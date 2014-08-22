@@ -1,3 +1,7 @@
 ;Add your custom plugins directives here
 ; Example:
 ;File "${STAGING_DIR}\plugins\${VERSION}\foo.dll"
+File "${STAGING_DIR}\plugins\ani_ip\ani_ip.dll"
+File "${STAGING_DIR}\plugins\ani_payload\ani_payload.dll"
+File "${STAGING_DIR}\plugins\ani_rpp\ani_rpp.dll"
+File "${STAGING_DIR}\plugins\ani_udp\ani_udp.dll"

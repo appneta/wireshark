@@ -1069,20 +1069,21 @@ static icmp_transaction_t *transaction_start(packet_info * pinfo,
 					   icmp_key);
 	}
 	if (icmp_trans == NULL) {
-		if (PINFO_FD_VISITED(pinfo)) {
-			/* No response found - add field and expert info */
-			it = proto_tree_add_item(tree, hf_icmp_no_resp, NULL, 0, 0,
-						 ENC_NA);
-			PROTO_ITEM_SET_GENERATED(it);
-
-			col_append_fstr(pinfo->cinfo, COL_INFO, " (no response found!)");
-
-			/* Expert info.  TODO: add to _icmp_transaction_t type and sequence number
-			   so can report here (and in taps) */
-			expert_add_info_format(pinfo, it, &ei_icmp_resp_not_found,
-					       "No response seen to ICMP request in frame %u",
-					       pinfo->fd->num);
-		}
+		/* AppNeta - removed to prevent misinterpretation of ICMP micro bursts */
+//		if (PINFO_FD_VISITED(pinfo)) {
+//			/* No response found - add field and expert info */
+//			it = proto_tree_add_item(tree, hf_icmp_no_resp, NULL, 0, 0,
+//						 ENC_NA);
+//			PROTO_ITEM_SET_GENERATED(it);
+//
+//			col_append_fstr(pinfo->cinfo, COL_INFO, " (no response found!)");
+//
+//			/* Expert info.  TODO: add to _icmp_transaction_t type and sequence number
+//			   so can report here (and in taps) */
+//			expert_add_info_format(pinfo, it, &ei_icmp_resp_not_found,
+//					       "No response seen to ICMP request in frame %u",
+//					       pinfo->fd->num);
+//		}
 
 		return NULL;
 	}
@@ -2063,7 +2064,7 @@ void proto_reg_handoff_icmp(void)
 	 */
 	ip_handle = find_dissector("ip");
 	icmp_handle = find_dissector("icmp");
-	data_handle = find_dissector("data");
+	data_handle = find_dissector("ani_payload");
 
 	dissector_add_uint("ip.proto", IP_PROTO_ICMP, icmp_handle);
 }

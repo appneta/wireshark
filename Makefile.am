@@ -638,7 +638,7 @@ am__v_PERL_ = $(am__v_PERL_@AM_DEFAULT_V@)
 am__v_PERL_0 = @echo "  PERL    " $@;
 am__v_PERL_1 =
 
-version.h: FORCE
+version.h:
 	$(AM_V_PERL)$(PERL) $(srcdir)/make-version.pl $(srcdir)
 
 #

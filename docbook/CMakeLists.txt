@@ -328,8 +328,8 @@ add_custom_target(
 		wsluarm
 		wsug_html_chunked/index.html
 		wsug_html/index.html
-		user-guide-a4.pdf
-		user-guide-us.pdf
+#		user-guide-a4.pdf
+#		user-guide-us.pdf
 )
 
 VALIDATE_XML(
@@ -377,8 +377,8 @@ add_custom_target(
 		wsluarm
 		wsdg_html_chunked/index.html
 		wsdg_html/index.html
-		developer-guide-a4.pdf
-		developer-guide-us.pdf
+#		developer-guide-a4.pdf
+#		developer-guide-us.pdf
 )
 
 VALIDATE_XML(
@@ -421,10 +421,10 @@ XML2PDF(
 add_custom_target(
 	release_notes ALL
 	DEPENDS
-		release-notes.html
+#		release-notes.html
 		release-notes.txt
-		release-notes-a4.pdf
-		release-notes-us.pdf
+#		release-notes-a4.pdf
+#		release-notes-us.pdf
 		${CMAKE_SOURCE_DIR}/NEWS
 )
 
