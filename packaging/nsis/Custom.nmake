@@ -5,4 +5,5 @@
 CUSTOM_PLUGINS= \
 # Example:
 # 	../../plugins/foo/foo.dll 	
-
+    ../../plugins/ani_payload/ani_payload.dll \
+    ../../plugins/ani_rpp/ani_rpp.dll

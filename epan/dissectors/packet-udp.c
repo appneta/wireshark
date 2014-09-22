@@ -748,7 +748,7 @@ proto_reg_handoff_udp(void)
 	dissector_add_uint("ip.proto", IP_PROTO_UDP, udp_handle);
 	udplite_handle = create_dissector_handle(dissect_udplite, proto_udplite);
 	dissector_add_uint("ip.proto", IP_PROTO_UDPLITE, udplite_handle);
-	data_handle = find_dissector("data");
+	data_handle = find_dissector("ani_payload");
 	udp_tap = register_tap("udp");
 	udp_follow_tap = register_tap("udp_follow");
 }

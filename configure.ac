@@ -5,7 +5,7 @@ m4_define([version_major], [1])
 m4_define([version_minor], [10])
 m4_define([version_micro], [9])
 m4_define([version_micro_extra], version_micro)
-m4_append([version_micro_extra], [])
+m4_append([version_micro_extra], [-appneta-1.14])
 
 AC_INIT(wireshark, [version_major.version_minor.version_micro_extra], http://bugs.wireshark.org/, , http://www.wireshark.org/)
 
