@@ -128,6 +128,7 @@ static int hf_ani_rpp_appliance_type = -1;
 static int hf_ani_rpp_custom_appliance_type = -1;
 static int hf_ani_rpp_command_flags = -1;
 static int hf_ani_rpp_command_flags_is_jumbo = -1;
+static int hf_ani_rpp_command_flags_is_super_jumbo = -1;
 static int hf_ani_rpp_payload = -1;
 
 /* RTP header fields									*/
@@ -628,6 +629,9 @@ static int dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo,
 							hf_ani_rpp_command_flags, tvb, offset + 9, 1,
 							cmd_info_flags);
 					field_tree = proto_item_add_subtree(tf, ett_ani_burst_info);
+					proto_tree_add_boolean(field_tree,
+							hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset + 9,
+							1, cmd_info_flags);
 					proto_tree_add_boolean(field_tree,
 							hf_ani_rpp_command_flags_is_jumbo, tvb, offset + 9,
 							1, cmd_info_flags);
@@ -1220,6 +1224,18 @@ void proto_register_ani_rpp(void) {
 					8,
 					NULL,
 					0x01,
+					"", HFILL
+			}
+		},
+		{
+			&hf_ani_rpp_command_flags_is_super_jumbo,
+			{
+				"Is Super Jumbo Packet",
+					"ani-rpp.is_super_jumbo",
+					FT_BOOLEAN,
+					8,
+					NULL,
+					0x02,
 					"", HFILL
 			}
 		},

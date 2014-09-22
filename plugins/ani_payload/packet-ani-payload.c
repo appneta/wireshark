@@ -20,14 +20,13 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-//#define NEW_PROTO_TREE_API
 
 #include "config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <glib.h>
-
-#include <wsutil/md5.h>
-
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/to_str.h>
@@ -39,20 +38,6 @@
 void proto_register_ani_payload(void);
 
 int proto_ani_payload = -1;
-
-#define DATA_HFI_INIT HFI_INIT(proto_data)
-
-static header_field_info hfi_data_data DATA_HFI_INIT =
-	  { "Data", "data.data", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL };
-
-static header_field_info hfi_data_text DATA_HFI_INIT =
-	  { "Text", "data.text", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL };
-
-static header_field_info hfi_data_len DATA_HFI_INIT =
-	  { "Length", "data.len", FT_INT32, BASE_DEC, NULL, 0x0, NULL, HFILL };
-
-static header_field_info hfi_data_md5_hash DATA_HFI_INIT =
-	  { "Payload MD5 hash", "data.md5_hash", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL };
 
 static int hf_payload_data = -1;
 static int hf_payload_legacy_signature = -1;
@@ -73,8 +58,6 @@ static int hf_payload_burst_size = -1;
 static int hf_payload_data_len = -1;
 
 static gboolean new_pane = FALSE;
-static gboolean show_as_text = FALSE;
-static gboolean generate_md5_hash = FALSE;
 static gboolean show_ani_payload = TRUE;
 
 static gint ett_payload = -1;
@@ -90,7 +73,9 @@ static const true_false_string ani_tf_set_not_set = {
 	"Not Set"
 };
 
-static void dissect_payload(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree) {
+static void
+dissect_payload(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
+{
 	guint bytes;
 
 	if (show_ani_payload && tree) {
@@ -103,7 +88,7 @@ static void dissect_payload(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *t
 			const guint8 *cp = tvb_get_ptr(tvb, 0, bytes);
 
 			if (new_pane) {
-				guint8 *real_data = (guint8 *)tvb_memdup(NULL, tvb, 0, bytes);
+				guint8 *real_data = (guint8 *)tvb_memdup(tvb, 0, bytes);
 				data_tvb = tvb_new_child_real_data(tvb,real_data,bytes,bytes);
 				tvb_set_free_cb(data_tvb, g_free);
 				add_new_data_source(pinfo, data_tvb, "Not dissected data bytes");

@@ -22,12 +22,4 @@
 #ifndef __PACKET_PAYLOAD_H__
 #define __PACKET_PAYLOAD_H__
 
-#include "ws_symbol_export.h"
-
-/*
- "proto_ani_payload" is exported from libwireshark.dll.
- * Thus we need a special declaration.
- */
-WS_DLL_PUBLIC int proto_ani_payload;
-
 #endif /* __PACKET_PAYLOAD_H__ */
