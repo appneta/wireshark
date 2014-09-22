@@ -1,0 +1,45 @@
+#
+# $Id: Custom.nmake $
+#
+
+include ..\config.nmake
+
+all: ani_rpp ani_payload
+
+ani_rpp:: 
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake
+	cd ..
+
+ani_payload:: 
+	cd ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake
+	cd ..
+
+clean:
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ../ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ..
+
+distclean: clean
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
+	cd ../ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
+	cd ..
+
+maintainer-clean: distclean
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
+	cd ../ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
+	cd ..
+
+install-plugins:
+!IFDEF ENABLE_LIBWIRESHARK
+	xcopy ani_rpp\*.dll ..\$(INSTALL_DIR)\plugins\$(VERSION) /d
+	xcopy ani_payload\*.dll ..\$(INSTALL_DIR)\plugins\$(VERSION) /d
+!ENDIF
