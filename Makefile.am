@@ -638,7 +638,7 @@ am__v_PERL_ = $(am__v_PERL_@AM_DEFAULT_V@)
 am__v_PERL_0 = @echo "  PERL    " $@;
 am__v_PERL_1 =
 
-version.h:
+version.h: FORCE
 	$(AM_V_PERL)$(PERL) $(srcdir)/make-version.pl $(srcdir)
 
 #
@@ -1165,7 +1165,7 @@ rpm-package: dist
 
 debian-package: debian/rules
 	@if test x$(HAVE_DPKG_BUILDPACKAGE) = xyes ; then \
-		dpkg-buildpackage -rfakeroot -us -uc ; \
+		dpkg-buildpackage -rfakeroot -Zgzip -us -uc ; \
 	else \
 		echo "Error: Debian packaging tools not found." ; \
 		echo "Package build abandoned." ; \
