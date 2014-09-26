@@ -125,6 +125,7 @@ static int hf_ani_rpp_appliance_type = -1;
 static int hf_ani_rpp_custom_appliance_type = -1;
 static int hf_ani_rpp_command_flags = -1;
 static int hf_ani_rpp_command_flags_is_jumbo = -1;
+static int hf_ani_rpp_command_flags_is_super_jumbo = -1;
 static int hf_ani_rpp_payload = -1;
 
 /* RTP header fields                                 */
@@ -344,7 +345,6 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
   guint16       seq_num;
   guint32       timestamp;
   guint32       sync_src;
-  static struct _rtp_info rtp_info;
   proto_tree*   rtp_tree = NULL;
   proto_item*   ti = NULL;
 
@@ -378,18 +378,6 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
   seq_num = tvb_get_ntohs( tvb, offset + 2 );
   timestamp = tvb_get_ntohl( tvb, offset + 4 );
   sync_src = tvb_get_ntohl( tvb, offset + 8 );
-
-  /* fill in the rtp_info structure */
-  rtp_info.info_version = version;
-  rtp_info.info_padding_set = padding_set;
-  rtp_info.info_padding_count = 0;
-  rtp_info.info_marker_set = marker_set;
-  rtp_info.info_payload_type = payload_type;
-  rtp_info.info_seq_num = seq_num;
-  rtp_info.info_timestamp = timestamp;
-  rtp_info.info_sync_src = sync_src;
-  rtp_info.info_setup_frame_num = 0;
-  rtp_info.info_payload_type_str = NULL;
 
   /* Create a subtree for RTP */
   if (sync_src == NO_FLOW) {
@@ -622,6 +610,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
           cmd_info_flags = tvb_get_guint8( tvb, offset + 9 );
           tf = proto_tree_add_uint( current_tree, hf_ani_rpp_command_flags, tvb, offset+9, 1, cmd_info_flags );
           field_tree = proto_item_add_subtree( tf, ett_ani_burst_info );
+          proto_tree_add_boolean( field_tree, hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset+9, 1, cmd_info_flags );
           proto_tree_add_boolean( field_tree, hf_ani_rpp_command_flags_is_jumbo, tvb, offset+9, 1, cmd_info_flags );
         }
 
@@ -832,8 +821,6 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
   /* Return the amount of data this dissector was able to dissect */
   return tvb_length(tvb);
 }
-
-
 
 /*******************************************************************/
 /* Register the protocol with Wireshark
@@ -1202,6 +1189,18 @@ proto_register_ani_rpp(void)
           8,
           NULL,
           0x01,
+          "", HFILL
+      }
+    },
+    {
+      &hf_ani_rpp_command_flags_is_super_jumbo,
+      {
+        "Is Super Jumbo Packet",
+          "ani-rpp.is_super_jumbo",
+          FT_BOOLEAN,
+          8,
+          NULL,
+          0x02,
           "", HFILL
       }
     },
