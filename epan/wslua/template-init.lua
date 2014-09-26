@@ -26,7 +26,7 @@
 -- Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 -- Set disable_lua to true to disable Lua support.
-disable_lua = false
+disable_lua = true
 
 if disable_lua then
     return
