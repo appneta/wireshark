@@ -1377,7 +1377,7 @@ init_prefs(void)
   prefs.gui_ask_unsaved            = TRUE;
   prefs.gui_find_wrap              = TRUE;
   prefs.gui_use_pref_save          = FALSE;
-  prefs.gui_webbrowser             = g_strdup(HTML_VIEWER " %s");
+  prefs.gui_webbrowser             = g_strdup("sensible-browser %s");
   prefs.gui_window_title           = g_strdup("");
   prefs.gui_start_title            = g_strdup("The World's Most Popular Network Protocol Analyzer");
   prefs.gui_version_in_start_page  = TRUE;

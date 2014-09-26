@@ -1,3 +1,5 @@
 ;Add your custom plugins directives here
 ; Example:
 ;File "..\..\plugins\foo\foo.dll"
+File "..\..\plugins\ani_payload\ani_payload.dll"
+File "..\..\plugins\ani_rpp\ani_rpp.dll"

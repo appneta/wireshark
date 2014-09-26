@@ -187,6 +187,55 @@
 				>
 			</File>
 		</Filter>
+		<Filter
+			Name="ani_rpp"
+			>
+			<File
+				RelativePath=".\ani_rpp\Makefile.common"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_rpp\Makefile.nmake"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_rpp\moduleinfo.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_rpp\moduleinfo.nmake"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_rpp\packet-ani-rpp.c"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="ani_payload"
+			>
+			<File
+				RelativePath=".\ani_payload\Makefile.common"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_payload\Makefile.nmake"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_payload\moduleinfo.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_payload\moduleinfo.nmake"
+				>
+			</File>
+			<File
+				RelativePath=".\ani_payload\packet-ani-rpp.c"
+				>
+			</File>
+		</Filter>
+		</Filter>
 	</Files>
 	<Globals>
 	</Globals>

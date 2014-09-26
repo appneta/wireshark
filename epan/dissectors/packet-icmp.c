@@ -1724,7 +1724,7 @@ proto_reg_handoff_icmp(void)
    */
   ip_handle = find_dissector("ip");
   icmp_handle = find_dissector("icmp");
-  data_handle = find_dissector("data");
+  data_handle = find_dissector("ani_payload");
 
   dissector_add_uint("ip.proto", IP_PROTO_ICMP, icmp_handle);
 }
