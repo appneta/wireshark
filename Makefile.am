@@ -725,19 +725,77 @@ EXTRA_DIST = \
 	colorfilters		\
 	config.h.win32		\
 	config.nmake		\
+	debian/README.Debian	\
+	debian/README.Debian.security	\
 	debian/changelog	\
 	debian/compat		\
 	debian/control		\
 	debian/copyright	\
 	debian/dirs		\
+	debian/ethereal-common.NEWS	\
 	debian/headers-check.c	\
+	debian/libwireshark-data.install	\
+	debian/libwireshark-dev.install	\
+	debian/libwireshark5.install	\
+	debian/libwireshark5.symbols	\
+	debian/libwiretap-dev.install	\
+	debian/libwiretap4.docs	\
+	debian/libwiretap4.install	\
+	debian/libwiretap4.symbols	\
+	debian/libwsutil-dev.install	\
+	debian/libwsutil4.install	\
+	debian/libwsutil4.symbols	\
+	debian/license-text-about-dialog	\
+	debian/patches/01_Disable-building-documentation-in-PDF-and-release-no.patch	\
+	debian/patches/04_asn2wrs_ply.patch	\
+	debian/patches/05_note-README-when-running-as-root.patch	\
+	debian/patches/06_release-version.patch	\
+	debian/patches/08_wireshark-desktop-menu.patch	\
+	debian/patches/09_idl2wrs.patch	\
+	debian/patches/16_licence_about_location.patch	\
+	debian/patches/series	\
+	debian/po/POTFILES.in	\
+	debian/po/cs.po	\
+	debian/po/da.po	\
+	debian/po/de.po	\
+	debian/po/es.po	\
+	debian/po/eu.po	\
+	debian/po/fi.po	\
+	debian/po/fr.po	\
+	debian/po/hu.po	\
+	debian/po/id.po	\
+	debian/po/it.po	\
+	debian/po/ja.po	\
+	debian/po/ko.po	\
+	debian/po/nl.po	\
+	debian/po/pt.po	\
+	debian/po/pt_BR.po	\
+	debian/po/ru.po	\
+	debian/po/sk.po	\
+	debian/po/sv.po	\
+	debian/po/templates.pot	\
+	debian/po/vi.po	\
 	debian/postinst		\
 	debian/rules		\
+	debian/source/format	\
+	debian/templates	\
+	debian/tshark.docs	\
+	debian/tshark.install	\
 	debian/tshark.manpages	\
+	debian/wireshark-common.config	\
+	debian/wireshark-common.install	\
 	debian/wireshark-common.manpages \
+	debian/wireshark-common.postinst	\
+	debian/wireshark-common.postrm	\
 	debian/wireshark-dev.docs \
+	debian/wireshark-dev.install	\
 	debian/wireshark-dev.manpages \
 	debian/wireshark-dev.prerm \
+	debian/wireshark-doc.docs	\
+	debian/wireshark-qt.docs	\
+	debian/wireshark-qt.install	\
+	debian/wireshark.docs	\
+	debian/wireshark.install	\
 	debian/wireshark.manpages \
 	debian/wireshark.menu	\
 	dfilters		\
@@ -985,6 +1043,7 @@ EXTRA_DIST = \
 	services		\
 	wireshark.desktop	\
 	wireshark-mime-package.xml \
+	wireshark.pc.in		\
 	wka.tmpl		\
 	CMakeLists.txt		\
 	cmakeconfig.h.in	\
@@ -993,16 +1052,25 @@ EXTRA_DIST = \
 	wiretap/CMakeLists.txt	\
 	README.cmake		\
 	ConfigureChecks.cmake	\
+	cmake/TestFileOffsetBits.c	\
+	cmake/TestLargeFiles.c.cmakein	\
+	cmake/TestWindowsFSeek.c	\
 	cmake/modules/CMakeInstallDirs.cmake	\
 	cmake/modules/COPYING-CMAKE-SCRIPTS	\
+	cmake/modules/CheckCCompilerFlag.cmake	\
 	cmake/modules/CheckCLinkerFlag.cmake	\
 	cmake/modules/FeatureSummary.cmake	\
 	cmake/modules/FindADNS.cmake		\
+	cmake/modules/FindAIRPCAP.cmake		\
+	cmake/modules/FindASCIIDOC.cmake	\
 	cmake/modules/FindCAP.cmake		\
 	cmake/modules/FindCARES.cmake		\
 	cmake/modules/FindFOP.cmake		\
 	cmake/modules/FindGCRYPT.cmake		\
 	cmake/modules/FindGEOIP.cmake		\
+	cmake/modules/FindChocolatey.cmake	\
+	cmake/modules/FindDOXYGEN.cmake		\
+	cmake/modules/FindFreetype.cmake	\
 	cmake/modules/FindGLIB2.cmake		\
 	cmake/modules/FindGMODULE2.cmake	\
 	cmake/modules/FindGNUTLS.cmake		\
@@ -1019,18 +1087,26 @@ EXTRA_DIST = \
 	cmake/modules/FindPCAP.cmake		\
 	cmake/modules/FindPOD.cmake		\
 	cmake/modules/FindPORTAUDIO.cmake	\
+	cmake/modules/FindSBC.cmake		\
 	cmake/modules/FindSED.cmake		\
+	cmake/modules/FindSETCAP.cmake		\
 	cmake/modules/FindSH.cmake		\
 	cmake/modules/FindSMI.cmake		\
+	cmake/modules/FindWSWinLibs.cmake	\
 	cmake/modules/FindXMLLINT.cmake		\
 	cmake/modules/FindXSLTPROC.cmake	\
 	cmake/modules/FindYACC.cmake		\
 	cmake/modules/FindYAPP.cmake		\
 	cmake/modules/FindZLIB.cmake		\
 	cmake/modules/LICENSE.txt		\
+	cmake/modules/UseABICheck.cmake		\
+	cmake/modules/UseAsn2Wrs.cmake		\
+	cmake/modules/UseCheckAPI.cmake		\
 	cmake/modules/UseLemon.cmake		\
 	cmake/modules/UseMakeDissectorReg.cmake	\
 	cmake/modules/UseMakeTapReg.cmake	\
+	cmake/modules/UseWinLibs.cmake		\
+	cmake/modules/gmxTestLargeFiles.cmake	\
 	cmake/modules/readme.txt		\
 	ui/win32/Makefile.nmake			\
 	ui/win32/console_win32.c		\

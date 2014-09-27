@@ -2846,6 +2846,7 @@ h323gatestat     1719/tcp # H.323 Unicast Gatekeeper Signaling [ITU-T] [ITU-T_TS
 h323gatestat     1719/udp # H.323 Unicast Gatekeeper Signaling [ITU-T] [ITU-T_TSB] 2013-01-31
 h323hostcall     1720/tcp # H.323 Call Control Signalling [ITU-T] [ITU-T_TSB] 2013-01-31
 h323hostcall     1720/udp # H.323 Call Control Signalling [ITU-T] [ITU-T_TSB] 2013-01-31
+h323hostcall     1720/sctp # H.323 Call Control [ITU-T] 2014-07-30
 caicci           1721/tcp # caicci [Sylvia_Scheuren] [Sylvia_Scheuren]
 caicci           1721/udp # caicci [Sylvia_Scheuren] [Sylvia_Scheuren]
 hks-lm           1722/tcp # HKS License Manager [Michael_Wood] [Michael_Wood]
@@ -6295,8 +6296,8 @@ asam             3451/tcp # ASAM Services [Mike_Gossett] [Mike_Gossett] 2002-04
 asam             3451/udp # ASAM Services [Mike_Gossett] [Mike_Gossett] 2002-04
 sabp-signal      3452/tcp # SABP-Signalling Protocol [Brendan_McWilliams] [Brendan_McWilliams] 2002-04
 sabp-signal      3452/udp # SABP-Signalling Protocol [Brendan_McWilliams] [Brendan_McWilliams] 2002-04
-pscupd           3453/tcp # PSC Update Port [Reid_B_Ligon] [Reid_B_Ligon]
-pscupd           3453/udp # PSC Update Port [Reid_B_Ligon] [Reid_B_Ligon]
+pscupd           3453/tcp # PSC Update [Datalogic_ADC_Inc] [Reid_B_Ligon] 2001-11-10 2014-07-31
+pscupd           3453/udp # PSC Update [Datalogic_ADC_Inc] [Reid_B_Ligon] 2001-11-10 2014-07-31
 mira             3454/tcp # Apple Remote Access Protocol [Mike_Alexander] [Mike_Alexander]
 mira             3454/udp # Apple Remote Access Protocol [Mike_Alexander] [Mike_Alexander]
 prsvp            3455/tcp # RSVP Port [Bob_Braden] [Bob_Braden]
@@ -8543,6 +8544,9 @@ hp-status        5226/udp # HP Status [Brett_Green_2] [Brett_Green_2]
 perfd            5227/tcp # HP System Performance Metric Service [Chris_Bertin] [Chris_Bertin] 2009-05-19
 perfd            5227/udp # HP System Performance Metric Service [Chris_Bertin] [Chris_Bertin] 2009-05-19
 hpvroom          5228/tcp # HP Virtual Room Service [Scott_Levin] [Scott_Levin] 2009-03-19
+jaxflow          5229/tcp # Netflow/IPFIX/sFlow Collector and Forwarder Management [JaxMP] [Stephen_Hull] 2014-08-15
+jaxflow-data     5230/tcp # JaxMP RealFlow application and protocol data [JaxMP] [Stephen_Hull] 2014-08-15
+crusecontrol     5231/tcp # Remote Control of Scan Software for Cruse Scanners [Cruse_Spezialmaschinen_GmbH] [Christof_J._Reetz_2] 2014-08-15
 csedaemon        5232/tcp # Cruse Scanning System Service [Christof_J_Reetz] [Christof_J_Reetz] 2011-03-09
 enfs             5233/tcp # Etinnae Network File Service [Chris_Peel] [Chris_Peel] 2011-03-09
 eenet            5234/tcp # EEnet communications [Helmut_Giritzer] [Helmut_Giritzer] 2005-11
@@ -8878,6 +8882,7 @@ ncxcp            5681/udp # Net-coneX Control Protocol [Ryan_Werber] [Ryan_Werbe
 brightcore       5682/udp # BrightCore control & data transfer exchange [Marko_Bjelac] [Marko_Bjelac] 2010-06-10
 coap             5683/udp # Constrained Application Protocol [IESG] [IETF_Chair] 2011-06-13 2013-07-25 [RFC7252]
 coaps            5684/udp # DTLS-secured CoAP [IESG] [IETF_Chair] 2013-07-25 [RFC7252]
+gog-multiplayer  5687/udp # GOG RakNet Game protocol on Galaxy service [GOG.com] [Michal_Gruchala] 2014-07-31
 ggz              5688/tcp # GGZ Gaming Zone [Josef_Spillner] [Josef_Spillner] 2003-01
 ggz              5688/udp # GGZ Gaming Zone [Josef_Spillner] [Josef_Spillner] 2003-01
 qmvideo          5689/tcp # QM video network management protocol [Jamie_Lokier] [Jamie_Lokier] 2006-05
@@ -9370,7 +9375,7 @@ clever-tcpip     6688/tcp # CleverView for TCP/IP Message Service [David_Cheng] 
 tsa              6689/tcp # Tofino Security Appliance [Scott_Howard] [Scott_Howard] 2009-10-13
 tsa              6689/udp # Tofino Security Appliance [Scott_Howard] [Scott_Howard] 2009-10-13
 babel            6696/udp # Babel Routing Protocol 2011-08-15 [RFC6126]
-ircs-u           6697/tcp # Internet Relay Chat via TLS/SSL 2014-02-11 [RFC-hartmann-default-port-for-irc-via-tls-ssl-09]
+ircs-u           6697/tcp # Internet Relay Chat via TLS/SSL 2014-02-11 [RFC7194]
 kti-icad-srvr    6701/tcp # KTI/ICAD Nameserver [Stanley_Knutson] [Stanley_Knutson]
 kti-icad-srvr    6701/udp # KTI/ICAD Nameserver [Stanley_Knutson] [Stanley_Knutson]
 e-design-net     6702/tcp # e-Design network [Janos_Lerch] [Janos_Lerch] 2006-02
@@ -9450,6 +9455,7 @@ swispol          6966/tcp # swispol [Yutaka_Ono] [Yutaka_Ono]
 swispol          6966/udp # swispol [Yutaka_Ono] [Yutaka_Ono]
 acmsoda          6969/tcp # acmsoda [Daniel_Simms] [Daniel_Simms]
 acmsoda          6969/udp # acmsoda [Daniel_Simms] [Daniel_Simms]
+conductor-mpx    6970/sctp # conductor for multiplex [George_Neville-Neil] [George_Neville-Neil] 2014-07-29
 MobilitySrv      6997/tcp # Mobility XE Protocol [Joseph_T_Savarese] [Joseph_T_Savarese] 2007-06
 MobilitySrv      6997/udp # Mobility XE Protocol [Joseph_T_Savarese] [Joseph_T_Savarese] 2007-06
 iatp-highpri     6998/tcp # IATP-highPri [John_Murphy] [John_Murphy]
@@ -10460,6 +10466,7 @@ documentum-s    10003/udp # EMC-Documentum Content Server ProductIANA assigned t
 documentum_s    10003/udp # EMC-Documentum Content Server Product [Reza_Bagherian] [Reza_Bagherian] 2007-07-19 This entry is an alias to "documentum-s".This entry is now historic, not usable for use with manycommon service discovery mechanisms.
 emcrmirccd      10004/tcp # EMC Replication Manager Client [Robert_Boudrie] [Robert_Boudrie] 2008-06-09
 emcrmird        10005/tcp # EMC Replication Manager Server [Robert_Boudrie] [Robert_Boudrie] 2008-06-09
+netapp-sync     10006/tcp # Sync replication protocol among different NetApp platforms [NetApp_2] [Paul_Mu] 2014-08-07
 mvs-capacity    10007/tcp # MVS Capacity [Donna_Dillenberger] [Donna_Dillenberger]
 mvs-capacity    10007/udp # MVS Capacity [Donna_Dillenberger] [Donna_Dillenberger]
 octopus         10008/tcp # Octopus Multiplexer [Chris_Koeritz_2] [Chris_Koeritz_2] 2002-10
@@ -11035,6 +11042,8 @@ tonidods        24465/tcp # Tonido Domain Server [Madhan_Kanagavel] [Madhan_Kana
 tonidods        24465/udp # Tonido Domain Server [Madhan_Kanagavel] [Madhan_Kanagavel] 2008-07-18
 binkp           24554/tcp # BINKP [Max_Masyutin] [Max_Masyutin]
 binkp           24554/udp # BINKP [Max_Masyutin] [Max_Masyutin]
+bilobit         24577/tcp # bilobit Service [bilobit_GmbH] [Martin_Schmuker] 2014-08-15
+bilobit-update  24577/udp # bilobit Service Update [bilobit_GmbH] [Martin_Schmuker] 2014-08-15
 canditv         24676/tcp # Canditv Message Service [Gary_Aston] [Gary_Aston] 2009-03-10
 canditv         24676/udp # Canditv Message Service [Gary_Aston] [Gary_Aston] 2009-03-10
 flashfiler      24677/tcp # FlashFiler [Ben_Oram] [Ben_Oram]

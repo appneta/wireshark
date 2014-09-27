@@ -134,8 +134,8 @@ Requires:	xdg-utils
 Requires:	hicolor-icon-theme
 BuildRequires:	desktop-file-utils
 Requires(post):	desktop-file-utils
-Requires(post): %{_sbindir}/update-alternatives
-Requires(postun): %{_sbindir}/update-alternatives
+Requires(post): /usr/sbin/update-alternatives
+Requires(postun): /usr/sbin/update-alternatives
 %if 0%{?suse_version}
 # Need this for SuSE's suse_update_desktop_file macro
 BuildRequires:	update-desktop-files
@@ -171,8 +171,8 @@ Requires:	xdg-utils
 Requires:	hicolor-icon-theme
 BuildRequires:	desktop-file-utils
 Requires(post):	desktop-file-utils
-Requires(post): %{_sbindir}/update-alternatives
-Requires(postun): %{_sbindir}/update-alternatives
+Requires(post): /usr/sbin/update-alternatives
+Requires(postun): /usr/sbin/update-alternatives
 BuildRequires:	gcc-c++
 %if 0%{?suse_version}
 # Need this for SuSE's suse_update_desktop_file macro
@@ -246,10 +246,16 @@ desktop-file-validate %{buildroot}/usr/share/applications/wireshark.desktop
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%if %{use_wireshark_group}
 %pre
+%if %{use_wireshark_group}
 getent group wireshark >/dev/null || groupadd -r wireshark
 %endif
+# If we have a pre-alternatives wireshark binary out there, get rid of it.
+# (With 'alternatives' %{_bindir}/wireshark should be a symlink.)
+if [ -f %{_bindir}/wireshark ]
+then
+	rm -f %{_bindir}/wireshark
+fi
 
 %post -p /sbin/ldconfig
 
@@ -260,7 +266,7 @@ getent group wireshark >/dev/null || groupadd -r wireshark
 update-desktop-database &> /dev/null ||:
 update-mime-database /usr/share/mime &> /dev/null || :
 touch --no-create /usr/share/icons/hicolor &>/dev/null || :
-%{_sbindir}/update-alternatives --install %{_bindir}/wireshark \
+/usr/sbin/update-alternatives --install %{_bindir}/wireshark \
   %{name} %{_bindir}/wireshark-gtk 50
 
 %postun gnome
@@ -269,7 +275,7 @@ update-mime-database /usr/share/mime &> /dev/null || :
 if [ $1 -eq 0 ] ; then
 	touch --no-create /usr/share/icons/hicolor &>/dev/null || :
 	gtk-update-icon-cache /usr/share/icons/hicolor &>/dev/null || :
-	%{_sbindir}/update-alternatives --remove %{name} %{_bindir}/wireshark-gtk
+	/usr/sbin/update-alternatives --remove %{name} %{_bindir}/wireshark-gtk
 fi
 %endif
 
@@ -278,7 +284,7 @@ fi
 update-desktop-database &> /dev/null ||:
 update-mime-database /usr/share/mime &> /dev/null || :
 touch --no-create /usr/share/icons/hicolor &>/dev/null || :
-%{_sbindir}/update-alternatives --install %{_bindir}/wireshark \
+/usr/sbin/update-alternatives --install %{_bindir}/wireshark \
   %{name} %{_bindir}/wireshark-qt 10
 
 %postun qt
@@ -287,7 +293,7 @@ update-mime-database /usr/share/mime &> /dev/null || :
 if [ $1 -eq 0 ] ; then
 	touch --no-create /usr/share/icons/hicolor &>/dev/null || :
 	gtk-update-icon-cache /usr/share/icons/hicolor &>/dev/null || :
-	%{_sbindir}/update-alternatives --remove %{name} %{_bindir}/wireshark-qt
+	/usr/sbin/update-alternatives --remove %{name} %{_bindir}/wireshark-qt
 fi
 %endif
 
@@ -299,10 +305,8 @@ gtk-update-icon-cache /usr/share/icons/hicolor &>/dev/null || :
 %files
 %defattr(-,root,root)
 %doc AUTHORS COPYING ChangeLog INSTALL INSTALL.configure NEWS README*
-# Don't pick up the wireshark (GUI) binary here
-%exclude %{_bindir}/wireshark
-%exclude %{_bindir}/wireshark-gtk
-%exclude %{_bindir}/wireshark-qt
+# Don't pick up any of the wireshark (GUI) binaries here
+%exclude %{_bindir}/wireshark*
 %{_bindir}/*
 
 # This generates a warning because dumpcap is listed twice. That's
@@ -367,6 +371,20 @@ gtk-update-icon-cache /usr/share/icons/hicolor &>/dev/null || :
 %endif
 
 %changelog
+* Mon Aug 4 2014 Jeff Morriss
+- Fix RPM builds with a prefix other than /usr: The location of
+  update-alternatives does not depend on Wireshark's installation prefix:
+  it's always in /usr/sbin/.
+
+* Fri Aug  1 2014 Jeff Morriss
+- Remove the old wireshark binary during RPM upgrades: this is needed because
+  we now declare wireshark to be %ghost so it doesn't get overwritten during an
+  upgrade (but in older RPMs it was the real program).
+
+* Tue Jul  1 2014 Jeff Morriss
+- Get rid of rpath when we're building RPMs: Fedora prohibits it, we don't
+  need it, and it gets in the way some times.
+
 * Tue Nov 26 2013 Jeff Morriss
 - Overhaul options handling to pull in the UI choice from ./configure.
 - Make it possible to not build the GNOME package.
@@ -386,14 +404,14 @@ gtk-update-icon-cache /usr/share/icons/hicolor &>/dev/null || :
 - Use SuSE's desktop-update macro.
 - Actually update MIME database when Wireshark's prefix is not /usr .
 
-* Thu Mar  6 2013 Jeff Morriss
+* Thu Mar  7 2013 Jeff Morriss
 - List more build dependencies.
 - Update to work on SuSE too: some of their package names are different.
 
-* Thu Mar  6 2013 Gerald Combs
+* Wed Mar  6 2013 Gerald Combs
 - Enable c-ares by default
 
-* Mon Feb  6 2013 Jeff Morriss
+* Thu Feb  7 2013 Jeff Morriss
 - Overhaul to make this file more useful/up to date.  Many changes are based
   on Fedora's .spec file.  Changes include:
   - Create a separate wireshark-gnome package (like Redhat).
@@ -431,7 +449,7 @@ gtk-update-icon-cache /usr/share/icons/hicolor &>/dev/null || :
 * Tue Aug 03 1999 Gilbert Ramirez <gram@xiexie.org>
 - updated to 0.7.0 and changed gtk+ requirement
 
-* Sun Jan 01 1999 Gerald Combs <gerald@zing.org>
+* Sun Jan 03 1999 Gerald Combs <gerald@zing.org>
 - updated to 0.5.1
 
 * Fri Nov 20 1998 FastJack <fastjack@i-s-o.net>
