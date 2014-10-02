@@ -505,8 +505,8 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         save_in_error_pkt = pinfo->flags.in_error_pkt;
         pinfo->flags.in_error_pkt = TRUE;
 
-        next_tvb = tvb_new_subset_remaining(tvb, 8);
-        set_actual_length(next_tvb, (headerLength - 2));
+        next_tvb = tvb_new_subset_remaining(tvb, offset);
+        set_actual_length(next_tvb, 28);
         if (ip_handle) {
           call_dissector( ip_handle, next_tvb, pinfo, current_tree );
         }
