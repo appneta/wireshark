@@ -97,7 +97,7 @@ PROCESSOR_ARCHITECTURE=amd64
 
 # "Microsoft Visual Studio 2008"
 # Visual C++ 9.0, _MSC_VER 1500, msvcr90.dll
-#MSVC_VARIANT=MSVC2008
+MSVC_VARIANT=MSVC2008
 
 # "Microsoft Visual C++ 2008 Express Edition"
 # Visual C++ 9.0, _MSC_VER 1500, msvcr90.dll
@@ -105,7 +105,7 @@ PROCESSOR_ARCHITECTURE=amd64
 
 # "Microsoft Visual Studio 2010"
 # Visual C++ 10.0, _MSC_VER 1600, msvcr100.dll
-MSVC_VARIANT=MSVC2010
+#MSVC_VARIANT=MSVC2010
 
 # "Microsoft Visual C++ 2010 Express Edition"
 # Visual C++ 10.0, _MSC_VER 1600, msvcr100.dll
