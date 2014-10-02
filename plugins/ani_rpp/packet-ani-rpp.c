@@ -1,6 +1,6 @@
 /* packet-ani-rpp.c
  * Routines for Responder Packet Protocol dissection
- * Copyright 2007, Apparent Networks
+ * Copyright 2007-2014 AppNeta
  *
  * $Id: packet-ani-rpp.c 23974 2007-04-04 18:21:25Z hpeterson $
  *
@@ -81,7 +81,6 @@ void proto_reg_handoff_ani_rpp(void);
 static dissector_handle_t ani_rpp_handle = NULL;
 static dissector_handle_t ip_handle = NULL;
 static dissector_handle_t payload_handle = NULL;
-static dissector_handle_t data_handle = NULL;
 
 /* Initialize the protocol and registered fields */
 static int proto_ani_rpp = -1;
@@ -94,6 +93,8 @@ static int hf_ani_rpp_header_length = -1;
 static int hf_ani_rpp_pkt_id = -1;
 static int hf_ani_rpp_flow_num = -1;
 static int hf_ani_rpp_flow_port = -1;
+static int hf_ani_rpp_flow_port_first = -1;
+static int hf_ani_rpp_flow_port_last = -1;
 static int hf_ani_rpp_test_weight = -1;
 static int hf_ani_rpp_error_code = -1;
 static int hf_ani_rpp_response_status = -1;
@@ -434,10 +435,11 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
   guint8 cmd_info_flags;
   guint32 id, flow, major, minor, revision, build, first_id,
     burst_hold_time, i, depth;
-  guint16 port, weight, burstsize, packetsize;
+  guint16 port, portend, weight, burstsize, packetsize;
   proto_tree   *current_tree = NULL, *field_tree = NULL;
   proto_item   *ti = NULL, *tf = NULL;
   tvbuff_t *next_tvb;
+  gboolean   save_in_error_pkt;
 
   currentHeader = HDR_SEQUENCE;
   while (currentHeader != HDR_LAST && currentHeader < HDR_INVALID) {
@@ -495,10 +497,22 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       /* the next 28 bytes are the ip and udp headers to be used in the response */
       if (current_tree) {
         proto_item_set_text(ti, "Reply Header");
-        next_tvb = tvb_new_subset(tvb, offset, -1, -1 );
+
+        /* Save the current value of the "we're inside an error packet"
+           flag, and set that flag; subdissectors may treat packets
+           that are the payload of error packets differently from
+           "real" packets. */
+        save_in_error_pkt = pinfo->flags.in_error_pkt;
+        pinfo->flags.in_error_pkt = TRUE;
+
+        next_tvb = tvb_new_subset_remaining(tvb, 8);
+        set_actual_length(next_tvb, (headerLength - 2));
         if (ip_handle) {
           call_dissector( ip_handle, next_tvb, pinfo, current_tree );
         }
+
+        /* Restore the "we're inside an error packet" flag. */
+        pinfo->flags.in_error_pkt = save_in_error_pkt;
 
         /* set some text in the info column */
         if (check_col(pinfo->cinfo, COL_INFO) && mainHeader) {
@@ -512,16 +526,21 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       if (current_tree) {
         port = tvb_get_ntohs( tvb, offset );
         proto_item_set_text(ti, "Create Flow Header");
-        proto_tree_add_item( current_tree, hf_ani_rpp_flow_port, tvb, offset, 2, FALSE );
-
-        /* tell Wireshark to dissect packets addressed to hf_ani_rpp_flow_port
-         * using this dissector.
-         */
-        dissector_add("udp.port", port, ani_rpp_handle);
+        if (headerLength >= 6) {
+          proto_tree_add_item( current_tree, hf_ani_rpp_flow_port_first, tvb, offset, 2, FALSE );
+          proto_tree_add_item( current_tree, hf_ani_rpp_flow_port_last, tvb, offset, 4, FALSE );
+        } else {
+          proto_tree_add_item( current_tree, hf_ani_rpp_flow_port, tvb, offset, 2, FALSE );
+        }
 
         /* set some text in the info column */
         if (check_col(pinfo->cinfo, COL_INFO) && mainHeader) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flow (port %d)", port);
+          if (headerLength >= 6) {
+            portend = tvb_get_ntohs( tvb, offset+2 );
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flows (ports %d through %d)", port, portend);
+          } else {
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flow (port %d)", port);
+          }
           mainHeader = 0;
         }
       }
@@ -530,10 +549,17 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
     case HDR_FLOW_RESPONSE:
       if (current_tree) {
         flow = tvb_get_ntohl( tvb, offset );
+        port = tvb_get_ntohs( tvb, offset+4 );
         proto_item_set_text(ti, "Flow Response Header");
         proto_tree_add_item ( current_tree, hf_ani_rpp_flow_num, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_flow_port, tvb, offset+4, 2, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE );
+
+        /* tell Wireshark to dissect packets addressed to hf_ani_rpp_flow_port
+         * using this dissector.
+         */
+        if (port != UDP_PORT_ANI_RPP)
+          dissector_add("udp.port", port, ani_rpp_handle);
 
         /* set some text in the info column */
         if (check_col(pinfo->cinfo, COL_INFO) && mainHeader) {
@@ -1037,6 +1063,30 @@ proto_register_ani_rpp(void)
       }
     },
     {
+      &hf_ani_rpp_flow_port_first,
+      {
+        "Flow Port First",
+          "ani-rpp.flowPortFirst",
+          FT_UINT16,
+          BASE_DEC,
+          NULL,
+          0x0,
+          "", HFILL
+      }
+    },
+    {
+      &hf_ani_rpp_flow_port_last,
+      {
+        "Flow Port Last",
+          "ani-rpp.flowPortLast",
+          FT_UINT16,
+          BASE_DEC,
+          NULL,
+          0x0,
+          "", HFILL
+      }
+    },
+    {
       &hf_ani_rpp_test_weight,
       {
         "Test Weight",
@@ -1453,7 +1503,7 @@ proto_register_ani_rpp(void)
   prefs_register_uint_preference(ani_rpp_module, "udp_port",
     "UDP Port",
     "The UDP port on which "
-    "Apparent Networks Responder "
+    "AppNeta Responder "
     "packets will be sent",
     10,&global_udp_port_artnet);
 
@@ -1494,7 +1544,6 @@ proto_reg_handoff_ani_rpp(void)
 
   dissector_add("udp.port", global_udp_port_artnet, ani_rpp_handle);
 
-  ip_handle = find_dissector("ani_ip");
+  ip_handle = find_dissector("ip");
   payload_handle = find_dissector("ani_payload");
-  data_handle = find_dissector("data");
 }
