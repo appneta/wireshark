@@ -4,7 +4,7 @@
 
 include ..\config.nmake
 
-all: ani_rpp ani_payload
+all: ani_rpp ani_payload twamp
 
 ani_rpp:: 
 	cd ani_rpp

@@ -1,3 +1,10 @@
+wireshark (1.12.4.appneta.15) UNRELEASED; urgency=medium
+
+  * TWAMP dissector (unauthenticated packets only)
+  * Merged previous AppNeta changes into the 1.12.4 release branch (ani_rpp, ani_payload, icmp modifications)
+
+ -- Josh Elsasser <jelsasser@appneta.com>  Fri, 13 Mar 2015 14:29:47 -0700
+
 wireshark (1.12.4) unstable; urgency=low
 
   * Self-made package
