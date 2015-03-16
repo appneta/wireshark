@@ -22,7 +22,7 @@
 #
 
 set(DISSECTOR_SRC
-	packet-ani_payload.c
+	packet-ani-payload.c
 )
 
 set(PLUGIN_FILES

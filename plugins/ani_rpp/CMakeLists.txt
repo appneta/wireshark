@@ -22,7 +22,7 @@
 #
 
 set(DISSECTOR_SRC
-	packet-ani_rpp.c
+	packet-ani-rpp.c
 )
 
 set(PLUGIN_FILES

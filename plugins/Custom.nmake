@@ -56,5 +56,5 @@ install-plugins:
 !IFDEF ENABLE_LIBWIRESHARK
 	xcopy ani_rpp\*.dll ..\$(INSTALL_DIR)\plugins\$(VERSION) /d
 	xcopy ani_payload\*.dll ..\$(INSTALL_DIR)\plugins\$(VERSION) /d
-	xcopy twamp\*.dll ..\$(INSTALL_DIR)\plugins\$(VERSION) /dtwamp
+	xcopy twamp\*.dll ..\$(INSTALL_DIR)\plugins\$(VERSION) /d
 !ENDIF
