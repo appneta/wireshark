@@ -1,6 +1,6 @@
 /* packet-ani-rpp.c
  * Routines for Responder Packet Protocol dissection
- * Copyright 2007-2015 AppNeta
+ * Copyright 2007-2014 AppNeta
  *
  * $Id: packet-ani-rpp.c 23974 2007-04-04 18:21:25Z hpeterson $
  *
@@ -468,9 +468,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         proto_tree_add_item( current_tree, hf_ani_rpp_pkt_id, tvb, offset, 4, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          col_add_fstr(pinfo->cinfo, COL_INFO, "Responder Packet: ID %d(0x%x)", id, id);
-        }
+        col_add_fstr(pinfo->cinfo, COL_INFO, "Responder Packet: ID %d(0x%x)", id, id);
       }
       offset += (headerLength - 2);
       break;
@@ -481,9 +479,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         proto_tree_add_item( current_tree, hf_ani_rpp_next_header_type, tvb, offset+1, 1, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          col_append_str(pinfo->cinfo, COL_INFO, " [Contains Errors]");
-        }
+        col_append_str(pinfo->cinfo, COL_INFO, " [Contains Errors]");
       }
       offset += (headerLength - 2);
       break;
@@ -515,10 +511,8 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         pinfo->flags.in_error_pkt = save_in_error_pkt;
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO) && mainHeader) {
-          col_append_str(pinfo->cinfo, COL_INFO, " Reply");
-          mainHeader = 0;
-        }
+        col_append_str(pinfo->cinfo, COL_INFO, " Reply");
+        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -534,15 +528,13 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         }
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO) && mainHeader) {
-          if (headerLength >= 6) {
-            portend = tvb_get_ntohs( tvb, offset+2 );
-            col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flows (ports %d through %d)", port, portend);
-          } else {
-            col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flow (port %d)", port);
-          }
-          mainHeader = 0;
+        if (headerLength >= 6) {
+          portend = tvb_get_ntohs( tvb, offset+2 );
+          col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flows (ports %d through %d)", port, portend);
+        } else {
+          col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flow (port %d)", port);
         }
+        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -559,13 +551,11 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
          * using this dissector.
          */
         if (port != UDP_PORT_ANI_RPP)
-          dissector_add("udp.port", port, ani_rpp_handle);
+          dissector_add_uint("udp.port", port, ani_rpp_handle);
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO) && mainHeader) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, " Flow Response (flow ID %d)", flow);
-          mainHeader = 0;
-        }
+        col_append_fstr(pinfo->cinfo, COL_INFO, " Flow Response (flow ID %d)", flow);
+        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -578,10 +568,8 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         proto_tree_add_item( current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO) && mainHeader) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, " Close Flow (flow ID %d)", flow);
-          mainHeader = 0;
-        }
+        col_append_fstr(pinfo->cinfo, COL_INFO, " Close Flow (flow ID %d)", flow);
+        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -592,9 +580,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         proto_tree_add_item( current_tree, hf_ani_rpp_test_weight, tvb, offset, 2, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, " (weight %d)", weight);
-        }
+        col_append_fstr(pinfo->cinfo, COL_INFO, " (weight %d)", weight);
       }
       offset += (headerLength - 2);
       break;
@@ -611,9 +597,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         proto_tree_add_item( current_tree, hf_ani_rpp_responder_version_build, tvb, offset+12, 4, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, ", version %d.%d.%d.%d", major, minor, revision, build);
-        }
+        col_append_fstr(pinfo->cinfo, COL_INFO, ", version %d.%d.%d.%d", major, minor, revision, build);
       }
       offset += (headerLength - 2);
       break;
@@ -641,30 +625,28 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         }
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          if (mode == 1) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst");
-          } else if (mode == 2) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Datagram");
-          } else if (mode == 3) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst");
-          } else if (mode == 4) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm");
-          } else if (mode == 5) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst Load");
-          } else if (mode == 0x81) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst (Primer)");
-          } else if (mode == 0x82) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Datagram (Primer)");
-          } else if (mode == 0x83) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst (Primer)");
-          } else if (mode == 0x84) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm (Primer)");
-          } else if (mode == 0x85) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst Load (Primer)");
-          }
-          col_append_fstr(pinfo->cinfo, COL_INFO, ", First ID %d, Packets %d", first_id, burstsize);
+        if (mode == 1) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst");
+        } else if (mode == 2) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Datagram");
+        } else if (mode == 3) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst");
+        } else if (mode == 4) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm");
+        } else if (mode == 5) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst Load");
+        } else if (mode == 0x81) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst (Primer)");
+        } else if (mode == 0x82) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Datagram (Primer)");
+        } else if (mode == 0x83) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst (Primer)");
+        } else if (mode == 0x84) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm (Primer)");
+        } else if (mode == 0x85) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst Load (Primer)");
         }
+        col_append_fstr(pinfo->cinfo, COL_INFO, ", First ID %d, Packets %d", first_id, burstsize);
       }
       offset += (headerLength - 2);
       break;
@@ -674,9 +656,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         proto_tree_add_item( current_tree, hf_ani_rpp_outbound_arrival_bits, tvb, offset, 8, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, ", Response");
-        }
+        col_append_fstr(pinfo->cinfo, COL_INFO, ", Response");
       }
       offset += (headerLength - 2);
       break;
@@ -689,9 +669,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         //proto_tree_add_item( current_tree, hf_ani_burst_process_time_us, tvb, offset+4, 4, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, ", Hold %u us", burst_hold_time);
-        }
+        col_append_fstr(pinfo->cinfo, COL_INFO, ", Hold %u us", burst_hold_time);
       }
       offset += (headerLength - 2);
       break;
@@ -786,9 +764,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
         proto_tree_add_item( current_tree, hf_ani_rpp_unknown_header, tvb, offset, headerLength-2, FALSE );
 
         /* set some text in the info column */
-        if (check_col(pinfo->cinfo, COL_INFO)) {
-          col_append_str(pinfo->cinfo, COL_INFO, " [Unknown Header]");
-        }
+        col_append_str(pinfo->cinfo, COL_INFO, " [Unknown Header]");
 
       }
       offset += (headerLength - 2);
@@ -810,14 +786,9 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
   guint8  octet2 = tvb_get_guint8( tvb, offset + 1 );
 
   /* Make entries in Protocol column and Info column on summary display */
-  if (check_col(pinfo->cinfo, COL_PROTOCOL))
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, "ani-rpp");
-
-  if (check_col(pinfo->cinfo, COL_INFO))
-    col_set_str(pinfo->cinfo, COL_INFO, "ANI-RPP Request");
-
-  if (check_col(pinfo->cinfo, COL_INFO))
-    col_clear(pinfo->cinfo, COL_INFO);
+  col_set_str(pinfo->cinfo, COL_PROTOCOL, "ani-rpp");
+  col_set_str(pinfo->cinfo, COL_INFO, "ANI-RPP Request");
+  col_clear(pinfo->cinfo, COL_INFO);
 
   /* determine how many bytes of the packet will be processed */
   offset = dissect_rtp_header(tvb, pinfo, offset, NULL);
@@ -840,9 +811,7 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     call_dissector(payload_handle, tvb_new_subset(tvb, offset, -1, -1), pinfo, tree);
   }
 
-  if (check_col(pinfo->cinfo, COL_INFO) && octet2 == 0x82) {
-    col_append_fstr(pinfo->cinfo, COL_INFO, ", Marker");
-  }
+  col_append_fstr(pinfo->cinfo, COL_INFO, ", Marker");
 
   /* Return the amount of data this dissector was able to dissect */
   return tvb_length(tvb);
@@ -1536,13 +1505,13 @@ proto_reg_handoff_ani_rpp(void)
   }
   else {
     /* delete the dissector with the old port value */
-    dissector_delete("udp.port", udp_port_ani_rpp,ani_rpp_handle);
+    dissector_delete_uint("udp.port", udp_port_ani_rpp,ani_rpp_handle);
   }
 
   /* save the new port value */
   udp_port_ani_rpp = global_udp_port_artnet;
 
-  dissector_add("udp.port", global_udp_port_artnet, ani_rpp_handle);
+  dissector_add_uint("udp.port", global_udp_port_artnet, ani_rpp_handle);
 
   ip_handle = find_dissector("ip");
   payload_handle = find_dissector("ani_payload");
