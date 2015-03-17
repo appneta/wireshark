@@ -1,5 +1,5 @@
 # Makefile.am
-# Automake file for TWAMP-Light plugin
+# Automake file for TWAMP plugin
 # By Steve Limkemann <stevelim@dgtech.com>
 # Copyright 1998 Steve Limkemann
 #

@@ -1,5 +1,5 @@
 # Makefile.nmake
-# nmake file for Gryphon plugin
+# nmake file for TWAMP plugin
 #
 
 include ..\..\config.nmake

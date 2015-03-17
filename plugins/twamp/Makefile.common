@@ -1,4 +1,4 @@
-# Makefile.common for Gryphon plugin
+# Makefile.common for TWAMP plugin
 #     Contains the stuff from Makefile.am and Makefile.nmake that is
 #     a) common to both files and
 #     b) portable between both files

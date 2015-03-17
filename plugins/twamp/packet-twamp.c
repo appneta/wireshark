@@ -2,8 +2,7 @@
  * Routines for Two-Way Active Measurement Protocl (TWAMP) dissection
  *
  * Currently only implements dissection for unauthenticated packetsc (TWAMP Light)
- * Author: Josh Elsasser <jelsasser@appneta.com>
- * Copyright (c) 2015 Apparent Networks
+ * Copyright (c) 2015 AppNeta
  *
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>

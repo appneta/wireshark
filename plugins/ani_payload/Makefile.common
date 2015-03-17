@@ -37,7 +37,6 @@ CLEAN_HEADER_FILES = \
 	packet-ani-payload.h
 
 HEADER_FILES = \
-	$(FLEX_GENERATED_HEADER_FILES) \
 	$(CLEAN_HEADER_FILES)
 
 include ../Makefile.common.inc

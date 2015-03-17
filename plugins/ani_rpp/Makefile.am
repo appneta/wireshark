@@ -1,5 +1,7 @@
 # Makefile.am
-# Automake file for ani_rpp plugin
+# Automake file for ani-rpp plugin
+# By Steve Limkemann <stevelim@dgtech.com>
+# Copyright 1998 Steve Limkemann
 #
 # Wireshark - Network traffic analyzer
 # By Gerald Combs <gerald@wireshark.org>
