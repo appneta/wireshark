@@ -1,7 +1,7 @@
 /* packet-twamp.c
  * Routines for Two-Way Active Measurement Protocl (TWAMP) dissection
  *
- * Currently only implements dissection for unauthenticated packetsc (TWAMP Light)
+ * Currently only implements dissection for unauthenticated packets (TWAMP Light)
  * Copyright (c) 2015 AppNeta
  *
  * Wireshark - Network traffic analyzer
@@ -146,7 +146,7 @@ dissect_twamp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     /*** HEURISTICS ***/
     /* Check MBZ fields for unauthenticated TWAMP packets */
     if (tvb_get_ntohs(tvb, 14) == 0 && tvb_get_ntohs(tvb, 38) == 0) {
-        dissect_twamp_unauth(tvb, pinfo, tree, data);
+        return dissect_twamp_unauth(tvb, pinfo, tree, data);
     } else {
         /* dissection not supported or invalid packet */
         return 0;
