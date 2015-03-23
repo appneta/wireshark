@@ -66,8 +66,21 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_item *ti;
     proto_tree *twamp_tree, *error_estim_tree;
     
-    guint error_bytes;
+    guint error_bytes, seq_num_bytes, reply_check_bytes;
+    gboolean is_request_packet;
     guint offset = 0;
+
+    /* CHECK FOR REQUEST PACKET */
+    /* if the receive timestamp field is zeroed, 
+     * this packet has not been reflected yet */
+    is_request_packet = (tvb_get_ntoh40(tvb, 24) == 0);
+
+    /* SET INFO COLUMN */
+    if (is_request_packet) {
+        col_set_str(pinfo->cinfo, COL_INFO, "TWAMP Request: ");
+    } else {
+        col_set_str(pinfo->cinfo, COL_INFO, "TWAMP Reply: ");
+    }
 
     /*** PROTOCOL TREE ***/
     /* create display subtree for the TWAMP light protocol */
@@ -77,6 +90,12 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     /* add packet fields to the subtree */
     proto_tree_add_item(twamp_tree, hf_twamp_seq, 
         tvb, offset, 4, ENC_BIG_ENDIAN);
+    if (is_request_packet) {
+        seq_num_bytes = tvb_get_ntoh40(tvb, offset);
+        if (seq_num_bytes) {
+            col_append_fstr(pinfo->cinfo, COL_INFO, "Sequence Number = %i", seq_num_bytes);
+        }
+    }
     offset+=4;
 
     proto_tree_add_item(twamp_tree, hf_twamp_timestamp, 
@@ -103,6 +122,12 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
     proto_tree_add_item(twamp_tree, hf_twamp_sender_seq, 
         tvb, offset, 4, ENC_BIG_ENDIAN);
+    if (! is_request_packet) {
+        seq_num_bytes = tvb_get_ntoh40(tvb, offset);
+        if (seq_num_bytes) {
+            col_append_fstr(pinfo->cinfo, COL_INFO, "Sequence Number = %i", seq_num_bytes);
+        }
+    }
     offset+=4;
 
     proto_tree_add_item(twamp_tree, hf_twamp_sender_timestamp, 
@@ -141,6 +166,7 @@ dissect_twamp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 {
     /*** COLUMN DATA ***/
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "TWAMP");
+    col_clear(pinfo->cinfo, COL_INFO);
     col_set_str(pinfo->cinfo, COL_INFO, "TWAMP Test Packet");
 
     /*** HEURISTICS ***/
