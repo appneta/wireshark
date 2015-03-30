@@ -43,6 +43,8 @@ HELP=$(STAGING_DIR)/help/capture_filters.txt \
 	$(STAGING_DIR)/help/toc
 
 PLUGINS= \
+	../../plugins/ani_rpp/ani_rpp.dll \
+	../../plugins/ani_payload/ani_payload.dll \
 	../../plugins/docsis/docsis.dll \
 	../../plugins/ethercat/ethercat.dll \
 	../../plugins/gryphon/gryphon.dll \
@@ -52,6 +54,7 @@ PLUGINS= \
 	../../plugins/opcua/opcua.dll \
 	../../plugins/profinet/profinet.dll \
 	../../plugins/stats_tree/stats_tree.dll \
+	../../plugins/twamp/twamp.dll \
 	../../plugins/unistim/unistim.dll \
 	../../plugins/wimax/wimax.dll \
 	../../plugins/wimaxasncp/wimaxasncp.dll \

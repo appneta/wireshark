@@ -298,6 +298,8 @@ PLATFORM_PCAP_SRC = \
 if HAVE_PLUGINS
 -include plugins/Custom.make
 plugin_ldadd = $(_CUSTOM_plugin_ldadd_) \
+	-dlopen plugins/ani_rpp/ani_rpp.la \
+	-dlopen plugins/ani_payload/ani_payload.la \
 	-dlopen plugins/docsis/docsis.la \
 	-dlopen plugins/ethercat/ethercat.la \
 	-dlopen plugins/gryphon/gryphon.la \
@@ -307,6 +309,7 @@ plugin_ldadd = $(_CUSTOM_plugin_ldadd_) \
 	-dlopen plugins/opcua/opcua.la \
 	-dlopen plugins/profinet/profinet.la \
 	-dlopen plugins/stats_tree/stats_tree.la \
+	-dlopen plugins/twamp/twamp.la \
 	-dlopen plugins/unistim/unistim.la \
 	-dlopen plugins/wimax/wimax.la \
 	-dlopen plugins/wimaxmacphy/wimaxmacphy.la

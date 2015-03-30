@@ -19,9 +19,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-include Custom.make
+-include Custom.make
 
 SUBDIRS = $(_CUSTOM_SUBDIRS_) \
+	ani_rpp \
+	ani_payload \
 	docsis \
 	ethercat \
 	gryphon \
@@ -31,6 +33,7 @@ SUBDIRS = $(_CUSTOM_SUBDIRS_) \
 	opcua \
 	profinet \
 	stats_tree \
+	twamp \
 	unistim \
 	wimax \
 	wimaxasncp \

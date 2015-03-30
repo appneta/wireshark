@@ -205,6 +205,8 @@ if ENABLE_STATIC
 -include ../plugins/Custom.make
 plugin_src = \
 	../plugins/asn1/packet-asn1.c \
+	../plugins/ani_rpp/packet-ani-rpp.c \
+	../plugins/ani_payload/packet-ani-payload.c \
 	../plugins/docsis/packet-bintrngreq.c \
 	../plugins/docsis/packet-bpkmattr.c \
 	../plugins/docsis/packet-bpkmreq.c \
@@ -234,7 +236,8 @@ plugin_src = \
 	../plugins/gryphon/packet-gryphon.c \
 	../plugins/irda/packet-irda.c \
 	../plugins/m2m/packet-m2m.c \
-	../plugins/m2m/wimax_tlv.c \
+	../plugins/irda/packet-irda.c \
+	../plugins/twamp/packet-twamp.c \
 	../plugins/wimax/crc.c \
 	../plugins/wimax/crc_data.c \
 	../plugins/wimax/mac_hd_generic_decoder.c \

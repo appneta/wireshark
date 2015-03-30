@@ -976,6 +976,8 @@ SectionGroup "Plugins / Extensions" SecPluginsGroup
 Section "Dissector Plugins" SecPlugins
 ;-------------------------------------------
 SetOutPath '$INSTDIR\plugins\${VERSION}'
+File "${STAGING_DIR}\plugins\${VERSION}\ani_rpp.dll"
+File "${STAGING_DIR}\plugins\${VERSION}\ani_payload.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\docsis.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\ethercat.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\gryphon.dll"
@@ -983,6 +985,7 @@ File "${STAGING_DIR}\plugins\${VERSION}\irda.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\m2m.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\opcua.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\profinet.dll"
+File "${STAGING_DIR}\plugins\${VERSION}\twamp.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\unistim.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\wimax.dll"
 File "${STAGING_DIR}\plugins\${VERSION}\wimaxasncp.dll"
