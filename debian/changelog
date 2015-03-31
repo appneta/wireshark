@@ -1,3 +1,9 @@
+wireshark (1.12.4.appneta.16) UNRELEASED; urgency=medium
+
+  * Plugins now included in the permanent build
+
+ -- Josh Elsasser <jelsasser@appneta.com>  Tues, 31 Mar 2015 14:29:47 -0700
+
 wireshark (1.12.4.appneta.15) UNRELEASED; urgency=medium
 
   * TWAMP dissector (unauthenticated packets only)
