@@ -3246,8 +3246,8 @@ AC_OUTPUT(
   packaging/svr4/checkinstall
   packaging/svr4/pkginfo
   plugins/Makefile
-  plugins/ani_rpp/Makefile
   plugins/ani_payload/Makefile
+  plugins/ani_rpp/Makefile
   plugins/docsis/Makefile
   plugins/easy_codec/Makefile
   plugins/ethercat/Makefile

@@ -1,7 +1,7 @@
 #
 
 # The name
-PACKAGE=twamp_light
+PACKAGE=twamp
 
 # The version
 MODULE_VERSION_MAJOR=0

@@ -65,13 +65,13 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     /* SUBTREE VARIABLES AND MISC LOCALS */
     proto_item *ti;
     proto_tree *twamp_tree, *error_estim_tree;
-    
-    guint error_bytes, seq_num_bytes, reply_check_bytes;
+
+    guint error_bytes, seq_num_bytes;
     gboolean is_request_packet;
     guint offset = 0;
 
     /* CHECK FOR REQUEST PACKET */
-    /* if the receive timestamp field is zeroed, 
+    /* if the receive timestamp field is zeroed,
      * this packet has not been reflected yet */
     is_request_packet = (tvb_get_ntoh40(tvb, 24) == 0);
 
@@ -88,7 +88,7 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     twamp_tree = proto_item_add_subtree(ti, ett_twamp);
 
     /* add packet fields to the subtree */
-    proto_tree_add_item(twamp_tree, hf_twamp_seq, 
+    proto_tree_add_item(twamp_tree, hf_twamp_seq,
         tvb, offset, 4, ENC_BIG_ENDIAN);
     if (is_request_packet) {
         seq_num_bytes = tvb_get_ntoh40(tvb, offset);
@@ -98,29 +98,29 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     }
     offset+=4;
 
-    proto_tree_add_item(twamp_tree, hf_twamp_timestamp, 
+    proto_tree_add_item(twamp_tree, hf_twamp_timestamp,
         tvb, offset, 8, ENC_TIME_NTP|ENC_BIG_ENDIAN);
     offset+=8;
 
     /* parse the error estimate field in a subtree */
-    ti = proto_tree_add_text(twamp_tree, tvb, offset, 2, "Error Estimate");
-    error_estim_tree = proto_item_add_subtree(ti, ett_twamp_error_estim);
-    
+    error_estim_tree = proto_tree_add_subtree(twamp_tree, tvb, offset, 2,
+        ett_twamp_error_estim, NULL, "Error Estimate");
+
     error_bytes = (gboolean) tvb_get_guint8(tvb, offset);
     proto_tree_add_boolean(error_estim_tree, hf_twamp_timestamp_synced,
         tvb, offset, 1, (gboolean) error_bytes >> 7);
-    proto_tree_add_uint(error_estim_tree, hf_twamp_error_scale, 
+    proto_tree_add_uint(error_estim_tree, hf_twamp_error_scale,
         tvb, offset, 1, (guint8) error_bytes & 0x3f);
-    proto_tree_add_item(error_estim_tree, hf_twamp_error_multi, 
+    proto_tree_add_item(error_estim_tree, hf_twamp_error_multi,
         tvb, offset+1, 1, ENC_BIG_ENDIAN);
     offset+=4; /*error bytes followed by two-byte MBZ*/
 
     /* add the receiver timestamp to the twamp tree */
-    proto_tree_add_item(twamp_tree, hf_twamp_receive_timestamp, 
+    proto_tree_add_item(twamp_tree, hf_twamp_receive_timestamp,
         tvb, offset, 8, ENC_TIME_NTP|ENC_BIG_ENDIAN);
     offset+=8;
 
-    proto_tree_add_item(twamp_tree, hf_twamp_sender_seq, 
+    proto_tree_add_item(twamp_tree, hf_twamp_sender_seq,
         tvb, offset, 4, ENC_BIG_ENDIAN);
     if (! is_request_packet) {
         seq_num_bytes = tvb_get_ntoh40(tvb, offset);
@@ -130,25 +130,25 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     }
     offset+=4;
 
-    proto_tree_add_item(twamp_tree, hf_twamp_sender_timestamp, 
+    proto_tree_add_item(twamp_tree, hf_twamp_sender_timestamp,
         tvb, offset, 8, ENC_TIME_NTP|ENC_BIG_ENDIAN);
     offset+=8;
 
     /* parse the sender error estimate field in a subtree */
-    ti = proto_tree_add_text(twamp_tree, tvb, offset, 2, "Sender Error Estimate");
-    error_estim_tree = proto_item_add_subtree(ti, ett_twamp_receive_estim);
+    error_estim_tree = proto_tree_add_subtree(twamp_tree, tvb, offset, 2,
+        ett_twamp_receive_estim, NULL, "Sender Error Estimate");
 
     error_bytes = tvb_get_guint8(tvb, offset);
     proto_tree_add_boolean(error_estim_tree, hf_twamp_sender_timestamp_synced,
         tvb, offset, 1, (gboolean) error_bytes >> 7);
-    proto_tree_add_uint(error_estim_tree, hf_twamp_sender_error_scale, 
+    proto_tree_add_uint(error_estim_tree, hf_twamp_sender_error_scale,
         tvb, offset, 1, (guint8) error_bytes & 0x3f);
-    proto_tree_add_item(error_estim_tree, hf_twamp_sender_error_multi, 
+    proto_tree_add_item(error_estim_tree, hf_twamp_sender_error_multi,
         tvb, offset+1, 1, ENC_BIG_ENDIAN);
     offset+=4; /*error bytes followed by two-byte MBZ*/
 
     /* sender ttl in main tree */
-    proto_tree_add_item(twamp_tree, hf_twamp_sender_ttl, 
+    proto_tree_add_item(twamp_tree, hf_twamp_sender_ttl,
         tvb, offset, 1, ENC_BIG_ENDIAN);
     offset+=1;
 
@@ -271,7 +271,7 @@ proto_register_twamp(void)
             " TWAMP UDP port if other than the default",
             10, &gTWAMP_PORT);
 } /* end proto_register_twamp */
- 
+
 void proto_reg_handoff_twamp(void)
 {
     static gboolean initialized = FALSE;
