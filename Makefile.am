@@ -339,8 +339,8 @@ dist_wimaxasncp_DATA = \
 if HAVE_PLUGINS
 -include plugins/Custom.make
 plugin_ldadd = $(_CUSTOM_plugin_ldadd_) \
-	-dlopen plugins/ani_rpp/ani_rpp.la \
 	-dlopen plugins/ani_payload/ani_payload.la \
+	-dlopen plugins/ani_rpp/ani_rpp.la \
 	-dlopen plugins/docsis/docsis.la \
 	-dlopen plugins/ethercat/ethercat.la \
 	-dlopen plugins/gryphon/gryphon.la \

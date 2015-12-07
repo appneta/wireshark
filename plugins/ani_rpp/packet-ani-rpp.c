@@ -338,13 +338,12 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
   gboolean      padding_set;
   gboolean      extension_set;
   unsigned int  csrc_count;
-  gboolean      marker_set;
   unsigned int  payload_type;
+  gboolean      marker_set;
   guint16       seq_num;
   guint32       timestamp;
   guint32       sync_src;
   proto_tree*   rtp_tree = NULL;
-  proto_item*   ti = NULL;
 
   /* Get the fields in the first octet */
   octet1 = tvb_get_guint8( tvb, offset );
@@ -379,13 +378,12 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
 
   /* Create a subtree for RTP */
   if (sync_src == NO_FLOW) {
-    ti = proto_tree_add_text(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH,
-      "Responder RTP Header: No flow%s", marker_set ? ", Marker" : "");
+    rtp_tree = proto_tree_add_subtree_format(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH, ett_ani_rtp, NULL,
+        "Responder RTP Header: No flow, %s", marker_set ? "Dual-ended" : "Single-ended");
   } else {
-    ti = proto_tree_add_text(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH,
-      "Responder RTP Header: Flow %d%s", sync_src, marker_set ? ", Marker" : "");
+    rtp_tree = proto_tree_add_subtree_format(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH, ett_ani_rtp, NULL,
+      "Responder RTP Header: Flow %u, %s", sync_src, marker_set ? "Dual-ended" : "Single-ended");
   }
-  rtp_tree = proto_item_add_subtree(ti, ett_ani_rtp);
 
   /* Add items to the RTP subtree */
   proto_tree_add_uint( rtp_tree, hf_rtp_version, tvb, offset, 1, octet1 );
@@ -419,15 +417,34 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
   return offset;
 }
 
+static proto_tree *add_subtree(tvbuff_t *tvb, gint *offset, proto_tree *current_tree,
+    gint header, gint8 headerLength, const char *title)
+{
+  proto_tree *tree = NULL;
+
+  if (current_tree && hf_subtrees[header]) {
+    tree = proto_tree_add_subtree(current_tree, tvb, *offset, headerLength,
+          *(hf_subtrees[header]), NULL, title);
+  }
+
+  if (tree) {
+    proto_tree_add_item(tree, hf_ani_rpp_next_header_type, tvb, *offset, 1, FALSE);
+    proto_tree_add_item(tree, hf_ani_rpp_header_length, tvb, *offset+1, 1, FALSE);
+  }
+
+  *offset += 2;
+
+  return tree;
+}
 /*******************************************************************/
 /* Parse the responder header starting at the offset in the tvb
  * buffer.  If ani_rpp_tree is set to NULL just return the length of
  * the header; otherwise add items to the dissector tree.
 */
 static int
-dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tree *ani_rpp_tree)
+dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_tree *ani_rpp_tree)
 {
-  int currentHeader, nextHeader;
+  gint currentHeader, nextHeader;
   guint8 headerLength = 0, mainHeader = 1, mode = 0;
   guint8 cmd_info_flags;
   guint32 id, flow, major, minor, revision, build, first_id,
@@ -444,24 +461,25 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
     nextHeader = tvb_get_guint8( tvb, offset );
     headerLength = tvb_get_guint8( tvb, offset+1 );
 
-    if (ani_rpp_tree && hf_subtrees[currentHeader]) {
-      /* Create a subtree for this header */
-      ti = proto_tree_add_text(ani_rpp_tree, tvb, offset, headerLength, "<not set>");
-      current_tree = proto_item_add_subtree(ti, *(hf_subtrees[currentHeader]));
-    }
+//    if (ani_rpp_tree && hf_subtrees[currentHeader]) {
+//      /* Create a subtree for this header */
+//      current_tree = proto_tree_add_subtree(ani_rpp_tree, tvb, offset, headerLength,
+//          *(hf_subtrees[currentHeader]), NULL, "<not set>");
+//    }
 
-    if (current_tree) {
-      proto_tree_add_item(current_tree, hf_ani_rpp_next_header_type, tvb, offset, 1, FALSE);
-      proto_tree_add_item(current_tree, hf_ani_rpp_header_length, tvb, offset+1, 1, FALSE);
-    }
-    offset += 2;
+//    if (current_tree) {
+//      proto_tree_add_item(current_tree, hf_ani_rpp_next_header_type, tvb, offset, 1, FALSE);
+//      proto_tree_add_item(current_tree, hf_ani_rpp_header_length, tvb, offset+1, 1, FALSE);
+//    }
+//    offset += 2;*/
 
     switch (currentHeader)
     {
     case HDR_SEQUENCE:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Sequence Header");
       if (current_tree) {
         id = tvb_get_ntohl( tvb, offset );
-        proto_item_set_text(ti, "Sequence Header");
         proto_tree_add_item( current_tree, hf_ani_rpp_pkt_id, tvb, offset, 4, FALSE );
 
         /* set some text in the info column */
@@ -470,8 +488,9 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_ERROR:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Error Header");
       if (current_tree) {
-        proto_item_set_text(ti, "Error Header");
         proto_tree_add_item( current_tree, hf_ani_rpp_error_code, tvb, offset, 1, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_next_header_type, tvb, offset+1, 1, FALSE );
 
@@ -481,16 +500,15 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_REQUEST:
-      if (current_tree) {
-        proto_item_set_text(ti, "Request Header");
-      }
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Request Header");
       offset += (headerLength - 2);
       break;
     case HDR_REPLY:
-      /* the next 28 bytes are the ip and udp headers to be used in the response */
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+        "Reply Header");
+    /* the next 28 bytes are the ip and udp headers to be used in the response */
       if (current_tree) {
-        proto_item_set_text(ti, "Reply Header");
-
         /* Save the current value of the "we're inside an error packet"
            flag, and set that flag; subdissectors may treat packets
            that are the payload of error packets differently from
@@ -514,9 +532,10 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_FLOW_CREATE:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Create Flow Header");
       if (current_tree) {
         port = tvb_get_ntohs( tvb, offset );
-        proto_item_set_text(ti, "Create Flow Header");
         if (headerLength >= 6) {
           proto_tree_add_item( current_tree, hf_ani_rpp_flow_port_first, tvb, offset, 2, FALSE );
           proto_tree_add_item( current_tree, hf_ani_rpp_flow_port_last, tvb, offset, 4, FALSE );
@@ -536,10 +555,11 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_FLOW_RESPONSE:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Reply Header");
       if (current_tree) {
         flow = tvb_get_ntohl( tvb, offset );
         port = tvb_get_ntohs( tvb, offset+4 );
-        proto_item_set_text(ti, "Flow Response Header");
         proto_tree_add_item ( current_tree, hf_ani_rpp_flow_num, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_flow_port, tvb, offset+4, 2, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE );
@@ -557,9 +577,10 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_FLOW_CLOSE:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Close Flow Header");
       if (current_tree) {
         flow = tvb_get_ntohl( tvb, offset );
-        proto_item_set_text(ti, "Close Flow Header");
         proto_tree_add_item ( current_tree, hf_ani_rpp_flow_num, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_flow_port, tvb, offset+4, 2, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE );
@@ -571,9 +592,10 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_TEST_WEIGHT:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Test Weight Header");
       if (current_tree) {
         weight = tvb_get_ntohs( tvb, offset );
-        proto_item_set_text(ti, "Test Weight Header");
         proto_tree_add_item( current_tree, hf_ani_rpp_test_weight, tvb, offset, 2, FALSE );
 
         /* set some text in the info column */
@@ -582,12 +604,13 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_RESPONDERVERSION:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Responder Version Header");
       if (current_tree) {
         major = tvb_get_ntohl( tvb, offset );
         minor = tvb_get_ntohl( tvb, offset+4 );
         revision = tvb_get_ntohl( tvb, offset+8 );
         build = tvb_get_ntohl( tvb, offset+12 );
-        proto_item_set_text(ti, "Responder Version");
         proto_tree_add_item( current_tree, hf_ani_rpp_responder_version_major, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_responder_version_minor, tvb, offset+4, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_responder_version_revision, tvb, offset+8, 4, FALSE );
@@ -599,11 +622,12 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_COMMAND_INFO:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Command Info Header");
       if (current_tree) {
         first_id = tvb_get_ntohl( tvb, offset);
         burstsize = tvb_get_ntohs( tvb, offset+4 );
         packetsize = tvb_get_ntohs( tvb, offset+6 );
-        proto_item_set_text(ti, "Command Info");
         proto_tree_add_item( current_tree, hf_ani_rpp_first_id, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_burst_size, tvb, offset+4, 2, FALSE );
         if (headerLength > 8) {
@@ -648,8 +672,9 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_OUTBOUNDARRIVAL:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Outbound Arrival Bits");
       if (current_tree) {
-        proto_item_set_text(ti, "Outbound Arrival Bits");
         proto_tree_add_item( current_tree, hf_ani_rpp_outbound_arrival_bits, tvb, offset, 8, FALSE );
 
         /* set some text in the info column */
@@ -658,10 +683,11 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_RESPONDERHOLDTIME:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+        "Responder Hold Times");
       if (current_tree) {
         burst_hold_time = tvb_get_ntohl( tvb, offset);
         //burst_process_time = tvb_get_ntohl( tvb, offset+4);
-        proto_item_set_text(ti, "Responder hold times");
         proto_tree_add_item( current_tree, hf_ani_burst_hold_time_us, tvb, offset, 4, FALSE );
         //proto_tree_add_item( current_tree, hf_ani_burst_process_time_us, tvb, offset+4, 4, FALSE );
 
@@ -671,9 +697,10 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_OUTBOUNDARRIVALTIME:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Outbound Arrival Timestamps");
       i = 0;
       if (current_tree) {
-        proto_item_set_text(ti, "Outbound Arrival Timestamps");
         depth = headerLength - 2;
         for (; i<depth; i+=4) {
           proto_tree_add_item( current_tree, hf_ani_rpp_outbound_arrival_times, tvb, offset+i, 4, FALSE );
@@ -682,8 +709,9 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_LOST_PACKETS:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Lost Packets");
       if (current_tree) {
-        proto_item_set_text(ti, "Lost Packets");
         depth = headerLength - 2;
         for (i=0; i<depth; i+=4) {
           proto_tree_add_item( current_tree, hf_ani_rpp_lost_id, tvb, offset+i, 4, FALSE );
@@ -693,40 +721,45 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_SIPPORT:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Sip Port");
       if (current_tree) {
         guint32 idLength = headerLength - 4;
-        proto_item_set_text(ti, "Sip Port");
         proto_tree_add_item( current_tree, hf_ani_rpp_sipport, tvb, offset, 2, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_ta_id, tvb, offset + 2, idLength, FALSE );
       }
       offset += (headerLength - 2);
       break;
     case HDR_PROTOCOL:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Protocol");
       if (current_tree) {
-        proto_item_set_text(ti, "Protocol");
         proto_tree_add_item( current_tree, hf_ani_rpp_protocol, tvb, offset, 4, FALSE );
       }
       offset += (headerLength - 2);
       break;
     case HDR_CONTROLLEDBURST:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Controlled Burst");
       if (current_tree) {
-        proto_item_set_text(ti, "Controlled Burst");
         proto_tree_add_item ( current_tree, hf_ani_rpp_cb_packetcount, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_cb_interpacketgap, tvb, offset+4, 4, FALSE );
       }
       offset += (headerLength - 2);
       break;
     case HDR_CONTROLLEDBURSTRESPONSE:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Controlled Burst Response");
       if (current_tree) {
-        proto_item_set_text(ti, "Controlled Burst Response");
         proto_tree_add_item ( current_tree, hf_ani_rpp_cb_resp_ratelimitcbrate, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_cb_resp_minpacketcount, tvb, offset+4, 4, FALSE );
       }
       offset += (headerLength - 2);
       break;
     case HDR_INBOUNDPACKETATTR:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Inbound Packet Attributes");
       if (current_tree) {
-        proto_item_set_text(ti, "Inbound Packet Attributes");
         proto_tree_add_item ( current_tree, hf_ani_rpp_inboundpacketcount, tvb, offset, 2, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_inboundpacketsize, tvb, offset+2, 2, FALSE );
         burstsize = tvb_get_ntohs( tvb, offset );
@@ -735,29 +768,33 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
       offset += (headerLength - 2);
       break;
     case HDR_H323PORT:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "H.323");
       if (current_tree) {
-        proto_item_set_text(ti, "H.323");
         proto_tree_add_item ( current_tree, hf_ani_rpp_h323port, tvb, offset, 2, FALSE );
       }
       offset += (headerLength - 2);
       break;
     case HDR_APPLIANCE_TYPE:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Device Type");
       if (current_tree) {
-        proto_item_set_text(ti, "Device Type");
         proto_tree_add_item ( current_tree, hf_ani_rpp_appliance_type, tvb, offset, 1, FALSE );
       }
       offset += (headerLength - 2);
       break;
     case HDR_CUSTOM_APPLIANCE_TYPE:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Custom Type");
       if (current_tree) {
-        proto_item_set_text(ti, "Custom Type");
         proto_tree_add_item ( current_tree, hf_ani_rpp_custom_appliance_type, tvb, offset, headerLength - 2, FALSE );
       }
       offset += (headerLength - 2);
       break;
     default:
+      current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+          "Unknown Header");
       if (current_tree) {
-        proto_item_set_text(ti, "Unknown Header");
         proto_tree_add_item( current_tree, hf_ani_rpp_unknown_header, tvb, offset, headerLength-2, FALSE );
 
         /* set some text in the info column */
@@ -780,7 +817,6 @@ static int
 dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
   unsigned int offset = 0;
-  guint8  octet2 = tvb_get_guint8( tvb, offset + 1 );
 
   /* Make entries in Protocol column and Info column on summary display */
   col_set_str(pinfo->cinfo, COL_PROTOCOL, "ani-rpp");
@@ -808,10 +844,10 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
     call_dissector(payload_handle, tvb_new_subset(tvb, offset, -1, -1), pinfo, tree);
   }
 
-  col_append_fstr(pinfo->cinfo, COL_INFO, ", Marker");
+  col_append_fstr(pinfo->cinfo, COL_INFO, ", Dual-ended");
 
   /* Return the amount of data this dissector was able to dissect */
-  return tvb_length(tvb);
+  return tvb_captured_length(tvb);
 }
 
 /*******************************************************************/
@@ -875,7 +911,7 @@ proto_register_ani_rpp(void)
     {
       &hf_rtp_marker,
       {
-        "RTP Marker",
+        "RTP Marker (Dual-ended)",
           "rtp.marker",
           FT_BOOLEAN,
           8,

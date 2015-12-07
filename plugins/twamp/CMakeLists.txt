@@ -19,6 +19,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+include(WiresharkPlugin)
+
+# This info is from moduleinfo.nmake
+set_module_info(twamp 0 0 4 0)
+
 set(DISSECTOR_SRC
 	packet-twamp.c
 )
@@ -47,18 +52,10 @@ register_dissector_files(plugin.c
 	${DISSECTOR_SRC}
 )
 
-add_library(twamp ${LINK_MODE_MODULE}
-	${PLUGIN_FILES}
-)
-set_target_properties(twamp PROPERTIES PREFIX "")
-set_target_properties(twamp PROPERTIES LINK_FLAGS "${WS_LINK_FLAGS}")
-set_target_properties(twamp PROPERTIES FOLDER "Plugins")
-
-target_link_libraries(twamp epan)
+add_plugin_library(twamp)
 
 install(TARGETS twamp
-	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/@CPACK_PACKAGE_NAME@/plugins/${CPACK_PACKAGE_VERSION} NAMELINK_SKIP
-	RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/@CPACK_PACKAGE_NAME@/plugins/${CPACK_PACKAGE_VERSION}
-	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/@CPACK_PACKAGE_NAME@/plugins/${CPACK_PACKAGE_VERSION}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION} NAMELINK_SKIP
+	RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}
 )
-

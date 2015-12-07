@@ -79,7 +79,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
 	guint bytes;
 
 	if (show_ani_payload && tree) {
-		bytes = tvb_length_remaining(tvb, 0);
+		bytes = tvb_captured_length_remaining(tvb, 0);
 		if (bytes > 0) {
 			tvbuff_t   *data_tvb;
 			proto_item *ti, *tf;

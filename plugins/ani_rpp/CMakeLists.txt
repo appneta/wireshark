@@ -19,6 +19,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+include(WiresharkPlugin)
+
+# This info is from moduleinfo.nmake
+set_module_info(ani_rpp 0 0 4 0)
+
 set(DISSECTOR_SRC
 	packet-ani-rpp.c
 )
@@ -47,18 +52,10 @@ register_dissector_files(plugin.c
 	${DISSECTOR_SRC}
 )
 
-add_library(ani_rpp ${LINK_MODE_MODULE}
-	${PLUGIN_FILES}
-)
-set_target_properties(ani_rpp PROPERTIES PREFIX "")
-set_target_properties(ani_rpp PROPERTIES LINK_FLAGS "${WS_LINK_FLAGS}")
-set_target_properties(ani_rpp PROPERTIES FOLDER "Plugins")
-
-target_link_libraries(ani_rpp epan)
+add_plugin_library(ani_rpp)
 
 install(TARGETS ani_rpp
-	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/@CPACK_PACKAGE_NAME@/plugins/${CPACK_PACKAGE_VERSION} NAMELINK_SKIP
-	RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/@CPACK_PACKAGE_NAME@/plugins/${CPACK_PACKAGE_VERSION}
-	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/@CPACK_PACKAGE_NAME@/plugins/${CPACK_PACKAGE_VERSION}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION} NAMELINK_SKIP
+	RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}
 )
-
