@@ -461,18 +461,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
     nextHeader = tvb_get_guint8( tvb, offset );
     headerLength = tvb_get_guint8( tvb, offset+1 );
 
-//    if (ani_rpp_tree && hf_subtrees[currentHeader]) {
-//      /* Create a subtree for this header */
-//      current_tree = proto_tree_add_subtree(ani_rpp_tree, tvb, offset, headerLength,
-//          *(hf_subtrees[currentHeader]), NULL, "<not set>");
-//    }
-
-//    if (current_tree) {
-//      proto_tree_add_item(current_tree, hf_ani_rpp_next_header_type, tvb, offset, 1, FALSE);
-//      proto_tree_add_item(current_tree, hf_ani_rpp_header_length, tvb, offset+1, 1, FALSE);
-//    }
-//    offset += 2;*/
-
     switch (currentHeader)
     {
     case HDR_SEQUENCE:
