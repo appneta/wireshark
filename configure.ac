@@ -9,7 +9,7 @@ m4_define([version_major], [2])
 m4_define([version_minor], [0])
 m4_define([version_micro], [1])
 m4_define([version_micro_extra], version_micro)
-m4_append([version_micro_extra], [])
+m4_append([version_micro_extra], [-appneta.17])
 
 AC_INIT(wireshark, [version_major.version_minor.version_micro_extra], http://bugs.wireshark.org/, , http://www.wireshark.org/)
 CONFIG_ARGS="$*"
@@ -3246,6 +3246,8 @@ AC_OUTPUT(
   packaging/svr4/checkinstall
   packaging/svr4/pkginfo
   plugins/Makefile
+  plugins/ani_rpp/Makefile
+  plugins/ani_payload/Makefile
   plugins/docsis/Makefile
   plugins/easy_codec/Makefile
   plugins/ethercat/Makefile
@@ -3256,6 +3258,7 @@ AC_OUTPUT(
   plugins/opcua/Makefile
   plugins/profinet/Makefile
   plugins/stats_tree/Makefile
+  plugins/twamp/Makefile
   plugins/unistim/Makefile
   plugins/wimax/Makefile
   plugins/wimaxasncp/Makefile
