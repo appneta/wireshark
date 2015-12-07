@@ -137,6 +137,7 @@ capture_session_init(capture_session *cap_session, void *cf)
     cap_session->owner                           = getuid();
     cap_session->group                           = getgid();
 #endif
+    cap_session->count                           = 0;
     cap_session->session_started                 = FALSE;
 }
 
@@ -364,6 +365,7 @@ sync_pipe_start(capture_options *capture_opts, capture_session *cap_session, voi
 #ifdef _WIN32
     HANDLE sync_pipe_read;                  /* pipe used to send messages from child to parent */
     HANDLE sync_pipe_write;                 /* pipe used to send messages from child to parent */
+    int signal_pipe_write_fd;
     HANDLE signal_pipe;                     /* named pipe used to send messages from parent to child (currently only stop) */
     GString *args = g_string_sized_new(200);
     gchar *quoted_arg;
@@ -565,6 +567,26 @@ sync_pipe_start(capture_options *capture_opts, capture_session *cap_session, voi
         return FALSE;
     }
 
+    /*
+     * Associate a C run-time file handle with the Windows HANDLE for the
+     * read side of the message pipe.
+     *
+     * (See http://www.flounder.com/handles.htm for information on various
+     * types of file handle in C/C++ on Windows.)
+     */
+    sync_pipe_read_fd = _open_osfhandle( (long) sync_pipe_read, _O_BINARY);
+    if (sync_pipe_read_fd == -1) {
+        /* Couldn't create the pipe between parent and child. */
+        report_failure("Couldn't get C file handle for sync pipe: %s", g_strerror(errno));
+        CloseHandle(sync_pipe_read);
+        CloseHandle(sync_pipe_write);
+        for (i = 0; i < argc; i++) {
+            g_free( (gpointer) argv[i]);
+        }
+        g_free(argv);
+        return FALSE;
+    }
+
     /* Create the signal pipe */
     signal_pipe_name = g_strdup_printf(SIGNAL_PIPE_FORMAT, control_id);
     signal_pipe = CreateNamedPipe(utf_8to16(signal_pipe_name),
@@ -575,10 +597,33 @@ sync_pipe_start(capture_options *capture_opts, capture_session *cap_session, voi
         /* Couldn't create the signal pipe between parent and child. */
         report_failure("Couldn't create signal pipe: %s",
                        win32strerror(GetLastError()));
+        ws_close(sync_pipe_read_fd);    /* Should close sync_pipe_read */
+        CloseHandle(sync_pipe_write);
         for (i = 0; i < argc; i++) {
             g_free( (gpointer) argv[i]);
         }
         g_free( (gpointer) argv);
+        return FALSE;
+    }
+
+    /*
+     * Associate a C run-time file handle with the Windows HANDLE for the
+     * read side of the message pipe.
+     *
+     * (See http://www.flounder.com/handles.htm for information on various
+     * types of file handle in C/C++ on Windows.)
+     */
+    signal_pipe_write_fd = _open_osfhandle( (intptr_t) signal_pipe, _O_BINARY);
+    if (sync_pipe_read_fd == -1) {
+        /* Couldn't create the pipe between parent and child. */
+        report_failure("Couldn't get C file handle for sync pipe: %s", g_strerror(errno));
+        ws_close(sync_pipe_read_fd);    /* Should close sync_pipe_read */
+        CloseHandle(sync_pipe_write);
+        CloseHandle(signal_pipe);
+        for (i = 0; i < argc; i++) {
+            g_free( (gpointer) argv[i]);
+        }
+        g_free(argv);
         return FALSE;
     }
 
@@ -612,8 +657,9 @@ sync_pipe_start(capture_options *capture_opts, capture_session *cap_session, voi
                       CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi)) {
         report_failure("Couldn't run %s in child process: %s",
                        args->str, win32strerror(GetLastError()));
-        CloseHandle(sync_pipe_read);
+        ws_close(sync_pipe_read_fd);    /* Should close sync_pipe_read */
         CloseHandle(sync_pipe_write);
+        CloseHandle(signal_pipe);
         for (i = 0; i < argc; i++) {
             g_free( (gpointer) argv[i]);
         }
@@ -623,12 +669,7 @@ sync_pipe_start(capture_options *capture_opts, capture_session *cap_session, voi
     cap_session->fork_child = (int) pi.hProcess;
     g_string_free(args, TRUE);
 
-    /* associate the operating system filehandle to a C run-time file handle */
-    /* (good file handle infos at: http://www.flounder.com/handles.htm) */
-    sync_pipe_read_fd = _open_osfhandle( (long) sync_pipe_read, _O_BINARY);
-
-    /* associate the operating system filehandle to a C run-time file handle */
-    cap_session->signal_pipe_write_fd = _open_osfhandle( (long) signal_pipe, _O_BINARY);
+    cap_session->signal_pipe_write_fd = signal_pipe_write_fd;
 
 #else /* _WIN32 */
     if (pipe(sync_pipe) < 0) {
@@ -781,13 +822,53 @@ sync_pipe_open_command(char** argv, int *data_read_fd,
         return -1;
     }
 
+    /*
+     * Associate a C run-time file handle with the Windows HANDLE for the
+     * read side of the message pipe.
+     *
+     * (See http://www.flounder.com/handles.htm for information on various
+     * types of file handle in C/C++ on Windows.)
+     */
+    *message_read_fd = _open_osfhandle( (long) sync_pipe[PIPE_READ], _O_BINARY);
+    if (*message_read_fd == -1) {
+        *msg = g_strdup_printf("Couldn't get C file handle for message read pipe: %s", g_strerror(errno));
+        CloseHandle(sync_pipe[PIPE_READ]);
+        CloseHandle(sync_pipe[PIPE_WRITE]);
+        for (i = 0; argv[i] != NULL; i++) {
+            g_free( (gpointer) argv[i]);
+        }
+        g_free( (gpointer) argv);
+        return -1;
+    }
+
     /* Create a pipe for the child process to send us data */
     /* (increase this value if you have trouble while fast capture file switches) */
     if (! CreatePipe(&data_pipe[PIPE_READ], &data_pipe[PIPE_WRITE], &sa, 5120)) {
         /* Couldn't create the message pipe between parent and child. */
         *msg = g_strdup_printf("Couldn't create data pipe: %s",
                                win32strerror(GetLastError()));
-        CloseHandle(sync_pipe[PIPE_READ]);
+        ws_close(*message_read_fd);    /* Should close sync_pipe[PIPE_READ] */
+        CloseHandle(sync_pipe[PIPE_WRITE]);
+        for (i = 0; argv[i] != NULL; i++) {
+            g_free( (gpointer) argv[i]);
+        }
+        g_free( (gpointer) argv);
+        return -1;
+    }
+
+    /*
+     * Associate a C run-time file handle with the Windows HANDLE for the
+     * read side of the data pipe.
+     *
+     * (See http://www.flounder.com/handles.htm for information on various
+     * types of file handle in C/C++ on Windows.)
+     */
+    *data_read_fd = _open_osfhandle( (long) data_pipe[PIPE_READ], _O_BINARY);
+    if (*data_read_fd == -1) {
+        *msg = g_strdup_printf("Couldn't get C file handle for data read pipe: %s", g_strerror(errno));
+        CloseHandle(data_pipe[PIPE_READ]);
+        CloseHandle(data_pipe[PIPE_WRITE]);
+        ws_close(*message_read_fd);    /* Should close sync_pipe[PIPE_READ] */
         CloseHandle(sync_pipe[PIPE_WRITE]);
         for (i = 0; argv[i] != NULL; i++) {
             g_free( (gpointer) argv[i]);
@@ -825,9 +906,9 @@ sync_pipe_open_command(char** argv, int *data_read_fd,
                       CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi)) {
         *msg = g_strdup_printf("Couldn't run %s in child process: %s",
                                args->str, win32strerror(GetLastError()));
-        CloseHandle(data_pipe[PIPE_READ]);
+        ws_close(*data_read_fd);       /* Should close data_pipe[PIPE_READ] */
         CloseHandle(data_pipe[PIPE_WRITE]);
-        CloseHandle(sync_pipe[PIPE_READ]);
+        ws_close(*message_read_fd);    /* Should close sync_pipe[PIPE_READ] */
         CloseHandle(sync_pipe[PIPE_WRITE]);
         for (i = 0; argv[i] != NULL; i++) {
             g_free( (gpointer) argv[i]);
@@ -837,11 +918,6 @@ sync_pipe_open_command(char** argv, int *data_read_fd,
     }
     *fork_child = (int) pi.hProcess;
     g_string_free(args, TRUE);
-
-    /* associate the operating system filehandles to C run-time file handles */
-    /* (good file handle infos at: http://www.flounder.com/handles.htm) */
-    *data_read_fd = _open_osfhandle( (long) data_pipe[PIPE_READ], _O_BINARY);
-    *message_read_fd = _open_osfhandle( (long) sync_pipe[PIPE_READ], _O_BINARY);
 #else /* _WIN32 */
     /* Create a pipe for the child process to send us messages */
     if (pipe(sync_pipe) < 0) {
@@ -1283,7 +1359,7 @@ sync_interface_list_open(gchar **data, gchar **primary_msg,
  * must be freed with g_free().
  */
 int
-sync_if_capabilities_open(const gchar *ifname, gboolean monitor_mode,
+sync_if_capabilities_open(const gchar *ifname, gboolean monitor_mode, const gchar* auth,
                           gchar **data, gchar **primary_msg,
                           gchar **secondary_msg, void (*update_cb)(void))
 {
@@ -1307,6 +1383,10 @@ sync_if_capabilities_open(const gchar *ifname, gboolean monitor_mode,
     argv = sync_pipe_add_arg(argv, &argc, "-L");
     if (monitor_mode)
         argv = sync_pipe_add_arg(argv, &argc, "-I");
+    if (auth) {
+        argv = sync_pipe_add_arg(argv, &argc, "-A");
+        argv = sync_pipe_add_arg(argv, &argc, auth);
+    }
 
 #ifndef DEBUG_CHILD
     /* Run dumpcap in capture child mode */
@@ -1776,6 +1856,7 @@ sync_pipe_input_cb(gint source, gpointer user_data)
     case SP_PACKET_COUNT:
         npackets = atoi(buffer);
         g_log(LOG_DOMAIN_CAPTURE, G_LOG_LEVEL_DEBUG, "sync_pipe_input_cb: new packets %u", npackets);
+        cap_session->count += npackets;
         capture_input_new_packets(cap_session, npackets);
         break;
     case SP_ERROR_MSG:

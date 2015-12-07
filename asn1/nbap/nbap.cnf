@@ -1243,7 +1243,7 @@ dch_id = 0xFFFFFFFF;
 #.FN_BODY RL-Specific-E-DCH-Information-Item
 address     dst_addr, null_addr;
 conversation_t *conversation;
-umts_fp_conversation_info_t *umts_fp_conversation_info;
+umts_fp_conversation_info_t *umts_fp_conversation_info = NULL;
 nbap_edch_port_info_t *old_info = NULL;
 
 transportLayerAddress_ipv4 = 0;
@@ -1263,11 +1263,14 @@ BindingID_port = 0;
         conversation = find_conversation(actx->pinfo->fd->num,&dst_addr,
             &null_addr, PT_UDP, BindingID_port,
             0, NO_ADDR_B|NO_PORT_B);
+        if (conversation) {
+            umts_fp_conversation_info = (umts_fp_conversation_info_t*)conversation_get_proto_data(conversation, proto_fp);
+        }
 
         /* We must also check if this port is about to be overriden, if thats the case we
          * might already have a DCH entry on this port which should be overwritten
          */
-        if (conversation == NULL || ((umts_fp_conversation_info_t*)conversation_get_proto_data(conversation, proto_fp))->channel == CHANNEL_DCH) {
+        if ((conversation == NULL) || (umts_fp_conversation_info && umts_fp_conversation_info->channel == CHANNEL_DCH)) {
 
 
 
@@ -1451,8 +1454,9 @@ BindingID_port = 0;
             conversation_set_dissector(conversation, fp_handle);
             if(actx->pinfo->link_dir==P2P_DIR_DL){
                 umts_fp_conversation_info = wmem_new0(wmem_file_scope(), umts_fp_conversation_info_t);
-                /*Steal the old informatoin*/
-                memcpy(umts_fp_conversation_info,conversation_get_proto_data(old_conversation, proto_fp),sizeof(umts_fp_conversation_info_t));
+                /* Steal the old information */
+                if (old_conversation)
+                    memcpy(umts_fp_conversation_info,conversation_get_proto_data(old_conversation, proto_fp),sizeof(umts_fp_conversation_info_t));
 
                 /* Overwrite the data */
                 umts_fp_conversation_info->iface_type        = IuB_Interface;
@@ -1606,7 +1610,8 @@ nbap_edch_channel_info[e_dch_macdflow_id].no_ddi_entries = num_items;
     {
         return offset;
     }
-    nbap_edch_channel_info[e_dch_macdflow_id].edch_ddi[num_items-1] = e_dch_ddi_value;
+    if(num_items>0)
+        nbap_edch_channel_info[e_dch_macdflow_id].edch_ddi[num_items-1] = e_dch_ddi_value;
 
 #.FN_BODY MACdPDU-Size VAL_PTR = &MACdPDU_Size
 %(DEFAULT_BODY)s
@@ -1615,15 +1620,15 @@ nbap_edch_channel_info[e_dch_macdflow_id].no_ddi_entries = num_items;
     {
         return offset;
     }
-    nbap_edch_channel_info[e_dch_macdflow_id].edch_macd_pdu_size[num_items-1] = MACdPDU_Size;
+    if(num_items>0)
+        nbap_edch_channel_info[e_dch_macdflow_id].edch_macd_pdu_size[num_items-1] = MACdPDU_Size;
 
 #.FN_BODY LogicalChannelID VAL_PTR = &logical_channel_id
     /* Set logical channel id for this entry*/
 %(DEFAULT_BODY)s
 
-
-    nbap_edch_channel_info[e_dch_macdflow_id].lchId[num_items-1] = logical_channel_id;
-
+    if(num_items>0)
+        nbap_edch_channel_info[e_dch_macdflow_id].lchId[num_items-1] = logical_channel_id;
 
 #.FN_BODY RLC-Mode VAL_PTR = &rlc_mode
     guint32 rlc_mode;

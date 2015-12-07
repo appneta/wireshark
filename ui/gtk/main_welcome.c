@@ -53,6 +53,7 @@
 #include "ui/gtk/main.h"
 #include "ui/gtk/menus.h"
 #include "ui/gtk/main_welcome.h"
+#include "ui/gtk/main_welcome_private.h"
 #include "ui/gtk/main_toolbar.h"
 #include "ui/gtk/help_dlg.h"
 #include "ui/gtk/capture_file_dlg.h"
@@ -136,6 +137,9 @@ static gboolean activate_link_cb(GtkLabel *label _U_, gchar *uri, gpointer user_
 #define CAPTURE_HB_BOX_CAPTURE        "CaptureHorizontalBoxCapture"
 #define CAPTURE_HB_BOX_REFRESH        "CaptureHorizontalBoxRefresh"
 
+static void
+welcome_header_push_msg(const gchar *msg_format, ...)
+    G_GNUC_PRINTF(1, 2);
 
 static GtkWidget *
 scroll_box_dynamic_new(GtkWidget *child_box, guint max_childs, guint scrollw_y_size) {
@@ -383,20 +387,24 @@ welcome_header_new(void)
     return eb;
 }
 
+static void
+welcome_header_push_msg(const gchar *msg_format, ...) {
+    va_list ap;
+    gchar *msg;
 
-void
-welcome_header_push_msg(const gchar *msg) {
-    gchar *msg_copy = g_strdup(msg);
+    va_start(ap, msg_format);
+    msg = g_strdup_vprintf(msg_format, ap);
+    va_end(ap);
 
-    status_messages = g_slist_append(status_messages, msg_copy);
+    status_messages = g_slist_append(status_messages, msg);
 
-    welcome_header_set_message(msg_copy);
+    welcome_header_set_message(msg);
 
     gtk_widget_hide(welcome_hb);
 }
 
 
-void
+static void
 welcome_header_pop_msg(void) {
     gchar *msg = NULL;
 
@@ -1453,3 +1461,138 @@ get_welcome_window(void)
 {
     return welcome_hb;
 }
+
+static void
+welcome_cf_file_closing_cb(capture_file *cf _U_)
+{
+    welcome_header_pop_msg();
+}
+
+void
+welcome_cf_callback(gint event, gpointer data, gpointer user_data _U_)
+{
+    switch(event) {
+    case(cf_cb_file_opened):
+        break;
+    case(cf_cb_file_closing):
+        welcome_cf_file_closing_cb((capture_file *)data);
+        break;
+    case(cf_cb_file_closed):
+        break;
+    case(cf_cb_file_read_started):
+        break;
+    case(cf_cb_file_read_finished):
+        break;
+    case(cf_cb_file_reload_started):
+        break;
+    case(cf_cb_file_reload_finished):
+        break;
+    case(cf_cb_file_rescan_started):
+        break;
+    case(cf_cb_file_rescan_finished):
+        break;
+    case(cf_cb_file_fast_save_finished):
+        break;
+    case(cf_cb_packet_selected):
+        break;
+    case(cf_cb_packet_unselected):
+        break;
+    case(cf_cb_field_unselected):
+        break;
+    case(cf_cb_file_save_started):
+        break;
+    case(cf_cb_file_save_finished):
+        break;
+    case(cf_cb_file_save_failed):
+        break;
+    case(cf_cb_file_save_stopped):
+        break;
+    case(cf_cb_file_export_specified_packets_started):
+        break;
+    case(cf_cb_file_export_specified_packets_finished):
+        break;
+    case(cf_cb_file_export_specified_packets_failed):
+        break;
+    case(cf_cb_file_export_specified_packets_stopped):
+        break;
+    default:
+        g_warning("welcome_cf_callback: event %u unknown", event);
+        g_assert_not_reached();
+    }
+}
+
+#ifdef HAVE_LIBPCAP
+static void
+welcome_capture_update_started_cb(capture_session *cap_session _U_)
+{
+    welcome_header_pop_msg();
+}
+
+static void
+welcome_capture_fixed_started_cb(capture_session *cap_session)
+{
+    capture_options *capture_opts = cap_session->capture_opts;
+    GString *interface_names;
+
+    welcome_header_pop_msg();
+
+    interface_names = get_iface_list_string(capture_opts, 0);
+    welcome_header_push_msg("Capturing on %s", interface_names->str);
+    g_string_free(interface_names, TRUE);
+}
+
+static void
+welcome_capture_fixed_finished_cb(capture_session *cap_session _U_)
+{
+    welcome_header_pop_msg();
+}
+
+static void
+welcome_capture_prepared_cb(capture_session *cap_session _U_)
+{
+    static const gchar msg[] = " Waiting for capture input data ...";
+    welcome_header_push_msg(msg);
+}
+
+static void
+welcome_capture_failed_cb(capture_session *cap_session _U_)
+{
+    welcome_header_pop_msg();
+}
+
+void
+welcome_capture_callback(gint event, capture_session *cap_session,
+                           gpointer user_data _U_)
+{
+    switch(event) {
+    case(capture_cb_capture_prepared):
+        welcome_capture_prepared_cb(cap_session);
+        break;
+    case(capture_cb_capture_update_started):
+        welcome_capture_update_started_cb(cap_session);
+        break;
+    case(capture_cb_capture_update_continue):
+        break;
+    case(capture_cb_capture_update_finished):
+        break;
+    case(capture_cb_capture_fixed_started):
+        welcome_capture_fixed_started_cb(cap_session);
+        break;
+    case(capture_cb_capture_fixed_continue):
+        break;
+    case(capture_cb_capture_fixed_finished):
+        welcome_capture_fixed_finished_cb(cap_session);
+        break;
+    case(capture_cb_capture_stopping):
+        /* Beware: this state won't be called, if the capture child
+         * closes the capturing on its own! */
+        break;
+    case(capture_cb_capture_failed):
+        welcome_capture_failed_cb(cap_session);
+        break;
+    default:
+        g_warning("welcome_capture_callback: event %u unknown", event);
+        g_assert_not_reached();
+    }
+}
+#endif /* HAVE_LIBPCAP */

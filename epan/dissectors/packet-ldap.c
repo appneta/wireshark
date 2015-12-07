@@ -705,14 +705,10 @@ attribute_types_initialize_cb(void)
     /* Unregister all fields */
     for (i = 0; i < hf_size; i++) {
       proto_unregister_field (proto_ldap, *(hf[i].p_id));
-
       g_free (hf[i].p_id);
-      g_free ((char *) hf[i].hfinfo.name);
-      g_free ((char *) hf[i].hfinfo.abbrev);
-      g_free ((char *) hf[i].hfinfo.blurb);
     }
     g_hash_table_destroy (attribute_types_hash);
-    g_free (hf);
+    proto_add_deregistered_data (hf);
     attribute_types_hash = NULL;
   }
 
@@ -3187,11 +3183,12 @@ dissect_ldap_ProtocolOp(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset
 
   /* XXX: the count will not work if the results span multiple TCP packets */
 
-  if(ldap_info && tree) { /* only count once - on tree pass */
+  if(ldap_info) { /* only count once */
     switch(ProtocolOp) {
 
     case LDAP_RES_SEARCH_ENTRY:
-  	ldap_info->num_results++;
+    if (!actx->pinfo->fd->flags.visited)
+        ldap_info->num_results++;
 
   	proto_item_append_text(tree, " [%d result%s]",
   		        ldap_info->num_results, ldap_info->num_results == 1 ? "" : "s");
@@ -3206,7 +3203,6 @@ dissect_ldap_ProtocolOp(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset
   	proto_item_append_text(tree, " [%d result%s]",
   		        ldap_info->num_results, ldap_info->num_results == 1 ? "" : "s");
 
-  	ldap_info->num_results = 0;
     	break;
      default:
    	break;
@@ -4160,6 +4156,7 @@ static void
 				if (decr_tvb) {
 					proto_item *enc_item = NULL;
 					proto_tree *enc_tree = NULL;
+					guint decr_len = tvb_reported_length(decr_tvb);
 
 					/*
 					* The LDAP message was encrypted in the packet, and has
@@ -4170,14 +4167,14 @@ static void
 					if (sasl_tree) {
 						enc_item = proto_tree_add_text(sasl_tree, gssapi_tvb, ver_len, -1,
 							"GSS-API Encrypted payload (%d byte%s)",
-							sasl_len - ver_len,
-							plurality(sasl_len - ver_len, "", "s"));
+							decr_len, plurality(decr_len, "", "s"));
 						enc_tree = proto_item_add_subtree(enc_item, ett_ldap_payload);
 					}
 					dissect_ldap_payload(decr_tvb, pinfo, enc_tree, ldap_info, is_mscldap);
 				} else if (plain_tvb) {
 					proto_item *plain_item = NULL;
 					proto_tree *plain_tree = NULL;
+					guint plain_len = tvb_reported_length(plain_tvb);
 
 					/*
 					* The LDAP message wasn't encrypted in the packet;
@@ -4188,8 +4185,7 @@ static void
 					if (sasl_tree) {
 						plain_item = proto_tree_add_text(sasl_tree, gssapi_tvb, ver_len, -1,
 							"GSS-API payload (%d byte%s)",
-							sasl_len - ver_len,
-							plurality(sasl_len - ver_len, "", "s"));
+							plain_len, plurality(plain_len, "", "s"));
 						plain_tree = proto_item_add_subtree(plain_item, ett_ldap_payload);
 					}
 
@@ -5742,7 +5738,7 @@ void proto_register_ldap(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-ldap-hfarr.c ---*/
-#line 2253 "../../asn1/ldap/packet-ldap-template.c"
+#line 2233 "../../asn1/ldap/packet-ldap-template.c"
   };
 
   /* List of subtrees */
@@ -5816,7 +5812,7 @@ void proto_register_ldap(void) {
     &ett_ldap_T_warning,
 
 /*--- End of included file: packet-ldap-ettarr.c ---*/
-#line 2267 "../../asn1/ldap/packet-ldap-template.c"
+#line 2247 "../../asn1/ldap/packet-ldap-template.c"
   };
   /* UAT for header fields */
   static uat_field_t custom_attribute_types_uat_fields[] = {
@@ -5982,7 +5978,7 @@ proto_reg_handoff_ldap(void)
 
 
 /*--- End of included file: packet-ldap-dis-tab.c ---*/
-#line 2416 "../../asn1/ldap/packet-ldap-template.c"
+#line 2396 "../../asn1/ldap/packet-ldap-template.c"
 
 
 }

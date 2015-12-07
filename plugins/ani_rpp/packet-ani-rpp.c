@@ -777,7 +777,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tr
 /* Code to actually dissect the packets
 */
 static int
-dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
   unsigned int offset = 0;
   guint8  octet2 = tvb_get_guint8( tvb, offset + 1 );

@@ -41,7 +41,7 @@
 #include <epan/packet.h>
 #include <epan/exceptions.h>
 #include <epan/expert.h>
-#include <epan/wmem/wmem.h>
+#include <epan/to_str.h>
 #include "packet-tcp.h"
 
 
@@ -1030,6 +1030,11 @@ static int
 format_amqp_1_0_double(tvbuff_t *tvb,
                        guint offset, guint bound _U_, guint length _U_,
                        const char **value);
+
+static int
+format_amqp_1_0_decimal(tvbuff_t *tvb _U_,
+                        guint offset _U_, guint bound _U_, guint length,
+                        const char **value);
 
 static int
 format_amqp_1_0_char(tvbuff_t *tvb,
@@ -2707,6 +2712,9 @@ static struct amqp_typeinfo amqp_1_0_fixed_types[] = {
     { 0x55, "smalllong",  format_amqp_1_0_int,          1 },
     { 0x72, "float",      format_amqp_1_0_float,        4 },
     { 0x82, "double",     format_amqp_1_0_double,       8 },
+    { 0x74, "decimal32",  format_amqp_1_0_decimal,      4 },
+    { 0x84, "decimal64",  format_amqp_1_0_decimal,      8 },
+    { 0x94, "decimal128", format_amqp_1_0_decimal,      16 },
     { 0x73, "char",       format_amqp_1_0_char,         4 },
     { 0x83, "timestamp",  format_amqp_1_0_timestamp,    8 },
     { 0x98, "uuid",       format_amqp_1_0_uuid,         16 },
@@ -10469,7 +10477,7 @@ format_amqp_1_0_float(tvbuff_t *tvb,
                       const char **value)
 {
     float floatval;
-    floatval = tvb_get_letohieee_float(tvb, offset);
+    floatval = tvb_get_ntohieee_float(tvb, offset);
     *value = wmem_strdup_printf(wmem_packet_scope(), "%f", floatval);
     return 4;
 }
@@ -10480,20 +10488,31 @@ format_amqp_1_0_double(tvbuff_t *tvb,
                        const char **value)
 {
     double doubleval;
-    doubleval = tvb_get_letohieee_double(tvb, offset);
+    doubleval = tvb_get_ntohieee_double(tvb, offset);
     *value = wmem_strdup_printf(wmem_packet_scope(), "%f", doubleval);
     return 8;
 }
 
-/* TODO: add AMQP 1.0 decimal[32|64|128] primitive types */
+static int
+format_amqp_1_0_decimal(tvbuff_t *tvb _U_,
+                        guint offset _U_, guint bound _U_, guint length,
+                        const char **value)
+{
+    /* TODO: this requires the _Decimal32 datatype from ISO/IEC TR 24732
+     * and corresponding support in printf and glib
+     */
+    *value = wmem_strdup_printf(wmem_packet_scope(), "(not supported)");
+    return length;
+}
 
 static int
 format_amqp_1_0_char(tvbuff_t *tvb,
                      guint offset, guint bound _U_, guint length _U_,
                      const char **value)
 {
-    *value = tvb_format_text(tvb, offset, 1);
-    return 1;
+    /* one UTF-32BE encoded Unicode character */
+    *value = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, 4, ENC_UCS_4|ENC_BIG_ENDIAN);
+    return 4;
 }
 
 static int
@@ -10512,8 +10531,8 @@ format_amqp_1_0_uuid(tvbuff_t *tvb,
 {
     e_guid_t uuid;
     tvb_get_guid(tvb, offset, &uuid, ENC_BIG_ENDIAN);
-    *value = tvb_format_text(tvb, offset, 16);
-    return 1;
+    *value = guid_to_ep_str(&uuid);
+    return 16;
 }
 
 static int

@@ -56,7 +56,6 @@
 #include "ui/gtk/expert_comp_dlg.h"
 #include "ui/gtk/stock_icons.h"
 #include "ui/gtk/profile_dlg.h"
-#include "ui/gtk/main_welcome.h"
 #include "ui/gtk/expert_indicators.h"
 #include "ui/gtk/capture_comment_icons.h"
 #include "ui/gtk/keys.h"
@@ -805,31 +804,14 @@ statusbar_capture_prepared_cb(capture_session *cap_session _U_)
 {
     static const gchar msg[] = " Waiting for capture input data ...";
     statusbar_push_file_msg(msg);
-    welcome_header_push_msg(msg);
 }
 
 static GString *
 statusbar_get_interface_names(capture_options *capture_opts)
 {
-    guint i;
     GString *interface_names;
 
-    interface_names = g_string_new("");
-
-#ifdef _WIN32
-    if (capture_opts->ifaces->len < 2) {
-#else
-    if (capture_opts->ifaces->len < 4) {
-#endif
-        for (i = 0; i < capture_opts->ifaces->len; i++) {
-            if (i > 0) {
-                g_string_append_printf(interface_names, ", ");
-            }
-            g_string_append_printf(interface_names, "%s", get_iface_description_for_interface(capture_opts, i));
-        }
-    } else {
-        g_string_append_printf(interface_names, "%u interfaces", capture_opts->ifaces->len);
-    }
+    interface_names = get_iface_list_string(capture_opts, 0);
     if (strlen (interface_names->str) > 0) {
         g_string_append(interface_names, ":");
     }
@@ -844,7 +826,6 @@ statusbar_capture_update_started_cb(capture_session *cap_session)
     GString *interface_names;
 
     statusbar_pop_file_msg();
-    welcome_header_pop_msg();
 
     interface_names = statusbar_get_interface_names(capture_opts);
     statusbar_push_file_msg("%s<live capture in progress> to file: %s",
@@ -917,12 +898,10 @@ statusbar_capture_fixed_started_cb(capture_session *cap_session)
 static void
 statusbar_capture_fixed_continue_cb(capture_session *cap_session)
 {
-    capture_file *cf = (capture_file *)cap_session->cf;
     gchar *capture_msg;
 
-
     gtk_statusbar_pop(GTK_STATUSBAR(packets_bar), packets_ctx);
-    capture_msg = g_strdup_printf(" Packets: %u", cf_get_packet_count(cf));
+    capture_msg = g_strdup_printf(" Packets: %u", cap_session->count);
     gtk_statusbar_push(GTK_STATUSBAR(packets_bar), packets_ctx, capture_msg);
     g_free(capture_msg);
 }
@@ -937,7 +916,6 @@ statusbar_capture_fixed_finished_cb(capture_session *cap_session _U_)
 
     /* Pop the "<live capture in progress>" message off the status bar. */
     statusbar_pop_file_msg();
-    welcome_header_pop_msg();
 
     /* Pop the "<capturing>" message off the status bar */
     gtk_statusbar_pop(GTK_STATUSBAR(packets_bar), packets_ctx);
@@ -952,7 +930,6 @@ statusbar_capture_failed_cb(capture_session *cap_session _U_)
 
     /* Pop the "<live capture in progress>" message off the status bar. */
     statusbar_pop_file_msg();
-    welcome_header_pop_msg();
 
     /* Pop the "<capturing>" message off the status bar */
     gtk_statusbar_pop(GTK_STATUSBAR(packets_bar), packets_ctx);

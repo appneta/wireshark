@@ -4066,11 +4066,12 @@ set_menu_object_data (const gchar *path, const gchar *key, gpointer data)
 static GList *
 remove_present_file_name(GList *recent_files_list, const gchar *cf_name)
 {
-    GList *li;
+    GList *li, *next;
     gchar *widget_cf_name;
 
-    for (li = g_list_first(recent_files_list); li; li = li->next) {
+    for (li = g_list_first(recent_files_list); li; li = next) {
         widget_cf_name = (gchar *)li->data;
+        next = li->next;
         if (
 #ifdef _WIN32
             /* do a case insensitive compare on win32 */
@@ -4146,8 +4147,10 @@ add_recent_items (guint merge_id, GtkUIManager *ui_manager)
     GtkActionGroup *action_group;
     GtkAction      *action;
     GtkWidget      *submenu_recent_files;
+    GtkWidget      *submenu_recent_file;
     GList          *items, *l;
     gchar          *action_name;
+    gchar          *recent_path;
     guint           i;
 
     /* Reset the recent files list in the welcome screen */
@@ -4214,9 +4217,15 @@ add_recent_items (guint merge_id, GtkUIManager *ui_manager)
                  GTK_UI_MANAGER_MENUITEM,
                  FALSE);
 
+      /* Disable mnemonic accelerator key for recent file name */
+      recent_path = g_strdup_printf ("/Menubar/FileMenu/OpenRecent/RecentFiles/recent-info-%u", i);
+      submenu_recent_file = gtk_ui_manager_get_widget(ui_manager, recent_path);
+      g_object_set(G_OBJECT (submenu_recent_file), "use-underline", 0, NULL);
+
       /* Add the file name to the recent files list on the Welcome screen */
       main_welcome_add_recent_capture_file(item_name, G_OBJECT(action));
 
+      g_free (recent_path);
       g_free (action_name);
     }
     /* Add a Separator */

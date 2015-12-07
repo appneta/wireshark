@@ -34,6 +34,7 @@
 #include "epan/ex-opt.h"
 #include "capture_ifinfo.h"
 #include "capture_ui_utils.h"
+#include "ui/capture_globals.h"
 #include "wiretap/wtap.h"
 #include "epan/to_str.h"
 
@@ -540,6 +541,106 @@ get_iface_description_for_interface(capture_options *capture_opts, guint i)
   } else {
     return (NULL);
   }
+}
+
+/*
+ * Set the active DLT for a device appropriately.
+ */
+void
+set_active_dlt(interface_t *device, int global_default_dlt)
+{
+  GList    *list;
+  gboolean  found_active_dlt;
+  link_row *link;
+
+  /*
+   * If there's a preference for the link-layer header type for
+   * this interface, use it.  If not, use the all-interface
+   * default; if that's not set on the command line, that will
+   * be -1, meaning "use per-interface defaults", otherwise
+   * we'll fail if it's not one of the types the interface
+   * supports.
+   */
+  if ((device->active_dlt = capture_dev_user_linktype_find(device->name)) == -1) {
+    device->active_dlt = global_default_dlt;
+  }
+
+  /*
+   * Is that one of the supported link-layer header types?
+   * If not, set it to -1, so we'll fall back on the first supported
+   * link-layer header type.
+   */
+  found_active_dlt = FALSE;
+  for (list = device->links; list != NULL; list = g_list_next(list)) {
+    link = (link_row *)(list->data);
+    if (link->dlt != -1 && link->dlt == device->active_dlt) {
+      found_active_dlt = TRUE;
+      break;
+    }
+  }
+  if (!found_active_dlt) {
+    device->active_dlt = -1;
+  }
+  if (device->active_dlt == -1) {
+    /* Fall back on the first supported DLT, if we have one. */
+    for (list = device->links; list != NULL; list = g_list_next(list)) {
+      link = (link_row *)(list->data);
+      if (link->dlt != -1) {
+        device->active_dlt = link->dlt;
+        break;
+      }
+    }
+  }
+}
+
+GString *
+get_iface_list_string(capture_options *capture_opts, guint32 style)
+{
+  GString *iface_list_string = g_string_new("");
+  guint i;
+
+  /*
+   * If we have a descriptive name for the interface, show that,
+   * rather than its raw name.  On NT 5.x (2K/XP/Server2K3), the
+   * interface name is something like "\Device\NPF_{242423..."
+   * which is pretty useless to the normal user.  On other platforms,
+   * it might be less cryptic, but if a more descriptive name is
+   * available, we should still use that.
+   */
+#ifdef _WIN32
+  if (capture_opts->ifaces->len < 2) {
+#else
+  if (capture_opts->ifaces->len < 4) {
+#endif
+    for (i = 0; i < capture_opts->ifaces->len; i++) {
+      if (i > 0) {
+        if (capture_opts->ifaces->len > 2) {
+          g_string_append_printf(iface_list_string, ",");
+        }
+        g_string_append_printf(iface_list_string, " ");
+        if (i == capture_opts->ifaces->len - 1) {
+          g_string_append_printf(iface_list_string, "and ");
+        }
+      }
+      if (style & IFLIST_QUOTE_IF_DESCRIPTION)
+        g_string_append_printf(iface_list_string, "'");
+      g_string_append_printf(iface_list_string, "%s", get_iface_description_for_interface(capture_opts, i));
+      if (style & IFLIST_QUOTE_IF_DESCRIPTION)
+        g_string_append_printf(iface_list_string, "'");
+      if (style & IFLIST_SHOW_FILTER) {
+        interface_options interface_opts;
+
+        interface_opts = g_array_index(capture_opts->ifaces, interface_options, i);
+        if (interface_opts.cfilter != NULL &&
+            strlen(interface_opts.cfilter) > 0) {
+          g_string_append_printf(iface_list_string, " (%s)", interface_opts.cfilter);
+        }
+      }
+    }
+  } else {
+    g_string_append_printf(iface_list_string, "%u interfaces", capture_opts->ifaces->len);
+  }
+  return iface_list_string;
 }
 
 #endif /* HAVE_LIBPCAP */

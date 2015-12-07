@@ -78,6 +78,7 @@ EXTRA_DIST = \
 	Scripts/chmodbpf-postinstall.sh	\
 	Scripts/cli-postinstall.sh	\
 	Scripts/wireshark-postinstall.sh	\
+	Scripts/xquartzfixer-postinstall.sh	\
 	utility-launcher	\
 	root.ds_store	\
 	util.ds_store	\
@@ -87,7 +88,11 @@ EXTRA_DIST = \
 	Wireshark_package.pmdoc/02chmodbpf.xml			\
 	Wireshark_package.pmdoc/03utility-contents.xml		\
 	Wireshark_package.pmdoc/03utility.xml			\
-	Wireshark_package.pmdoc/index.xml.in
+	Wireshark_package.pmdoc/04xquartzfixer-contents.xml	\
+	Wireshark_package.pmdoc/04xquartzfixer.xml		\
+	Wireshark_package.pmdoc/index.xml.in		\
+	XQuartzFixer/XQuartzFixer	\
+	XQuartzFixer/org.wireshark.XQuartzFixer.plist
 
 
 COPYING.txt: ../../COPYING

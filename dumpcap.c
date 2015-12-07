@@ -64,6 +64,39 @@
 #include <sys/utsname.h>
 #endif
 
+/*
+ * Linux bonding devices mishandle unknown ioctls; they fail
+ * with ENODEV rather than ENOTSUP, EOPNOTSUPP, or ENOTTY,
+ * so pcap_can_set_rfmon() returns a "no such device" indication
+ * if we try to do SIOCGIWMODE on them.
+ *
+ * So, on Linux, we check for bonding devices, if we can, before
+ * trying pcap_can_set_rfmon(), as pcap_can_set_rfmon() will
+ * end up trying SIOCGIWMODE on the device if that ioctl exists.
+ */
+#if defined(HAVE_PCAP_CREATE) && defined(__linux__)
+
+#include <sys/ioctl.h>
+
+/*
+ * If we're building for a Linux version that supports bonding,
+ * HAVE_BONDING will be defined.
+ */
+
+#ifdef HAVE_LINUX_SOCKIOS_H
+#include <linux/sockios.h>
+#endif
+
+#ifdef HAVE_LINUX_IF_BONDING_H
+#include <linux/if_bonding.h>
+#endif
+
+#if defined(BOND_INFO_QUERY_OLD) || defined(SIOCBONDINFOQUERY)
+#define HAVE_BONDING
+#endif
+
+#endif /* defined(HAVE_PCAP_CREATE) && defined(__linux__) */
+
 #include <signal.h>
 #include <errno.h>
 
@@ -1130,15 +1163,49 @@ create_data_link_info(int dlt)
     return data_link_info;
 }
 
+#if defined(HAVE_BONDING) && defined(HAVE_PCAP_CREATE)
+static gboolean
+is_linux_bonding_device(const char *ifname)
+{
+    int fd;
+    struct ifreq ifr;
+    ifbond ifb;
+
+    fd = socket(PF_INET, SOCK_DGRAM, 0);
+    if (fd == -1)
+        return FALSE;
+
+    memset(&ifr, 0, sizeof ifr);
+    g_strlcpy(ifr.ifr_name, ifname, sizeof ifr.ifr_name);
+    memset(&ifb, 0, sizeof ifb);
+    ifr.ifr_data = (caddr_t)&ifb;
+#if defined(SIOCBONDINFOQUERY)
+    if (ioctl(fd, SIOCBONDINFOQUERY, &ifr) == 0) {
+        close(fd);
+        return TRUE;
+    }
+#else
+    if (ioctl(fd, BOND_INFO_QUERY_OLD, &ifr) == 0) {
+        close(fd);
+        return TRUE;
+    }
+#endif
+
+    return FALSE;
+}
+#elif defined(HAVE_PCAP_CREATE)
+static gboolean
+is_linux_bonding_device(const char *ifname _U_)
+{
+    return FALSE;
+}
+#endif
+
 /*
  * Get the capabilities of a network device.
  */
 static if_capabilities_t *
-get_if_capabilities(const char *devicename, gboolean monitor_mode
-#ifndef HAVE_PCAP_CREATE
-        _U_
-#endif
-, char **err_str)
+get_if_capabilities(interface_options *interface_opts, char **err_str)
 {
     if_capabilities_t *caps;
     char errbuf[PCAP_ERRBUF_SIZE];
@@ -1174,7 +1241,19 @@ get_if_capabilities(const char *devicename, gboolean monitor_mode
      */
     errbuf[0] = '\0';
 #ifdef HAVE_PCAP_OPEN
-    pch = pcap_open(devicename, MIN_PACKET_SIZE, 0, 0, NULL, errbuf);
+#ifdef HAVE_PCAP_REMOTE
+    if (strncmp (interface_opts->name, "rpcap://", 8) == 0) {
+        struct pcap_rmtauth auth;
+
+        auth.type = interface_opts->auth_type == CAPTURE_AUTH_PWD ?
+            RPCAP_RMTAUTH_PWD : RPCAP_RMTAUTH_NULL;
+        auth.username = interface_opts->auth_username;
+        auth.password = interface_opts->auth_password;
+
+        pch = pcap_open(interface_opts->name, MIN_PACKET_SIZE, 0, 0, &auth, errbuf);
+    } else
+#endif
+        pch = pcap_open(interface_opts->name, MIN_PACKET_SIZE, 0, 0, NULL, errbuf);
     caps->can_set_rfmon = FALSE;
     if (pch == NULL) {
         if (err_str != NULL)
@@ -1183,14 +1262,26 @@ get_if_capabilities(const char *devicename, gboolean monitor_mode
         return NULL;
     }
 #elif defined(HAVE_PCAP_CREATE)
-    pch = pcap_create(devicename, errbuf);
+    pch = pcap_create(interface_opts->name, errbuf);
     if (pch == NULL) {
         if (err_str != NULL)
             *err_str = g_strdup(errbuf);
         g_free(caps);
         return NULL;
     }
-    status = pcap_can_set_rfmon(pch);
+    if (is_linux_bonding_device(interface_opts->name)) {
+        /*
+         * Linux bonding device; not Wi-Fi, so no monitor mode, and
+         * calling pcap_can_set_rfmon() might get a "no such device"
+         * error.
+         */
+        status = 0;
+    } else {
+        /*
+         * Not a Linux bonding device, so go ahead.
+         */
+        status = pcap_can_set_rfmon(pch);
+    }
     if (status < 0) {
         /* Error. */
         if (status == PCAP_ERROR)
@@ -1206,7 +1297,7 @@ get_if_capabilities(const char *devicename, gboolean monitor_mode
         caps->can_set_rfmon = FALSE;
     else if (status == 1) {
         caps->can_set_rfmon = TRUE;
-        if (monitor_mode)
+        if (interface_opts->monitor_mode)
             pcap_set_rfmon(pch, 1);
     } else {
         if (err_str != NULL) {
@@ -1233,7 +1324,7 @@ get_if_capabilities(const char *devicename, gboolean monitor_mode
         return NULL;
     }
 #else
-    pch = pcap_open_live(devicename, MIN_PACKET_SIZE, 0, 0, errbuf);
+    pch = pcap_open_live(interface_opts->name, MIN_PACKET_SIZE, 0, 0, errbuf);
     caps->can_set_rfmon = FALSE;
     if (pch == NULL) {
         if (err_str != NULL)
@@ -1242,7 +1333,7 @@ get_if_capabilities(const char *devicename, gboolean monitor_mode
         return NULL;
     }
 #endif
-    deflt = get_pcap_linktype(pch, devicename);
+    deflt = get_pcap_linktype(pch, interface_opts->name);
 #ifdef HAVE_PCAP_LIST_DATALINKS
     nlt = pcap_list_datalinks(pch, &linktypes);
     if (nlt == 0 || linktypes == NULL) {
@@ -3349,7 +3440,7 @@ do_file_switch_or_stop(capture_options *capture_opts,
 
     if (capture_opts->multi_files_on) {
         if (cnd_autostop_files != NULL &&
-            cnd_eval(cnd_autostop_files, ++global_ld.autostop_files)) {
+            cnd_eval(cnd_autostop_files, (guint64)++global_ld.autostop_files)) {
             /* no files left: stop here */
             global_ld.go = FALSE;
             return FALSE;
@@ -3588,7 +3679,7 @@ capture_loop_start(capture_options *capture_opts, gboolean *stats_known, struct 
 
         if (capture_opts->has_autostop_files)
             cnd_autostop_files =
-                cnd_new(CND_CLASS_CAPTURESIZE, capture_opts->autostop_files);
+                cnd_new(CND_CLASS_CAPTURESIZE, (guint64)capture_opts->autostop_files);
     }
 
     /* init the time values */
@@ -4609,28 +4700,41 @@ main(int argc, char *argv[])
             break;
             /*** all non capture option specific ***/
         case 'D':        /* Print a list of capture devices and exit */
-            list_interfaces = TRUE;
-            run_once_args++;
+            if (!list_interfaces) {
+                list_interfaces = TRUE;
+                run_once_args++;
+            }
             break;
         case 'L':        /* Print list of link-layer types and exit */
-            list_link_layer_types = TRUE;
-            run_once_args++;
+            if (!list_link_layer_types) {
+                list_link_layer_types = TRUE;
+                run_once_args++;
+            }
             break;
 #ifdef HAVE_BPF_IMAGE
         case 'd':        /* Print BPF code for capture filter and exit */
-            print_bpf_code = TRUE;
-            run_once_args++;
+            if (!print_bpf_code) {
+                print_bpf_code = TRUE;
+                run_once_args++;
+            }
             break;
 #endif
         case 'S':        /* Print interface statistics once a second */
-            print_statistics = TRUE;
-            run_once_args++;
+            if (!print_statistics) {
+                print_statistics = TRUE;
+                run_once_args++;
+            }
             break;
         case 'k':        /* Set wireless channel */
-            set_chan = TRUE;
-            set_chan_arg = optarg;
-            run_once_args++;
-           break;
+            if (!set_chan) {
+                set_chan = TRUE;
+                set_chan_arg = optarg;
+                run_once_args++;
+            } else {
+                cmdarg_err("Only one -k flag may be specified");
+                arg_error = TRUE;
+            }
+            break;
         case 'M':        /* For -D, -L, and -S, print machine-readable output */
             machine_readable = TRUE;
             break;
@@ -4682,7 +4786,11 @@ main(int argc, char *argv[])
     }
 
     if (run_once_args > 1) {
-        cmdarg_err("Only one of -D, -L, or -S may be supplied.");
+#ifdef HAVE_BPF_IMAGE
+        cmdarg_err("Only one of -D, -L, -d, -k, or -S may be supplied.");
+#else
+        cmdarg_err("Only one of -D, -L, -k, or -S may be supplied.");
+#endif
         exit_main(1);
     } else if (run_once_args == 1) {
         /* We're supposed to print some information, rather than
@@ -4802,6 +4910,42 @@ main(int argc, char *argv[])
         exit_main(status);
     }
 
+    if (list_link_layer_types) {
+        /* Get the list of link-layer types for the capture device. */
+        if_capabilities_t *caps;
+        gchar *err_str;
+        guint  ii;
+
+        for (ii = 0; ii < global_capture_opts.ifaces->len; ii++) {
+            interface_options interface_opts;
+
+            interface_opts = g_array_index(global_capture_opts.ifaces, interface_options, ii);
+            caps = get_if_capabilities(&interface_opts, &err_str);
+            if (caps == NULL) {
+                cmdarg_err("The capabilities of the capture device \"%s\" could not be obtained (%s).\n"
+                           "Please check to make sure you have sufficient permissions, and that\n"
+                           "you have the proper interface or pipe specified.", interface_opts.name, err_str);
+                g_free(err_str);
+                exit_main(2);
+            }
+            if (caps->data_link_types == NULL) {
+                cmdarg_err("The capture device \"%s\" has no data link types.", interface_opts.name);
+                exit_main(2);
+            }
+            if (machine_readable)      /* tab-separated values to stdout */
+                /* XXX: We need to change the format and adopt consumers */
+                print_machine_readable_if_capabilities(caps);
+            else
+                /* XXX: We might want to print also the interface name */
+                capture_opts_print_if_capabilities(caps, interface_opts.name,
+                                                   interface_opts.monitor_mode);
+            free_if_capabilities(caps);
+        }
+        exit_main(0);
+    }
+
+    /* We're supposed to do a capture, or print the BPF code for a filter. */
+
     /* Let the user know what interfaces were chosen. */
     if (capture_child) {
         for (j = 0; j < global_capture_opts.ifaces->len; j++) {
@@ -4841,43 +4985,7 @@ main(int argc, char *argv[])
         g_string_free(str, TRUE);
     }
 
-    if (list_link_layer_types) {
-        /* Get the list of link-layer types for the capture device. */
-        if_capabilities_t *caps;
-        gchar *err_str;
-        guint  ii;
-
-        for (ii = 0; ii < global_capture_opts.ifaces->len; ii++) {
-            interface_options interface_opts;
-
-            interface_opts = g_array_index(global_capture_opts.ifaces, interface_options, ii);
-            caps = get_if_capabilities(interface_opts.name,
-                                       interface_opts.monitor_mode, &err_str);
-            if (caps == NULL) {
-                cmdarg_err("The capabilities of the capture device \"%s\" could not be obtained (%s).\n"
-                           "Please check to make sure you have sufficient permissions, and that\n"
-                           "you have the proper interface or pipe specified.", interface_opts.name, err_str);
-                g_free(err_str);
-                exit_main(2);
-            }
-            if (caps->data_link_types == NULL) {
-                cmdarg_err("The capture device \"%s\" has no data link types.", interface_opts.name);
-                exit_main(2);
-            }
-            if (machine_readable)      /* tab-separated values to stdout */
-                /* XXX: We need to change the format and adopt consumers */
-                print_machine_readable_if_capabilities(caps);
-            else
-                /* XXX: We might want to print also the interface name */
-                capture_opts_print_if_capabilities(caps, interface_opts.name,
-                                                   interface_opts.monitor_mode);
-            free_if_capabilities(caps);
-        }
-        exit_main(0);
-    }
-
-    /* We're supposed to do a capture, or print the BPF code for a filter.
-       Process the snapshot length, as that affects the generated BPF code. */
+    /* Process the snapshot length, as that affects the generated BPF code. */
     capture_opts_trim_snaplen(&global_capture_opts, MIN_PACKET_SIZE);
 
 #ifdef HAVE_BPF_IMAGE

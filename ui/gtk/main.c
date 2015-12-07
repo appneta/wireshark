@@ -73,6 +73,7 @@
 #include <epan/column.h>
 #include <epan/disabled_protos.h>
 #include <epan/epan.h>
+#include <epan/proto.h>
 #include <epan/epan_dissect.h>
 #include <epan/dfilter/dfilter.h>
 #include <epan/strutil.h>
@@ -164,6 +165,7 @@
 #include "ui/gtk/main_toolbar.h"
 #include "ui/gtk/main_toolbar_private.h"
 #include "ui/gtk/main_welcome.h"
+#include "ui/gtk/main_welcome_private.h"
 #include "ui/gtk/drag_and_drop.h"
 #include "ui/gtk/capture_file_dlg.h"
 #include "ui/gtk/packet_panes.h"
@@ -2445,9 +2447,15 @@ main(int argc, char *argv[])
 #ifdef HAVE_LIBPCAP
     capture_callback_add(main_capture_callback, NULL);
 #endif
+
     cf_callback_add(statusbar_cf_callback, NULL);
 #ifdef HAVE_LIBPCAP
     capture_callback_add(statusbar_capture_callback, NULL);
+#endif
+
+    cf_callback_add(welcome_cf_callback, NULL);
+#ifdef HAVE_LIBPCAP
+    capture_callback_add(welcome_capture_callback, NULL);
 #endif
 
     /* Arrange that if we have no console window, and a GLib message logging
@@ -2947,11 +2955,19 @@ main(int argc, char *argv[])
 
             device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
             if (device.selected) {
-#if defined(HAVE_PCAP_CREATE)
-                caps = capture_get_if_capabilities(device.name, device.monitor_mode_supported, &err_str, main_window_update);
-#else
-                caps = capture_get_if_capabilities(device.name, FALSE, &err_str,main_window_update);
+                gchar* auth_str = NULL;
+#ifdef HAVE_PCAP_REMOTE
+                if (device.remote_opts.remote_host_opts.auth_type == CAPTURE_AUTH_PWD) {
+                    auth_str = g_strdup_printf("%s:%s", device.remote_opts.remote_host_opts.auth_username,
+                                               device.remote_opts.remote_host_opts.auth_password);
+                }
 #endif
+#if defined(HAVE_PCAP_CREATE)
+                caps = capture_get_if_capabilities(device.name, device.monitor_mode_supported, auth_str, &err_str, main_window_update);
+#else
+                caps = capture_get_if_capabilities(device.name, FALSE, auth_str, &err_str,main_window_update);
+#endif
+                g_free(auth_str);
                 if (caps == NULL) {
                     cmdarg_err("%s", err_str);
                     g_free(err_str);
@@ -3960,6 +3976,38 @@ void change_configuration_profile (const gchar *profile_name)
 
     /* Reload pane geometry, must be done after recreating the list */
     main_pane_load_window_geometry();
+}
+
+void
+main_fields_changed (void)
+{
+    /* Reload color filters */
+    color_filters_reload();
+
+    /* Syntax check filter */
+    filter_te_syntax_check_cb(main_display_filter_widget, NULL);
+    if (cfile.dfilter) {
+        /* Check if filter is still valid */
+        dfilter_t *dfp = NULL;
+        if (!dfilter_compile(cfile.dfilter, &dfp)) {
+            /* Not valid.  Enable 'Apply' button and remove dfilter. */
+            g_signal_emit_by_name(G_OBJECT(main_display_filter_widget), "changed");
+            g_free(cfile.dfilter);
+            cfile.dfilter = NULL;
+        }
+        dfilter_free(dfp);
+    }
+
+    if (have_custom_cols(&cfile.cinfo)) {
+        /* Recreate packet list according to new/changed/deleted fields */
+        packet_list_recreate();
+    } else if (cfile.state != FILE_CLOSED) {
+        /* Redissect packets if we have any */
+        redissect_packets();
+    }
+    destroy_packet_wins(); /* TODO: close windows until we can recreate */
+
+    proto_free_deregistered_fields();
 }
 
 /** redissect packets and update UI */

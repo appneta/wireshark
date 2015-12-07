@@ -2173,9 +2173,16 @@ main(int argc, char *argv[])
         for (i = 0; i < global_capture_opts.ifaces->len; i++) {
           interface_options  interface_opts;
           if_capabilities_t *caps;
+          char *auth_str = NULL;
 
           interface_opts = g_array_index(global_capture_opts.ifaces, interface_options, i);
-          caps = capture_get_if_capabilities(interface_opts.name, interface_opts.monitor_mode, &err_str, NULL);
+#ifdef HAVE_PCAP_REMOTE
+          if (interface_opts.auth_type == CAPTURE_AUTH_PWD) {
+              auth_str = g_strdup_printf("%s:%s", interface_opts.auth_username, interface_opts.auth_password);
+          }
+#endif
+          caps = capture_get_if_capabilities(interface_opts.name, interface_opts.monitor_mode, auth_str, &err_str, NULL);
+          g_free(auth_str);
           if (caps == NULL) {
             cmdarg_err("%s", err_str);
             g_free(err_str);
@@ -2430,7 +2437,7 @@ capture(void)
 {
   gboolean          ret;
   guint             i;
-  GString          *str = g_string_new("");
+  GString          *str;
 #ifdef USE_TSHARK_SELECT
   fd_set            readfds;
 #endif
@@ -2513,30 +2520,7 @@ capture(void)
     global_capture_opts.ifaces = g_array_remove_index(global_capture_opts.ifaces, i);
     g_array_insert_val(global_capture_opts.ifaces, i, interface_opts);
   }
-#ifdef _WIN32
-  if (global_capture_opts.ifaces->len < 2)
-#else
-  if (global_capture_opts.ifaces->len < 4)
-#endif
-  {
-    for (i = 0; i < global_capture_opts.ifaces->len; i++) {
-      interface_options interface_opts;
-
-      interface_opts = g_array_index(global_capture_opts.ifaces, interface_options, i);
-      if (i > 0) {
-          if (global_capture_opts.ifaces->len > 2) {
-              g_string_append_printf(str, ",");
-          }
-          g_string_append_printf(str, " ");
-          if (i == global_capture_opts.ifaces->len - 1) {
-              g_string_append_printf(str, "and ");
-          }
-      }
-      g_string_append_printf(str, "'%s'", interface_opts.descr);
-    }
-  } else {
-    g_string_append_printf(str, "%u interfaces", global_capture_opts.ifaces->len);
-  }
+  str = get_iface_list_string(&global_capture_opts, IFLIST_QUOTE_IF_DESCRIPTION);
   if (really_quiet == FALSE)
     fprintf(stderr, "Capturing on %s\n", str->str);
   fflush(stderr);
@@ -3051,7 +3035,7 @@ process_packet_second_pass(capture_file *cf, epan_dissect_t *edt, frame_data *fd
          2) we're printing packet info but we're *not* verbose; in verbose
             mode, we print the protocol tree, not the protocol summary.
      */
-    if ((tap_flags & TL_REQUIRES_COLUMNS) || (print_packet_info && print_summary))
+    if ((tap_flags & TL_REQUIRES_COLUMNS) || (print_packet_info && print_summary) || output_fields_has_cols(output_fields))
       cinfo = &cf->cinfo;
     else
       cinfo = NULL;
@@ -3358,6 +3342,7 @@ load_cap_file(capture_file *cf, char *save_file, int out_file_type,
     buffer_free(&buf);
   }
   else {
+    /* !perform_two_pass_analysis */
     framenum = 0;
 
     if (do_dissection) {

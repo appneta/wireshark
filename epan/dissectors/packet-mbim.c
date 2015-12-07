@@ -3085,7 +3085,7 @@ mbim_dissect_sms_cdma_record(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *
     }
     if (timestamp_offset && timestamp_size) {
         proto_tree_add_item(tree, hf_mbim_sms_cdma_record_timestamp, tvb, base_offset + timestamp_offset,
-                            timestamp_size, ENC_LITTLE_ENDIAN|ENC_UTF_16);
+                            timestamp_size, ENC_NA|ENC_ASCII);
     }
     if (encoded_message_offset && size_in_bytes) {
         ti = proto_tree_add_item(tree, hf_mbim_sms_cdma_record_encoded_message, tvb, base_offset + encoded_message_offset,
@@ -3188,6 +3188,7 @@ mbim_dissect_sms_send_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, g
                                      sc_address_size, NULL, 0);
             }
             if (pdu_data_size > (guint32)(sc_address_size + 1)) {
+                pdu_data_size -= sc_address_size + 1;
                 sms_tvb = tvb_new_subset(tvb, base_offset + pdu_data_offset + 1 + sc_address_size,
                                          pdu_data_size, pdu_data_size);
                 pinfo->p2p_dir = P2P_DIR_RECV;
@@ -5029,7 +5030,7 @@ dissect_mbim_bulk(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
                 offset += 4;
                 datagram_length = tvb_get_letohl(tvb, offset);
                 proto_tree_add_uint(subtree, hf_mbim_bulk_ndp_datagram_length_32,
-                                    tvb, offset, 3, datagram_length);
+                                    tvb, offset, 4, datagram_length);
                 offset += 4;
             }
             if (next_index > reported_length) {

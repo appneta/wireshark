@@ -2050,7 +2050,7 @@ int find_signature(const guint8 *m_ptr, int rec_size, int pay_off, guint32 flow_
     /*  flow ID and sequence number at the appropriate offsets.                             */
     for (tgt = pay_off; tgt < (rec_size); tgt++) {
         if (m_ptr[tgt] == 0xdd) {                       /* found magic byte? check fields */
-            if (m_ptr[tgt + 15] == 0xe2) {
+            if ((tgt + 15 < rec_size) && (m_ptr[tgt + 15] == 0xe2)) {
                 if (m_ptr[tgt + 4] != flow_seq)
                     continue;
 
@@ -2061,7 +2061,7 @@ int find_signature(const guint8 *m_ptr, int rec_size, int pay_off, guint32 flow_
 
                 return (tgt);
             }
-            else
+            else if (tgt + SIG_FSQ_OFF < rec_size)
             {                                               /* out which one... */
                 if (m_ptr[tgt + SIG_FSQ_OFF] != flow_seq)   /* check sequence number */
                     continue;                               /* if failed, keep scanning */
@@ -2112,7 +2112,10 @@ static float getRate( guint8 plcpType, guint8 mcsIndex, guint16 rflags, guint8 n
     float symbol_tx_time, bitrate  = 0.0f;
 
     if (plcpType == 0)
-        bitrate =  canonical_rate_legacy[mcsIndex];
+    {
+        if (mcsIndex < G_N_ELEMENTS(canonical_rate_legacy))
+            bitrate =  canonical_rate_legacy[mcsIndex];
+    }
     else if (plcpType == 1 || plcpType == 2)
     {
         if ( rflags & FLAGS_CHAN_SHORTGI)
@@ -2134,8 +2137,8 @@ static float getRate( guint8 plcpType, guint8 mcsIndex, guint16 rflags, guint8 n
         else
             symbol_tx_time = 4.0f;
 
-    /* Check for the out of range mcsIndex.  Should never happen, but if mcs index is greater than 9 assume 9 is the value */
-    if (mcsIndex > 9) mcsIndex = 9;
+        /* Check for the out of range mcsIndex.  Should never happen, but if mcs index is greater than 9 assume 9 is the value */
+        if (mcsIndex > 9) mcsIndex = 9;
         if ( rflags & FLAGS_CHAN_40MHZ )
             bitrate = (canonical_ndbps_40_vht[ mcsIndex ] * nss) / symbol_tx_time;
         else if (rflags & FLAGS_CHAN_80MHZ )

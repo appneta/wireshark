@@ -294,6 +294,10 @@ struct _protocol {
 /* List of all protocols */
 static GList *protocols = NULL;
 
+/* Deregistered fields */
+static GPtrArray *deregistered_fields = NULL;
+static GPtrArray *deregistered_data = NULL;
+
 /* Contains information about a field when a dissector calls
  * proto_tree_add_item.  */
 #define FIELD_INFO_NEW(pool, fi)  fi = wmem_new(pool, field_info)
@@ -459,6 +463,8 @@ proto_init(void (register_all_protocols_func)(register_cb cb, gpointer client_da
 	gpa_hfinfo.allocated_len = 0;
 	gpa_hfinfo.hfi           = NULL;
 	gpa_name_map             = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, save_same_name_hfinfo);
+	deregistered_fields      = g_ptr_array_new();
+	deregistered_data        = g_ptr_array_new();
 
 	/* Initialize the ftype subsystem */
 	ftypes_initialize();
@@ -563,6 +569,17 @@ proto_cleanup(void)
 		g_free(gpa_hfinfo.hfi);
 		gpa_hfinfo.hfi           = NULL;
 	}
+
+	if (deregistered_fields) {
+		g_ptr_array_free(deregistered_fields, FALSE);
+		deregistered_fields = NULL;
+	}
+
+	if (deregistered_data) {
+		g_ptr_array_free(deregistered_data, FALSE);
+		deregistered_data = NULL;
+	}
+
 	g_free(tree_is_expanded);
 	tree_is_expanded = NULL;
 }
@@ -1897,6 +1914,30 @@ proto_tree_new_item(field_info *new_fi, proto_tree *tree,
 	return pi;
 }
 
+/*
+ * Validates that field length bytes are available starting from
+ * start (pos/neg). Throws an exception if they aren't.
+ */
+static void
+test_length(header_field_info *hfinfo, tvbuff_t *tvb,
+	    gint start, gint length)
+{
+	gint size = length;
+
+	if (!tvb)
+		return;
+
+	if (hfinfo->type == FT_STRINGZ) {
+		/* If we're fetching until the end of the TVB, only validate
+		 * that the offset is within range.
+		 */
+		if (length == -1)
+			size = 0;
+	}
+
+	tvb_ensure_bytes_exist(tvb, start, size);
+}
+
 /* Gets data from tvbuff, adds it to proto_tree, increments offset,
    and returns proto_item* */
 proto_item *
@@ -1925,6 +1966,8 @@ ptvcursor_add(ptvcursor_t *ptvc, int hfindex, gint length,
 		ptvc->offset += n;
 	}
 
+	test_length(hfinfo, ptvc->tvb, offset, item_length);
+
 	/* Coast clear. Try and fake it */
 	TRY_TO_FAKE_THIS_ITEM(ptvc->tree, hfindex, hfinfo);
 
@@ -1932,30 +1975,6 @@ ptvcursor_add(ptvcursor_t *ptvc, int hfindex, gint length,
 
 	return proto_tree_new_item(new_fi, ptvc->tree, ptvc->tvb,
 		offset, length, encoding);
-}
-
-/*
- * Validates that field length bytes are available starting from
- * start (pos/neg). Throws an exception if they aren't.
- */
-static void
-test_length(header_field_info *hfinfo, tvbuff_t *tvb,
-	    gint start, gint length)
-{
-	gint size = length;
-
-	if (!tvb)
-		return;
-
-	if (hfinfo->type == FT_STRINGZ) {
-		/* If we're fetching until the end of the TVB, only validate
-		 * that the offset is within range.
-		 */
-		if (length == -1)
-			size = 0;
-	}
-
-	tvb_ensure_bytes_exist(tvb, start, size);
 }
 
 /* Add an item to a proto_tree, using the text label registered to that item;
@@ -2105,6 +2124,8 @@ proto_tree_add_bytes_item(proto_tree *tree, int hfindex, tvbuff_t *tvb,
 
 		if (bytes)
 		    proto_tree_set_bytes_gbytearray(new_fi, bytes);
+		else
+		    proto_tree_set_bytes(new_fi, NULL, 0);
 
 		if (created_bytes)
 		    g_byte_array_free(created_bytes, TRUE);
@@ -5210,9 +5231,50 @@ proto_unregister_field (const int parent, gint hf_id)
 			/* Found the hf_id in this protocol */
 			g_hash_table_steal(gpa_name_map, hfi->abbrev);
 			g_ptr_array_remove_index_fast(proto->fields, i);
+			g_ptr_array_add(deregistered_fields, gpa_hfinfo.hfi[hf_id]);
 			return;
 		}
 	}
+}
+
+void
+proto_add_deregistered_data (void *data)
+{
+    g_ptr_array_add(deregistered_data, data);
+}
+
+static void
+free_deregistered_field (gpointer data, gpointer user_data _U_)
+{
+    header_field_info *hfi = (header_field_info *) data;
+    gint hf_id = hfi->id;
+
+    g_free((char *)hfi->name);
+    g_free((char *)hfi->abbrev);
+    g_free((char *)hfi->blurb);
+    if (hfi->parent == -1)
+        g_slice_free(header_field_info, hfi);
+
+    gpa_hfinfo.hfi[hf_id] = NULL; /* Invalidate this hf_id / proto_id */
+}
+
+static void
+free_deregistered_data (gpointer data, gpointer user_data _U_)
+{
+    g_free (data);
+}
+
+/* free deregistered fields and data */
+void
+proto_free_deregistered_fields (void)
+{
+    g_ptr_array_foreach(deregistered_fields, free_deregistered_field, NULL);
+    g_ptr_array_free(deregistered_fields, TRUE);
+    deregistered_fields = g_ptr_array_new();
+
+    g_ptr_array_foreach(deregistered_data, free_deregistered_data, NULL);
+    g_ptr_array_free(deregistered_data, TRUE);
+    deregistered_data = g_ptr_array_new();
 }
 
 /* chars allowed in field abbrev */
@@ -5647,7 +5709,7 @@ proto_register_subtree_array(gint *const *indices, const int num_indices)
 		/* set new items to 0 */
 		/* XXX, slow!!! optimize when needed (align 'i' to 32, and set rest of guint32 to 0) */
 		for (i = num_tree_types; i < num_tree_types + num_indices; i++)
-			tree_is_expanded[i >> 5] &= ~(1 << (i & 31));
+			tree_is_expanded[i >> 5] &= ~(1U << (i & 31));
 	}
 
 	/*
@@ -6701,6 +6763,9 @@ proto_registrar_dump_values(void)
 
 	len = gpa_hfinfo.len;
 	for (i = 0; i < len ; i++) {
+		if (gpa_hfinfo.hfi[i] == NULL)
+			continue; /* This is a deregistered protocol or field */
+
 		PROTO_REGISTRAR_GET_NTH(i, hfinfo);
 
 		 if (hfinfo->id == hf_text_only) {
@@ -6873,6 +6938,9 @@ proto_registrar_dump_fields(void)
 
 	len = gpa_hfinfo.len;
 	for (i = 0; i < len ; i++) {
+		if (gpa_hfinfo.hfi[i] == NULL)
+			continue; /* This is a deregistered protocol or header field */
+
 		PROTO_REGISTRAR_GET_NTH(i, hfinfo);
 
 		/*
@@ -8167,7 +8235,7 @@ gboolean
 tree_expanded(int tree_type)
 {
 	g_assert(tree_type >= 0 && tree_type < num_tree_types);
-	return tree_is_expanded[tree_type >> 5] & (1 << (tree_type & 31));
+	return tree_is_expanded[tree_type >> 5] & (1U << (tree_type & 31));
 }
 
 void
@@ -8176,9 +8244,9 @@ tree_expanded_set(int tree_type, gboolean value)
 	g_assert(tree_type >= 0 && tree_type < num_tree_types);
 
 	if (value)
-		tree_is_expanded[tree_type >> 5] |= (1 << (tree_type & 31));
+		tree_is_expanded[tree_type >> 5] |= (1U << (tree_type & 31));
 	else
-		tree_is_expanded[tree_type >> 5] &= ~(1 << (tree_type & 31));
+		tree_is_expanded[tree_type >> 5] &= ~(1U << (tree_type & 31));
 }
 
 /*

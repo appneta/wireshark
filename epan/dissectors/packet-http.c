@@ -2330,14 +2330,10 @@ header_fields_initialize_cb(void)
 		/* Unregister all fields */
 		for (i = 0; i < hf_size; i++) {
 			proto_unregister_field (proto_http, *(hf[i].p_id));
-
 			g_free (hf[i].p_id);
-			g_free ((char *) hf[i].hfinfo.name);
-			g_free ((char *) hf[i].hfinfo.abbrev);
-			g_free ((char *) hf[i].hfinfo.blurb);
 		}
 		g_hash_table_destroy (header_fields_hash);
-		g_free (hf);
+		proto_add_deregistered_data (hf);
 		header_fields_hash = NULL;
 	}
 
@@ -2794,6 +2790,10 @@ dissect_http(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 	} else {
 		while (tvb_reported_length_remaining(tvb, offset) > 0) {
 			if (conv_data->upgrade == UPGRADE_WEBSOCKET && pinfo->fd->num >= conv_data->startframe) {
+				/* Websockets is a stream of data, preserve
+				 * desegmentation functionality. */
+				if (pinfo->can_desegment > 0)
+					pinfo->can_desegment++;
 				call_dissector_only(websocket_handle, tvb_new_subset_remaining(tvb, offset), pinfo, tree, NULL);
 				break;
 			}

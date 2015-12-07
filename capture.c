@@ -132,38 +132,12 @@ gboolean
 capture_start(capture_options *capture_opts, capture_session *cap_session, void(*update_cb)(void))
 {
   gboolean ret;
-  guint i;
-  GString *source = g_string_new("");
+  GString *source;
 
   cap_session->state = CAPTURE_PREPARING;
+  cap_session->count = 0;
   g_log(LOG_DOMAIN_CAPTURE, G_LOG_LEVEL_MESSAGE, "Capture Start ...");
-#ifdef _WIN32
-  if (capture_opts->ifaces->len < 2) {
-#else
-  if (capture_opts->ifaces->len < 4) {
-#endif
-    for (i = 0; i < capture_opts->ifaces->len; i++) {
-      interface_options interface_opts;
-
-      interface_opts = g_array_index(capture_opts->ifaces, interface_options, i);
-      if (i > 0) {
-          if (capture_opts->ifaces->len > 2) {
-              g_string_append_printf(source, ",");
-          }
-          g_string_append_printf(source, " ");
-          if (i == capture_opts->ifaces->len - 1) {
-              g_string_append_printf(source, "and ");
-          }
-      }
-      g_string_append_printf(source, "%s", get_iface_description_for_interface(capture_opts, i));
-      if ((interface_opts.cfilter != NULL) &&
-          (strlen(interface_opts.cfilter) > 0)) {
-        g_string_append_printf(source, " (%s)", interface_opts.cfilter);
-      }
-    }
-  } else {
-    g_string_append_printf(source, "%u interfaces", capture_opts->ifaces->len);
-  }
+  source = get_iface_list_string(capture_opts, IFLIST_SHOW_FILTER);
   cf_set_tempfile_source((capture_file *)cap_session->cf, source->str);
   g_string_free(source, TRUE);
   /* try to start the capture child process */
@@ -293,7 +267,7 @@ capture_input_read_all(capture_session *cap_session, gboolean is_tempfile,
   }
 
   /* if we didn't capture even a single packet, close the file again */
-  if(cf_get_packet_count((capture_file *)cap_session->cf) == 0 && !capture_opts->restart) {
+  if(cap_session->count == 0 && !capture_opts->restart) {
     simple_dialog(ESD_TYPE_INFO, ESD_BTN_OK,
 "%sNo packets captured!%s\n"
 "\n"
@@ -420,9 +394,6 @@ capture_input_new_packets(capture_session *cap_session, int to_read)
       break;
     }
   } else {
-    /* increase the capture file packet counter by the number of incoming packets */
-    cf_set_packet_count((capture_file *)cap_session->cf,
-        cf_get_packet_count((capture_file *)cap_session->cf) + to_read);
     cf_fake_continue_tail((capture_file *)cap_session->cf);
 
     capture_callback_invoke(capture_cb_capture_fixed_continue, cap_session);
@@ -550,7 +521,6 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
 {
   capture_options *capture_opts = cap_session->capture_opts;
   int  err;
-  int  packet_count_save;
 
   g_log(LOG_DOMAIN_CAPTURE, G_LOG_LEVEL_MESSAGE, "Capture stopped!");
   g_assert(cap_session->state == CAPTURE_PREPARING || cap_session->state == CAPTURE_RUNNING);
@@ -572,8 +542,6 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
       /* Read what remains of the capture file. */
       status = cf_finish_tail((capture_file *)cap_session->cf, &err);
 
-      /* XXX: If -Q (quit-after-cap) then cf->count clr'd below so save it first */
-      packet_count_save = cf_get_packet_count((capture_file *)cap_session->cf);
       /* Tell the GUI we are not doing a capture any more.
          Must be done after the cf_finish_tail(), so file lengths are
          correctly displayed */
@@ -583,7 +551,7 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
       switch (status) {
 
       case CF_READ_OK:
-        if ((packet_count_save == 0) && !capture_opts->restart) {
+        if (cap_session->count == 0 && !capture_opts->restart) {
           simple_dialog(ESD_TYPE_INFO, ESD_BTN_OK,
             "%sNo packets captured!%s\n"
             "\n"

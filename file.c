@@ -1114,13 +1114,6 @@ cf_get_packet_count(capture_file *cf)
 }
 
 /* XXX - use a macro instead? */
-void
-cf_set_packet_count(capture_file *cf, int packet_count)
-{
-  cf->count = packet_count;
-}
-
-/* XXX - use a macro instead? */
 gboolean
 cf_is_tempfile(capture_file *cf)
 {
@@ -1401,7 +1394,7 @@ cf_merge_files(char **out_filenamep, int in_file_count,
       int_data.opt_comment           = NULL;
       int_data.if_description        = NULL;
       int_data.if_speed              = 0;
-      int_data.if_tsresol            = 6;
+      int_data.if_tsresol            = file_int_data->if_tsresol;
       int_data.if_filter_str         = NULL;
       int_data.bpf_filter_len        = 0;
       int_data.if_filter_bpf_bytes   = NULL;
@@ -5033,7 +5026,7 @@ cf_open_failure_alert_box(const char *filename, int err, gchar *err_info,
     case WTAP_ERR_UNSUPPORTED:
       /* Seen only when opening a capture file for reading. */
       simple_error_message_box(
-            "The file \"%s\" contains record data that Wireshark doesn't support.\n",
+            "The file \"%s\" contains record data that Wireshark doesn't support.\n"
             "(%s)",
             display_basename, err_info);
       g_free(err_info);

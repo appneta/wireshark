@@ -952,8 +952,9 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
      * event that the SYN or SYN/ACK packet is not seen
      * (this solves bug 1542)
      */
-    if(tcpd->fwd->base_seq==0) {
+    if(tcpd->fwd->base_seq_set == FALSE) {
         tcpd->fwd->base_seq = (flags & TH_SYN) ? seq : seq-1;
+        tcpd->fwd->base_seq_set = TRUE;
     }
 
     /* Only store reverse sequence if this isn't the SYN
@@ -967,8 +968,9 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
      * other packets the ISN is unknown, so ack-1 is
      * as good a guess as ack.
      */
-    if( (tcpd->rev->base_seq==0) && (flags & TH_ACK) ) {
+    if( (tcpd->rev->base_seq_set==FALSE) && (flags & TH_ACK) ) {
         tcpd->rev->base_seq = ack-1;
+        tcpd->rev->base_seq_set = TRUE;
     }
 
     if( flags & TH_ACK ) {
@@ -1135,8 +1137,8 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
 
 
 finished_fwd:
-    /* If this was NOT a dupack we must reset the dupack counters */
-    if( (!tcpd->ta) || !(tcpd->ta->flags&TCP_A_DUPLICATE_ACK) ) {
+    /* If the ack number changed we must reset the dupack counters */
+    if( ack != tcpd->fwd->lastack ) {
         tcpd->fwd->lastnondupack=pinfo->fd->num;
         tcpd->fwd->dupacknum=0;
     }
@@ -1222,7 +1224,7 @@ finished_fwd:
         }
 
         /* Check for spurious retransmission. If the current seq + segment length
-         * is less then the receivers lastask, the packet contains duplicated
+         * is less then the receivers lastack, the packet contains duplicated
          * data and may be considered spurious.
          */
         if ( seq + seglen < tcpd->rev->lastack ) {
@@ -1245,11 +1247,14 @@ finished_fwd:
 finished_checking_retransmission_type:
 
     nextseq = seq+seglen;
-    if (seglen || flags&(TH_SYN|TH_FIN)) {
-        /* add this new sequence number to the fwd list */
+    if ((seglen || flags&(TH_SYN|TH_FIN)) && tcpd->fwd->segment_count < TCP_MAX_UNACKED_SEGMENTS) {
+        /* Add this new sequence number to the fwd list.  But only if there
+	 * aren't "too many" unacked segements (e.g., we're not seeing the ACKs).
+	 */
         ual = wmem_new(wmem_file_scope(), tcp_unacked_t);
         ual->next=tcpd->fwd->segments;
         tcpd->fwd->segments=ual;
+        tcpd->fwd->segment_count++;
         ual->frame=pinfo->fd->num;
         ual->seq=seq;
         ual->ts=pinfo->fd->abs_ts;
@@ -1276,9 +1281,14 @@ finished_checking_retransmission_type:
     }
 
     /* Store the highest continuous seq number seen so far for 'max seq to be acked',
-     so we can detect TCP_A_ACK_LOST_PACKET condition
+     so we can detect TCP_A_ACK_LOST_PACKET condition.
+     Notes:
+        A retransmitted segment can include additional data not previously seen.
+        XXX: It seems that the additional data may never be dissected (by a sub-dissector)
+             since the whole segment is marked as being a retransmission.
      */
-    if(EQ_SEQ(seq, tcpd->fwd->maxseqtobeacked) || !tcpd->fwd->maxseqtobeacked) {
+    if((LE_SEQ(seq, tcpd->fwd->maxseqtobeacked) && GT_SEQ(tcpd->fwd->nextseq, tcpd->fwd->maxseqtobeacked))
+       || !tcpd->fwd->maxseqtobeacked) {
         if( !tcpd->ta || !(tcpd->ta->flags&TCP_A_ZERO_WINDOW_PROBE) ) {
             tcpd->fwd->maxseqtobeacked=tcpd->fwd->nextseq;
         }
@@ -1347,6 +1357,7 @@ finished_checking_retransmission_type:
         }
         wmem_free(wmem_file_scope(), ual);
         ual = tmpual;
+        tcpd->rev->segment_count--;
     }
 
     /* how many bytes of data are there in flight after this frame
@@ -2291,13 +2302,13 @@ tcp_dissect_pdus(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 /*
                  * Display the PDU length as a field
                  */
-                item=proto_tree_add_uint((proto_tree *)p_get_proto_data(pinfo->pool, pinfo, proto_tcp, pinfo->curr_layer_num),
+                item=proto_tree_add_uint((proto_tree *)p_get_proto_data(pinfo->pool, pinfo, proto_tcp, 1),
                                          hf_tcp_pdu_size,
                                          tvb, offset, plen, plen);
                 PROTO_ITEM_SET_GENERATED(item);
 #if 0
         } else {
-                item = proto_tree_add_text((proto_tree *)p_get_proto_data(pinfo->pool, pinfo, proto_tcp, pinfo->curr_layer_num),
+                item = proto_tree_add_text((proto_tree *)p_get_proto_data(pinfo->pool, pinfo, proto_tcp, 1),
                                         tvb, offset, -1,
                     "PDU Size: %u cut short at %u",plen,captured_length_remaining);
                 PROTO_ITEM_SET_GENERATED(item);
@@ -4204,7 +4215,7 @@ dissect_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
             ti = proto_tree_add_item(tree, proto_tcp, tvb, 0, -1, ENC_NA);
         }
         tcp_tree = proto_item_add_subtree(ti, ett_tcp);
-        p_add_proto_data(pinfo->pool, pinfo, proto_tcp, pinfo->curr_layer_num, tcp_tree);
+        p_add_proto_data(pinfo->pool, pinfo, proto_tcp, 1, tcp_tree);
 
         proto_tree_add_uint_format_value(tcp_tree, hf_tcp_srcport, tvb, offset, 2, tcph->th_sport,
                                    "%s (%u)", src_port_str, tcph->th_sport);
@@ -4262,7 +4273,7 @@ dissect_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
      * mission later.
      */
     if(tcpd && ((tcph->th_flags&(TH_SYN|TH_ACK))==TH_SYN) &&
-       (tcpd->fwd->base_seq!=0) &&
+       (tcpd->fwd->base_seq_set == TRUE) &&
        (tcph->th_seq!=tcpd->fwd->base_seq) ) {
         if (!(pinfo->fd->flags.visited)) {
             conv=conversation_new(pinfo->fd->num, &pinfo->src, &pinfo->dst, pinfo->ptype, pinfo->srcport, pinfo->destport, 0);

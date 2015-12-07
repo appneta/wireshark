@@ -190,7 +190,8 @@ col_title_change_ok (GtkWidget *w, gpointer parent_w)
 	}
 
 	if (cur_fmt == COL_CUSTOM) {
-		if (strcmp (name, get_column_custom_field(col_id)) != 0) {
+		const gchar *custom_field = get_column_custom_field(col_id);
+		if ((custom_field && strcmp (name, custom_field) != 0) || (custom_field == NULL)) {
 			set_column_custom_field (col_id, name);
 			recreate = TRUE;
 		}
@@ -1233,6 +1234,7 @@ packet_list_get_row_data(gint row)
 	GtkTreeIter iter;
 	frame_data *fdata;
 
+	g_assert(row > 0);
 	gtk_tree_path_append_index(path, row-1);
 	gtk_tree_model_get_iter(GTK_TREE_MODEL(packetlist), &iter, path);
 

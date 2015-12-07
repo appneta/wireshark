@@ -923,7 +923,7 @@ pcapng_read_if_descr_block(FILE_T fh, pcapng_block_header_t *bh, pcapng_t *pn,
                                 } else if (option_content[0] == 1) {
                                         wblock->data.if_descr.bpf_filter_len = oh.option_length-1;
                                         wblock->data.if_descr.if_filter_bpf_bytes = (gchar *)g_malloc(oh.option_length-1);
-                                        memcpy(&wblock->data.if_descr.if_filter_bpf_bytes, option_content+1, oh.option_length-1);
+                                        memcpy(wblock->data.if_descr.if_filter_bpf_bytes, option_content+1, oh.option_length-1);
                                 }
                         } else {
                                 pcapng_debug1("pcapng_read_if_descr_block: if_filter length %u seems strange", oh.option_length);
@@ -1384,11 +1384,12 @@ pcapng_read_simple_packet_block(FILE_T fh, pcapng_block_header_t *bh, pcapng_t *
         /*
          * The captured length is not a field in the SPB; it can be
          * calculated as the minimum of the snapshot length from the
-	 * IDB and the packet length, as per the pcap-ng spec.
+         * IDB and the packet length, as per the pcap-ng spec. An IDB
+         * snapshot length of 0 means no limit.
          */
         simple_packet.cap_len = simple_packet.packet_len;
-        if (simple_packet.cap_len > iface_info.snap_len)
-                simple_packet.cap_len = iface_info.snap_len;
+        if (simple_packet.cap_len > iface_info.snap_len && iface_info.snap_len != 0)
+            simple_packet.cap_len = iface_info.snap_len;
 
         /*
          * How much padding is there at the end of the packet data?
@@ -1626,8 +1627,8 @@ pcapng_read_name_resolution_block(FILE_T fh, pcapng_block_header_t *bh, pcapng_t
                 }
                 switch (nrb.record_type) {
                         case NRES_ENDOFRECORD:
-                                /* There shouldn't be any more data */
-                                to_read = 0;
+                                /* There shouldn't be any more data - but there MAY be options */
+                                goto read_options;
                                 break;
                         case NRES_IP4RECORD:
                                 /*
@@ -1669,8 +1670,8 @@ pcapng_read_name_resolution_block(FILE_T fh, pcapng_block_header_t *bh, pcapng_t
                                          */
                                         memcpy(&v4_addr,
                                             buffer_start_ptr(&nrb_rec), 4);
-                                        if (pn->byte_swapped)
-                                                v4_addr = GUINT32_SWAP_LE_BE(v4_addr);
+                                        /* IPv4 address is in big-endian order in the file always, which is how we store
+                                           it internally as well, so don't byte-swap it */
                                         for (namep = (char *)buffer_start_ptr(&nrb_rec) + 4, record_len = nrb.record_len - 4;
                                             record_len != 0;
                                             namep += namelen, record_len -= namelen) {
@@ -1774,6 +1775,18 @@ pcapng_read_name_resolution_block(FILE_T fh, pcapng_block_header_t *bh, pcapng_t
                                 break;
                 }
         }
+
+read_options:
+        to_read -= block_read;
+
+        if (to_read > 0 && !file_skip(fh, to_read, err)) {
+            buffer_free(&nrb_rec);
+            if (*err != 0)
+                    return -1;
+            return 0;
+        }
+
+        block_read += to_read;
 
         buffer_free(&nrb_rec);
         return block_read;
@@ -2008,7 +2021,7 @@ pcapng_read_interface_statistics_block(FILE_T fh, pcapng_block_header_t *bh, pca
 static int
 pcapng_read_unknown_block(FILE_T fh, pcapng_block_header_t *bh, pcapng_t *pn _U_, wtapng_block_t *wblock _U_, int *err, gchar **err_info)
 {
-        int block_read;
+        guint32 block_read;
         guint32 block_total_length;
 #ifdef HAVE_PLUGINS
         block_handler *handler;

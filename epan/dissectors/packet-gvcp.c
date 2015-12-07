@@ -1082,10 +1082,10 @@ static int dissect_register(guint32 addr, proto_tree *branch, tvbuff_t *tvb, gin
 	case GVCP_SC_PACKET_SIZE(1):
 	case GVCP_SC_PACKET_SIZE(2):
 	case GVCP_SC_PACKET_SIZE(3):
-		proto_tree_add_item(branch, hf_gvcp_sc_fire_test_packet, tvb, offset, 1, ENC_BIG_ENDIAN);
-		proto_tree_add_item(branch, hf_gvcp_sc_do_not_fragment, tvb, offset, 1, ENC_BIG_ENDIAN);
-		proto_tree_add_item(branch, hf_gvcp_sc_pixel_endianness, tvb, offset, 1, ENC_BIG_ENDIAN);
-		proto_tree_add_item(branch, hf_gvcp_sc_packet_size, tvb, offset+2, 2, ENC_BIG_ENDIAN);
+		proto_tree_add_item(branch, hf_gvcp_sc_fire_test_packet, tvb, offset, 4, ENC_BIG_ENDIAN);
+		proto_tree_add_item(branch, hf_gvcp_sc_do_not_fragment, tvb, offset, 4, ENC_BIG_ENDIAN);
+		proto_tree_add_item(branch, hf_gvcp_sc_pixel_endianness, tvb, offset, 4, ENC_BIG_ENDIAN);
+		proto_tree_add_item(branch, hf_gvcp_sc_packet_size, tvb, offset, 4, ENC_BIG_ENDIAN);
 		break;
 
 	case GVCP_SC_PACKET_DELAY(0):
@@ -1952,7 +1952,14 @@ static void dissect_readreg_ack(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, p
 				address_string = get_register_name_from_address(*((guint32*)wmem_array_index(gvcp_trans->addr_list, 0)), &is_custom_register);
 			}
 
-			col_append_fstr(pinfo->cinfo, COL_INFO, "%s Value=0x%08X", address_string, tvb_get_ntohl(tvb, offset));
+			if (num_registers)
+			{
+				col_append_fstr(pinfo->cinfo, COL_INFO, "%s Value=0x%08X", address_string, tvb_get_ntohl(tvb, offset));
+			}
+			else
+			{
+				col_append_fstr(pinfo->cinfo, COL_INFO, "%s", address_string);
+			}
 		}
 	}
 

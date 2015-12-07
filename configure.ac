@@ -7,7 +7,7 @@
 #
 m4_define([version_major], [1])
 m4_define([version_minor], [12])
-m4_define([version_micro], [4])
+m4_define([version_micro], [9])
 m4_define([version_micro_extra], version_micro)
 m4_append([version_micro_extra], [-appneta.16])
 
@@ -1076,7 +1076,15 @@ else
 		# documentation I can find online.
 		#
 		CFLAGS="-Ae +O2 $CFLAGS"
-		CFLAGS_FOR_BUILD="-Ae +O2 $CFLAGS"
+		if test "$CC" = "$CC_FOR_BUILD"; then
+			#
+			# We're building the build tools with the same
+			# compiler as the one with which we're building
+			# Wireshark, so add the flags to the flags for
+			# that compiler as well.
+			#
+			CFLAGS_FOR_BUILD="-Ae +O2 $CFLAGS"
+		fi
 		CXXFLAGS="+O2 $CFLAGS"
 		AC_MSG_RESULT(HP ANSI C compiler - added -Ae +O2)
 		;;
@@ -1531,7 +1539,6 @@ fi
 if test "$have_gtk" = "yes" ; then
 	# If we have GTK then add flags for it.
 
-	CPPFLAGS="-DGDK_PIXBUF_DISABLE_DEPRECATED $CPPFLAGS"
 	CPPFLAGS="-DGDK_DISABLE_DEPRECATED $CPPFLAGS"
 	if test \( $gtk_config_major_version -eq 3 -a $gtk_config_minor_version -ge 10 \) ; then
 		## Allow use of deprecated & disable deprecated warnings if Gtk >= 3.10;
@@ -1575,7 +1582,7 @@ then
 	AC_PATH_PROG(UIC, uic-qt4)
 	if test "x$UIC" = x
 	then
-		if test "x$with_qt" = "xyes"; then
+		if test "x$have_qt" = "xyes"; then
 			#
 			# If you want to build with Qt, you'd better
 			# have uic.
@@ -1601,7 +1608,7 @@ then
 	AC_PATH_PROG(MOC, moc-qt4)
 	if test "x$MOC" = x
 	then
-		if test "x$with_qt" = "xyes"; then
+		if test "x$have_qt" = "xyes"; then
 			#
 			# If you want to build with Qt, you'd better
 			# have moc.
@@ -2254,9 +2261,11 @@ if test "x$enable_setcap_install" = "xno" ; then
 	AC_MSG_RESULT(no)
 else
 	if test "x$SETCAP" = "x" ; then
-		AC_MSG_RESULT(no. Setcap not found)
+		AC_MSG_RESULT(setcap not found)
+		AC_MSG_ERROR([Setcap install was requested, but setcap was not found])
 	elif test "x$enable_dumpcap" = "xno" ; then
-		AC_MSG_ERROR(Setcap install works only with dumpcap but dumpcap is disabled)
+		AC_MSG_RESULT(dumpcap disabled)
+		AC_MSG_ERROR([Setcap install works only with dumpcap, but dumpcap is disabled])
 	else
 		AC_MSG_RESULT(yes)
 	fi
@@ -2276,9 +2285,11 @@ if test "x$enable_setuid_install" = "xno" ; then
 else
 	if test "x$enable_setcap_install" = "xyes" ; then
 		enable_setuid_install=no
-		AC_MSG_RESULT(no; using setcap instead)
+		AC_MSG_RESULT(setcap and setuid both selected)
+		AC_MSG_ERROR(You must choose one of setcap install and setuid install)
 	elif test "x$enable_dumpcap" = "xno" ; then
-		AC_MSG_ERROR(Setuid install works only with dumpcap but dumpcap is disabled)
+		AC_MSG_RESULT(dumpcap disabled)
+		AC_MSG_ERROR([Setuid install works only with dumpcap, but dumpcap is disabled])
 	else
 		AC_MSG_RESULT(yes)
 	fi
@@ -2337,6 +2348,17 @@ AC_CHECK_HEADERS(direct.h dirent.h fcntl.h getopt.h grp.h inttypes.h netdb.h pwd
 AC_CHECK_HEADERS(sys/ioctl.h sys/param.h sys/socket.h sys/sockio.h sys/stat.h sys/time.h sys/types.h sys/utsname.h sys/wait.h)
 AC_CHECK_HEADERS(netinet/in.h)
 AC_CHECK_HEADERS(arpa/inet.h arpa/nameser.h)
+
+#
+# On Linux, check for some additional headers, which we need as a
+# workaround for a bonding driver bug and for libpcap's current lack
+# of its own workaround for that bug.
+#
+case "$host_os" in
+linux*)
+	AC_CHECK_HEADERS(linux/sockios.h linux/if_bonding.h,,,[#include <sys/socket.h>])
+	;;
+esac
 
 dnl SSL Check
 SSL_LIBS=''
@@ -2958,6 +2980,8 @@ AC_OUTPUT(
   packaging/svr4/checkinstall
   packaging/svr4/pkginfo
   plugins/Makefile
+  plugins/ani_rpp/Makefile
+  plugins/ani_payload/Makefile
   plugins/docsis/Makefile
   plugins/ethercat/Makefile
   plugins/gryphon/Makefile
@@ -2967,6 +2991,7 @@ AC_OUTPUT(
   plugins/opcua/Makefile
   plugins/profinet/Makefile
   plugins/stats_tree/Makefile
+  plugins/twamp/Makefile
   plugins/unistim/Makefile
   plugins/wimax/Makefile
   plugins/wimaxasncp/Makefile

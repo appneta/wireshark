@@ -77,6 +77,8 @@ typedef struct _usb_trans_info_t {
      * Valid only during GET CONFIGURATION response.
      */
     usb_conv_info_t *interface_info;
+
+    guint64 usb_id;
 } usb_trans_info_t;
 
 /* Conversation Structure
@@ -103,6 +105,8 @@ struct _usb_conv_info_t {
     usb_trans_info_t *usb_trans_info; /* pointer to the current transaction */
 
     void *class_data;	/* private class/id decode data */
+
+    wmem_array_t *alt_settings;
 };
 
 /* This is what a tap will tap */

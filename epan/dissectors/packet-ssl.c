@@ -407,8 +407,9 @@ ssl_parse_old_keys(void)
         for (i = 0; old_keys[i] != NULL; i++) {
             parts = ep_strsplit(old_keys[i], ",", 4);
             if (parts[0] && parts[1] && parts[2] && parts[3]) {
+                gchar *path = uat_esc(parts[3], (guint)strlen(parts[3]));
                 uat_entry = ep_strdup_printf("\"%s\",\"%s\",\"%s\",\"%s\",\"\"",
-                                parts[0], parts[1], parts[2], parts[3]);
+                                parts[0], parts[1], parts[2], path);
                 if (!uat_load_str(ssldecrypt_uat, uat_entry, &err)) {
                     ssl_debug_printf("ssl_parse_old_keys: Can't load UAT string %s: %s\n",
                                      uat_entry, err);
@@ -1610,10 +1611,10 @@ dissect_ssl3_record(tvbuff_t *tvb, packet_info *pinfo,
         if (ssl&&decrypt_ssl3_record(tvb, pinfo, offset,
                 record_length, content_type, ssl, FALSE))
           ssl_add_record_info(proto_ssl, pinfo, ssl_decrypted_data.data,
-                  ssl_decrypted_data_avail, offset);
+                  ssl_decrypted_data_avail, tvb_raw_offset(tvb)+offset);
 
         /* try to retrieve and use decrypted alert record, if any. */
-        decrypted = ssl_get_record_info(tvb, proto_ssl, pinfo, offset);
+        decrypted = ssl_get_record_info(tvb, proto_ssl, pinfo, tvb_raw_offset(tvb)+offset);
         if (decrypted) {
             add_new_data_source(pinfo, decrypted, "Decrypted SSL record");
             dissect_ssl3_alert(decrypted, pinfo, ssl_record_tree, 0, session);
@@ -1633,10 +1634,10 @@ dissect_ssl3_record(tvbuff_t *tvb, packet_info *pinfo,
         if (ssl && decrypt_ssl3_record(tvb, pinfo, offset,
                 record_length, content_type, ssl, FALSE))
             ssl_add_record_info(proto_ssl, pinfo, ssl_decrypted_data.data,
-                ssl_decrypted_data_avail, offset);
+                ssl_decrypted_data_avail, tvb_raw_offset(tvb)+offset);
 
         /* try to retrieve and use decrypted handshake record, if any. */
-        decrypted = ssl_get_record_info(tvb, proto_ssl, pinfo, offset);
+        decrypted = ssl_get_record_info(tvb, proto_ssl, pinfo, tvb_raw_offset(tvb)+offset);
         if (decrypted) {
             /* add desegmented data to the data source list */
             add_new_data_source(pinfo, decrypted, "Decrypted SSL record");
@@ -1689,10 +1690,10 @@ dissect_ssl3_record(tvbuff_t *tvb, packet_info *pinfo,
         if (ssl && decrypt_ssl3_record(tvb, pinfo, offset,
                 record_length, content_type, ssl, FALSE))
             ssl_add_record_info(proto_ssl, pinfo, ssl_decrypted_data.data,
-                                ssl_decrypted_data_avail, offset);
+                                ssl_decrypted_data_avail, tvb_raw_offset(tvb)+offset);
 
         /* try to retrieve and use decrypted handshake record, if any. */
-        decrypted = ssl_get_record_info(tvb, proto_ssl, pinfo, offset);
+        decrypted = ssl_get_record_info(tvb, proto_ssl, pinfo, tvb_raw_offset(tvb)+offset);
         if (decrypted) {
             add_new_data_source(pinfo, decrypted, "Decrypted SSL record");
             dissect_ssl3_heartbeat(decrypted, pinfo, ssl_record_tree, 0, session, tvb_length (decrypted), TRUE);
@@ -2745,14 +2746,16 @@ dissect_ssl3_hnd_cert_status(tvbuff_t *tvb, proto_tree *tree,
         break;
     case SSL_HND_CERT_STATUS_TYPE_OCSP_MULTI:
         {
-            guint   list_len;
+            gint32 list_len;
 
             list_len = tvb_get_ntoh24(tvb, offset);
             offset += 3;
 
-            while (list_len-- > 0)
+            while (list_len > 0) {
+                guint32 prev_offset = offset;
                 offset = dissect_ssl3_ocsp_response(tvb, tree, offset, pinfo);
-
+                list_len -= offset - prev_offset;
+            }
             break;
         }
     }

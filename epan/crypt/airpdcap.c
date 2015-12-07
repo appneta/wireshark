@@ -365,6 +365,11 @@ AirPDcapDecryptWPABroadcastKey(const EAPOL_RSN_KEY *pEAPKey, guint8  *decryption
     }else if (key_version == AIRPDCAP_WPA_KEY_VER_AES_CCMP){
         /* AES */
         key_bytes_len = pntoh16(pEAPKey->key_data_len);
+
+        /* AES keys must be at least 128 bits = 16 bytes. */
+        if (key_bytes_len < 16) {
+            return;
+        }
     }
 
     if (key_bytes_len > TKIP_GROUP_KEYBYTES_LEN_MAX || key_bytes_len == 0) { /* Don't read past the end of pEAPKey->ie */
@@ -686,6 +691,12 @@ INT AirPDcapPacketProcess(
     if (tot_len < (UINT)(mac_header_len+AIRPDCAP_CRYPTED_DATA_MINLEN)) {
         AIRPDCAP_DEBUG_PRINT_LINE("AirPDcapPacketProcess", "minimum length violated", AIRPDCAP_DEBUG_LEVEL_5);
         return AIRPDCAP_RET_WRONG_DATA_SIZE;
+    }
+
+    /* Assume that the decrypt_data field is at least this size. */
+    if (tot_len > AIRPDCAP_MAX_CAPLEN) {
+        AIRPDCAP_DEBUG_PRINT_LINE("AirPDcapPacketProcess", "length too large", AIRPDCAP_DEBUG_LEVEL_3);
+        return AIRPDCAP_RET_UNSUCCESS;
     }
 
     /* get BSSID */
@@ -1223,7 +1234,7 @@ AirPDcapWepMng(
     /* remove IC header */
     offset = mac_header_len;
     *decrypt_len-=4;
-    memcpy(decrypt_data+offset, decrypt_data+offset+AIRPDCAP_WEP_IVLEN+AIRPDCAP_WEP_KIDLEN, *decrypt_len-offset);
+    memmove(decrypt_data+offset, decrypt_data+offset+AIRPDCAP_WEP_IVLEN+AIRPDCAP_WEP_KIDLEN, *decrypt_len-offset);
 
     return AIRPDCAP_RET_SUCCESS;
 }
@@ -1614,6 +1625,10 @@ AirPDcapStoreSa(
 {
     INT last_free;
 
+    if (ctx->first_free_index>=AIRPDCAP_MAX_SEC_ASSOCIATIONS_NR) {
+        /* there is no empty space available. FAILURE */
+        return -1;
+    }
     if (ctx->sa[ctx->first_free_index].used) {
         /* last addition was in the middle of the array (and the first_free_index was just incremented by 1)   */
         /* search for a free space from the first_free_index to AIRPDCAP_STA_INFOS_NR (to avoid free blocks in */
@@ -1707,7 +1722,8 @@ AirPDcapGetBssidAddress(
     }
 }
 
-/* Function used to derive the PTK. Refer to IEEE 802.11I-2004, pag. 74 */
+/* Function used to derive the PTK. Refer to IEEE 802.11I-2004, pag. 74
+ * and IEEE 802.11i-2004, pag. 164 */
 static void
 AirPDcapRsnaPrfX(
     AIRPDCAP_SEC_ASSOCIATION *sa,
@@ -1719,6 +1735,7 @@ AirPDcapRsnaPrfX(
     UINT8 i;
     UCHAR R[100];
     INT offset=sizeof("Pairwise key expansion");
+    UCHAR output[80]; /* allow for sha1 overflow. */
 
     memset(R, 0, 100);
 
@@ -1755,8 +1772,9 @@ AirPDcapRsnaPrfX(
     for(i = 0; i < (x+159)/160; i++)
     {
         R[offset] = i;
-        sha1_hmac(pmk, 32, R, 100, ptk + i * 20);
+        sha1_hmac(pmk, 32, R, 100, &output[20 * i]);
     }
+    memcpy(ptk, output, x/8);
 }
 
 static INT

@@ -5,6 +5,8 @@ include ..\config.nmake
 ## To add a plugin: Add entry to PLUGIN_LIST
 
 PLUGIN_LIST = \
+	ani_rpp 	\
+	ani_payload \
 	docsis      \
 	ethercat    \
 	gryphon     \
@@ -14,6 +16,7 @@ PLUGIN_LIST = \
 	opcua       \
 	profinet    \
 	stats_tree  \
+	twamp       \
 	unistim     \
 	wimax       \
 	wimaxasncp  \
@@ -41,7 +44,7 @@ distclean-local: clean-local
 maintainer-clean-local: distclean-local
 
 checkapi:
-	$(MAKE) -f Makefile.nmake PLUGIN_TARGET=checkapi process-plugins 
+	$(MAKE) -f Makefile.nmake PLUGIN_TARGET=checkapi process-plugins
 
 
 
