@@ -1,3 +1,9 @@
+wireshark (2.0.1.appneta.19) UNRELEASED; urgency=medium
+
+  * add SSL decode support 
+
+ -- Fred Klassen <fklassen@appneta.com>  Fri, 11 Mar 2016 12:20:47 -0700
+
 wireshark (2.0.1.appneta.18) UNRELEASED; urgency=medium
 
   * merge with upstream 
