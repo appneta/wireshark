@@ -20,11 +20,11 @@ BEGIN
             VALUE "FileDescription", "@PACKAGE@ dissector\0"
             VALUE "FileVersion", "@MODULE_VERSION@\0"
             VALUE "InternalName", "@PACKAGE@ @MODULE_VERSION@\0"
-            VALUE "LegalCopyright", "Copyright © 2010-2014 AppNeta\0"
+            VALUE "LegalCopyright", "Copyright © 2010-2016 AppNeta\0"
             VALUE "OriginalFilename", "@PLUGIN_NAME@.dll\0"
             VALUE "ProductName", "Wireshark\0"
             VALUE "ProductVersion", "@VERSION@\0"
-            VALUE "Comments", "Build with @MSVC_VARIANT@\0"
+            VALUE "Comments", "Built with @MSVC_VARIANT@\0"
         END
     END
     BLOCK "VarFileInfo"

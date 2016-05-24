@@ -27,8 +27,9 @@
 								<option id="gnu.c.compiler.option.include.paths.1316276739" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="/usr/include/glib-2.0"/>
 								</option>
-								<option id="gnu.c.compiler.option.preprocessor.def.symbols.434191685" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
+								<option id="gnu.c.compiler.option.preprocessor.def.symbols.434191685" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="NEW_PROTO_TREE_API=1"/>
+									<listOptionValue builtIn="false" value="_U_"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1752824299" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>

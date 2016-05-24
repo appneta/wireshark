@@ -36,5 +36,13 @@
 #endif
 
 /* Version number of package */
-#define VERSION "1.0.11"
+
+#define stringiz1(x) #x
+#define stringize(x) stringiz1(x)
+
+#ifndef BUILD_NUMBER
+#define BUILD_NUMBER 0
+#endif
+
+#define VERSION "1.1." stringize(BUILD_NUMBER)
 

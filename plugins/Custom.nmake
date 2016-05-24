@@ -1,0 +1,61 @@
+#
+
+include ..\config.nmake
+
+all: ani_rpp ani_payload twamp
+
+
+ani_rpp:: 
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake
+	cd ..
+
+ani_payload:: 
+	cd ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake
+	cd ..
+
+ani_twamp:: 
+	cd twamp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake
+	cd ..
+
+clean:
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ..
+	cd ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ..
+	cd twamp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ..
+
+distclean: clean
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
+	cd ..
+	cd ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
+	cd ..
+	cd twamp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
+	cd ..
+
+maintainer-clean: distclean
+	cd ani_rpp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
+	cd ..
+	cd ani_payload
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
+	cd ..
+	cd ani_twamp
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
+	cd ..
+
+install-plugins:
+!IFDEF ENABLE_LIBWIRESHARK
+	xcopy ani_rpp\*.dll ..\$(INSTALL_DIR)\plugins\ /d
+	xcopy ani_payload\*.dll ..\$(INSTALL_DIR)\plugins\ /d
+	xcopy twamp\*.dll ..\$(INSTALL_DIR)\plugins\ /d
+!ENDIF

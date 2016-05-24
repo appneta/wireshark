@@ -276,8 +276,6 @@ wireshark.bsc: \
 	epan\dissectors\*.sbr		\
 	epan\ftypes\*.sbr		\
 	epan\wslua\*.sbr		\
-	plugins\ani_payload\*.sbr	\
-	plugins\ani_rpp\*.sbr		\
 	plugins\asn1\*.sbr		\
 	plugins\docsis\*.sbr		\
 	plugins\ethercat\*.sbr		\
@@ -288,7 +286,6 @@ wireshark.bsc: \
 	plugins\opcua\*.sbr		\
 	plugins\profinet\*.sbr		\
 	plugins\stats_tree\*.sbr	\
-	plugins\twamp\*.sbr		\
 	plugins\unistim\*.sbr		\
 	plugins\wimax\*.sbr		\
 	plugins\wimaxasncp\*.sbr	\

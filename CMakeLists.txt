@@ -1034,8 +1034,6 @@ if(ENABLE_PLUGINS)
 	set_target_properties(plugins PROPERTIES FOLDER "Plugins")
 	set(PLUGIN_INSTALL_DIR "${ABSOLUTE_CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}")
 	set(PLUGIN_SRC_DIRS
-		plugins/ani_payload
-		plugins/ani_rpp
 		plugins/docsis
 		plugins/ethercat
 		plugins/gryphon
@@ -1045,7 +1043,6 @@ if(ENABLE_PLUGINS)
 		plugins/opcua
 		plugins/profinet
 		plugins/stats_tree
-		plugins/twamp
 		plugins/unistim
 		plugins/wimax
 		plugins/wimaxasncp

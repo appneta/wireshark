@@ -22,7 +22,7 @@
 include(WiresharkPlugin)
 
 # This info is from moduleinfo.nmake
-set_module_info(ani_payload 0 0 4 0)
+set_module_info(ani_payload 1 1 0 0)
 
 set(DISSECTOR_SRC
 	packet-ani-payload.c

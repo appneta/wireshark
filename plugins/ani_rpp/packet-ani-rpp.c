@@ -805,6 +805,7 @@ static int
 dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
   unsigned int offset = 0;
+  gboolean      marker_set;
 
   /* Make entries in Protocol column and Info column on summary display */
   col_set_str(pinfo->cinfo, COL_PROTOCOL, "ani-rpp");
@@ -813,6 +814,8 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
 
   /* determine how many bytes of the packet will be processed */
   offset = dissect_rtp_header(tvb, pinfo, offset, NULL);
+  /* Get the marker field of the RTP header */
+  marker_set = RTP_MARKER( tvb_get_guint8( tvb, offset + 1 ) );
   offset = dissect_responder_header(tvb, pinfo, offset, NULL);
 
   if (tree) {
@@ -832,7 +835,7 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
     call_dissector(payload_handle, tvb_new_subset(tvb, offset, -1, -1), pinfo, tree);
   }
 
-  col_append_fstr(pinfo->cinfo, COL_INFO, ", Dual-ended");
+  col_append_fstr(pinfo->cinfo, COL_INFO, marker_set ? ", Dual-ended" : ", Single-ended");
 
   /* Return the amount of data this dissector was able to dissect */
   return tvb_captured_length(tvb);
