@@ -125,7 +125,7 @@ lib/
 .libs
 packaging/rpm/RPMS
 packaging/rpm/SRPMS
-
+.settings
 
 # Doc #
 ########
