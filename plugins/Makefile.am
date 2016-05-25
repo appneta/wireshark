@@ -22,6 +22,8 @@
 -include Custom.make
 
 SUBDIRS = $(_CUSTOM_SUBDIRS_) \
+	ani_rpp \
+	ani_payload \
 	docsis \
 	easy_codec \
 	ethercat \
@@ -32,6 +34,7 @@ SUBDIRS = $(_CUSTOM_SUBDIRS_) \
 	opcua \
 	profinet \
 	stats_tree \
+	twamp \
 	unistim \
 	wimax \
 	wimaxasncp \
