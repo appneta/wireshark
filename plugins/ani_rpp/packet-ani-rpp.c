@@ -830,6 +830,7 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
     ani_rpp_tree = proto_item_add_subtree(ti, ett_ani_rpp);
 
     /* Add items to our subtree */
+    offset = 0;
     offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree, &marker_set);
     offset = dissect_responder_header(tvb, pinfo, offset, ani_rpp_tree);
     call_dissector(payload_handle, tvb_new_subset(tvb, offset, -1, -1), pinfo, tree);
