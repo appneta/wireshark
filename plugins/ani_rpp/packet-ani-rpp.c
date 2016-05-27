@@ -30,6 +30,7 @@
 
 #include <epan/packet.h>
 #include <epan/prefs.h>
+#include <epan/proto.h>
 #include <epan/dissectors/packet-rtp.h>
 
 #define UDP_PORT_ANI_RPP  3239
@@ -331,7 +332,8 @@ static const unsigned char PATHTEST_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x
  * the header; otherwise add items to the dissector tree.
 */
 static int
-dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree *ani_rpp_tree)
+dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset,
+    proto_tree *ani_rpp_tree, gboolean *marker_set)
 {
   guint8        octet1, octet2;
   unsigned int  version;
@@ -339,11 +341,12 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
   gboolean      extension_set;
   unsigned int  csrc_count;
   unsigned int  payload_type;
-  gboolean      marker_set;
   guint16       seq_num;
   guint32       timestamp;
   guint32       sync_src;
   proto_tree*   rtp_tree = NULL;
+
+  *marker_set = 0;
 
   /* Get the fields in the first octet */
   octet1 = tvb_get_guint8( tvb, offset );
@@ -368,7 +371,7 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
   csrc_count = RTP_CSRC_COUNT( octet1 );
 
   /* Get the fields in the second octet */
-  marker_set = RTP_MARKER( octet2 );
+  *marker_set = RTP_MARKER( octet2 );
   payload_type = RTP_PAYLOAD_TYPE( octet2 );
 
   /* Get the subsequent fields */
@@ -379,10 +382,10 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset, proto_tree
   /* Create a subtree for RTP */
   if (sync_src == NO_FLOW) {
     rtp_tree = proto_tree_add_subtree_format(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH, ett_ani_rtp, NULL,
-        "Responder RTP Header: No flow, %s", marker_set ? "Dual-ended" : "Single-ended");
+        "Responder RTP Header: No flow, %s", *marker_set ? "Dual-ended" : "Single-ended");
   } else {
     rtp_tree = proto_tree_add_subtree_format(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH, ett_ani_rtp, NULL,
-      "Responder RTP Header: Flow %u, %s", sync_src, marker_set ? "Dual-ended" : "Single-ended");
+      "Responder RTP Header: Flow %u, %s", sync_src, *marker_set ? "Dual-ended" : "Single-ended");
   }
 
   /* Add items to the RTP subtree */
@@ -813,9 +816,7 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
   col_clear(pinfo->cinfo, COL_INFO);
 
   /* determine how many bytes of the packet will be processed */
-  offset = dissect_rtp_header(tvb, pinfo, offset, NULL);
-  /* Get the marker field of the RTP header */
-  marker_set = RTP_MARKER( tvb_get_guint8( tvb, offset + 1 ) );
+  offset = dissect_rtp_header(tvb, pinfo, offset, NULL, &marker_set);
   offset = dissect_responder_header(tvb, pinfo, offset, NULL);
 
   if (tree) {
@@ -829,12 +830,10 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
     ani_rpp_tree = proto_item_add_subtree(ti, ett_ani_rpp);
 
     /* Add items to our subtree */
-    offset = 0;
-    offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree);
+    offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree, &marker_set);
     offset = dissect_responder_header(tvb, pinfo, offset, ani_rpp_tree);
     call_dissector(payload_handle, tvb_new_subset(tvb, offset, -1, -1), pinfo, tree);
   }
-
   col_append_fstr(pinfo->cinfo, COL_INFO, marker_set ? ", Dual-ended" : ", Single-ended");
 
   /* Return the amount of data this dissector was able to dissect */
