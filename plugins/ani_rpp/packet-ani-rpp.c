@@ -113,10 +113,13 @@ static int hf_ani_rpp_lost_id = -1;
 static int hf_ani_rpp_sipport = -1;
 static int hf_ani_rpp_ta_id = -1;
 static int hf_ani_rpp_protocol = -1;
-static int hf_ani_rpp_cb_packetcount = -1;
-static int hf_ani_rpp_cb_interpacketgap = -1;
+static int hf_ani_rpp_cb_inbound_packetcount = -1;
+static int hf_ani_rpp_cb_inbound_interpacketgap = -1;
+static int hf_ani_rpp_cb_outbound_packetcount = -1;
+static int hf_ani_rpp_cb_outbound_interpacketgap = -1;
 static int hf_ani_rpp_cb_resp_ratelimitcbrate = -1;
 static int hf_ani_rpp_cb_resp_minpacketcount = -1;
+static int hf_ani_rpp_cb_flags_resp_csv_debug = -1;
 static int hf_ani_rpp_inboundpacketcount = -1;
 static int hf_ani_rpp_inboundpacketsize = -1;
 static int hf_ani_rpp_h323port = -1;
@@ -125,6 +128,7 @@ static int hf_ani_rpp_custom_appliance_type = -1;
 static int hf_ani_rpp_command_flags = -1;
 static int hf_ani_rpp_command_flags_is_jumbo = -1;
 static int hf_ani_rpp_command_flags_is_super_jumbo = -1;
+static int hf_ani_rpp_command_flags_is_inbound = -1;
 static int hf_ani_rpp_payload = -1;
 
 /* RTP header fields                                 */
@@ -449,7 +453,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
 {
   gint currentHeader, nextHeader;
   guint8 headerLength = 0, mainHeader = 1, mode = 0;
-  guint8 cmd_info_flags;
+  guint8 cmd_info_flags = 0;
   guint32 id, flow, major, minor, revision, build, first_id,
     burst_hold_time, i, depth;
   guint16 port, portend, weight, burstsize, packetsize;
@@ -632,8 +636,9 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
           cmd_info_flags = tvb_get_guint8( tvb, offset + 9 );
           tf = proto_tree_add_uint( current_tree, hf_ani_rpp_command_flags, tvb, offset+9, 1, cmd_info_flags );
           field_tree = proto_item_add_subtree( tf, ett_ani_burst_info );
-          proto_tree_add_boolean( field_tree, hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset+9, 1, cmd_info_flags );
           proto_tree_add_boolean( field_tree, hf_ani_rpp_command_flags_is_jumbo, tvb, offset+9, 1, cmd_info_flags );
+          proto_tree_add_boolean( field_tree, hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset+9, 1, cmd_info_flags );
+          proto_tree_add_boolean( field_tree, hf_ani_rpp_command_flags_is_inbound, tvb, offset+9, 1, cmd_info_flags );
         }
 
         /* set some text in the info column */
@@ -642,7 +647,11 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
         } else if (mode == 2) {
           col_append_fstr(pinfo->cinfo, COL_INFO, ", Datagram");
         } else if (mode == 3) {
-          col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst");
+          if ((cmd_info_flags & 0x4)) {
+            col_append_fstr(pinfo->cinfo, COL_INFO, ", Inbound Controlled Burst");
+          } else
+            col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst");
+        }
         } else if (mode == 4) {
           col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm");
         } else if (mode == 5) {
@@ -733,8 +742,15 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
       current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
           "Controlled Burst");
       if (current_tree) {
-        proto_tree_add_item ( current_tree, hf_ani_rpp_cb_packetcount, tvb, offset, 4, FALSE );
-        proto_tree_add_item( current_tree, hf_ani_rpp_cb_interpacketgap, tvb, offset+4, 4, FALSE );
+        proto_tree_add_item ( current_tree, hf_ani_rpp_cb_inbound_packetcount, tvb, offset, 4, FALSE );
+        proto_tree_add_item( current_tree, hf_ani_rpp_cb_inbound_interpacketgap, tvb, offset+4, 4, FALSE );
+        tf = proto_tree_add_uint( current_tree, hf_ani_rpp_command_flags, tvb, offset+4, 1, cmd_info_flags );
+        field_tree = proto_item_add_subtree( tf, ett_ani_burst_info );
+        proto_tree_add_boolean( field_tree, hf_ani_rpp_cb_flags_resp_csv_debug, tvb, offset+4, 1, tvb_get_guint32( tvb, offset + 4 ) );
+        if (headerLength >= 18) {
+          proto_tree_add_item ( current_tree, hf_ani_rpp_cb_outbound_packetcount, tvb, offset+8, 4, FALSE );
+          proto_tree_add_item( current_tree, hf_ani_rpp_cb_outbound_interpacketgap, tvb, offset+12, 4, FALSE );
+        }
       }
       offset += (headerLength - 2);
       break;
@@ -1212,6 +1228,18 @@ proto_register_ani_rpp(void)
       }
     },
     {
+      &hf_ani_rpp_cb_flags_resp_csv_debug,
+      {
+        "Responder CSV Debug",
+          "ani-rpp.resp_csv_debug",
+          FT_UINT32,
+          BASE_DEC,
+          NULL,
+          0x80000000,
+          "", HFILL
+      }
+    },
+    {
       &hf_ani_rpp_command_flags,
       {
         "Command Flags",
@@ -1244,6 +1272,18 @@ proto_register_ani_rpp(void)
           8,
           NULL,
           0x02,
+          "", HFILL
+      }
+    },
+    {
+      &hf_ani_rpp_command_flags_is_inbound,
+      {
+        "Is Inbound Packet",
+          "ani-rpp.is_inbound",
+          FT_BOOLEAN,
+          8,
+          NULL,
+          0x04,
           "", HFILL
       }
     },
@@ -1320,10 +1360,10 @@ proto_register_ani_rpp(void)
       }
     },
     {
-      &hf_ani_rpp_cb_packetcount,
+      &hf_ani_rpp_cb_inbound_packetcount,
       {
-        "Packet Count",
-          "ani-rpp.cb_packetcount",
+        "Inbound Packet Count",
+          "ani-rpp.cb_inbound_packetcount",
           FT_UINT32,
           BASE_DEC,
           NULL,
@@ -1332,10 +1372,34 @@ proto_register_ani_rpp(void)
       }
     },
     {
-      &hf_ani_rpp_cb_interpacketgap,
+      &hf_ani_rpp_cb_inbound_interpacketgap,
       {
-        "Inter-packet Gap (usec)",
-          "ani-rpp.cp_interpacketgap",
+        "Inbound Inter-packet Gap (usec)",
+          "ani-rpp.cb_inbound_interpacketgap",
+          FT_UINT32,
+          BASE_DEC,
+          NULL,
+          0x0,
+          "", HFILL
+      }
+    },
+    {
+      &hf_ani_rpp_cb_outbound_packetcount,
+      {
+        "Outbound Packet Count",
+          "ani-rpp.cb_outbound_packetcount",
+          FT_UINT32,
+          BASE_DEC,
+          NULL,
+          0x0,
+          "", HFILL
+      }
+    },
+    {
+      &hf_ani_rpp_cb_outbound_interpacketgap,
+      {
+        "Outbound Inter-packet Gap (usec)",
+          "ani-rpp.cb_outbound_interpacketgap",
           FT_UINT32,
           BASE_DEC,
           NULL,
