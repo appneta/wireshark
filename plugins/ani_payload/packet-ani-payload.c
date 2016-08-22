@@ -30,6 +30,7 @@
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/to_str.h>
+#include <wsutil/str_util.h>
 #include "packet-ani-payload.h"
 
 /* proto_data cannot be static because it's referenced in the
@@ -73,8 +74,8 @@ static const true_false_string ani_tf_set_not_set = {
 	"Not Set"
 };
 
-static void
-dissect_payload(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
+static int
+dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
 	guint bytes;
 
@@ -239,6 +240,8 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
 			PROTO_ITEM_SET_GENERATED (ti);
 		}
 	}
+
+	return 0;
 }
 
 void

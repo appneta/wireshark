@@ -217,6 +217,7 @@ static expert_field ei_icmp_checksum = EI_INIT;
 #define ICMP_MIP_CHALLENGE	24
 
 static dissector_handle_t ip_handle;
+static dissector_handle_t data_handle;
 
 static const value_string icmp_type_str[] = {
 	{ICMP_ECHOREPLY,    "Echo (ping) reply"},

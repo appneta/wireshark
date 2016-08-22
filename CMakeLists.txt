@@ -1111,6 +1111,8 @@ if(ENABLE_PLUGINS)
 		set(PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}")
 	endif()
 	set(PLUGIN_SRC_DIRS
+		plugins/ani_payload
+		plugins/ani_rpp
 		plugins/docsis
 		plugins/ethercat
 		plugins/gryphon
@@ -1120,6 +1122,7 @@ if(ENABLE_PLUGINS)
 		plugins/opcua
 		plugins/profinet
 		plugins/stats_tree
+		plugins/twamp
 		plugins/unistim
 		plugins/wimax
 		plugins/wimaxasncp

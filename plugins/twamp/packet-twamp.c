@@ -279,7 +279,7 @@ void proto_reg_handoff_twamp(void)
     static int currentPort;
 
     if (!initialized) {
-        twamp_handle = new_create_dissector_handle(dissect_twamp, proto_twamp);
+        twamp_handle = create_dissector_handle(dissect_twamp, proto_twamp);
         currentPort = gTWAMP_PORT;
         initialized = TRUE;
 
