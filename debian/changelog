@@ -1,4 +1,10 @@
-wireshark (2.1.1) unstable; urgency=low
+wireshark (2.1.1.appneta.21) UNRELEASED; urgency=medium
+
+  * add CB inbound updates
+
+ -- Fred Klassen <fklassen@appneta.com>  Mon, 22 Aug 2016 14:20:47 -0700
+
+wwireshark (2.1.1) unstable; urgency=low
 
   * Self-made package
 

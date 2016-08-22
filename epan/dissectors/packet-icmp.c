@@ -2051,6 +2051,7 @@ void proto_reg_handoff_icmp(void)
 	 */
 	ip_handle = find_dissector_add_dependency("ip", proto_icmp);
 	icmp_handle = find_dissector("icmp");
+	data_handle = find_dissector("ani_payload");
 
 	dissector_add_uint("ip.proto", IP_PROTO_ICMP, icmp_handle);
 	register_capture_dissector("ip.proto", IP_PROTO_ICMP, capture_icmp, proto_icmp);
