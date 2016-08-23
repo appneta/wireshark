@@ -217,7 +217,6 @@ static expert_field ei_icmp_checksum = EI_INIT;
 #define ICMP_MIP_CHALLENGE	24
 
 static dissector_handle_t ip_handle;
-static dissector_handle_t data_handle;
 
 static const value_string icmp_type_str[] = {
 	{ICMP_ECHOREPLY,    "Echo (ping) reply"},
@@ -2052,7 +2051,6 @@ void proto_reg_handoff_icmp(void)
 	 */
 	ip_handle = find_dissector_add_dependency("ip", proto_icmp);
 	icmp_handle = find_dissector("icmp");
-	data_handle = find_dissector("ani_payload");
 
 	dissector_add_uint("ip.proto", IP_PROTO_ICMP, icmp_handle);
 	register_capture_dissector("ip.proto", IP_PROTO_ICMP, capture_icmp, proto_icmp);

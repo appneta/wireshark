@@ -340,11 +340,6 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset,
     proto_tree *ani_rpp_tree, gboolean *marker_set)
 {
   guint8        octet1, octet2;
-  unsigned int  version;
-  gboolean      padding_set;
-  gboolean      extension_set;
-  unsigned int  csrc_count;
-  unsigned int  payload_type;
   guint16       seq_num;
   guint32       timestamp;
   guint32       sync_src;
@@ -366,17 +361,8 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset,
     return RTP_HEADER_LENGTH;
   }
 
-  /* parse the rtp header, adding items to the dissector tree */
-
-  /* get the fields in the first octet */
-  version = RTP_VERSION( octet1 );
-  padding_set = RTP_PADDING( octet1 );
-  extension_set = RTP_EXTENSION( octet1 );
-  csrc_count = RTP_CSRC_COUNT( octet1 );
-
   /* Get the fields in the second octet */
   *marker_set = RTP_MARKER( octet2 );
-  payload_type = RTP_PAYLOAD_TYPE( octet2 );
 
   /* Get the subsequent fields */
   seq_num = tvb_get_ntohs( tvb, offset + 2 );
@@ -401,12 +387,6 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, int offset,
 
   proto_tree_add_boolean( rtp_tree, hf_rtp_marker, tvb, offset,
     1, octet2 );
-  /*
-  proto_tree_add_uint_format( ani_rpp_tree, hf_rtp_payload_type, tvb,
-  offset, 1, octet2, "Payload type: %s (%u)",
-  payload_type_str ? payload_type_str : val_to_str( payload_type, rtp_payload_type_vals,"Unknown"),
-  payload_type);
-  */
   offset++;
 
   /* Sequence number 16 bits (2 octets) */
@@ -452,13 +432,13 @@ static int
 dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_tree *ani_rpp_tree)
 {
   gint currentHeader, nextHeader;
-  guint8 headerLength = 0, mainHeader = 1, mode = 0;
+  guint8 headerLength = 0, mode = 0;
   guint8 cmd_info_flags = 0;
-  guint32 id, flow, major, minor, revision, build, first_id,
+  guint32 id, flow, major, minor, revision, build, first_id = 0,
     burst_hold_time, i, depth;
-  guint16 port, portend, weight, burstsize, packetsize;
+  guint16 port, portend, weight, burstsize = 0;
   proto_tree   *current_tree = NULL, *field_tree = NULL;
-  proto_item   *ti = NULL, *tf = NULL;
+  proto_item  *tf = NULL;
   tvbuff_t *next_tvb;
   gboolean   save_in_error_pkt;
 
@@ -522,7 +502,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
 
         /* set some text in the info column */
         col_append_str(pinfo->cinfo, COL_INFO, " Reply");
-        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -545,7 +524,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
         } else {
           col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flow (port %d)", port);
         }
-        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -567,7 +545,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
 
         /* set some text in the info column */
         col_append_fstr(pinfo->cinfo, COL_INFO, " Flow Response (flow ID %d)", flow);
-        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -582,7 +559,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
 
         /* set some text in the info column */
         col_append_fstr(pinfo->cinfo, COL_INFO, " Close Flow (flow ID %d)", flow);
-        mainHeader = 0;
       }
       offset += (headerLength - 2);
       break;
@@ -622,7 +598,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
       if (current_tree) {
         first_id = tvb_get_ntohl( tvb, offset);
         burstsize = tvb_get_ntohs( tvb, offset+4 );
-        packetsize = tvb_get_ntohs( tvb, offset+6 );
         proto_tree_add_item( current_tree, hf_ani_rpp_first_id, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_burst_size, tvb, offset+4, 2, FALSE );
         if (headerLength > 8) {
@@ -649,9 +624,9 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
         } else if (mode == 3) {
           if ((cmd_info_flags & 0x4)) {
             col_append_fstr(pinfo->cinfo, COL_INFO, ", Inbound Controlled Burst");
-          } else
+          } else {
             col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst");
-        }
+          }
         } else if (mode == 4) {
           col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm");
         } else if (mode == 5) {
@@ -744,9 +719,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
       if (current_tree) {
         proto_tree_add_item ( current_tree, hf_ani_rpp_cb_inbound_packetcount, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_cb_inbound_interpacketgap, tvb, offset+4, 4, FALSE );
-        tf = proto_tree_add_uint( current_tree, hf_ani_rpp_command_flags, tvb, offset+4, 1, cmd_info_flags );
-        field_tree = proto_item_add_subtree( tf, ett_ani_burst_info );
-        proto_tree_add_boolean( field_tree, hf_ani_rpp_cb_flags_resp_csv_debug, tvb, offset+4, 1, tvb_get_guint32( tvb, offset + 4 ) );
         if (headerLength >= 18) {
           proto_tree_add_item ( current_tree, hf_ani_rpp_cb_outbound_packetcount, tvb, offset+8, 4, FALSE );
           proto_tree_add_item( current_tree, hf_ani_rpp_cb_outbound_interpacketgap, tvb, offset+12, 4, FALSE );
@@ -1588,7 +1560,7 @@ proto_reg_handoff_ani_rpp(void)
   static guint udp_port_ani_rpp = UDP_PORT_ANI_RPP;
 
   if (!inited) {
-      ani_rpp_handle = new_create_dissector_handle(dissect_ani_rpp, proto_ani_rpp);
+      ani_rpp_handle = create_dissector_handle(dissect_ani_rpp, proto_ani_rpp);
       inited = TRUE;
   }
   else {
