@@ -436,6 +436,10 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
   guint8 cmd_info_flags = 0;
   guint32 id, flow, major, minor, revision, build, first_id = 0,
     burst_hold_time, i, depth;
+  guint32 cb_in_count = 0,
+      cb_in_gap = 0,
+      cb_out_count = 0,
+      cb_out_gap = 0;
   guint16 port, portend, weight, burstsize = 0;
   proto_tree   *current_tree = NULL, *field_tree = NULL;
   proto_item  *tf = NULL;
@@ -717,11 +721,19 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
       current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
           "Controlled Burst");
       if (current_tree) {
+        cb_in_count = tvb_get_ntohl( tvb, offset);
+        cb_in_gap = tvb_get_ntohl( tvb, offset+4);
         proto_tree_add_item ( current_tree, hf_ani_rpp_cb_inbound_packetcount, tvb, offset, 4, FALSE );
         proto_tree_add_item( current_tree, hf_ani_rpp_cb_inbound_interpacketgap, tvb, offset+4, 4, FALSE );
         if (headerLength >= 18) {
+          cb_out_count = tvb_get_ntohl( tvb, offset+8);
+          cb_out_gap = tvb_get_ntohl( tvb, offset+12);
           proto_tree_add_item ( current_tree, hf_ani_rpp_cb_outbound_packetcount, tvb, offset+8, 4, FALSE );
           proto_tree_add_item( current_tree, hf_ani_rpp_cb_outbound_interpacketgap, tvb, offset+12, 4, FALSE );
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Out=%d/%d In=%d/%d (pkts/gap)",
+              cb_out_count, cb_out_gap, cb_in_count, cb_in_gap);
+        } else {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", %d/%d (pkts/gap)", cb_in_count, cb_in_gap);
         }
       }
       offset += (headerLength - 2);
