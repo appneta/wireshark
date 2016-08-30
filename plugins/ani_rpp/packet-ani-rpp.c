@@ -117,6 +117,7 @@ static int hf_ani_rpp_cb_inbound_packetcount = -1;
 static int hf_ani_rpp_cb_inbound_interpacketgap = -1;
 static int hf_ani_rpp_cb_outbound_packetcount = -1;
 static int hf_ani_rpp_cb_outbound_interpacketgap = -1;
+static int hf_ani_rpp_cb_inbound_flags_csv_debug = -1;
 static int hf_ani_rpp_cb_resp_ratelimitcbrate = -1;
 static int hf_ani_rpp_cb_resp_minpacketcount = -1;
 static int hf_ani_rpp_cb_flags_resp_csv_debug = -1;
@@ -439,7 +440,8 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
   guint32 cb_in_count = 0,
       cb_in_gap = 0,
       cb_out_count = 0,
-      cb_out_gap = 0;
+      cb_out_gap = 0,
+      cb_in_flags = 0;
   guint16 port, portend, weight, burstsize = 0;
   proto_tree   *current_tree = NULL, *field_tree = NULL;
   proto_item  *tf = NULL;
@@ -723,17 +725,24 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, gint offset, proto_t
       if (current_tree) {
         cb_in_count = tvb_get_ntohl( tvb, offset);
         cb_in_gap = tvb_get_ntohl( tvb, offset+4);
-        proto_tree_add_item ( current_tree, hf_ani_rpp_cb_inbound_packetcount, tvb, offset, 4, FALSE );
-        proto_tree_add_item( current_tree, hf_ani_rpp_cb_inbound_interpacketgap, tvb, offset+4, 4, FALSE );
+        cb_in_flags = cb_in_count & 0x80000000;
+        proto_tree_add_boolean( current_tree, hf_ani_rpp_cb_inbound_flags_csv_debug, tvb, offset, 4, cb_in_flags );
+        proto_tree_add_uint( current_tree, hf_ani_rpp_cb_inbound_packetcount, tvb, offset, 4, cb_in_count & 0x7fffffff);
+        proto_tree_add_uint( current_tree, hf_ani_rpp_cb_inbound_interpacketgap, tvb, offset+4, 4, cb_in_gap );
+        if (cb_in_flags) {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", Debug ");
+        } else {
+          col_append_fstr(pinfo->cinfo, COL_INFO, ", ");
+        }
         if (headerLength >= 18) {
           cb_out_count = tvb_get_ntohl( tvb, offset+8);
           cb_out_gap = tvb_get_ntohl( tvb, offset+12);
-          proto_tree_add_item ( current_tree, hf_ani_rpp_cb_outbound_packetcount, tvb, offset+8, 4, FALSE );
-          proto_tree_add_item( current_tree, hf_ani_rpp_cb_outbound_interpacketgap, tvb, offset+12, 4, FALSE );
-          col_append_fstr(pinfo->cinfo, COL_INFO, ", Out=%d/%d In=%d/%d (pkts/gap)",
-              cb_out_count, cb_out_gap, cb_in_count, cb_in_gap);
+          proto_tree_add_uint( current_tree, hf_ani_rpp_cb_outbound_packetcount, tvb, offset+8, 4, cb_out_count );
+          proto_tree_add_uint( current_tree, hf_ani_rpp_cb_outbound_interpacketgap, tvb, offset+12, 4, cb_out_gap );
+          col_append_fstr(pinfo->cinfo, COL_INFO, "Out=%d/%d In=%d/%d (pkts/gap)",
+              cb_out_count, cb_out_gap, cb_in_count & 0x7fffffff, cb_in_gap);
         } else {
-          col_append_fstr(pinfo->cinfo, COL_INFO, ", %d/%d (pkts/gap)", cb_in_count, cb_in_gap);
+          col_append_fstr(pinfo->cinfo, COL_INFO, "%d/%d (pkts/gap)", cb_in_count & 0x7fffffff, cb_in_gap);
         }
       }
       offset += (headerLength - 2);
@@ -1388,6 +1397,18 @@ proto_register_ani_rpp(void)
           BASE_DEC,
           NULL,
           0x0,
+          "", HFILL
+      }
+    },
+    {
+      &hf_ani_rpp_cb_inbound_flags_csv_debug,
+      {
+        "CSV Debug",
+          "ani-rpp.cb_flags_is_csv_debug",
+          FT_BOOLEAN,
+          32,
+          NULL,
+          0x80000000,
           "", HFILL
       }
     },

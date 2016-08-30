@@ -1,3 +1,9 @@
+wireshark (2.1.1.appneta.23) UNRELEASED; urgency=medium
+
+  * add Controlled Burst debug bit
+
+ -- Fred Klassen <fklassen@appneta.com>  Tue, 30 Aug 2016 10:02:00 -0700
+
 wireshark (2.1.1.appneta.22) UNRELEASED; urgency=medium
 
   * change dependencies
