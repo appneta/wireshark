@@ -66,7 +66,8 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_item *ti;
     proto_tree *twamp_tree, *error_estim_tree;
 
-    guint error_bytes, seq_num_bytes;
+	guint error_bytes;
+	guint64 seq_num_bytes;
     gboolean is_request_packet;
     guint offset = 0;
 
