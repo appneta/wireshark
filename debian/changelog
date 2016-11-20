@@ -1,6 +1,7 @@
 wireshark (2.2.2.appneta.24) UNRELEASED; urgency=medium
 
   * merge from wireshark 2.1.1.appneta.23
+  * add Enhanced Controlled Burst (ECB)
 
  -- Fred Klassen <fklassen@appneta.com>  Sat, 19 Aug 2016 18:03:00 -0700
 

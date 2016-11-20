@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include <glib.h>
+#include <epan/proto.h>
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/to_str.h>
@@ -40,23 +41,23 @@ void proto_register_ani_payload(void);
 
 int proto_ani_payload = -1;
 
-static int hf_payload_data = -1;
-static int hf_payload_legacy_signature = -1;
-static int hf_payload_path_signature = -1;
-static int hf_payload_path_reply_signature = -1;
-static int hf_payload_path_flags = -1;
-static int hf_payload_path_flags_first = -1;
-static int hf_payload_path_flags_last = -1;
-static int hf_payload_path_flags_iht = -1;
-static int hf_payload_path_burst_length = -1;
-static int hf_payload_path_iht_value = -1;
-static int hf_payload_pathtest_signature = -1;
-static int hf_payload_pathtest_burst_packets = -1;
-static int hf_payload_pathtest_sequence = -1;
-static int hf_payload_pathtest_stream = -1;
-static int hf_payload_flags = -1;
-static int hf_payload_burst_size = -1;
-static int hf_payload_data_len = -1;
+static gint hf_payload_data = -1;
+static gint hf_payload_legacy_signature = -1;
+static gint hf_payload_path_signature = -1;
+static gint hf_payload_path_reply_signature = -1;
+static gint hf_payload_path_flags = -1;
+static gint hf_payload_path_flags_first = -1;
+static gint hf_payload_path_flags_last = -1;
+static gint hf_payload_path_flags_iht = -1;
+static gint hf_payload_path_burst_length = -1;
+static gint hf_payload_path_iht_value = -1;
+static gint hf_payload_pathtest_signature = -1;
+static gint hf_payload_pathtest_burst_packets = -1;
+static gint hf_payload_pathtest_sequence = -1;
+static gint hf_payload_pathtest_stream = -1;
+static gint hf_payload_flags = -1;
+static gint hf_payload_burst_size = -1;
+static gint hf_payload_data_len = -1;
 
 static gboolean new_pane = FALSE;
 static gboolean show_ani_payload = TRUE;
