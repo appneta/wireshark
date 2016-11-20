@@ -49,12 +49,21 @@ static gint hf_payload_path_flags = -1;
 static gint hf_payload_path_flags_first = -1;
 static gint hf_payload_path_flags_last = -1;
 static gint hf_payload_path_flags_iht = -1;
+static gint hf_payload_path_flags_ecb = -1;
 static gint hf_payload_path_burst_length = -1;
 static gint hf_payload_path_iht_value = -1;
 static gint hf_payload_pathtest_signature = -1;
 static gint hf_payload_pathtest_burst_packets = -1;
 static gint hf_payload_pathtest_sequence = -1;
 static gint hf_payload_pathtest_stream = -1;
+static gint hf_payload_ecb_magnify = -1;
+static gint hf_payload_ecb_ssn = -1;
+static gint hf_payload_ecb_duration = -1;
+static gint hf_payload_ecb_gap = -1;
+static gint hf_payload_ecb_ll_rx = -1;
+static gint hf_payload_ecb_ll_us = -1;
+static gint hf_payload_ecb_total_rx = -1;
+static gint hf_payload_ecb_total_us = -1;
 static gint hf_payload_flags = -1;
 static gint hf_payload_burst_size = -1;
 static gint hf_payload_data_len = -1;
@@ -65,17 +74,17 @@ static gboolean show_ani_payload = TRUE;
 static gint ett_payload = -1;
 static gint ett_flags = -1;
 
-const unsigned char ANI_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFF };
-const unsigned char ANI_REPLY_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFD };
-const unsigned char ANI_LEGACY_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0x54, 0xD5 };
-const unsigned char PATHTEST_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFE };
+const guchar ANI_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFF };
+const guchar ANI_REPLY_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFD };
+const guchar ANI_LEGACY_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0x54, 0xD5 };
+const guchar PATHTEST_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFE };
 
 static const true_false_string ani_tf_set_not_set = {
 	"Set",
 	"Not Set"
 };
 
-static int
+static gint
 dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
 	guint bytes;
@@ -88,6 +97,8 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 			proto_tree *data_tree, *field_tree;
 			gint offset = 0;
 			const guint8 *cp = tvb_get_ptr(tvb, 0, bytes);
+			guint path_payload_min_size = (sizeof(ANI_PAYLOAD_SIGNATURE) + 4);
+			guint ecb_payload_min_size = path_payload_min_size + (4 * sizeof(guint32)) + (2 * sizeof(guint16));
 
 			if (new_pane) {
 				guint8 *real_data = (guint8 *)tvb_memdup(wmem_packet_scope(), tvb, 0, bytes);
@@ -142,7 +153,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 				else
 					col_append_fstr(pinfo->cinfo, COL_INFO, ", PathTest payload - stream=%u seq=%u", stream, seq);
 				offset += 7;
-			} else if (bytes >= (sizeof(ANI_PAYLOAD_SIGNATURE) + 4) &&
+			} else if (bytes >= path_payload_min_size  &&
 					(!memcmp(cp, ANI_PAYLOAD_SIGNATURE, sizeof(ANI_PAYLOAD_SIGNATURE))
 							|| !memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE)))) {
 				/* path packet */
@@ -150,9 +161,11 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 				gboolean first = FALSE;
 				gboolean last = FALSE;
 				gboolean iht = FALSE;
+				gboolean ecb = FALSE;
 				guint8  flags;
 				guint32 burst_length;
 				guint32 iht_value;
+				guint32 ecb_magnify;
 				int bit_offset;
 				const char *reply_str;
 
@@ -169,7 +182,9 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 				first = !!(flags & 0x01);
 				last = !!(flags & 0x02);
 				iht = !!(flags & 0x04);
+				ecb = !!(flags & 0x08);
 				burst_length = ((status >> 8) & 0x000FFFFF);
+				ecb_magnify = burst_length;
 
 				iht_value = tvb_get_ntohl(tvb, offset+3);
 
@@ -201,6 +216,14 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 					proto_item_append_text(tf, " (iht)");
 				}
 
+				if (ecb) {
+					proto_item_append_text(ti, " (ECB)");
+					proto_item_append_text(tf, " (ECB)");
+				}
+
+				proto_tree_add_bits_item(field_tree, hf_payload_path_flags_ecb, tvb, bit_offset + 0,
+						1, ENC_BIG_ENDIAN);
+
 				proto_tree_add_bits_item(field_tree, hf_payload_path_flags_iht, tvb, bit_offset + 1,
 						1, ENC_BIG_ENDIAN);
 
@@ -210,8 +233,15 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 				proto_tree_add_bits_item(field_tree, hf_payload_path_flags_first, tvb, bit_offset + 3,
 						1, ENC_BIG_ENDIAN);
 
-				proto_tree_add_uint(data_tree, hf_payload_path_burst_length, tvb, offset, 3, burst_length);
-				proto_item_append_text(ti, " (%u bytes)", burst_length);
+				if (ecb) {
+					/* Enhanced Controlled Burst */
+					proto_tree_add_uint(data_tree, hf_payload_ecb_magnify, tvb, offset, 3, ecb_magnify);
+					proto_item_append_text(ti, " (%u copies)", ecb_magnify);
+				} else {
+					/* Path */
+					proto_tree_add_uint(data_tree, hf_payload_path_burst_length, tvb, offset, 3, burst_length);
+					proto_item_append_text(ti, " (%u bytes)", burst_length);
+				}
 
 				if (iht) {
 					proto_tree_add_uint(data_tree, hf_payload_path_iht_value, tvb, offset+3, 4, iht_value);
@@ -219,14 +249,41 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 					offset += 4;
 				}
 
-				if (iht)
-					col_append_fstr(pinfo->cinfo, COL_INFO, ", Path %spayload - first=%u last=%u burst=%u iht=%u",
-							reply_str, first, last, burst_length, iht_value);
+				if (ecb)
+					col_append_fstr(pinfo->cinfo, COL_INFO, ", ECB %spayload:", reply_str);
 				else
-					col_append_fstr(pinfo->cinfo, COL_INFO, ", Path %spayload - first=%u last=%u burst=%u",
-							reply_str, first, last, burst_length);
+					col_append_fstr(pinfo->cinfo, COL_INFO, ", Path %spayload:", reply_str);
+
+				col_append_fstr(pinfo->cinfo, COL_INFO, " first=%u last=%u", first, last);
+
+				if (iht)
+					col_append_fstr(pinfo->cinfo, COL_INFO, " iht=%u", iht_value);
+
+				if (ecb)
+					col_append_fstr(pinfo->cinfo, COL_INFO, " magnify=%u", ecb_magnify);
+				else
+					col_append_fstr(pinfo->cinfo, COL_INFO, " burst=%u", burst_length);
 
 				offset += sizeof(guint) - 1;
+
+				if (ecb && bytes >= ecb_payload_min_size) {
+					proto_tree_add_item(data_tree, hf_payload_ecb_ssn, tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					proto_tree_add_item(data_tree, hf_payload_ecb_duration, tvb, offset, 2, ENC_BIG_ENDIAN);
+					col_append_fstr(pinfo->cinfo, COL_INFO, " duration=%ums", tvb_get_ntohs(tvb, offset));
+					offset += 2;
+					col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset));
+					proto_tree_add_item(data_tree, hf_payload_ecb_gap, tvb, offset, 2, ENC_BIG_ENDIAN);
+					offset += 2;
+					proto_tree_add_item(data_tree, hf_payload_ecb_ll_rx, tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					proto_tree_add_item(data_tree, hf_payload_ecb_ll_us, tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					proto_tree_add_item(data_tree, hf_payload_ecb_total_rx, tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					proto_tree_add_item(data_tree, hf_payload_ecb_total_us, tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+				}
 			} else {
 				/* non-ANI packet */
 				ti = proto_tree_add_protocol_format(tree, proto_ani_payload, tvb,
@@ -271,6 +328,8 @@ proto_register_ani_payload(void)
 			{ "Last packet", "ani_payload.path_flags.last", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
 		{ &hf_payload_path_flags_iht,
 			{ "Interrupt Hold Time (iht) available", "ani_payload.path_flags.iht", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
+		{ &hf_payload_path_flags_ecb,
+			{ "Enhanced Controlled Burst (ECB)", "ani_payload.path_flags.ecb", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
 		{ &hf_payload_path_burst_length,
 			{ "Burst length", "ani_payload.path_burst_length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
 		{ &hf_payload_path_iht_value,
@@ -283,6 +342,22 @@ proto_register_ani_payload(void)
 			{ "Sequence", "ani_payload.pathtest_sequence", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
 		{ &hf_payload_pathtest_stream,
 			{ "Stream", "ani_payload.pathtest_stream", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_magnify,
+			{ "Magnification", "ani_payload.ecb_magnification", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_ssn,
+			{ "First ID", "ani_payload.ecb_first_seq", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_duration,
+			{ "Duration (ms)", "ani_payload.ecb_duration", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_gap,
+			{ "Gap (us)", "ani_payload.ecb_gap", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_ll_rx,
+			{ "Loss-less RX count", "ani_payload.ecb_ll_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_ll_us,
+			{ "Loss-less delta time (us)", "ani_payload.ecb_ll_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_total_rx,
+			{ "Total RX count", "ani_payload.ecb_total_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+		{ &hf_payload_ecb_total_us,
+			{ "Total delta time (us)", "ani_payload.ecb_total_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
 	};
 
 	static gint *ett[] = {
