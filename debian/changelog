@@ -1,3 +1,27 @@
+wireshark (2.2.2.appneta.24) UNRELEASED; urgency=medium
+
+  * merge from wireshark 2.1.1.appneta.23
+
+ -- Fred Klassen <fklassen@appneta.com>  Sat, 19 Aug 2016 18:03:00 -0700
+
+wireshark (2.2.2.appneta.23) UNRELEASED; urgency=medium
+
+  * add Controlled Burst debug bit
+
+ -- Fred Klassen <fklassen@appneta.com>  Tue, 30 Aug 2016 10:02:00 -0700
+
+wireshark (2.2.2.appneta.22) UNRELEASED; urgency=medium
+
+  * change dependencies
+
+ -- Fred Klassen <fklassen@appneta.com>  Mon, 24 Aug 2016 10:27:07 -0700
+
+wireshark (2.2.2.appneta.21) UNRELEASED; urgency=medium
+
+  * add CB inbound updates
+
+ -- Fred Klassen <fklassen@appneta.com>  Mon, 22 Aug 2016 14:20:47 -0700
+
 wireshark (2.2.2) unstable; urgency=low
 
   * Self-made package

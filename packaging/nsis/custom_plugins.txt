@@ -1,3 +1,5 @@
 ;Add your custom plugins directives here
 ; Example:
-;File "${STAGING_DIR}\plugins\foo.dll"
+File "${STAGING_DIR}\plugins\ani_payload.dll"
+File "${STAGING_DIR}\plugins\ani_rpp.dll"
+File "${STAGING_DIR}\plugins\twamp.dll"

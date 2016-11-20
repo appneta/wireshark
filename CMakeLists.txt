@@ -27,7 +27,7 @@ set(PROJECT_MAJOR_VERSION 2)
 set(PROJECT_MINOR_VERSION 2)
 set(PROJECT_PATCH_VERSION 2)
 set(PROJECT_BUILD_VERSION ${GIT_REVISION})
-set(PROJECT_VERSION_EXTENSION "")
+set(PROJECT_VERSION_EXTENSION "-appneta.24")
 
 if(DEFINED ENV{WIRESHARK_VERSION_EXTRA})
 	set(PROJECT_VERSION_EXTENSION "$ENV{WIRESHARK_VERSION_EXTRA}")
@@ -1111,6 +1111,8 @@ if(ENABLE_PLUGINS)
 		set(PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}")
 	endif()
 	set(PLUGIN_SRC_DIRS
+		plugins/ani_payload
+		plugins/ani_rpp
 		plugins/docsis
 		plugins/ethercat
 		plugins/gryphon
@@ -1120,6 +1122,7 @@ if(ENABLE_PLUGINS)
 		plugins/opcua
 		plugins/profinet
 		plugins/stats_tree
+		plugins/twamp
 		plugins/unistim
 		plugins/wimax
 		plugins/wimaxasncp
