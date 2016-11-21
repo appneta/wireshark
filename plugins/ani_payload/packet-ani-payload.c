@@ -43,6 +43,7 @@ int proto_ani_payload = -1;
 
 static gint hf_payload_data = -1;
 static gint hf_payload_legacy_signature = -1;
+static gint hf_payload_legacy_corrupt_signature = -1;
 static gint hf_payload_path_signature = -1;
 static gint hf_payload_path_reply_signature = -1;
 static gint hf_payload_path_flags = -1;
@@ -69,7 +70,7 @@ static gint hf_payload_burst_size = -1;
 static gint hf_payload_data_len = -1;
 
 static gboolean new_pane = FALSE;
-static gboolean show_ani_payload = TRUE;
+static gboolean show_appneta_payload = TRUE;
 
 static gint ett_payload = -1;
 static gint ett_flags = -1;
@@ -77,6 +78,7 @@ static gint ett_flags = -1;
 const guchar ANI_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFF };
 const guchar ANI_REPLY_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFD };
 const guchar ANI_LEGACY_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0x54, 0xD5 };
+const guchar ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT[] = { 0xEC, 0xBD, 0x7F, 0x60, 0x54 };
 const guchar PATHTEST_PAYLOAD_SIGNATURE[] = { 0xEC, 0xBD, 0x7F, 0x60, 0xFE };
 
 static const true_false_string ani_tf_set_not_set = {
@@ -89,7 +91,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 {
     guint bytes;
 
-    if (show_ani_payload && tree) {
+    if (show_appneta_payload && tree) {
         bytes = tvb_captured_length_remaining(tvb, 0);
         if (bytes > 0) {
             tvbuff_t   *data_tvb;
@@ -114,12 +116,24 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 offset = sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE);
                 ti = proto_tree_add_protocol_format(tree, proto_ani_payload, tvb,
                         0,
-                        bytes, "Data (%d byte%s) - ANI Legacy Payload", bytes,
+                        bytes, "Data (%d byte%s) - AppNeta Legacy Payload", bytes,
                         plurality(bytes, "", "s"));
                 data_tree = proto_item_add_subtree(ti, ett_payload);
 
                 proto_tree_add_item(data_tree, hf_payload_legacy_signature, data_tvb, 0, offset, ENC_NA);
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", ANI Legacy payload");
+                col_append_fstr(pinfo->cinfo, COL_INFO, ", AppNeta Legacy Payload");
+            } else if (bytes >= sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT) &&
+                    !memcmp(cp, ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT, sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT))) {
+                /* legacy packet */
+                offset = sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT);
+                ti = proto_tree_add_protocol_format(tree, proto_ani_payload, tvb,
+                        0,
+                        bytes, "Data (%d byte%s) - AppNeta Legacy Payload - CORRUPT", bytes,
+                        plurality(bytes, "", "s"));
+                data_tree = proto_item_add_subtree(ti, ett_payload);
+
+                proto_tree_add_item(data_tree, hf_payload_legacy_corrupt_signature, data_tvb, 0, offset, ENC_NA);
+                col_append_fstr(pinfo->cinfo, COL_INFO, ", AppNeta Legacy Payload - CORRUPT");
             } else if (bytes >= (sizeof(PATHTEST_PAYLOAD_SIGNATURE) + 7) &&
                     !memcmp(cp, PATHTEST_PAYLOAD_SIGNATURE, sizeof(PATHTEST_PAYLOAD_SIGNATURE))) {
                 /* pathtest packet */
@@ -190,7 +204,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 
                 ti = proto_tree_add_protocol_format(tree, proto_ani_payload, tvb,
                         0,
-                        bytes, "Data (%d byte%s) - ANI Path %sPayload", bytes,
+                        bytes, "Data (%d byte%s) - AppNeta Path %sPayload", bytes,
                         plurality(bytes, "", "s"), reply_str);
                 data_tree = proto_item_add_subtree(ti, ett_payload);
                 if (reply_str[0])
@@ -236,7 +250,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 if (ecb) {
                     /* Enhanced Controlled Burst */
                     proto_tree_add_uint(data_tree, hf_payload_ecb_magnify, tvb, offset, 3, ecb_magnify);
-                    proto_item_append_text(ti, " (%u copies)", ecb_magnify);
+                    proto_item_append_text(ti, " (magnification %uX)", ecb_magnify);
                 } else {
                     /* Path */
                     proto_tree_add_uint(data_tree, hf_payload_path_burst_length, tvb, offset, 3, burst_length);
@@ -245,7 +259,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 
                 if (iht) {
                     proto_tree_add_uint(data_tree, hf_payload_path_iht_value, tvb, offset+3, 4, iht_value);
-                    proto_item_append_text(ti, " (%u nsec)", iht_value);
+                    proto_item_append_text(ti, " (iht=%u nsec)", iht_value);
                     offset += 4;
                 }
 
@@ -307,57 +321,59 @@ proto_register_ani_payload(void)
 {
     static hf_register_info hf[] = {
         { &hf_payload_burst_size,
-            { "Burst size", "ani_payload.burst_size", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Burst size", "appneta_payload.burst_size", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_flags,
-            { "Flags", "ani_payload.flags", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+            { "Flags", "appneta_payload.flags", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_legacy_signature,
-            { "Legacy signature", "ani_payload.legacy_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+            { "AppNeta Legacy signature", "appneta_payload.legacy_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_payload_legacy_corrupt_signature,
+            { "AppNeta Legacy signature", "appneta_payload.legacy_reply_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_path_signature,
-            { "Path signature", "ani_payload.path_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+            { "AppNeta Path signature", "appneta_payload.path_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_path_reply_signature,
-            { "Path Reply signature", "ani_payload.path_reply_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+            { "AppNeta Path Reply signature", "appneta_payload.path_reply_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_data,
-            { "Data", "ani_payload.data", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+            { "Data", "appneta_payload.data", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_data_len,
-            { "Length", "ani_payload.len", FT_INT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Length", "appneta_payload.len", FT_INT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_path_flags,
-            { "Path flags", "ani_payload.path_flags", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+            { "Path flags", "appneta_payload.path_flags", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_path_flags_first,
-            { "First packet", "ani_payload.path_flags.first", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
+            { "First packet", "appneta_payload.path_flags.first", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
         { &hf_payload_path_flags_last,
-            { "Last packet", "ani_payload.path_flags.last", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
+            { "Last packet", "appneta_payload.path_flags.last", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
         { &hf_payload_path_flags_iht,
-            { "Interrupt Hold Time (iht) available", "ani_payload.path_flags.iht", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
+            { "Interrupt Hold Time (iht) available", "appneta_payload.path_flags.iht", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
         { &hf_payload_path_flags_ecb,
-            { "Enhanced Controlled Burst (ECB)", "ani_payload.path_flags.ecb", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
+            { "Enhanced Controlled Burst (ECB)", "appneta_payload.path_flags.ecb", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
         { &hf_payload_path_burst_length,
-            { "Burst length", "ani_payload.path_burst_length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Burst length", "appneta_payload.path_burst_length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_path_iht_value,
-            { "iht value", "ani_payload.path_iht_value", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "iht value", "appneta_payload.path_iht_value", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_pathtest_signature,
-            { "PathTest signature", "ani_payload.pathtest_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+            { "PathTest signature", "appneta_payload.pathtest_signature", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_pathtest_burst_packets,
-            { "Burst packets", "ani_payload.pathtest_burst_packets", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Burst packets", "appneta_payload.pathtest_burst_packets", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_pathtest_sequence,
-            { "Sequence", "ani_payload.pathtest_sequence", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Sequence", "appneta_payload.pathtest_sequence", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_pathtest_stream,
-            { "Stream", "ani_payload.pathtest_stream", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Stream", "appneta_payload.pathtest_stream", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_magnify,
-            { "Magnification", "ani_payload.ecb_magnification", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Magnification", "appneta_payload.ecb_magnification", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_ssn,
-            { "First ID", "ani_payload.ecb_first_seq", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "First ID", "appneta_payload.ecb_first_seq", FT_UINT32, BASE_DEC_HEX, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_duration,
-            { "Duration (ms)", "ani_payload.ecb_duration", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Duration (ms)", "appneta_payload.ecb_duration", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_gap,
-            { "Gap (us)", "ani_payload.ecb_gap", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Gap (us)", "appneta_payload.ecb_gap", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_ll_rx,
-            { "Loss-less RX count", "ani_payload.ecb_ll_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Loss-less RX count", "appneta_payload.ecb_ll_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_ll_us,
-            { "Loss-less delta time (us)", "ani_payload.ecb_ll_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Loss-less delta time (us)", "appneta_payload.ecb_ll_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_total_rx,
-            { "Total RX count", "ani_payload.ecb_total_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Total RX count", "appneta_payload.ecb_total_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_ecb_total_us,
-            { "Total delta time (us)", "ani_payload.ecb_total_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+            { "Total delta time (us)", "appneta_payload.ecb_total_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
     };
 
     static gint *ett[] = {
@@ -368,19 +384,19 @@ proto_register_ani_payload(void)
     module_t *module_data;
 
     proto_ani_payload = proto_register_protocol (
-        "ANI Payload", /* name */
-        "ANI_Payload", /* short name */
-        "ani_payload" /* abbrev */
+        "AppNeta Payload", /* name */
+        "AppNeta_Payload", /* short name */
+        "appneta_payload" /* abbrev */
     );
 
-    register_dissector("ani_payload", dissect_payload, proto_ani_payload);
+    register_dissector("appneta_payload", dissect_payload, proto_ani_payload);
 
     proto_register_field_array(proto_ani_payload, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
 
     module_data = prefs_register_protocol(proto_ani_payload, NULL);
-    prefs_register_bool_preference(module_data, "show_ani_payload",
-            "Show dissected data on ANI payload",
-            "Show dissected data on ANI payload in the Packet Details pane",
-            &show_ani_payload);
+    prefs_register_bool_preference(module_data, "show_appneta_payload",
+            "Show dissected data on AppNeta payload",
+            "Show dissected data on AppNeta payload in the Packet Details pane",
+            &show_appneta_payload);
 }

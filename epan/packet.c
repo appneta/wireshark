@@ -198,7 +198,7 @@ packet_cache_proto_handles(void)
 	file_handle = find_dissector("file");
 	g_assert(file_handle != NULL);
 
-	data_handle = find_dissector("ani_payload");
+	data_handle = find_dissector("appneta_payload");
 	g_assert(data_handle != NULL);
 
 	proto_malformed = proto_get_id_by_filter_name("_ws.malformed");
