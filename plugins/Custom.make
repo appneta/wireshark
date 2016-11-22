@@ -12,5 +12,5 @@ _CUSTOM_EXTRA_DIST_ = \
 _CUSTOM_plugin_ldadd_ = \
 	-dlopen plugins/ani_rpp/ani_rpp.la \
 	-dlopen plugins/ani_payload/ani_payload.la \
-	-dlopen plugins/twamp/twamp.la \
-	
+	-dlopen plugins/twamp/twamp.la
+

@@ -38,9 +38,9 @@
  * print routines
  */
 void proto_register_ani_payload(void);
+static dissector_handle_t appneta_responder_handle = NULL;
 
-int proto_ani_payload = -1;
-
+static gint proto_ani_payload = -1;
 static gint hf_payload_data = -1;
 static gint hf_payload_legacy_signature = -1;
 static gint hf_payload_legacy_corrupt_signature = -1;
@@ -50,21 +50,13 @@ static gint hf_payload_path_flags = -1;
 static gint hf_payload_path_flags_first = -1;
 static gint hf_payload_path_flags_last = -1;
 static gint hf_payload_path_flags_iht = -1;
-static gint hf_payload_path_flags_ecb = -1;
+static gint hf_payload_path_flags_ext = -1;
 static gint hf_payload_path_burst_length = -1;
 static gint hf_payload_path_iht_value = -1;
 static gint hf_payload_pathtest_signature = -1;
 static gint hf_payload_pathtest_burst_packets = -1;
 static gint hf_payload_pathtest_sequence = -1;
 static gint hf_payload_pathtest_stream = -1;
-static gint hf_payload_ecb_magnify = -1;
-static gint hf_payload_ecb_ssn = -1;
-static gint hf_payload_ecb_duration = -1;
-static gint hf_payload_ecb_gap = -1;
-static gint hf_payload_ecb_ll_rx = -1;
-static gint hf_payload_ecb_ll_us = -1;
-static gint hf_payload_ecb_total_rx = -1;
-static gint hf_payload_ecb_total_us = -1;
 static gint hf_payload_flags = -1;
 static gint hf_payload_burst_size = -1;
 static gint hf_payload_data_len = -1;
@@ -98,9 +90,9 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
             proto_item *ti, *tf;
             proto_tree *data_tree, *field_tree;
             gint offset = 0;
-            const guint8 *cp = tvb_get_ptr(tvb, 0, bytes);
+            const guint8 *cp = tvb_get_ptr(tvb, offset, bytes);
             guint path_payload_min_size = (sizeof(ANI_PAYLOAD_SIGNATURE) + 4);
-            guint ecb_payload_min_size = path_payload_min_size + (4 * sizeof(guint32)) + (2 * sizeof(guint16));
+            guint ecb_payload_min_size = path_payload_min_size + 66;
 
             if (new_pane) {
                 guint8 *real_data = (guint8 *)tvb_memdup(wmem_packet_scope(), tvb, 0, bytes);
@@ -175,13 +167,12 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 gboolean first = FALSE;
                 gboolean last = FALSE;
                 gboolean iht = FALSE;
-                gboolean ecb = FALSE;
+                gboolean ext = FALSE;
                 guint8  flags;
                 guint32 burst_length;
-                guint32 iht_value;
-                guint32 ecb_magnify;
+                guint32 iht_value = 0;
                 int bit_offset;
-                const char *reply_str;
+                const gchar *reply_str;
 
                 if (!memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE)))
                     reply_str = "Reply ";
@@ -196,11 +187,8 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 first = !!(flags & 0x01);
                 last = !!(flags & 0x02);
                 iht = !!(flags & 0x04);
-                ecb = !!(flags & 0x08);
+                ext = !!(flags & 0x08);
                 burst_length = ((status >> 8) & 0x000FFFFF);
-                ecb_magnify = burst_length;
-
-                iht_value = tvb_get_ntohl(tvb, offset+3);
 
                 ti = proto_tree_add_protocol_format(tree, proto_ani_payload, tvb,
                         0,
@@ -226,16 +214,17 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 }
 
                 if (iht) {
+                    iht_value = tvb_get_ntohl(tvb, offset+3);
                     proto_item_append_text(ti, " (iht)");
                     proto_item_append_text(tf, " (iht)");
                 }
 
-                if (ecb) {
-                    proto_item_append_text(ti, " (ECB)");
-                    proto_item_append_text(tf, " (ECB)");
+                if (ext) {
+                    proto_item_append_text(ti, " (Ext)");
+                    proto_item_append_text(tf, " (Extended Headers)");
                 }
 
-                proto_tree_add_bits_item(field_tree, hf_payload_path_flags_ecb, tvb, bit_offset + 0,
+                proto_tree_add_bits_item(field_tree, hf_payload_path_flags_ext, tvb, bit_offset + 0,
                         1, ENC_BIG_ENDIAN);
 
                 proto_tree_add_bits_item(field_tree, hf_payload_path_flags_iht, tvb, bit_offset + 1,
@@ -247,68 +236,51 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 proto_tree_add_bits_item(field_tree, hf_payload_path_flags_first, tvb, bit_offset + 3,
                         1, ENC_BIG_ENDIAN);
 
-                if (ecb) {
-                    /* Enhanced Controlled Burst */
-                    proto_tree_add_uint(data_tree, hf_payload_ecb_magnify, tvb, offset, 3, ecb_magnify);
-                    proto_item_append_text(ti, " (magnification %uX)", ecb_magnify);
+                if (ext) {
+                    /* Extended headers*/
+                    ++offset;
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " Extended %spayload", reply_str);
+                    if (appneta_responder_handle && bytes >= ecb_payload_min_size) {
+                        tvbuff_t *resp_tvb = tvb_new_subset_remaining(tvb, offset);
+
+                        offset += call_dissector_with_data(appneta_responder_handle,
+                                resp_tvb, pinfo, data_tree, "payload");
+                    }
                 } else {
                     /* Path */
                     proto_tree_add_uint(data_tree, hf_payload_path_burst_length, tvb, offset, 3, burst_length);
                     proto_item_append_text(ti, " (%u bytes)", burst_length);
-                }
 
-                if (iht) {
-                    proto_tree_add_uint(data_tree, hf_payload_path_iht_value, tvb, offset+3, 4, iht_value);
-                    proto_item_append_text(ti, " (iht=%u nsec)", iht_value);
-                    offset += 4;
-                }
+                    if (iht) {
+                        proto_tree_add_uint(data_tree, hf_payload_path_iht_value, tvb, offset+3, 4, iht_value);
+                        proto_item_append_text(ti, " (iht=%u nsec)", iht_value);
+                        offset += 4;
+                    }
 
-                if (ecb)
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", ECB %spayload:", reply_str);
-                else
                     col_append_fstr(pinfo->cinfo, COL_INFO, ", Path %spayload:", reply_str);
 
-                col_append_fstr(pinfo->cinfo, COL_INFO, " first=%u last=%u", first, last);
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " first=%u last=%u", first, last);
 
-                if (iht)
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " iht=%u", iht_value);
+                    if (iht)
+                        col_append_fstr(pinfo->cinfo, COL_INFO, " iht=%u", iht_value);
 
-                if (ecb)
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " magnify=%u", ecb_magnify);
-                else
                     col_append_fstr(pinfo->cinfo, COL_INFO, " burst=%u", burst_length);
 
-                offset += sizeof(guint) - 1;
-
-                if (ecb && bytes >= ecb_payload_min_size) {
-                    proto_tree_add_item(data_tree, hf_payload_ecb_ssn, tvb, offset, 4, ENC_BIG_ENDIAN);
-                    offset += 4;
-                    proto_tree_add_item(data_tree, hf_payload_ecb_duration, tvb, offset, 2, ENC_BIG_ENDIAN);
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " duration=%ums", tvb_get_ntohs(tvb, offset));
-                    offset += 2;
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset));
-                    proto_tree_add_item(data_tree, hf_payload_ecb_gap, tvb, offset, 2, ENC_BIG_ENDIAN);
-                    offset += 2;
-                    proto_tree_add_item(data_tree, hf_payload_ecb_ll_rx, tvb, offset, 4, ENC_BIG_ENDIAN);
-                    offset += 4;
-                    proto_tree_add_item(data_tree, hf_payload_ecb_ll_us, tvb, offset, 4, ENC_BIG_ENDIAN);
-                    offset += 4;
-                    proto_tree_add_item(data_tree, hf_payload_ecb_total_rx, tvb, offset, 4, ENC_BIG_ENDIAN);
-                    offset += 4;
-                    proto_tree_add_item(data_tree, hf_payload_ecb_total_us, tvb, offset, 4, ENC_BIG_ENDIAN);
-                    offset += 4;
+                    offset += sizeof(guint) - 1;
                 }
             } else {
                 /* non-ANI packet */
                 ti = proto_tree_add_protocol_format(tree, proto_ani_payload, tvb,
                         0,
-                        bytes, "Data (%d byte%s)", bytes,
+                        bytes, "Payload (%d byte%s)", bytes - offset,
                         plurality(bytes, "", "s"));
                 data_tree = proto_item_add_subtree(ti, ett_payload);
             }
 
-            proto_tree_add_item(data_tree, hf_payload_data, data_tvb, offset, bytes-offset, ENC_NA);
-            ti = proto_tree_add_int(data_tree, hf_payload_data_len, data_tvb, 0, 0, bytes);
+            proto_tree_add_item(data_tree, hf_payload_data, data_tvb, offset,
+                    tvb_captured_length_remaining(data_tvb, offset), ENC_NA);
+            ti = proto_tree_add_int(data_tree, hf_payload_data_len, data_tvb, 0, 0,
+                    tvb_captured_length_remaining(data_tvb, offset));
             PROTO_ITEM_SET_GENERATED (ti);
         }
     }
@@ -344,8 +316,8 @@ proto_register_ani_payload(void)
             { "Last packet", "appneta_payload.path_flags.last", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
         { &hf_payload_path_flags_iht,
             { "Interrupt Hold Time (iht) available", "appneta_payload.path_flags.iht", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
-        { &hf_payload_path_flags_ecb,
-            { "Enhanced Controlled Burst (ECB)", "appneta_payload.path_flags.ecb", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
+        { &hf_payload_path_flags_ext,
+            { "Extended Headers", "appneta_payload.path_flags.ext", FT_BOOLEAN, BASE_NONE, TFS(&ani_tf_set_not_set), 0x0, NULL, HFILL } },
         { &hf_payload_path_burst_length,
             { "Burst length", "appneta_payload.path_burst_length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_path_iht_value,
@@ -358,22 +330,6 @@ proto_register_ani_payload(void)
             { "Sequence", "appneta_payload.pathtest_sequence", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
         { &hf_payload_pathtest_stream,
             { "Stream", "appneta_payload.pathtest_stream", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_magnify,
-            { "Magnification", "appneta_payload.ecb_magnification", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_ssn,
-            { "First ID", "appneta_payload.ecb_first_seq", FT_UINT32, BASE_DEC_HEX, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_duration,
-            { "Duration (ms)", "appneta_payload.ecb_duration", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_gap,
-            { "Gap (us)", "appneta_payload.ecb_gap", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_ll_rx,
-            { "Loss-less RX count", "appneta_payload.ecb_ll_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_ll_us,
-            { "Loss-less delta time (us)", "appneta_payload.ecb_ll_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_total_rx,
-            { "Total RX count", "appneta_payload.ecb_total_rx", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
-        { &hf_payload_ecb_total_us,
-            { "Total delta time (us)", "appneta_payload.ecb_total_us", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
     };
 
     static gint *ett[] = {
@@ -382,6 +338,8 @@ proto_register_ani_payload(void)
     };
 
     module_t *module_data;
+
+    appneta_responder_handle = find_dissector("appneta_responder");
 
     proto_ani_payload = proto_register_protocol (
         "AppNeta Payload", /* name */
