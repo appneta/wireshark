@@ -1998,7 +1998,7 @@ proto_register_ani_rpp(void)
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
-                            0x01,
+                            0x04,
                             "", HFILL
                     }
             },
