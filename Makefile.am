@@ -770,7 +770,7 @@ noinst_HEADERS = \
 # FORCE is the portable version of .PHONY
 FORCE:
 
-version.h: FORCE
+version.h:
 	$(AM_V_PERL)$(PERL) $(srcdir)/make-version.pl $(srcdir)
 
 #

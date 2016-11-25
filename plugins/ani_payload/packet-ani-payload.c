@@ -339,8 +339,6 @@ proto_register_ani_payload(void)
 
     module_t *module_data;
 
-    appneta_responder_handle = find_dissector("appneta_responder");
-
     proto_ani_payload = proto_register_protocol (
         "AppNeta Payload", /* name */
         "AppNeta_Payload", /* short name */
@@ -358,3 +356,10 @@ proto_register_ani_payload(void)
             "Show dissected data on AppNeta payload in the Packet Details pane",
             &show_appneta_payload);
 }
+
+void
+proto_handoff_ani_payload(void)
+{
+    appneta_responder_handle = find_dissector("appneta_responder");
+}
+

@@ -516,7 +516,7 @@ about_license_page_new(void)
 #if defined(_WIN32)
   absolute_path = get_datafile_path("COPYING.txt");
 #else
-  absolute_path = get_datafile_path("COPYING");
+  absolute_path = get_datafile_path("ABOUT.GPL");
 #endif
   page = text_page_new(absolute_path);
 
