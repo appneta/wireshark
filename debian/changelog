@@ -1,9 +1,14 @@
-wireshark (2.2.2.appneta.26) UNRELEASED; urgency=medium
+wireshark (2.2.3.appneta.26) UNRELEASED; urgency=medium
 
   * fix ECB paylaod decodes
 
  -- Fred Klassen <fklassen@appneta.com>  Thu, 24 Aug 2016 16:56:00 -0700
 
+wireshark (2.2.3) unstable; urgency=low
+
+  * Self-made package
+
+ -- Wireshark Self-made package <wireshark@example.com>  Wed, 27 Jan 2010 00:00:00 +0000
 wireshark (2.2.2.appneta.25) UNRELEASED; urgency=medium
 
   * updated ECB packet design
@@ -34,8 +39,3 @@ wireshark (2.2.2.appneta.21) UNRELEASED; urgency=medium
 
  -- Fred Klassen <fklassen@appneta.com>  Mon, 22 Aug 2016 14:20:47 -0700
 
-wireshark (2.2.2) unstable; urgency=low
-
-  * Self-made package
-
- -- Wireshark Self-made package <wireshark@example.com>  Wed, 27 Jan 2010 00:00:00 +0000
