@@ -1014,9 +1014,9 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_resp_flags, tvb, offset+1, 1, flags);
                 field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_response);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_padding, tvb, offset, 1, FALSE);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_final, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_in, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_out, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_final, tvb, offset+1, 1, flags);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx, tvb, offset+2, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_us, tvb, offset+6, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx, tvb, offset+10, 4, FALSE);
