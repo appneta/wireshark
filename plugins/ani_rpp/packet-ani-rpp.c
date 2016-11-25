@@ -1022,7 +1022,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx, tvb, offset+10, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_us, tvb, offset+14, 4, FALSE);
                 if (final_results) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " Final"
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " Final");
                 }
                 if (out_avail) {
                     proto_item_append_text(tf, " (Out-bound results)");
