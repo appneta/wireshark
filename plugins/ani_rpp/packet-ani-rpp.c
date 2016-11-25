@@ -97,7 +97,6 @@ gint proto_appneta_responder = -1;
 /* Initialize the protocol and registered fields */
 static gint proto_ani_rpp = -1;
 static guint global_udp_port_artnet = UDP_PORT_ANI_RPP;
-static gboolean show_appneta_payload = TRUE;
 
 /* Responder packet fields */
 static gint hf_ani_rpp_next_header_type = -1;
@@ -2337,11 +2336,6 @@ proto_register_ani_rpp(void)
             "packets will be sent",
             10,&global_udp_port_artnet);
 
-    prefs_register_bool_preference(ani_rpp_module,
-            "show_appneta_payload",
-            "Show dissected AppNeta payload",
-            "Show dissected AppNeta payload in the Packet Details pane",
-            &show_appneta_payload);
 }
 
 
