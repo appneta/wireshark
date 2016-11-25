@@ -1630,7 +1630,7 @@ proto_register_ani_rpp(void)
                             "Lost Packet ID",
                             "appneta_rpp.lost_id",
                             FT_UINT32,
-                            BASE_DEC,
+                            BASE_DEC_HEX,
                             NULL,
                             0x0,
                             "", HFILL
