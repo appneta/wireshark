@@ -1020,10 +1020,10 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_us, tvb, offset+14, 4, FALSE);
                 if (out_avail) {
                     proto_item_append_text(tf, " (Out-bound results)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-out[ll=%u", tvb_get_ntohs(tvb, offset+2));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohs(tvb, offset+6));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohs(tvb, offset+10));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohs(tvb, offset+14));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-out[ll=%u", tvb_get_ntohl(tvb, offset+2));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+6));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+10));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+14));
                 }
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx, tvb, offset+18, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_us, tvb, offset+22, 4, FALSE);
@@ -1031,10 +1031,10 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_us, tvb, offset+30, 4, FALSE);
                 if (in_avail) {
                     proto_item_append_text(tf, " (In-bound results)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-in[ll=%u", tvb_get_ntohs(tvb, offset+18));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohs(tvb, offset+22));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohs(tvb, offset+26));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohs(tvb, offset+30));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-in[ll=%u", tvb_get_ntohl(tvb, offset+18));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+22));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+26));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+30));
                 }
             }
             offset += (headerLength - 2);
