@@ -162,6 +162,7 @@ static gint hf_ani_rpp_ecb_resp_padding = -1;
 static gint hf_ani_rpp_ecb_resp_flags = -1;
 static gint hf_ani_rpp_ecb_resp_flags_in = -1;
 static gint hf_ani_rpp_ecb_resp_flags_out = -1;
+static gint hf_ani_rpp_ecb_resp_flags_final = -1;
 static gint hf_ani_rpp_ecb_resp_outbound_ll_rx = -1;
 static gint hf_ani_rpp_ecb_resp_outbound_ll_us = -1;
 static gint hf_ani_rpp_ecb_resp_outbound_total_rx = -1;
@@ -1005,19 +1006,24 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Enhanced Controlled Burst Response");
             if (current_tree) {
-                gboolean out_avail, in_avail;
+                gboolean out_avail, in_avail, final_results;
                 flags = tvb_get_guint8(tvb, offset + 1);
                 out_avail = !!(flags & 0x01);
                 in_avail = !!(flags & 0x02);
+                final_results = !!(flags & 0x03);
                 tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_resp_flags, tvb, offset+1, 1, flags);
                 field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_response);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_padding, tvb, offset, 1, FALSE);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_in, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_out, tvb, offset+1, 1, flags);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_final, tvb, offset+1, 1, flags);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx, tvb, offset+2, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_us, tvb, offset+6, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx, tvb, offset+10, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_us, tvb, offset+14, 4, FALSE);
+                if (final_results) {
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " Final"
+                }
                 if (out_avail) {
                     proto_item_append_text(tf, " (Out-bound results)");
                     col_append_fstr(pinfo->cinfo, COL_INFO, " RX-out[ll=%u", tvb_get_ntohl(tvb, offset+2));
@@ -1976,6 +1982,18 @@ proto_register_ani_rpp(void)
                     {
                             "Out-bound results available",
                             "appneta_rpp.ecb_resp_flags.out",
+                            FT_BOOLEAN,
+                            8,
+                            TFS(&ani_tf_set_not_set),
+                            0x01,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_resp_flags_final,
+                    {
+                            "Final results",
+                            "appneta_rpp.ecb_resp_flags.final",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
