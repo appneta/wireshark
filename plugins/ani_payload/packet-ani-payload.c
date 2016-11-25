@@ -37,6 +37,8 @@
 /* proto_data cannot be static because it's referenced in the
  * print routines
  */
+static module_t *proto_reg_ani_payload = NULL;
+void proto_handoff_ani_payload(void);
 void proto_register_ani_payload(void);
 static dissector_handle_t appneta_responder_handle = NULL;
 
@@ -240,6 +242,9 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                     /* Extended headers*/
                     ++offset;
                     col_append_fstr(pinfo->cinfo, COL_INFO, " Extended %spayload", reply_str);
+                    if (!appneta_responder_handle)
+                        appneta_responder_handle = find_dissector("appneta_responder");
+
                     if (appneta_responder_handle && bytes >= ecb_payload_min_size) {
                         tvbuff_t *resp_tvb = tvb_new_subset_remaining(tvb, offset);
 
@@ -346,6 +351,10 @@ proto_register_ani_payload(void)
     );
 
     register_dissector("appneta_payload", dissect_payload, proto_ani_payload);
+
+    /* Register preferences module */
+    proto_reg_ani_payload = prefs_register_protocol(proto_ani_payload,
+             proto_handoff_ani_payload);
 
     proto_register_field_array(proto_ani_payload, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
