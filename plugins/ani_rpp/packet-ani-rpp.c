@@ -163,13 +163,21 @@ static gint hf_ani_rpp_ecb_resp_flags = -1;
 static gint hf_ani_rpp_ecb_resp_flags_in = -1;
 static gint hf_ani_rpp_ecb_resp_flags_out = -1;
 static gint hf_ani_rpp_ecb_resp_flags_final = -1;
+static gint hf_ani_rpp_ecb_resp_outbound_first_tx_ts = -1;
+static gint hf_ani_rpp_ecb_resp_outbound_first_rx_ts = -1;
 static gint hf_ani_rpp_ecb_resp_outbound_ll_rx = -1;
+static gint hf_ani_rpp_ecb_resp_outbound_ll_rx_bytes = -1;
 static gint hf_ani_rpp_ecb_resp_outbound_ll_us = -1;
 static gint hf_ani_rpp_ecb_resp_outbound_total_rx = -1;
+static gint hf_ani_rpp_ecb_resp_outbound_total_rx_bytes = -1;
 static gint hf_ani_rpp_ecb_resp_outbound_total_us = -1;
+static gint hf_ani_rpp_ecb_resp_inbound_first_tx_ts = -1;
+static gint hf_ani_rpp_ecb_resp_inbound_first_rx_ts = -1;
 static gint hf_ani_rpp_ecb_resp_inbound_ll_rx = -1;
+static gint hf_ani_rpp_ecb_resp_inbound_ll_rx_bytes = -1;
 static gint hf_ani_rpp_ecb_resp_inbound_ll_us = -1;
 static gint hf_ani_rpp_ecb_resp_inbound_total_rx = -1;
+static gint hf_ani_rpp_ecb_resp_inbound_total_rx_bytes = -1;
 static gint hf_ani_rpp_ecb_resp_inbound_total_us = -1;
 static gint hf_ani_rpp_payload = -1;
 static gint hf_ani_rpp_signature_undefined = -1;
@@ -973,6 +981,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 flags = tvb_get_guint8(tvb, offset + 1);
                 first_seq = !!(flags & 0x01);
                 last_seq = !!(flags & 0x02);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_padding, tvb, offset, 1, FALSE);
                 tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_request_flags, tvb, offset+1, 1, flags);
                 field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_request);
                 if (first_seq) {
@@ -983,7 +992,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     proto_item_append_text(tf, " (Last sequence)");
                     col_append_fstr(pinfo->cinfo, COL_INFO, ", Last Seq");
                 }
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_padding, tvb, offset, 1, FALSE);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_last_seq, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_first_seq, tvb, offset+1, 1, flags);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_ssn, tvb, offset+2, 4, FALSE);
@@ -1011,37 +1019,45 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 out_avail = !!(flags & 0x01);
                 in_avail = !!(flags & 0x02);
                 final_results = !!(flags & 0x04);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_padding, tvb, offset, 1, FALSE);
                 tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_resp_flags, tvb, offset+1, 1, flags);
                 field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_response);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_padding, tvb, offset, 1, FALSE);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_final, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_in, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_out, tvb, offset+1, 1, flags);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx, tvb, offset+2, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_us, tvb, offset+6, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx, tvb, offset+10, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_us, tvb, offset+14, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_tx_ts, tvb, offset+2, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_rx_ts, tvb, offset+6, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx, tvb, offset+10, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx_bytes, tvb, offset+14, 8, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_us, tvb, offset+22, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx, tvb, offset+26, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx_bytes, tvb, offset+30, 8, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_us, tvb, offset+38, 4, FALSE);
                 if (final_results) {
                     proto_item_append_text(tf, " (Final results)");
                     col_append_fstr(pinfo->cinfo, COL_INFO, " Final");
                 }
                 if (out_avail) {
                     proto_item_append_text(tf, " (Out-bound results)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-out[ll=%u", tvb_get_ntohl(tvb, offset+2));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+6));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+10));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+14));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-out[ll=%u", tvb_get_ntohl(tvb, offset+10));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+22) - tvb_get_ntohl(tvb, offset+6));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+26));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+38) - tvb_get_ntohl(tvb, offset+6));
                 }
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx, tvb, offset+18, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_us, tvb, offset+22, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_rx, tvb, offset+26, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_us, tvb, offset+30, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_first_tx_ts, tvb, offset+42, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_first_rx_ts, tvb, offset+46, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx, tvb, offset+50, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx_bytes, tvb, offset+54, 8, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_us, tvb, offset+62, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_rx, tvb, offset+66, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_rx_bytes, tvb, offset+70, 8, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_us, tvb, offset+78, 4, FALSE);
                 if (in_avail) {
                     proto_item_append_text(tf, " (In-bound results)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-in[ll=%u", tvb_get_ntohl(tvb, offset+18));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+22));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+26));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+30));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-in[ll=%u", tvb_get_ntohl(tvb, offset+50));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+62) - tvb_get_ntohl(tvb, offset+46));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+66));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+78) - tvb_get_ntohl(tvb, offset+46));
                 }
             }
             offset += (headerLength - 2);
@@ -2003,6 +2019,30 @@ proto_register_ani_rpp(void)
                     }
             },
             {
+                    &hf_ani_rpp_ecb_resp_outbound_first_tx_ts,
+                    {
+                            "ECB Response Out-bound TX timstamp (usecs)",
+                            "appneta_rpp.ecb_resp_outbound_first_tx_ts",
+                            FT_UINT32,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_resp_outbound_first_rx_ts,
+                    {
+                            "ECB Response Out-bound First RX timestamp (usecs)",
+                            "appneta_rpp.ecb_resp_outbound_first_rx_ts",
+                            FT_UINT32,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
                     &hf_ani_rpp_ecb_resp_outbound_ll_rx,
                     {
                             "ECB Response Out-bound loss-less RX (packets)",
@@ -2015,9 +2055,21 @@ proto_register_ani_rpp(void)
                     }
             },
             {
+                    &hf_ani_rpp_ecb_resp_outbound_ll_rx_bytes,
+                    {
+                            "ECB Response Out-bound loss-less RX (bytes)",
+                            "appneta_rpp.ecb_resp_outbound_ll_rx_bytes",
+                            FT_UINT64,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
                     &hf_ani_rpp_ecb_resp_outbound_ll_us,
                     {
-                            "ECB Response Out-bound loss-less delta time (usec)",
+                            "ECB Response Out-bound loss-less RX timestamp (usec)",
                             "appneta_rpp.ecb_resp_outbound_ll_us",
                             FT_UINT32,
                             BASE_DEC,
@@ -2039,10 +2091,46 @@ proto_register_ani_rpp(void)
                     }
             },
             {
+                    &hf_ani_rpp_ecb_resp_outbound_total_rx_bytes,
+                    {
+                            "ECB Response Out-bound total RX (bytes)",
+                            "appneta_rpp.ecb_resp_outbound_total_rx_bytes",
+                            FT_UINT64,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
                     &hf_ani_rpp_ecb_resp_outbound_total_us,
                     {
-                            "ECB Response Out-bound total delta time (usec)",
+                            "ECB Response Out-bound total RX timestamp (usec)",
                             "appneta_rpp.ecb_resp_outbound_total_us",
+                            FT_UINT32,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_resp_inbound_first_tx_ts,
+                    {
+                            "ECB Response In-bound TX timestamp (usecs)",
+                            "appneta_rpp.ecb_resp_inbound_first_tx_ts",
+                            FT_UINT32,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_resp_inbound_first_rx_ts,
+                    {
+                            "ECB Response In-bound First RX timestamp (usecs)",
+                            "appneta_rpp.ecb_resp_inbound_first_rx_ts",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2053,7 +2141,7 @@ proto_register_ani_rpp(void)
             {
                     &hf_ani_rpp_ecb_resp_inbound_ll_rx,
                     {
-                            "ECB Response in-bound loss-less RX (packets)",
+                            "ECB Response In-bound loss-less RX (packets)",
                             "appneta_rpp.ecb_resp_inbound_ll_rx",
                             FT_UINT32,
                             BASE_DEC,
@@ -2063,9 +2151,21 @@ proto_register_ani_rpp(void)
                     }
             },
             {
+                    &hf_ani_rpp_ecb_resp_inbound_ll_rx_bytes,
+                    {
+                            "ECB Response In-bound loss-less RX (bytes)",
+                            "appneta_rpp.ecb_resp_inbound_ll_rx_bytes",
+                            FT_UINT64,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
                     &hf_ani_rpp_ecb_resp_inbound_ll_us,
                     {
-                            "ECB Response In-bound loss-less delta time (usec)",
+                            "ECB Response In-bound loss-less RX timestamp (usec)",
                             "appneta_rpp.ecb_resp_inbound_ll_us",
                             FT_UINT32,
                             BASE_DEC,
@@ -2087,9 +2187,21 @@ proto_register_ani_rpp(void)
                     }
             },
             {
+                    &hf_ani_rpp_ecb_resp_inbound_total_rx_bytes,
+                    {
+                            "ECB Response In-bound total RX (bytes)",
+                            "appneta_rpp.ecb_resp_inbound_total_rx_bytes",
+                            FT_UINT64,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
                     &hf_ani_rpp_ecb_resp_inbound_total_us,
                     {
-                            "ECB Response In-bound total delta time (usec)",
+                            "ECB Response In-bound total RX timestamp (usec)",
                             "appneta_rpp.ecb_resp_inbound_total_us",
                             FT_UINT32,
                             BASE_DEC,

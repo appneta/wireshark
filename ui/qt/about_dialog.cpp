@@ -341,7 +341,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
 #if defined(_WIN32)
     f_license.setFileName(get_datafile_path("COPYING.txt"));
 #else
-    f_license.setFileName(get_datafile_path("ABOUT.GPL"));
+    f_license.setFileName(get_datafile_path("COPYING"));
 #endif
 
     f_license.open(QFile::ReadOnly | QFile::Text);
