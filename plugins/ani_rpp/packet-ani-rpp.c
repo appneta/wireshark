@@ -179,6 +179,7 @@ static gint hf_ani_rpp_ecb_resp_inbound_ll_us = -1;
 static gint hf_ani_rpp_ecb_resp_inbound_total_rx = -1;
 static gint hf_ani_rpp_ecb_resp_inbound_total_rx_bytes = -1;
 static gint hf_ani_rpp_ecb_resp_inbound_total_us = -1;
+static gint hf_ani_rpp_pseudo_chksum = -1;
 static gint hf_ani_rpp_payload = -1;
 static gint hf_ani_rpp_signature_undefined = -1;
 static gint hf_ani_rpp_signature_path = -1;
@@ -239,6 +240,7 @@ static gint ett_ani_controlled_burst_ready = -1;
 static gint ett_ani_enhanced_controlled_burst_request = -1;
 static gint ett_ani_enhanced_controlled_burst_response = -1;
 static gint ett_ani_signature = -1;
+static gint ett_ani_pseudo_cksum = -1;
 static gint ett_ani_invalid = -1;
 
 /* Setup protocol subtree array */
@@ -272,46 +274,59 @@ static gint *ett[] = {
         &ett_ani_enhanced_controlled_burst_request,
         &ett_ani_enhanced_controlled_burst_response,
         &ett_ani_signature,
+        &ett_ani_pseudo_cksum,
         &ett_ani_invalid,
 };
 
 /*
- * an array of pointers to the subtree index and pointervalues to the
- * structure below
+ * an array of pointers to the subtree index and pointer values to the
+ * structure below.  NULL means don't print
  */
 static gint *hf_subtrees[] = {
         NULL,
+        NULL,                                           /* HDR_LAST */
+        &ett_ani_seq,                                   /* HDR_SEQUENCE */
+        &ett_ani_custom,                                /* HDR_CUSTOM_TYPE */
+        &ett_ani_request,                               /* HDR_REQUEST */
+        &ett_ani_reply,                                 /* HDR_REPLY */
+        &ett_ani_flow_create,                            /* HDR_FLOW_CREATE */
+        &ett_ani_flow_response,                          /* HDR_FLOW_RESPONSE */
+        &ett_ani_flow_close,                             /* HDR_FLOW_CLOSE */
+        &ett_ani_test_weight,                           /* HDR_TEST_WEIGHT */
+        &ett_ani_test_parameters,                       /* HDR_TEST_PARAMS */
+        &ett_ani_flow_not_found,                         /* HDR_FLOW_PACKET */
+        &ett_ani_burst_info,                            /* HDR_COMMAND_INFO */
+        &ett_ani_responder_version,                     /* HDR_RESPONDERVERSION */
+        &ett_ani_outbound_arrival,                      /* HDR_OUTBOUNDARRIVAL */
+        &ett_ani_burst_hold_time,                       /* HDR_RESPONDERHOLDTIME */
+        &ett_ani_outbound_arrival_times,                /* HDR_OUTBOUNDARRIVALTIME */
+        &ett_ani_lost_pkts,                             /* HDR_LOST_PACKETS */
+        &ett_ani_sipport,                               /* HDR_SIPPORT */
+        &ett_ani_protocol,                              /* HDR_PROTOCOL */
+        &ett_ani_controlled_burst,                      /* HDR_CONTROLLEDBURST */
+        &ett_ani_controlled_burst_response,             /* HDR_CONTROLLEDBURSTRESPONSE */
+        &ett_ani_inboundpacketattr,                     /* HDR_INBOUNDPACKETATTR */
+        &ett_ani_h323port,                              /* HDR_H323PORT */
+        &ett_ani_appliance_type,                        /* HDR_APPLIANCE_TYPE */
+        &ett_ani_error,                                 /* HDR_ERROR */
+        &ett_ani_controlled_burst_request,              /* HDR_CONTROLLEDBURSTREQUEST */
+        &ett_ani_controlled_burst_ready,                /* HDR_CONTROLLEDBURSTREADY */
+        &ett_ani_enhanced_controlled_burst_request,     /* HDR_ECBREQUEST */
+        &ett_ani_enhanced_controlled_burst_response,    /* HDR_ECBRESPONSE */
+        &ett_ani_signature,                             /* HDR_SIGNATURE */
+        &ett_ani_pseudo_cksum,                          /* HDR_PSEUDO_CKSUM */
+        &ett_ani_invalid,                               /* HDR_RESERVED1 */
+        &ett_ani_invalid,                               /* HDR_RESERVED2 */
+        &ett_ani_invalid,                               /* HDR_RESERVED3 */
+        &ett_ani_invalid,                               /* HDR_RESERVED4 */
+        &ett_ani_invalid,                               /* HDR_RESERVED5 */
+        &ett_ani_invalid,                               /* HDR_RESERVED6 */
+        &ett_ani_invalid,                               /* HDR_RESERVED7 */
+        &ett_ani_invalid,                               /* HDR_RESERVED8 */
+        &ett_ani_invalid,                               /* HDR_RESERVED9 */
+        &ett_ani_invalid,                               /* HDR_INVALID */
         NULL,
-        &ett_ani_seq,
-        &ett_ani_custom,
-        &ett_ani_request,
-        &ett_ani_reply,
-        &ett_ani_flow_create,
-        &ett_ani_flow_response,
-        &ett_ani_flow_close,
-        &ett_ani_test_weight,
-        &ett_ani_test_parameters,
-        &ett_ani_flow_not_found,
-        &ett_ani_burst_info,
-        &ett_ani_responder_version,
-        &ett_ani_outbound_arrival,
-        &ett_ani_burst_hold_time,
-        &ett_ani_outbound_arrival_times,
-        &ett_ani_lost_pkts,
-        &ett_ani_sipport,
-        &ett_ani_protocol,
-        &ett_ani_controlled_burst,
-        &ett_ani_controlled_burst_response,
-        &ett_ani_inboundpacketattr,
-        &ett_ani_h323port,
-        &ett_ani_appliance_type,
-        &ett_ani_error,
-        &ett_ani_controlled_burst_request,
-        &ett_ani_controlled_burst_ready,
-        &ett_ani_enhanced_controlled_burst_request,
-        &ett_ani_enhanced_controlled_burst_response,
-        &ett_ani_signature,
-        &ett_ani_invalid,
+        NULL,
 };
 
 /*
@@ -349,7 +364,17 @@ static const value_string ani_rpp_header_type_vals[] =
         { 28, "Enhanced Controlled Burst" },
         { 29, "Enhanced Controlled Burst Response" },
         { 30, "Signature Header" },
-        { 31, "Invalid Header" },
+        { 31, "Pseudo Checksum" },
+        { 32, "Reserved 1" },
+        { 33, "Reserved 2" },
+        { 34, "Reserved 3" },
+        { 35, "Reserved 4" },
+        { 36, "Reserved 5" },
+        { 37, "Reserved 6" },
+        { 38, "Reserved 7" },
+        { 39, "Reserved 8" },
+        { 40, "Reserved 9" },
+        { 41, "Invalid Header" },
         { 0, NULL },
 };
 
@@ -385,6 +410,7 @@ enum ResponderHeaderType
     HDR_ECBREQUEST,
     HDR_ECBRESPONSE,
     HDR_SIGNATURE,         /* 30 */
+    HDR_PSEUDO_CKSUM,
     HDR_RESERVED1,
     HDR_RESERVED2,
     HDR_RESERVED3,
@@ -394,7 +420,6 @@ enum ResponderHeaderType
     HDR_RESERVED7,
     HDR_RESERVED8,
     HDR_RESERVED9,
-    HDR_RESERVED10,
     HDR_INVALID,
     HDR_COUNT,
 } ResponderHeaderType;
@@ -423,6 +448,7 @@ static const value_string ani_rpp_error_code_vals[] =
         { 9, "Count error" },
         { 10, "QoS lock unavailable" },
         { 11, "SIP port unavailable" },
+        { 12, "QoS altered" },
         { 0, NULL }
 };
 
@@ -559,11 +585,11 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, gint offset,
 }
 
 static proto_tree *add_subtree(tvbuff_t *tvb, gint *offset, proto_tree *current_tree,
-        gint header, gint8 headerLength, const char *title)
+        gint header, guint8 headerLength, const char *title)
 {
     proto_tree *tree = NULL;
 
-    if (current_tree && hf_subtrees[header]) {
+    if (current_tree && header < HDR_COUNT && hf_subtrees[header]) {
         tree = proto_tree_add_subtree(current_tree, tvb, *offset, headerLength,
                 *(hf_subtrees[header]), NULL, title);
     }
@@ -1129,11 +1155,21 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             }
             offset += (headerLength - 2);
             break;
+        case HDR_PSEUDO_CKSUM:
+                current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+                        "Pseudo Checksum");
+                if (current_tree) {
+                    tf = proto_tree_add_item(current_tree, hf_ani_rpp_pseudo_chksum, tvb, offset, 2, FALSE);
+                    field_tree = proto_item_add_subtree( tf, ett_ani_pseudo_cksum);
+                }
+            offset += (headerLength - 2);
+            break;
         default:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Unknown Header");
             if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_unknown_header, tvb, offset, headerLength-2, FALSE);
+                tf = proto_tree_add_item(current_tree, hf_ani_rpp_unknown_header, tvb, offset, headerLength-2, FALSE);
+                field_tree = proto_item_add_subtree( tf, ett_ani_invalid);
 
                 /* set some text in the info column */
                 col_append_str(pinfo->cinfo, COL_INFO, " [Unknown Header]");
@@ -2205,6 +2241,18 @@ proto_register_ani_rpp(void)
                             "appneta_rpp.ecb_resp_inbound_total_us",
                             FT_UINT32,
                             BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_pseudo_chksum,
+                    {
+                            "Pseudo Checksum",
+                            "appneta_rpp.pseudo_cksum",
+                            FT_UINT16,
+                            BASE_HEX_DEC,
                             NULL,
                             0x0,
                             "", HFILL

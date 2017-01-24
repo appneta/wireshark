@@ -9,7 +9,7 @@ m4_define([version_major], [2])
 m4_define([version_minor], [2])
 m4_define([version_micro], [3])
 dnl Updated by make-version.pl
-m4_define([version_extra], [-appneta.27])
+m4_define([version_extra], [-appneta.29])
 m4_define([version_micro_extra], m4_join([], version_micro, version_extra))
 
 AC_INIT(Wireshark, [version_major.version_minor.version_micro_extra], http://bugs.wireshark.org/, , http://www.wireshark.org/)
