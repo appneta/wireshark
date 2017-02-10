@@ -151,6 +151,7 @@ static gint hf_ani_rpp_ecb_request_padding = -1;
 static gint hf_ani_rpp_ecb_request_flags = -1;
 static gint hf_ani_rpp_ecb_request_flags_first_seq = -1;
 static gint hf_ani_rpp_ecb_request_flags_last_seq = -1;
+static gint hf_ani_rpp_ecb_request_flags_reply = -1;
 static gint hf_ani_rpp_ecb_request_ssn = -1;
 static gint hf_ani_rpp_ecb_request_outbound_magnify = -1;
 static gint hf_ani_rpp_ecb_request_outbound_duration = -1;
@@ -809,9 +810,9 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     flags = tvb_get_guint8(tvb, offset + 9);
                     tf = proto_tree_add_uint(current_tree, hf_ani_rpp_command_flags, tvb, offset+9, 1, flags);
                     field_tree = proto_item_add_subtree( tf, ett_ani_burst_info);
-                    proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_jumbo, tvb, offset+9, 1, flags);
-                    proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset+9, 1, flags);
                     proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_inbound, tvb, offset+9, 1, flags);
+                    proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset+9, 1, flags);
+                    proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_jumbo, tvb, offset+9, 1, flags);
                 }
 
                 /* set some text in the info column */
@@ -1003,13 +1004,18 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Enhanced Controlled Burst Request");
             if (current_tree) {
-                gboolean first_seq, last_seq;
+                gboolean first_seq, last_seq, is_reply;
                 flags = tvb_get_guint8(tvb, offset + 1);
                 first_seq = !!(flags & 0x01);
                 last_seq = !!(flags & 0x02);
+                is_reply = !!(flags & 0x04);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_padding, tvb, offset, 1, FALSE);
                 tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_request_flags, tvb, offset+1, 1, flags);
                 field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_request);
+                if (is_reply) {
+                    proto_item_append_text(tf, " (Reply)");
+                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Reply");
+                }
                 if (first_seq) {
                     proto_item_append_text(tf, " (First sequence)");
                     col_append_fstr(pinfo->cinfo, COL_INFO, ", First Seq");
@@ -1018,6 +1024,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     proto_item_append_text(tf, " (Last sequence)");
                     col_append_fstr(pinfo->cinfo, COL_INFO, ", Last Seq");
                 }
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_reply, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_last_seq, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_first_seq, tvb, offset+1, 1, flags);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_ssn, tvb, offset+2, 4, FALSE);
@@ -1042,15 +1049,15 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             if (current_tree) {
                 gboolean out_avail, in_avail, final_results;
                 flags = tvb_get_guint8(tvb, offset + 1);
-                out_avail = !!(flags & 0x01);
-                in_avail = !!(flags & 0x02);
+                in_avail = !!(flags & 0x01);
+                out_avail = !!(flags & 0x02);
                 final_results = !!(flags & 0x04);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_padding, tvb, offset, 1, FALSE);
                 tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_resp_flags, tvb, offset+1, 1, flags);
                 field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_response);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_final, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_in, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_out, tvb, offset+1, 1, flags);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_in, tvb, offset+1, 1, flags);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_tx_ts, tvb, offset+2, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_rx_ts, tvb, offset+6, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx, tvb, offset+10, 4, FALSE);
@@ -1889,7 +1896,7 @@ proto_register_ani_rpp(void)
             {
                     &hf_ani_rpp_ecb_request_flags_first_seq,
                     {
-                            "First sequence",
+                            "Is First sequence",
                             "appneta_rpp.ecb_request_flags.first",
                             FT_BOOLEAN,
                             8,
@@ -1901,12 +1908,24 @@ proto_register_ani_rpp(void)
             {
                     &hf_ani_rpp_ecb_request_flags_last_seq,
                     {
-                            "Last sequence",
+                            "Is Last sequence",
                             "appneta_rpp.ecb_request_flags.last",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
                             0x02,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_request_flags_reply,
+                    {
+                            "Is Reply",
+                            "appneta_rpp.ecb_request_flags.reply",
+                            FT_BOOLEAN,
+                            8,
+                            TFS(&ani_tf_set_not_set),
+                            0x04,
                             "", HFILL
                     }
             },
@@ -2026,7 +2045,7 @@ proto_register_ani_rpp(void)
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
-                            0x02,
+                            0x01,
                             "", HFILL
                     }
             },
@@ -2038,7 +2057,7 @@ proto_register_ani_rpp(void)
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
-                            0x01,
+                            0x02,
                             "", HFILL
                     }
             },
@@ -2057,7 +2076,7 @@ proto_register_ani_rpp(void)
             {
                     &hf_ani_rpp_ecb_resp_outbound_first_tx_ts,
                     {
-                            "ECB Response Out-bound TX timstamp (usecs)",
+                            "ECB Response Out-bound TX timestamp (usecs)",
                             "appneta_rpp.ecb_resp_outbound_first_tx_ts",
                             FT_UINT32,
                             BASE_DEC,

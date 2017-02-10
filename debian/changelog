@@ -1,4 +1,10 @@
-wireshark (2.2.3.appneta.29) UNRELEASED; urgency=medium
+wireshark (2.2.3.appneta.30) UNRELEASED; unstable; urgency=low
+
+  * updates to ECB dual-ended flags
+
+ -- Fred Klassen <fklassen@appneta.com>  Fri, 10 Feb 2017 10:45:00 -0700
+
+wireshark (2.2.3.appneta.29) UNRELEASED; unstable; urgency=low
 
   * Fix 'malformed packet' on field length > 128
 
@@ -8,11 +14,14 @@ wireshark (2.2.3.appneta.28) UNRELEASED; urgency=medium
 
   * Pseudo Checksum decode
 
+ -- Fred Klassen <fklassen@appneta.com>  Tue, 13 Dec 2016 13:13:00 -0700
+
 wireshark (2.2.3.appneta.27) UNRELEASED; urgency=medium
 
   * new ECB Results decode
 
  -- Fred Klassen <fklassen@appneta.com>  Thu, 1 Dec 2016 10:42:00 -0700
+
 wireshark (2.2.3.appneta.26) UNRELEASED; urgency=medium
 
   * fix ECB paylaod decodes
