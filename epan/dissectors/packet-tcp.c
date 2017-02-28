@@ -707,11 +707,25 @@ static const char* tcp_host_get_filter_type(hostlist_talker_t* host, conv_filter
         return CONV_FILTER_INVALID;
     }
 
-    if (filter == CONV_FT_SRC_ADDRESS || filter == CONV_FT_DST_ADDRESS || filter == CONV_FT_ANY_ADDRESS) {
+    if (filter == CONV_FT_SRC_ADDRESS) {
         if (host->myaddress.type == AT_IPv4)
             return "ip.src";
         if (host->myaddress.type == AT_IPv6)
             return "ipv6.src";
+    }
+
+    if (filter == CONV_FT_DST_ADDRESS) {
+        if (host->myaddress.type == AT_IPv4)
+            return "ip.dst";
+        if (host->myaddress.type == AT_IPv6)
+            return "ipv6.dst";
+    }
+
+    if (filter == CONV_FT_ANY_ADDRESS) {
+        if (host->myaddress.type == AT_IPv4)
+            return "ip.addr";
+        if (host->myaddress.type == AT_IPv6)
+            return "ipv6.addr";
     }
 
     return CONV_FILTER_INVALID;
@@ -2756,6 +2770,17 @@ again:
                 /* TCP analysis already flags this (in COL_INFO) as a retransmission--if it's enabled */
             }
 
+            /* Fix for bug 3264: look up ipfd for this (first) segment,
+               so can add tcp.reassembled_in generated field on this code path. */
+            ipfd_head = fragment_get(&tcp_reassembly_table, pinfo, pinfo->num, NULL);
+            if (ipfd_head) {
+                if (ipfd_head->reassembled_in != 0) {
+                    item = proto_tree_add_uint(tcp_tree, hf_tcp_reassembled_in, tvb, 0,
+                                       0, ipfd_head->reassembled_in);
+                    PROTO_ITEM_SET_GENERATED(item);
+                }
+            }
+
             nbytes = tvb_reported_length_remaining(tvb, offset);
 
             proto_tree_add_bytes_format(tcp_tree, hf_tcp_segment_data, tvb, offset,
@@ -2764,7 +2789,7 @@ again:
             return;
         }
 
-        /* The above code only finds retransmission if the PDU boundaries and the seq coinside I think
+        /* The above code only finds retransmission if the PDU boundaries and the seq coincide I think
          * If we have sequence analysis active use the TCP_A_RETRANSMISSION flag.
          * XXXX Could the above code be improved?
          */
@@ -5965,7 +5990,7 @@ dissect_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
                                                ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
 
                 calc_item = proto_tree_add_uint(tcp_tree, hf_tcp_checksum_calculated, tvb,
-                                              offset + 16, 2, th_sum);
+                                              offset + 16, 2, in_cksum_shouldbe(th_sum, computed_cksum));
                 PROTO_ITEM_SET_GENERATED(calc_item);
 
                 /* Checksum is valid, so we're willing to desegment it. */

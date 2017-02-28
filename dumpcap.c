@@ -642,7 +642,7 @@ get_capture_device_open_failure_messages(const char *open_err_str,
                  "Please check that \"%s\" is the proper interface.\n"
                  "\n"
                  "\n"
-                 "Help can be found at:\n"
+                 "Help can be found on the following pages:\n"
                  "\n"
                  "       https://wiki.wireshark.org/WinPcap\n"
                  "       https://wiki.wireshark.org/CaptureSetup\n",
@@ -1847,6 +1847,9 @@ error:
     pcap_opts->cap_pipe_err = PIPERR;
     cap_pipe_close(fd, pcap_opts->from_cap_socket);
     pcap_opts->cap_pipe_fd = -1;
+#ifdef _WIN32
+    pcap_opts->cap_pipe_h = INVALID_HANDLE_VALUE;
+#endif
 }
 
 

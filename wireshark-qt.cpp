@@ -373,7 +373,8 @@ int main(int argc, char *qt_argv[])
     relinquish_special_privs_perm();
 
     /*
-     * Attempt to get the pathname of the executable file.
+     * Attempt to get the pathname of the directory containing the
+     * executable file.
      */
     /* init_progfile_dir_error = */ init_progfile_dir(argv[0],
         (int (*)(int, char **)) get_gui_compiled_info);
@@ -531,12 +532,11 @@ int main(int argc, char *qt_argv[])
     init_report_err(vfailure_alert_box, open_failure_alert_box,
                     read_failure_alert_box, write_failure_alert_box);
 
-    init_open_routines();
+    wtap_init();
 
 #ifdef HAVE_PLUGINS
     /* Register all the plugin types we have. */
     epan_register_plugin_types(); /* Types known to libwireshark */
-    wtap_register_plugin_types(); /* Types known to libwiretap */
     codec_register_plugin_types(); /* Types known to libwscodecs */
 
     /* Scan for plugins.  This does *not* call their registration routines;
@@ -558,6 +558,16 @@ int main(int argc, char *qt_argv[])
                    splash_update, NULL)) {
         SimpleDialog::displayQueuedMessages(main_w);
         return 2;
+    }
+
+    // Read the dynamic part of the recent file. This determines whether or
+    // not the recent list appears in the main window so the earlier we can
+    // call this the better.
+    if (!recent_read_dynamic(&rf_path, &rf_open_errno)) {
+        simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
+                      "Could not open recent file\n\"%s\": %s.",
+                      rf_path, g_strerror(rf_open_errno));
+        g_free(rf_path);
     }
 
     splash_update(RA_LISTENERS, NULL, NULL);
@@ -733,15 +743,6 @@ int main(int argc, char *qt_argv[])
     /* For update of WindowTitle (When use gui.window_title preference) */
     main_w->setWSWindowTitle();
 ////////
-
-    /* Read the dynamic part of the recent file, as we have the gui now ready for
-       it. */
-    if (!recent_read_dynamic(&rf_path, &rf_open_errno)) {
-        simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                      "Could not open recent file\n\"%s\": %s.",
-                      rf_path, g_strerror(rf_open_errno));
-        g_free(rf_path);
-    }
 
     packet_list_enable_color(recent.packet_list_colorize);
 

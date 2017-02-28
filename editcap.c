@@ -578,11 +578,16 @@ is_duplicate(guint8* fd, guint32 len) {
     md5_state_t ms;
 
     /*Hint to ignore some bytes at the start of the frame for the digest calculation(-I option) */
+    guint32 offset = ignored_bytes;
     guint32 new_len;
     guint8 *new_fd;
 
-    new_fd  = &fd[ignored_bytes];
-    new_len = len - (ignored_bytes);
+    if (len <= (guint32)ignored_bytes) {
+        offset = 0;
+    }
+
+    new_fd  = &fd[offset];
+    new_len = len - (offset);
 
     cur_dup_entry++;
     if (cur_dup_entry >= dup_window)
@@ -615,11 +620,16 @@ is_duplicate_rel_time(guint8* fd, guint32 len, const nstime_t *current) {
     md5_state_t ms;
 
     /*Hint to ignore some bytes at the start of the frame for the digest calculation(-I option) */
+    guint32 offset = ignored_bytes;
     guint32 new_len;
     guint8 *new_fd;
 
-    new_fd  = &fd[ignored_bytes];
-    new_len = len - (ignored_bytes);
+    if (len <= (guint32)ignored_bytes) {
+        offset = 0;
+    }
+
+    new_fd  = &fd[offset];
+    new_len = len - (offset);
 
     cur_dup_entry++;
     if (cur_dup_entry >= dup_window)
@@ -749,8 +759,9 @@ print_usage(FILE *output)
     fprintf(output, "                         (e.g. 0.000001).\n");
     fprintf(output, "  -a <framenum>:<comment>  Add or replace comment for given frame number\n");
     fprintf(output, "\n");
-    fprintf(output, "  -I <bytes to ignore>   ignore the specified bytes at the beginning of\n");
-    fprintf(output, "                         the frame during MD5 hash calculation\n");
+    fprintf(output, "  -I <bytes to ignore>   ignore the specified number of bytes at the beginning\n");
+    fprintf(output, "                         of the frame during MD5 hash calculation, unless the\n");
+    fprintf(output, "                         frame is too short, then the full frame is used.\n");
     fprintf(output, "                         Useful to remove duplicated packets taken on\n");
     fprintf(output, "                         several routers(differents mac addresses for \n");
     fprintf(output, "                         example)\n");
@@ -930,6 +941,7 @@ main(int argc, char *argv[])
 {
     GString      *comp_info_str;
     GString      *runtime_info_str;
+    char         *init_progfile_dir_error;
     wtap         *wth;
     int           i, j, read_err, write_err;
     gchar        *read_err_info, *write_err_info;
@@ -970,9 +982,6 @@ main(int argc, char *argv[])
     GArray                      *nrb_hdrs = NULL;
     char                        *shb_user_appl;
 
-#ifdef HAVE_PLUGINS
-    char* init_progfile_dir_error;
-#endif
 
 #ifdef _WIN32
     arg_list_utf_16to8(argc, argv);
@@ -997,26 +1006,31 @@ main(int argc, char *argv[])
      * Get credential information for later use.
      */
     init_process_policies();
-    init_open_routines();
+
+    /*
+     * Attempt to get the pathname of the directory containing the
+     * executable file.
+     */
+    init_progfile_dir_error = init_progfile_dir(argv[0], main);
+    if (init_progfile_dir_error != NULL) {
+        fprintf(stderr,
+                "editcap: Can't get pathname of directory containing the editcap program: %s.\n",
+                init_progfile_dir_error);
+        g_free(init_progfile_dir_error);
+    }
+
+    wtap_init();
 
 #ifdef HAVE_PLUGINS
     /* Register wiretap plugins */
-    if ((init_progfile_dir_error = init_progfile_dir(argv[0], main))) {
-        g_warning("editcap: init_progfile_dir(): %s", init_progfile_dir_error);
-        g_free(init_progfile_dir_error);
-    } else {
-        /* Register all the plugin types we have. */
-        wtap_register_plugin_types(); /* Types known to libwiretap */
+    init_report_err(failure_message,NULL,NULL,NULL);
 
-        init_report_err(failure_message,NULL,NULL,NULL);
+    /* Scan for plugins.  This does *not* call their registration routines;
+        that's done later. */
+    scan_plugins();
 
-        /* Scan for plugins.  This does *not* call their registration routines;
-           that's done later. */
-        scan_plugins();
-
-        /* Register all libwiretap plugin modules. */
-        register_all_wiretap_modules();
-    }
+    /* Register all libwiretap plugin modules. */
+    register_all_wiretap_modules();
 #endif
 
     /* Process the options */

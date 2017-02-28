@@ -85,7 +85,7 @@ my $set_release = 0;
 my %version_pref = (
 	"version_major" => 2,
 	"version_minor" => 2,
-	"version_micro" => 3,
+	"version_micro" => 5,
 	"version_build" => 0,
 
 	"enable"        => 1,
@@ -689,9 +689,11 @@ sub get_config {
 	}
 
 	if (! open(FILE, "<$vconf_file")) {
-		print_diag "Version configuration file $vconf_file not "
-		. "found. Using defaults.\n";
-		return 1;
+		if (! open(FILE, "<$srcdir/$vconf_file")) {
+			print_diag "Version configuration file $vconf_file not "
+			. "found. Using defaults.\n";
+			return 1;
+		}
 	}
 
 	while (<FILE>) {

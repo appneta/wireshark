@@ -47,6 +47,10 @@
     #include <arpa/inet.h>
 #endif
 
+#ifdef HAVE_SYS_TIME_H
+    #include <sys/time.h>
+#endif
+
 /* Configuration options */
 /* #define ANDROIDDUMP_USE_LIBPCAP */
 #define EXTCAP_ENCAP_BLUETOOTH_H4_WITH_PHDR    1
@@ -297,9 +301,8 @@ static struct extcap_dumper extcap_dumper_open(char *fifo, int encap) {
 #else
     int err = 0;
 
-    init_open_routines();
+    wtap_init();
 #ifdef HAVE_PLUGINS
-    wtap_register_plugin_types();
     register_all_wiretap_modules();
 #endif
 
