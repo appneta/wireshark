@@ -485,7 +485,8 @@ main(int argc, char *argv[])
     string_fmts = g_ptr_array_new();
 
     /*
-     * Attempt to get the pathname of the executable file.
+     * Attempt to get the pathname of the directory containing the
+     * executable file.
      */
     init_progfile_dir_error = init_progfile_dir(argv[0], main);
     if (init_progfile_dir_error != NULL) {
@@ -513,6 +514,8 @@ main(int argc, char *argv[])
     timestamp_set_type(TS_RELATIVE);
     timestamp_set_precision(TS_PREC_AUTO);
     timestamp_set_seconds_type(TS_SECONDS_DEFAULT);
+
+    wtap_init();
 
     /* Register all dissectors; we must do this before checking for the
        "-G" flag, as the "-G" flag dumps information registered by the

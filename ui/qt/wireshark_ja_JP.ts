@@ -2595,32 +2595,32 @@ PLEASE NOTE: One option MUST be selected.</source>
         <translation>オブジェクトを探索中</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="113"/>
+        <location filename="export_object_dialog.cpp" line="188"/>
         <source>Export</source>
         <translation>エクスポート</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="113"/>
+        <location filename="export_object_dialog.cpp" line="188"/>
         <source>%1 object list</source>
         <translation>%1 オブジェクト一覧</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="247"/>
+        <location filename="export_object_dialog.cpp" line="325"/>
         <source>Save Object As</source>
         <translation>としてオブジェクトを保存</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="274"/>
+        <location filename="export_object_dialog.cpp" line="352"/>
         <source>Save All Objects In</source>
         <translation>すべてのオブジェクトを保存</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="316"/>
+        <location filename="export_object_dialog.cpp" line="399"/>
         <source>Object Export</source>
         <translation>オブジェクト出力</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="317"/>
+        <location filename="export_object_dialog.cpp" line="400"/>
         <source>Some files could not be saved.</source>
         <translation>いくつかのファイルは保存できませんでした。</translation>
     </message>
@@ -13608,51 +13608,51 @@ a:hover {
         <translation>として保存</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="338"/>
+        <location filename="sequence_dialog.cpp" line="339"/>
         <source>No data</source>
         <translation>データなし</translation>
     </message>
     <message numerus="yes">
-        <location filename="sequence_dialog.cpp" line="340"/>
+        <location filename="sequence_dialog.cpp" line="341"/>
         <source>%Ln node(s)</source>
         <translation>
             <numerusform>%Ln ノード</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="sequence_dialog.cpp" line="341"/>
+        <location filename="sequence_dialog.cpp" line="342"/>
         <source>%Ln item(s)</source>
         <translation>
             <numerusform>%Ln 項目</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="367"/>
+        <location filename="sequence_dialog.cpp" line="368"/>
         <source>Portable Document Format (*.pdf)</source>
         <translation>PDF形式 (*.pdf)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="368"/>
+        <location filename="sequence_dialog.cpp" line="369"/>
         <source>Portable Network Graphics (*.png)</source>
         <translation>PNG形式 (*.png)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="369"/>
+        <location filename="sequence_dialog.cpp" line="370"/>
         <source>Windows Bitmap (*.bmp)</source>
         <translation>Windowsビットマップ形式 (*.bmp)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="371"/>
+        <location filename="sequence_dialog.cpp" line="372"/>
         <source>JPEG File Interchange Format (*.jpeg *.jpg)</source>
         <translation>JPEG形式 (*.jpeg *.jpg)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="372"/>
+        <location filename="sequence_dialog.cpp" line="373"/>
         <source>ASCII (*.txt)</source>
         <translation>アスキー形式 (*.txt)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="383"/>
+        <location filename="sequence_dialog.cpp" line="384"/>
         <source>Save Graph As</source>
         <oldsource>Wireshark: Save Graph As...</oldsource>
         <translation>としてグラフを保存</translation>
@@ -14127,7 +14127,7 @@ a:hover {
 <context>
     <name>SimpleDialog</name>
     <message>
-        <location filename="simple_dialog.cpp" line="200"/>
+        <location filename="simple_dialog.cpp" line="197"/>
         <source>Multiple problems found</source>
         <translation>複数の問題が見つかりました</translation>
     </message>

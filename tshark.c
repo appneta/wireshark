@@ -642,12 +642,17 @@ main(int argc, char *argv[])
   print_current_user();
 
   /*
-   * Attempt to get the pathname of the executable file.
+   * Attempt to get the pathname of the directory containing the
+   * executable file.
    */
   init_progfile_dir_error = init_progfile_dir(argv[0], main);
   if (init_progfile_dir_error != NULL) {
-    fprintf(stderr, "tshark: Can't get pathname of tshark program: %s.\n",
+    fprintf(stderr,
+            "tshark: Can't get pathname of directory containing the tshark program: %s.\n"
+            "It won't be possible to capture traffic.\n"
+            "Report this to the Wireshark developers.",
             init_progfile_dir_error);
+    g_free(init_progfile_dir_error);
   }
 
   initialize_funnel_ops();
@@ -782,12 +787,11 @@ main(int argc, char *argv[])
   timestamp_set_precision(TS_PREC_AUTO);
   timestamp_set_seconds_type(TS_SECONDS_DEFAULT);
 
-  init_open_routines();
+  wtap_init();
 
 #ifdef HAVE_PLUGINS
   /* Register all the plugin types we have. */
   epan_register_plugin_types(); /* Types known to libwireshark */
-  wtap_register_plugin_types(); /* Types known to libwiretap */
 
   /* Scan for plugins.  This does *not* call their registration routines;
      that's done later. */
@@ -3598,8 +3602,8 @@ print_columns(capture_file *cf)
     switch (col_item->col_fmt) {
     case COL_NUMBER:
       column_len = col_len = strlen(col_item->col_data);
-      if (column_len < 3)
-        column_len = 3;
+      if (column_len < 5)
+        column_len = 5;
       line_bufp = get_line_buf(buf_offset + column_len);
       put_spaces_string(line_bufp + buf_offset, col_item->col_data, col_len, column_len);
       break;

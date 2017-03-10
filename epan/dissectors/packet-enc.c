@@ -98,7 +98,7 @@ dissect_enc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 
   col_set_str(pinfo->cinfo, COL_PROTOCOL, "ENC");
 
-  ench.af = tvb_get_ntohl(tvb, 0);
+  ench.af = tvb_get_h_guint32(tvb, 0);
   ench.spi = tvb_get_ntohl(tvb, 4);
 
   if (tree) {
@@ -109,9 +109,9 @@ dissect_enc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
                                         ench.spi);
     enc_tree = proto_item_add_subtree(ti, ett_enc);
 
-    proto_tree_add_item(enc_tree, hf_enc_af, tvb, 0, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(enc_tree, hf_enc_af, tvb, 0, 4, ENC_HOST_ENDIAN);
     proto_tree_add_item(enc_tree, hf_enc_spi, tvb, 4, 4, ENC_BIG_ENDIAN);
-    proto_tree_add_bitmask(enc_tree, tvb, 8, hf_enc_flags, ett_enc_flag, flags, ENC_BIG_ENDIAN);
+    proto_tree_add_bitmask(enc_tree, tvb, 8, hf_enc_flags, ett_enc_flag, flags, ENC_HOST_ENDIAN);
   }
 
   /* Set the tvbuff for the payload after the header */
@@ -139,13 +139,13 @@ proto_register_enc(void)
       { "Payload encrypted", "enc.flags.payload_enc", FT_BOOLEAN, 32, NULL, BSD_ENC_M_CONF,
         NULL, HFILL }},
     { &hf_enc_flags_payload_auth,
-      { "Payload encrypted", "enc.flags.payload_auth", FT_BOOLEAN, 32, NULL, BSD_ENC_M_AUTH,
+      { "Payload authenticated", "enc.flags.payload_auth", FT_BOOLEAN, 32, NULL, BSD_ENC_M_AUTH,
         NULL, HFILL }},
     { &hf_enc_flags_payload_compress,
-      { "Payload encrypted", "enc.flags.payload_compress", FT_BOOLEAN, 32, NULL, BSD_ENC_M_COMP,
+      { "Payload compressed", "enc.flags.payload_compress", FT_BOOLEAN, 32, NULL, BSD_ENC_M_COMP,
         NULL, HFILL }},
     { &hf_enc_flags_header_auth,
-      { "Payload encrypted", "enc.flags.header_auth", FT_BOOLEAN, 32, NULL, BSD_ENC_M_AUTH_AH,
+      { "Header authenticated", "enc.flags.header_auth", FT_BOOLEAN, 32, NULL, BSD_ENC_M_AUTH_AH,
         NULL, HFILL }},
   };
   static gint *ett[] =

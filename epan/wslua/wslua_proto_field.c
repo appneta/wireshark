@@ -458,18 +458,22 @@ WSLUA_CONSTRUCTOR ProtoField_new(lua_State* L) {
             return 0;
         }
         break;
-    /* TODO: new in 1.99 and not handled yet */
+    /* TODO: not handled yet */
     case FT_UINT40:
     case FT_UINT48:
     case FT_UINT56:
     case FT_INT40:
     case FT_INT48:
     case FT_INT56:
-    /* older but not supported yet (or maybe ever) */
+    case FT_IEEE_11073_SFLOAT:
+    case FT_IEEE_11073_FLOAT:
     case FT_UINT_STRING:
-    case FT_PCRE:
     case FT_AX25:
     case FT_STRINGZPAD:
+        WSLUA_ARG_ERROR(ProtoField_new,TYPE,"Unsupported ProtoField field type");
+        break;
+    /* FT_PCRE isn't a valid field type. */
+    case FT_PCRE:
     default:
         WSLUA_ARG_ERROR(ProtoField_new,TYPE,"Invalid ProtoField field type");
         break;

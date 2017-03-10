@@ -2598,32 +2598,32 @@ po którym zostanie użyty nowy plik przechwytywania jeśli zamierzasz używać 
         <translation>Szukanie obiektów</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="113"/>
+        <location filename="export_object_dialog.cpp" line="188"/>
         <source>Export</source>
         <translation>Eksportuj</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="113"/>
+        <location filename="export_object_dialog.cpp" line="188"/>
         <source>%1 object list</source>
         <translation>%1 lista obiektów</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="247"/>
+        <location filename="export_object_dialog.cpp" line="325"/>
         <source>Save Object As</source>
         <translation>Zapisz obiekt jako</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="274"/>
+        <location filename="export_object_dialog.cpp" line="352"/>
         <source>Save All Objects In</source>
         <translation>Zapisz wszystkie obiekty</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="316"/>
+        <location filename="export_object_dialog.cpp" line="399"/>
         <source>Object Export</source>
         <translation>Eksportuj obiekt</translation>
     </message>
     <message>
-        <location filename="export_object_dialog.cpp" line="317"/>
+        <location filename="export_object_dialog.cpp" line="400"/>
         <source>Some files could not be saved.</source>
         <translation>Pewne pliki nie zostały zapisane.</translation>
     </message>
@@ -13653,12 +13653,12 @@ text-decoration: underline;
         <translation>Zapisz jako</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="338"/>
+        <location filename="sequence_dialog.cpp" line="339"/>
         <source>No data</source>
         <translation>Brak danych</translation>
     </message>
     <message numerus="yes">
-        <location filename="sequence_dialog.cpp" line="340"/>
+        <location filename="sequence_dialog.cpp" line="341"/>
         <source>%Ln node(s)</source>
         <translation>
             <numerusform>%Ln węzeł</numerusform>
@@ -13667,7 +13667,7 @@ text-decoration: underline;
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="sequence_dialog.cpp" line="341"/>
+        <location filename="sequence_dialog.cpp" line="342"/>
         <source>%Ln item(s)</source>
         <translation>
             <numerusform>%Ln obiekt</numerusform>
@@ -13676,32 +13676,32 @@ text-decoration: underline;
         </translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="367"/>
+        <location filename="sequence_dialog.cpp" line="368"/>
         <source>Portable Document Format (*.pdf)</source>
         <translation>Dokument PDF (*.pdf)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="368"/>
+        <location filename="sequence_dialog.cpp" line="369"/>
         <source>Portable Network Graphics (*.png)</source>
         <translation>Obraz PNG (*.png)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="369"/>
+        <location filename="sequence_dialog.cpp" line="370"/>
         <source>Windows Bitmap (*.bmp)</source>
         <translation>Bitmapa Windows (*.bmp)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="371"/>
+        <location filename="sequence_dialog.cpp" line="372"/>
         <source>JPEG File Interchange Format (*.jpeg *.jpg)</source>
         <translation>Obraz JPEG (*.jpeg *.jpg)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="372"/>
+        <location filename="sequence_dialog.cpp" line="373"/>
         <source>ASCII (*.txt)</source>
         <translation>ASCII (*.txt)</translation>
     </message>
     <message>
-        <location filename="sequence_dialog.cpp" line="383"/>
+        <location filename="sequence_dialog.cpp" line="384"/>
         <source>Save Graph As</source>
         <oldsource>Wireshark: Save Graph As...</oldsource>
         <translation>Zapisz wykres jako</translation>
@@ -14203,7 +14203,7 @@ text-decoration: underline;
 <context>
     <name>SimpleDialog</name>
     <message>
-        <location filename="simple_dialog.cpp" line="200"/>
+        <location filename="simple_dialog.cpp" line="197"/>
         <source>Multiple problems found</source>
         <translation>Wystąpiło wiele problemów</translation>
     </message>

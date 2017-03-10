@@ -373,7 +373,8 @@ int main(int argc, char *qt_argv[])
     relinquish_special_privs_perm();
 
     /*
-     * Attempt to get the pathname of the executable file.
+     * Attempt to get the pathname of the directory containing the
+     * executable file.
      */
     /* init_progfile_dir_error = */ init_progfile_dir(argv[0],
         (int (*)(int, char **)) get_gui_compiled_info);
@@ -531,12 +532,11 @@ int main(int argc, char *qt_argv[])
     init_report_err(vfailure_alert_box, open_failure_alert_box,
                     read_failure_alert_box, write_failure_alert_box);
 
-    init_open_routines();
+    wtap_init();
 
 #ifdef HAVE_PLUGINS
     /* Register all the plugin types we have. */
     epan_register_plugin_types(); /* Types known to libwireshark */
-    wtap_register_plugin_types(); /* Types known to libwiretap */
     codec_register_plugin_types(); /* Types known to libwscodecs */
 
     /* Scan for plugins.  This does *not* call their registration routines;
