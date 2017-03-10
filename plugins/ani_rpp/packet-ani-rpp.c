@@ -1037,7 +1037,6 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_gap, tvb, offset+10, 2, FALSE);
                 col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+10));
                 if (headerLength > 20) {
-                	proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_max_packets, tvb, offset+18, 4, FALSE);
                 	col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+18));
                 }
                 col_append_fstr(pinfo->cinfo, COL_INFO, "]");
@@ -1048,6 +1047,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_gap, tvb, offset+16, 2, FALSE);
                 col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+16));
                 if (headerLength > 20) {
+                	proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_max_packets, tvb, offset+18, 4, FALSE);
                 	proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_max_packets, tvb, offset+22, 4, FALSE);
                 	col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+22));
                 }
