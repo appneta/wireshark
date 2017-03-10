@@ -159,6 +159,8 @@ static gint hf_ani_rpp_ecb_request_outbound_gap = -1;
 static gint hf_ani_rpp_ecb_request_inbound_magnify = -1;
 static gint hf_ani_rpp_ecb_request_inbound_duration = -1;
 static gint hf_ani_rpp_ecb_request_inbound_gap = -1;
+static gint hf_ani_rpp_ecb_request_outbound_max_packets = -1;
+static gint hf_ani_rpp_ecb_request_inbound_max_packets = -1;
 static gint hf_ani_rpp_ecb_resp_padding = -1;
 static gint hf_ani_rpp_ecb_resp_flags = -1;
 static gint hf_ani_rpp_ecb_resp_flags_in = -1;
@@ -1033,13 +1035,23 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_duration, tvb, offset+8, 2, FALSE);
                 col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+8));
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_gap, tvb, offset+10, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus]", tvb_get_ntohs(tvb, offset+10));
+                col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+10));
+                if (headerLength > 20) {
+                	proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_max_packets, tvb, offset+18, 4, FALSE);
+                	col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+18));
+                }
+                col_append_fstr(pinfo->cinfo, COL_INFO, "]");
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_magnify, tvb, offset+12, 2, FALSE);
                 col_append_fstr(pinfo->cinfo, COL_INFO, " in[mag=%ums", tvb_get_ntohs(tvb, offset+12));
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_duration, tvb, offset+14, 2, FALSE);
                 col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+14));
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_gap, tvb, offset+16, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus]", tvb_get_ntohs(tvb, offset+16));
+                col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+16));
+                if (headerLength > 20) {
+                	proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_max_packets, tvb, offset+22, 4, FALSE);
+                	col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+22));
+                }
+                col_append_fstr(pinfo->cinfo, COL_INFO, "]");
             }
             offset += (headerLength - 2);
             break;
@@ -2006,6 +2018,30 @@ proto_register_ani_rpp(void)
                     {
                             "ECB In-bound Inter-packet Gap (usec)",
                             "appneta_rpp.ecb_request_inbound_gap",
+                            FT_UINT16,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_request_outbound_max_packets,
+                    {
+                            "ECB Out-bound Maximum Packets",
+                            "appneta_rpp.ecb_request_outbound_max_packets",
+                            FT_UINT16,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_request_inbound_max_packets,
+                    {
+                            "ECB In-bound Maximum Packets",
+                            "appneta_rpp.ecb_request_inbound_max_packets",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
