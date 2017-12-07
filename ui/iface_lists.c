@@ -113,10 +113,7 @@ scan_local_interfaces(void (*update_cb)(void))
     interface_options interface_opts;
     gboolean          found = FALSE;
     static gboolean   running = FALSE;
-<<<<<<< HEAD
-=======
     GHashTable        *selected_devices;
->>>>>>> upstream/master-2.4
 
     if (running) {
         /* scan_local_interfaces internally calls update_cb to process UI events
@@ -395,11 +392,8 @@ scan_local_interfaces(void (*update_cb)(void))
             global_capture_opts.num_selected++;
         }
     }
-<<<<<<< HEAD
-=======
 
     g_hash_table_destroy(selected_devices);
->>>>>>> upstream/master-2.4
     running = FALSE;
 }
 

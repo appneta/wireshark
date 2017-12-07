@@ -80,10 +80,6 @@
 #include "extcap.h"
 #endif
 
-#ifdef HAVE_EXTCAP
-#include "extcap.h"
-#endif
-
 #include <wiretap/wtap-int.h>
 #include <wiretap/file_wrappers.h>
 
@@ -780,21 +776,7 @@ main(int argc, char *argv[])
       show_version("TFShark (Wireshark)", comp_info_str, runtime_info_str);
       g_string_free(comp_info_str, TRUE);
       g_string_free(runtime_info_str, TRUE);
-<<<<<<< HEAD
-      /* We don't really have to cleanup here, but it's a convenient way to test
-       * start-up and shut-down of the epan library without any UI-specific
-       * cruft getting in the way. Makes the results of running
-       * $ ./tools/valgrind-wireshark -n
-       * much more useful. */
-      epan_cleanup();
-#ifdef HAVE_EXTCAP
-      extcap_cleanup();
-#endif
-      return 0;
-    }
-=======
       goto clean_exit;
->>>>>>> upstream/master-2.4
     case 'O':        /* Only output these protocols */
       /* already processed; just ignore it now */
       break;
@@ -944,16 +926,8 @@ main(int argc, char *argv[])
     if (!dfilter_compile(rfilter, &rfcode, &err_msg)) {
       cmdarg_err("%s", err_msg);
       g_free(err_msg);
-<<<<<<< HEAD
-      epan_cleanup();
-#ifdef HAVE_EXTCAP
-      extcap_cleanup();
-#endif
-      return 2;
-=======
       exit_status = INVALID_FILTER;
       goto clean_exit;
->>>>>>> upstream/master-2.4
     }
   }
   cfile.rfcode = rfcode;
@@ -962,16 +936,8 @@ main(int argc, char *argv[])
     if (!dfilter_compile(dfilter, &dfcode, &err_msg)) {
       cmdarg_err("%s", err_msg);
       g_free(err_msg);
-<<<<<<< HEAD
-      epan_cleanup();
-#ifdef HAVE_EXTCAP
-      extcap_cleanup();
-#endif
-      return 2;
-=======
       exit_status = INVALID_FILTER;
       goto clean_exit;
->>>>>>> upstream/master-2.4
     }
   }
   cfile.dfcode = dfcode;
@@ -1015,16 +981,8 @@ main(int argc, char *argv[])
     /* TODO: if tfshark is ever changed to give the user a choice of which
        open_routine reader to use, then the following needs to change. */
     if (cf_open(&cfile, cf_name, WTAP_TYPE_AUTO, FALSE, &err) != CF_OK) {
-<<<<<<< HEAD
-      epan_cleanup();
-#ifdef HAVE_EXTCAP
-      extcap_cleanup();
-#endif
-      return 2;
-=======
       exit_status = OPEN_ERROR;
       goto clean_exit;
->>>>>>> upstream/master-2.4
     }
 
     /* Process the packets in the file */

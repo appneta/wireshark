@@ -251,19 +251,12 @@ while [ \( $PASS -lt $MAX_PASSES -o $MAX_PASSES -lt 1 \) -a $DONE -ne 1 ] ; do
                 VG_DEF_LEAKED=`grep "definitely lost:" $TMP_DIR/$ERR_FILE | cut -f7 -d' ' | tr -d ,`
                 VG_IND_LEAKED=`grep "indirectly lost:" $TMP_DIR/$ERR_FILE | cut -f7 -d' ' | tr -d ,`
                 VG_TOTAL_LEAKED=`expr $VG_DEF_LEAKED + $VG_IND_LEAKED`
-<<<<<<< HEAD
-                if [ $? -ne 0 ] ; then
-=======
                 if [ $RUNNER_RETVAL -ne 0 ] ; then
->>>>>>> upstream/master-2.4
                     echo "General Valgrind failure."
                     VG_ERR_CNT=1
                 elif [ "$VG_TOTAL_LEAKED" -gt "$MAX_LEAK" ] ; then
                     echo "Definitely + indirectly ($VG_DEF_LEAKED + $VG_IND_LEAKED) exceeds max ($MAX_LEAK)."
-<<<<<<< HEAD
-=======
                     echo "Definitely + indirectly ($VG_DEF_LEAKED + $VG_IND_LEAKED) exceeds max ($MAX_LEAK)." >> $TMP_DIR/$ERR_FILE
->>>>>>> upstream/master-2.4
                     VG_ERR_CNT=1
                 fi
                 if grep -q "Valgrind cannot continue" $TMP_DIR/$ERR_FILE; then

@@ -146,15 +146,10 @@ main(int argc, char **argv)
 		    init_progfile_dir_error);
 		g_free(init_progfile_dir_error);
 	}
-<<<<<<< HEAD
-
-	wtap_init();
-=======
 
 	wtap_init();
 
 	cmdarg_err_init(failure_warning_message, failure_message_cont);
->>>>>>> upstream/master-2.4
 
 #ifdef _WIN32
 	arg_list_utf_16to8(argc, argv);
@@ -163,14 +158,6 @@ main(int argc, char **argv)
 
 #ifdef HAVE_PLUGINS
 	/* Register wiretap plugins */
-<<<<<<< HEAD
-	init_report_err(failure_message,NULL,NULL,NULL);
-
-	/* Scan for plugins.  This does *not* call their registration routines;
-		that's done later. */
-	scan_plugins();
-
-=======
 	init_report_message(failure_warning_message, failure_warning_message,
 	    NULL, NULL, NULL);
 
@@ -183,7 +170,6 @@ main(int argc, char **argv)
 	   plugins need libwireshark). */
 	scan_plugins(DONT_REPORT_LOAD_FAILURE);
 
->>>>>>> upstream/master-2.4
 	/* Register all libwiretap plugin modules. */
 	register_all_wiretap_modules();
 #endif

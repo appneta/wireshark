@@ -722,14 +722,10 @@ void MainWindow::captureCaptureFixedFinished(capture_session *) {
     /* Enable menu items that make sense if you're not currently running
      a capture. */
     setForCaptureInProgress(false);
-<<<<<<< HEAD
-    setMenusForCaptureFile();
-=======
     /* There isn't a real capture_file structure yet, so just force disabling
        menu options.  They will "refresh" when the capture file is reloaded to
        display packets */
     setMenusForCaptureFile(true);
->>>>>>> upstream/master-2.4
 
     setWindowIcon(wsApp->normalIcon());
 

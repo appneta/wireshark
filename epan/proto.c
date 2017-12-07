@@ -10104,11 +10104,8 @@ proto_item_add_bitmask_tree(proto_item *item, tvbuff_t *tvb, const int offset,
 			break;
 
 		case FT_UINT40:
-		case FT_INT48:
 		case FT_UINT48:
-		case FT_INT56:
 		case FT_UINT56:
-		case FT_INT64:
 		case FT_UINT64:
 			if (hf->display == BASE_CUSTOM) {
 				gchar lbl[ITEM_LABEL_LENGTH];

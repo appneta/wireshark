@@ -114,22 +114,14 @@ add_library(wiretap ${LINK_MODE_LIB}
 
 add_dependencies(wiretap version)
 
-<<<<<<< HEAD
-set(FULL_SO_VERSION "6.0.4")
-=======
-set(FULL_SO_VERSION "7.0.4")
->>>>>>> upstream/master-2.4
+set(FULL_SO_VERSION "7.0.3")
 
 set_target_properties(wiretap PROPERTIES
 	PREFIX "lib"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
 	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
-<<<<<<< HEAD
-	VERSION ${FULL_SO_VERSION} SOVERSION 6
-=======
 	VERSION ${FULL_SO_VERSION} SOVERSION 7
->>>>>>> upstream/master-2.4
 	FOLDER "DLLs"
 )
 

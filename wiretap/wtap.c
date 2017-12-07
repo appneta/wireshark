@@ -1443,8 +1443,6 @@ wtap_init(void)
 }
 
 /*
-<<<<<<< HEAD
-=======
  * Cleanup the library
  */
 void
@@ -1457,7 +1455,6 @@ wtap_cleanup(void)
 }
 
 /*
->>>>>>> upstream/master-2.4
  * Editor modelines  -  http://www.wireshark.org/tools/modelines.html
  *
  * Local variables:

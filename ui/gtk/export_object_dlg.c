@@ -107,10 +107,7 @@ eo_win_destroy_cb(GtkWindow *win _U_, gpointer data)
 	while(slist) {
 		entry = (export_object_entry_t *)slist->data;
 		eo_free_entry(entry);
-<<<<<<< HEAD
-=======
 
->>>>>>> upstream/master-2.4
 		slist = slist->next;
 	}
 

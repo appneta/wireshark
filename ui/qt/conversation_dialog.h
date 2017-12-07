@@ -39,9 +39,6 @@ public:
 public slots:
     void updateStartTime(bool absolute);
 
-public slots:
-    void updateStartTime(bool absolute);
-
 private:
     void initDirectionMap();
     void updateItems();

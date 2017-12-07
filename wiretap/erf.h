@@ -118,11 +118,8 @@
 #define ERF_META_SECTION_MASK 0xFF00
 #define ERF_META_IS_SECTION(type) (type > 0 && (type & ERF_META_SECTION_MASK) == ERF_META_SECTION_MASK)
 #define ERF_META_HOST_ID_IMPLICIT G_MAXUINT64
-<<<<<<< HEAD
-=======
 #define ERF_ANCHOR_ID_IS_DEFINITION(anchor_id) ((guint64)anchor_id & ERF_EHDR_ANCHOR_ID_DEFINITION_MASK)
 #define ERF_EHDR_SET_MORE_EXTHDR(ext_hdr) ((guint64)ext_hdr | ERF_EHDR_MORE_EXTHDR_MASK)
->>>>>>> upstream/master-2.4
 
 #define ERF_META_SECTION_CAPTURE     0xFF00
 #define ERF_META_SECTION_HOST        0xFF01
@@ -310,15 +307,12 @@
 #define ERF_META_TAG_ptp_port_state         412
 #define ERF_META_TAG_ptp_delay_mechanism    413
 #define ERF_META_TAG_clk_port_proto         414
-<<<<<<< HEAD
-=======
 
 #define ERF_POPULATE_SUCCESS 1
 #define ERF_POPULATE_ALREADY_POPULATED 0
 #define ERF_POPULATE_FAILED -1
 
 #define ERF_MAX_INTERFACES 4
->>>>>>> upstream/master-2.4
 
  /*
   * The timestamp is 64bit unsigned fixed point little-endian value with

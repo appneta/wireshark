@@ -342,11 +342,7 @@ int main(int argc, char *qt_argv[])
 #ifdef _WIN32
     int                  opt;
 #endif
-<<<<<<< HEAD
-    int                  ret_val;
-=======
     int                  ret_val = EXIT_SUCCESS;
->>>>>>> upstream/master-2.4
     char               **argv = qt_argv;
 
 #ifdef _WIN32

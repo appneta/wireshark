@@ -662,17 +662,9 @@ QString ExtcapArgument::prefValue()
 
 void ExtcapArgument::resetValue()
 {
-<<<<<<< HEAD
-    // XXX consider using the preferences API which can store the default value
-    // and put that here instead of an empty value.
-    if (_argument->pref_valptr) {
-        g_free(*_argument->pref_valptr);
-        *_argument->pref_valptr = NULL;
-=======
     if (_argument->pref_valptr) {
         g_free(*_argument->pref_valptr);
         *_argument->pref_valptr = g_strdup("");
->>>>>>> upstream/master-2.4
     }
 }
 
@@ -706,11 +698,7 @@ QString ExtcapArgument::prefKey(const QString & device_name)
 
     pref = extcap_pref_for_argument(device_name.toStdString().c_str(), _argument);
     if ( pref != NULL )
-<<<<<<< HEAD
-        return QString(pref->name);
-=======
         return QString(prefs_get_name(pref));
->>>>>>> upstream/master-2.4
 
     return QString();
 }

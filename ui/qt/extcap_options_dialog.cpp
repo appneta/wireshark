@@ -200,11 +200,7 @@ void ExtcapOptionsDialog::anyValueChanged()
 
 void ExtcapOptionsDialog::loadArguments()
 {
-<<<<<<< HEAD
-    GList * arguments = NULL, * item = NULL;
-=======
     GList * arguments = NULL, * walker = NULL, * item = NULL;
->>>>>>> upstream/master-2.4
     ExtcapArgument * argument = NULL;
 
     if ( device_name.length() == 0  )
@@ -217,14 +213,10 @@ void ExtcapOptionsDialog::loadArguments()
     ExtcapArgumentList required;
     ExtcapArgumentList optional;
 
-<<<<<<< HEAD
-    while ( arguments != NULL )
-=======
     walker = arguments;
     while ( walker != NULL )
->>>>>>> upstream/master-2.4
     {
-        item = g_list_first((GList *)(arguments->data));
+        item = g_list_first((GList *)(walker->data));
         while ( item != NULL )
         {
             argument = ExtcapArgument::create((extcap_arg *)(item->data));
@@ -238,11 +230,7 @@ void ExtcapOptionsDialog::loadArguments()
             }
             item = item->next;
         }
-<<<<<<< HEAD
-        arguments = g_list_next(arguments);
-=======
         walker = g_list_next(walker);
->>>>>>> upstream/master-2.4
     }
 
     if ( required.length() > 0 )
@@ -250,32 +238,6 @@ void ExtcapOptionsDialog::loadArguments()
 
     if ( optional.length() > 0 )
         extcapArguments << optional;
-}
-
-void ExtcapOptionsDialog::updateWidgets()
-{
-    QWidget * lblWidget = NULL, *editWidget = NULL;
-    ExtcapArgument * argument = NULL;
-    bool allowStart = true;
-
-    unsigned int counter = 0;
-
-    if ( device_name.length() == 0  )
-        return;
-
-    /* find existing layout */
-    if (ui->verticalLayout->children().count() > 0)
-    {
-        QGridLayout * layout = (QGridLayout *)ui->verticalLayout->itemAt(0);
-        ui->verticalLayout->removeItem(layout);
-        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-    }
-
-    QGridLayout * layout = new QGridLayout();
-
-    /* Load all extcap arguments */
-    loadArguments();
-
 
     /* argument items are now owned by ExtcapArgument. Only free the lists */
     extcap_free_if_configuration(arguments, FALSE);
@@ -317,11 +279,7 @@ void ExtcapOptionsDialog::updateWidgets()
             editWidget = argument->createEditor((QWidget *) this);
             if ( editWidget != NULL )
             {
-<<<<<<< HEAD
-                editWidget->setProperty(QString("extcap").toLocal8Bit(), QVariant::fromValue(argument));
-=======
                 editWidget->setProperty(QString("extcap").toLocal8Bit(), VariantPointer<ExtcapArgument>::asQVariant(argument));
->>>>>>> upstream/master-2.4
                 layout->addWidget(editWidget, counter, 1, Qt::AlignVCenter);
             }
 
@@ -458,15 +416,9 @@ void ExtcapOptionsDialog::resetValues()
                 ExtcapArgument * arg = 0;
                 QVariant prop = child->property(QString("extcap").toLocal8Bit());
 
-<<<<<<< HEAD
-                if ( prop.isValid() && prop.canConvert<ExtcapArgument *>())
-                {
-                    arg = prop.value<ExtcapArgument *>();
-=======
                 if ( prop.isValid() )
                 {
                     arg = VariantPointer<ExtcapArgument>::asPtr(prop);
->>>>>>> upstream/master-2.4
 
                     /* value<> can fail */
                     if (arg)
@@ -478,11 +430,7 @@ void ExtcapOptionsDialog::resetValues()
                         QWidget * editWidget = arg->createEditor((QWidget *) this);
                         if ( editWidget != NULL )
                         {
-<<<<<<< HEAD
-                            editWidget->setProperty(QString("extcap").toLocal8Bit(), QVariant::fromValue(arg));
-=======
                             editWidget->setProperty(QString("extcap").toLocal8Bit(), VariantPointer<ExtcapArgument>::asQVariant(arg));
->>>>>>> upstream/master-2.4
                             layout->addWidget(editWidget, row, 1, Qt::AlignVCenter);
                         }
                     }
@@ -551,12 +499,6 @@ void ExtcapOptionsDialog::storeValues()
         {
             gchar * val = g_strdup(value.length() == 0 ? " " : value.toStdString().c_str());
 
-<<<<<<< HEAD
-            /* Setting the internally stored value for the preference to the new value */
-            extcap_pref_store((*iter)->argument(), val);
-
-=======
->>>>>>> upstream/master-2.4
             g_hash_table_insert(entries, g_strdup(key.toStdString().c_str()), val);
         }
     }

@@ -147,7 +147,7 @@ epan/dissectors/dcerpc/*-stamp
 .libs
 packaging/rpm/RPMS
 packaging/rpm/SRPMS
-.settings/*.prefs
+
 
 # Doc #
 ########

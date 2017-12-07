@@ -33,43 +33,27 @@
         <translation>作者</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="about_dialog.ui" line="170"/>
-=======
         <location filename="about_dialog.ui" line="162"/>
         <source>Search Authors</source>
         <translation>著者を検索</translation>
     </message>
     <message>
         <location filename="about_dialog.ui" line="177"/>
->>>>>>> upstream/master-2.4
         <source>Folders</source>
         <translation>フォルダ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="about_dialog.ui" line="196"/>
-=======
         <location filename="about_dialog.ui" line="203"/>
->>>>>>> upstream/master-2.4
         <source>Plugins</source>
         <translation>プラグイン</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="about_dialog.ui" line="213"/>
-=======
         <location filename="about_dialog.ui" line="220"/>
->>>>>>> upstream/master-2.4
         <source>Keyboard Shortcuts</source>
         <translation>キーボードショートカット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="about_dialog.ui" line="230"/>
-=======
         <location filename="about_dialog.ui" line="237"/>
->>>>>>> upstream/master-2.4
         <source>License</source>
         <translation>ライセンス</translation>
     </message>
@@ -98,11 +82,7 @@
         <translation>名前:</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="address_editor_frame.cpp" line="149"/>
-=======
         <location filename="address_editor_frame.cpp" line="166"/>
->>>>>>> upstream/master-2.4
         <source>Can&apos;t assign %1 to %2</source>
         <translation>%1 を %2 に割り当てることができません</translation>
     </message>
@@ -1047,284 +1027,156 @@
         <translation>コメントを保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="72"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="73"/>
->>>>>>> upstream/master-2.4
         <source>Capture File Properties</source>
         <translation>キャプチャファイルプロパティ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="155"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="156"/>
->>>>>>> upstream/master-2.4
         <source>Unknown</source>
         <translation>不明</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="158"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="159"/>
->>>>>>> upstream/master-2.4
         <source>File</source>
         <translation>ファイル</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="162"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="163"/>
->>>>>>> upstream/master-2.4
         <source>Name</source>
         <translation>名前</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="167"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="168"/>
->>>>>>> upstream/master-2.4
         <source>Length</source>
         <translation>長さ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="173"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="174"/>
->>>>>>> upstream/master-2.4
         <source> (gzip compressed)</source>
         <translation> (gzip圧縮)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="176"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="177"/>
->>>>>>> upstream/master-2.4
         <source>Format</source>
         <translation>形式</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="190"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="191"/>
->>>>>>> upstream/master-2.4
         <source>Encapsulation</source>
         <translation>カプセル化</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="196"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="197"/>
->>>>>>> upstream/master-2.4
         <source>Snapshot length</source>
         <translation>スナップショット長</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="207"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="208"/>
->>>>>>> upstream/master-2.4
         <source>Time</source>
         <translation>時間</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="212"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="213"/>
->>>>>>> upstream/master-2.4
         <source>First packet</source>
         <translation>最初のパケット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="218"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="219"/>
->>>>>>> upstream/master-2.4
         <source>Last packet</source>
         <translation>最後のパケット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="238"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="239"/>
->>>>>>> upstream/master-2.4
         <source>Elapsed</source>
         <translation>経過時間</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="247"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="248"/>
->>>>>>> upstream/master-2.4
         <source>Capture</source>
         <translation>キャプチャ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="262"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="263"/>
->>>>>>> upstream/master-2.4
         <source>Hardware</source>
         <translation>ハードウエア</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="273"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="274"/>
->>>>>>> upstream/master-2.4
         <source>OS</source>
         <translation>OS</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="284"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="285"/>
->>>>>>> upstream/master-2.4
         <source>Application</source>
         <translation>アプリケーション</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="293"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="294"/>
->>>>>>> upstream/master-2.4
         <source>Interfaces</source>
         <translation>インターフェース</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="297"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="298"/>
->>>>>>> upstream/master-2.4
         <source>Interface</source>
         <translation>インターフェース</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="298"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="299"/>
->>>>>>> upstream/master-2.4
         <source>Dropped packets</source>
         <translation>欠落したパケット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="299"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="300"/>
->>>>>>> upstream/master-2.4
         <source>Capture filter</source>
         <translation>キャプチャフィルタ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="300"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="301"/>
->>>>>>> upstream/master-2.4
         <source>Link type</source>
         <translation>リンク種別</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="301"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="302"/>
->>>>>>> upstream/master-2.4
         <source>Packet size limit</source>
         <translation>パケットサイズ制限</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="331"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="332"/>
->>>>>>> upstream/master-2.4
         <source>none</source>
         <translation>なし</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="334"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="335"/>
->>>>>>> upstream/master-2.4
         <source>%1 bytes</source>
         <translation>%1 バイト</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="350"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="351"/>
->>>>>>> upstream/master-2.4
         <source>Statistics</source>
         <translation>統計</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="354"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="355"/>
->>>>>>> upstream/master-2.4
         <source>Measurement</source>
         <translation>測定</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="355"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="356"/>
->>>>>>> upstream/master-2.4
         <source>Captured</source>
         <translation>キャプチャ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="356"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="357"/>
->>>>>>> upstream/master-2.4
         <source>Displayed</source>
         <translation>表示</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="357"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="358"/>
->>>>>>> upstream/master-2.4
         <source>Marked</source>
         <translation>マーク済</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="361"/>
-        <source>N/A</source>
-        <translation>N/A</translation>
-    </message>
-    <message>
-=======
->>>>>>> upstream/master-2.4
         <location filename="capture_file_properties_dialog.cpp" line="378"/>
         <source>Packets</source>
         <translation>パケット数</translation>
@@ -1360,26 +1212,22 @@
         <translation>平均ビット数毎秒</translation>
     </message>
     <message>
-        <location filename="capture_file_properties_dialog.cpp" line="525"/>
+        <location filename="capture_file_properties_dialog.cpp" line="520"/>
         <source>File Comment</source>
         <translation>ファイルコメント</translation>
     </message>
     <message>
-        <location filename="capture_file_properties_dialog.cpp" line="534"/>
+        <location filename="capture_file_properties_dialog.cpp" line="529"/>
         <source>Packet Comments</source>
         <translation>パケットコメント</translation>
     </message>
     <message>
-        <location filename="capture_file_properties_dialog.cpp" line="541"/>
+        <location filename="capture_file_properties_dialog.cpp" line="536"/>
         <source>&lt;p&gt;Frame %1: </source>
         <translation>&lt;p&gt;フレーム %1: </translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_file_properties_dialog.cpp" line="599"/>
-=======
         <location filename="capture_file_properties_dialog.cpp" line="590"/>
->>>>>>> upstream/master-2.4
         <source>Created by Wireshark %1
 
 </source>
@@ -1404,11 +1252,7 @@
         <translation>キャプチャフィルタ入力</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_filter_edit.cpp" line="304"/>
-=======
         <location filename="capture_filter_edit.cpp" line="280"/>
->>>>>>> upstream/master-2.4
         <source>Enter a capture filter %1</source>
         <translation>キャプチャフィルタ %1 を入力</translation>
     </message>
@@ -1423,65 +1267,31 @@
         <translation>このフィルタ文字列を表示に適用します</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_filter_edit.cpp" line="299"/>
-=======
         <location filename="capture_filter_edit.cpp" line="275"/>
->>>>>>> upstream/master-2.4
         <source>Multiple filters selected. Override them here or leave this blank to preserve them.</source>
         <extracomment>This is a very long concept that needs to fit into a short space.</extracomment>
         <translation>複数のフィルタが選択されています。選択を上書きするかあるいは空白のままにしておいてください</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_filter_edit.cpp" line="300"/>
-=======
         <location filename="capture_filter_edit.cpp" line="276"/>
->>>>>>> upstream/master-2.4
         <source>&lt;p&gt;The interfaces you have selected have different capture filters. Typing a filter here will override them. Doing nothing will preserve them.&lt;/p&gt;</source>
         <translation>&lt;p&gt;選択したインターフェースには異なるキャプチャフィルタがあります。ここにフィルタを入力すれば上書きされます。なにもしなければそのまま保存します&lt;/p&gt;</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_filter_edit.cpp" line="404"/>
-=======
         <location filename="capture_filter_edit.cpp" line="378"/>
->>>>>>> upstream/master-2.4
         <source>Save this filter</source>
         <translation>このフィルタを保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_filter_edit.cpp" line="406"/>
-=======
         <location filename="capture_filter_edit.cpp" line="380"/>
->>>>>>> upstream/master-2.4
         <source>Remove this filter</source>
         <translation>このフィルタを削除</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="capture_filter_edit.cpp" line="408"/>
-        <source>Manage Capture Filters</source>
-        <translation>キャプチャフィルタ管理</translation>
-    </message>
-    <message>
-        <location filename="capture_filter_edit.cpp" line="541"/>
-        <source>Unable to save capture filter settings.</source>
-        <translation>キャプチャフィルタ設定を保存できません</translation>
-    </message>
-    <message>
-        <location filename="capture_filter_edit.cpp" line="542"/>
-        <source>Could not save to your capture filter file
-&quot;%1&quot;: %2.</source>
-        <translation type="unfinished">キャプチャフィルタファイルを保存できません &quot;%1&quot;: %2.</translation>
-    </message>
-=======
         <location filename="capture_filter_edit.cpp" line="382"/>
         <source>Manage Capture Filters</source>
         <translation>キャプチャフィルタ管理</translation>
     </message>
->>>>>>> upstream/master-2.4
 </context>
 <context>
     <name>CaptureInterfacesDialog</name>
@@ -2029,44 +1839,22 @@ PLEASE NOTE: One option MUST be selected.</source>
         <translation>色付けルールをインポート</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="coloring_rules_dialog.cpp" line="342"/>
-=======
         <location filename="coloring_rules_dialog.cpp" line="344"/>
->>>>>>> upstream/master-2.4
         <source>Export %1 Coloring Rules</source>
         <translation>%1 色付けルールをエクスポート</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="coloring_rules_dialog.cpp" line="363"/>
-=======
         <location filename="coloring_rules_dialog.cpp" line="365"/>
->>>>>>> upstream/master-2.4
         <source>Your coloring rules file contains unknown rules</source>
         <translation>あなたの色付けルールのファイルは未知のルールを含んでいます。</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="coloring_rules_dialog.cpp" line="364"/>
-        <source>Wireshark doesn&apos;t recognize one or more of your coloring rules. They have been disabled.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Wireshark doesn&apos;t recognize one or more of your coloring rules. Saving will disable them.</source>
-        <oldsource>Wireshark doesn&apos;t recognize one or more of your coloring rules. Saving will discard them.</oldsource>
-        <translation type="obsolete">Wiresharkはひとつかそれ以上の色付けルールを認識できません。保存は破棄されます。</translation>
-    </message>
-    <message>
-        <location filename="coloring_rules_dialog.cpp" line="376"/>
-=======
         <location filename="coloring_rules_dialog.cpp" line="366"/>
         <source>Wireshark doesn&apos;t recognize one or more of your coloring rules. They have been disabled.</source>
         <translation>Wiresharkは１つかそれ以上の色分けルールを認識しません。それらは無効とされました。</translation>
     </message>
     <message>
         <location filename="coloring_rules_dialog.cpp" line="378"/>
->>>>>>> upstream/master-2.4
         <source>Unable to save coloring rules: %s</source>
         <translation>色付けルール %s を保存できません</translation>
     </message>
@@ -2174,40 +1962,24 @@ PLEASE NOTE: One option MUST be selected.</source>
 <context>
     <name>ConversationDialog</name>
     <message>
-<<<<<<< HEAD
-        <location filename="conversation_dialog.cpp" line="69"/>
-=======
         <location filename="conversation_dialog.cpp" line="70"/>
->>>>>>> upstream/master-2.4
         <source>Follow Stream</source>
         <oldsource>Follow Stream...</oldsource>
         <translation>ストリームを追跡</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="conversation_dialog.cpp" line="70"/>
-=======
         <location filename="conversation_dialog.cpp" line="71"/>
->>>>>>> upstream/master-2.4
         <source>Follow a TCP or UDP stream.</source>
         <translation>TCPかUDPストリームを追跡</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="conversation_dialog.cpp" line="73"/>
-=======
         <location filename="conversation_dialog.cpp" line="74"/>
->>>>>>> upstream/master-2.4
         <source>Graph</source>
         <oldsource>Graph...</oldsource>
         <translation>グラフ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="conversation_dialog.cpp" line="74"/>
-=======
         <location filename="conversation_dialog.cpp" line="75"/>
->>>>>>> upstream/master-2.4
         <source>Graph a TCP conversation.</source>
         <translation>TCP対話をグラフ化します</translation>
     </message>
@@ -2861,56 +2633,32 @@ PLEASE NOTE: One option MUST be selected.</source>
         <translation>オブジェクトを探索中</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="export_object_dialog.cpp" line="188"/>
-=======
         <location filename="export_object_dialog.cpp" line="174"/>
->>>>>>> upstream/master-2.4
         <source>Export</source>
         <translation>エクスポート</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="export_object_dialog.cpp" line="188"/>
-=======
         <location filename="export_object_dialog.cpp" line="174"/>
->>>>>>> upstream/master-2.4
         <source>%1 object list</source>
         <translation>%1 オブジェクト一覧</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="export_object_dialog.cpp" line="325"/>
-=======
         <location filename="export_object_dialog.cpp" line="316"/>
->>>>>>> upstream/master-2.4
         <source>Save Object As</source>
         <translation>としてオブジェクトを保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="export_object_dialog.cpp" line="352"/>
-=======
         <location filename="export_object_dialog.cpp" line="343"/>
->>>>>>> upstream/master-2.4
         <source>Save All Objects In</source>
         <translation>すべてのオブジェクトを保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="export_object_dialog.cpp" line="399"/>
-=======
         <location filename="export_object_dialog.cpp" line="389"/>
->>>>>>> upstream/master-2.4
         <source>Object Export</source>
         <translation>オブジェクト出力</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="export_object_dialog.cpp" line="400"/>
-=======
         <location filename="export_object_dialog.cpp" line="390"/>
->>>>>>> upstream/master-2.4
         <source>Some files could not be saved.</source>
         <translation>いくつかのファイルは保存できませんでした。</translation>
     </message>
@@ -3716,11 +3464,7 @@ PLEASE NOTE: One option MUST be selected.</source>
 <context>
     <name>IOGraph</name>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1858"/>
-=======
         <location filename="io_graph_dialog.cpp" line="1910"/>
->>>>>>> upstream/master-2.4
         <source>Unknown</source>
         <translation>不明</translation>
     </message>
@@ -4158,47 +3902,27 @@ PLEASE NOTE: One option MUST be selected.</source>
         <translation>として保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="220"/>
-=======
         <location filename="io_graph_dialog.cpp" line="219"/>
->>>>>>> upstream/master-2.4
         <source>1 sec</source>
         <translation>1秒</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="221"/>
-=======
         <location filename="io_graph_dialog.cpp" line="220"/>
->>>>>>> upstream/master-2.4
         <source>10 sec</source>
         <translation>10秒</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="222"/>
-=======
         <location filename="io_graph_dialog.cpp" line="221"/>
->>>>>>> upstream/master-2.4
         <source>1 min</source>
         <translation>1分</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="223"/>
-=======
         <location filename="io_graph_dialog.cpp" line="222"/>
->>>>>>> upstream/master-2.4
         <source>10 min</source>
         <translation>10分</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="253"/>
-=======
         <location filename="io_graph_dialog.cpp" line="252"/>
->>>>>>> upstream/master-2.4
         <source>Time (s)</source>
         <translation>時間(秒)</translation>
     </message>
@@ -4213,182 +3937,102 @@ PLEASE NOTE: One option MUST be selected.</source>
         <translation>コピー</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="217"/>
-=======
         <location filename="io_graph_dialog.cpp" line="216"/>
->>>>>>> upstream/master-2.4
         <source>1 ms</source>
         <translation>1ミリ秒</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="218"/>
-=======
         <location filename="io_graph_dialog.cpp" line="217"/>
->>>>>>> upstream/master-2.4
         <source>10 ms</source>
         <translation>10ミリ秒</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="219"/>
-=======
         <location filename="io_graph_dialog.cpp" line="218"/>
->>>>>>> upstream/master-2.4
         <source>100 ms</source>
         <translation>100ミリ秒</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="261"/>
-=======
         <location filename="io_graph_dialog.cpp" line="260"/>
->>>>>>> upstream/master-2.4
         <source>Wireshark IO Graphs: %1</source>
         <translation>Wireshark入出力グラフ: %1</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="396"/>
-=======
         <location filename="io_graph_dialog.cpp" line="395"/>
->>>>>>> upstream/master-2.4
         <source>All packets</source>
         <translation>すべてのパケット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="400"/>
-=======
         <location filename="io_graph_dialog.cpp" line="399"/>
->>>>>>> upstream/master-2.4
         <source>TCP errors</source>
         <translation>TCPエラー</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="897"/>
-=======
         <location filename="io_graph_dialog.cpp" line="935"/>
->>>>>>> upstream/master-2.4
         <source>Hover over the graph for details.</source>
         <translation>詳細はグラフの上にマウスをのせてください</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="899"/>
-=======
         <location filename="io_graph_dialog.cpp" line="937"/>
->>>>>>> upstream/master-2.4
         <source>No packets in interval</source>
         <translation>この間隔にパケットはありません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="904"/>
-=======
         <location filename="io_graph_dialog.cpp" line="942"/>
->>>>>>> upstream/master-2.4
         <source>Click to select packet</source>
         <translation>クリックしてパケットを選んでください</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="904"/>
-=======
         <location filename="io_graph_dialog.cpp" line="942"/>
->>>>>>> upstream/master-2.4
         <source>Packet</source>
         <translation>パケット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="908"/>
-=======
         <location filename="io_graph_dialog.cpp" line="946"/>
->>>>>>> upstream/master-2.4
         <source>%1 (%2s%3).</source>
         <translation>%1 (%2s%3).</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="919"/>
-=======
         <location filename="io_graph_dialog.cpp" line="957"/>
->>>>>>> upstream/master-2.4
         <source>Release to zoom, x = %1 to %2, y = %3 to %4</source>
         <translation>離してズーム, x = %1 から %2, y = %3 から %4</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="925"/>
-=======
         <location filename="io_graph_dialog.cpp" line="963"/>
->>>>>>> upstream/master-2.4
         <source>Unable to select range.</source>
         <translation>範囲を選択できません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="928"/>
-=======
         <location filename="io_graph_dialog.cpp" line="966"/>
->>>>>>> upstream/master-2.4
         <source>Click to select a portion of the graph.</source>
         <translation>クリックしてグラフの割合を選びます</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1550"/>
-=======
         <location filename="io_graph_dialog.cpp" line="1602"/>
->>>>>>> upstream/master-2.4
         <source>Portable Document Format (*.pdf)</source>
         <translation>PDF形式 (*.pdf)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1551"/>
-=======
         <location filename="io_graph_dialog.cpp" line="1603"/>
->>>>>>> upstream/master-2.4
         <source>Portable Network Graphics (*.png)</source>
         <translation>PNG形式 (*.png)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1552"/>
-=======
         <location filename="io_graph_dialog.cpp" line="1604"/>
->>>>>>> upstream/master-2.4
         <source>Windows Bitmap (*.bmp)</source>
         <translation>Windowsビットマップ形式 (*.bmp)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1554"/>
-=======
         <location filename="io_graph_dialog.cpp" line="1606"/>
->>>>>>> upstream/master-2.4
         <source>JPEG File Interchange Format (*.jpeg *.jpg)</source>
         <translation>JPEG形式 (*.jpeg *.jpg)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1555"/>
-=======
         <location filename="io_graph_dialog.cpp" line="1607"/>
->>>>>>> upstream/master-2.4
         <source>Comma Separated Values (*.csv)</source>
         <translation>カンマ区切りテキスト形式 (*.csv)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1567"/>
-=======
         <location filename="io_graph_dialog.cpp" line="1619"/>
->>>>>>> upstream/master-2.4
         <source>Save Graph As</source>
         <translation>としてグラフを保存</translation>
     </message>
@@ -4606,21 +4250,10 @@ PLEASE NOTE: One option MUST be selected.</source>
         <translation>RTPデータを保存できません。</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <source>Please select an IAX2 packet</source>
-        <translation type="vanished">IAX2パケットを選んでください</translation>
-    </message>
-    <message>
-        <location filename="iax2_analysis_dialog.cpp" line="323"/>
-        <location filename="iax2_analysis_dialog.cpp" line="344"/>
-        <source>Please select an IAX2 packet.</source>
-        <translation type="unfinished"></translation>
-=======
         <location filename="iax2_analysis_dialog.cpp" line="323"/>
         <location filename="iax2_analysis_dialog.cpp" line="344"/>
         <source>Please select an IAX2 packet.</source>
         <translation>1つのIAX2パケットを選んでください</translation>
->>>>>>> upstream/master-2.4
     </message>
     <message>
         <location filename="iax2_analysis_dialog.cpp" line="453"/>
@@ -7457,20 +7090,12 @@ a:hover {
         <translation>自動アップデートを無効にしました</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_welcome.cpp" line="390"/>
-=======
         <location filename="main_welcome.cpp" line="395"/>
->>>>>>> upstream/master-2.4
         <source>not found</source>
         <translation>見つかりません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_welcome.cpp" line="472"/>
-=======
         <location filename="main_welcome.cpp" line="474"/>
->>>>>>> upstream/master-2.4
         <source>Copy file path</source>
         <translation>ファイルパスをコピー</translation>
     </message>
@@ -9737,57 +9362,33 @@ a:hover {
         <translation>指定プロトコルを有効および無効化します</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="441"/>
-=======
         <location filename="main_window.cpp" line="297"/>
->>>>>>> upstream/master-2.4
         <source>Check for Updates</source>
         <oldsource>Check for Updates...</oldsource>
         <translation>更新を確認…</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="823"/>
-=======
         <location filename="main_window.cpp" line="930"/>
->>>>>>> upstream/master-2.4
         <source> before quitting</source>
         <translation>終了前</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1008"/>
-=======
         <location filename="main_window.cpp" line="1166"/>
->>>>>>> upstream/master-2.4
         <source>Save packets before merging?</source>
         <translation>結合する前にパケットを保存しますか？</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1009"/>
-=======
         <location filename="main_window.cpp" line="1167"/>
->>>>>>> upstream/master-2.4
         <source>A temporary capture file can&apos;t be merged.</source>
         <translation>一時的なキャプチャファイルは結合することができません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1015"/>
-=======
         <location filename="main_window.cpp" line="1173"/>
->>>>>>> upstream/master-2.4
         <source>Save changes in &quot;%1&quot; before merging?</source>
         <translation>結合する前に &quot;%1&quot; に変更を保存しますか？</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1017"/>
-=======
         <location filename="main_window.cpp" line="1175"/>
->>>>>>> upstream/master-2.4
         <source>Changes must be saved before the files can be merged.</source>
         <translation>ファイルを結合する前に変更を保存する必要があります</translation>
     </message>
@@ -9797,169 +9398,98 @@ a:hover {
         <translation>無効な表示フィルタ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1054"/>
-=======
         <location filename="main_window.cpp" line="1212"/>
->>>>>>> upstream/master-2.4
         <source>Invalid Read Filter</source>
         <translation>無効な読込フィルタ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1055"/>
-=======
         <location filename="main_window.cpp" line="1213"/>
->>>>>>> upstream/master-2.4
         <source>The filter expression %1 isn&apos;t a valid read filter. (%2).</source>
         <translation>フィルタ式 %1 は有効な読込みフィルタではありません(%2)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1145"/>
-=======
         <location filename="main_window.cpp" line="1302"/>
->>>>>>> upstream/master-2.4
         <source> before importing a capture</source>
         <oldsource> before importing a new capture</oldsource>
         <translation>新しいキャプチャファイルをインポートする前に</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1421"/>
-=======
         <location filename="main_window.cpp" line="1578"/>
->>>>>>> upstream/master-2.4
         <source>Unable to export to &quot;%1&quot;.</source>
         <translation>&quot;%1&quot; をエクスポートすることができません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1422"/>
-=======
         <location filename="main_window.cpp" line="1579"/>
->>>>>>> upstream/master-2.4
         <source>You cannot export packets to the current capture file.</source>
         <translation>現在のキャプチャファイルへパケットをエクスポートすることはできません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1509"/>
-        <location filename="main_window.cpp" line="1534"/>
-=======
         <location filename="main_window.cpp" line="1667"/>
         <location filename="main_window.cpp" line="1692"/>
->>>>>>> upstream/master-2.4
         <source>.</source>
         <translation>.</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1581"/>
-=======
         <location filename="main_window.cpp" line="1737"/>
->>>>>>> upstream/master-2.4
         <source>Do you want to save the changes you&apos;ve made%1?</source>
         <oldsource>Do you want to save the captured packets</oldsource>
         <translation>%1 に作成した変更を保存したいですか？</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1577"/>
-        <location filename="main_window.cpp" line="1585"/>
-=======
         <location filename="main_window.cpp" line="1733"/>
         <location filename="main_window.cpp" line="1741"/>
->>>>>>> upstream/master-2.4
         <source>Your captured packets will be lost if you don&apos;t save them.</source>
         <translation>保存しない場合キャプチャしたパケットは失われます</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1590"/>
-=======
         <location filename="main_window.cpp" line="1746"/>
->>>>>>> upstream/master-2.4
         <source>Do you want to save the changes you&apos;ve made to the capture file &quot;%1&quot;%2?</source>
         <translation>キャプチャスタイルに行った変更を保存しますか</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1582"/>
-        <location filename="main_window.cpp" line="1591"/>
-=======
         <location filename="main_window.cpp" line="1738"/>
         <location filename="main_window.cpp" line="1747"/>
->>>>>>> upstream/master-2.4
         <source>Your changes will be lost if you don&apos;t save them.</source>
         <translation>保存しない場合変更は失われます</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1576"/>
-=======
         <location filename="main_window.cpp" line="967"/>
         <source>Unable to drop files during capture.</source>
         <translation>キャプチャ中にファイルをドロップできません</translation>
     </message>
     <message>
         <location filename="main_window.cpp" line="1732"/>
->>>>>>> upstream/master-2.4
         <source>Do you want to stop the capture and save the captured packets%1?</source>
         <translation>キャプチャを停止してキャプチャしたパケットを保存しますか？%1</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1584"/>
-=======
         <location filename="main_window.cpp" line="1740"/>
->>>>>>> upstream/master-2.4
         <source>Do you want to save the captured packets%1?</source>
         <translation>キャプチャしたパケットを保存しますか？%1</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1608"/>
-=======
         <location filename="main_window.cpp" line="1764"/>
->>>>>>> upstream/master-2.4
         <source>Save before Continue</source>
         <translation>続ける前に保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1610"/>
-=======
         <location filename="main_window.cpp" line="1766"/>
->>>>>>> upstream/master-2.4
         <source>Stop and Save</source>
         <translation>停止して保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1622"/>
-=======
         <location filename="main_window.cpp" line="1778"/>
->>>>>>> upstream/master-2.4
         <source>Stop and Quit &amp;without Saving</source>
         <oldsource>Stop and Quit without Saving</oldsource>
         <translation>保存せずに停止して終了します</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1634"/>
-=======
         <location filename="main_window.cpp" line="1790"/>
->>>>>>> upstream/master-2.4
         <source>Quit &amp;without Saving</source>
         <oldsource>Quit without Saving</oldsource>
         <translation>保存せずに終了</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1625"/>
-        <location filename="main_window.cpp" line="1638"/>
-=======
         <location filename="main_window.cpp" line="773"/>
         <location filename="main_window.cpp" line="2740"/>
         <source>Show or hide the toolbar</source>
@@ -9968,45 +9498,28 @@ a:hover {
     <message>
         <location filename="main_window.cpp" line="1781"/>
         <location filename="main_window.cpp" line="1794"/>
->>>>>>> upstream/master-2.4
         <source>Continue &amp;without Saving</source>
         <oldsource>Continue without Saving</oldsource>
         <translation>保存せずに続ける</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1628"/>
-=======
         <location filename="main_window.cpp" line="1784"/>
->>>>>>> upstream/master-2.4
         <source>Stop and Continue &amp;without Saving</source>
         <oldsource>Stop and Continue without Saving</oldsource>
         <translation>保存せずに停止して続けます</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1960"/>
-=======
         <location filename="main_window.cpp" line="2162"/>
->>>>>>> upstream/master-2.4
         <source>(File name can&apos;t be mapped to UTF-8)</source>
         <translation>ファイル名をUTF-8形式に割り当てできません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="1981"/>
-=======
         <location filename="main_window.cpp" line="2183"/>
->>>>>>> upstream/master-2.4
         <source>The Wireshark Network Analyzer</source>
         <translation>ワイヤーシャークネットワークアナライザ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="2006"/>
-=======
         <location filename="main_window.cpp" line="2208"/>
->>>>>>> upstream/master-2.4
         <source>Capturing from %1</source>
         <translation>%1 からキャプチャ中</translation>
     </message>
@@ -10016,101 +9529,57 @@ a:hover {
         <translation>別のファイルを開く前に</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="708"/>
-=======
         <location filename="main_window_slots.cpp" line="786"/>
->>>>>>> upstream/master-2.4
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="799"/>
-=======
         <location filename="main_window_slots.cpp" line="895"/>
->>>>>>> upstream/master-2.4
         <source>Saving %1</source>
         <translation>保存中 %1</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="839"/>
-=======
         <location filename="main_window_slots.cpp" line="941"/>
->>>>>>> upstream/master-2.4
         <source>No interface selected</source>
         <translation>インターフェースが選択されていません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="849"/>
-=======
         <location filename="main_window_slots.cpp" line="951"/>
->>>>>>> upstream/master-2.4
         <source>Invalid capture filter</source>
         <translation>無効なキャプチャフィルタ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1097"/>
-=======
         <location filename="main_window_slots.cpp" line="1199"/>
->>>>>>> upstream/master-2.4
         <source>Clear Menu</source>
         <translation>メニューをクリア</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1577"/>
-=======
         <location filename="main_window_slots.cpp" line="1697"/>
->>>>>>> upstream/master-2.4
         <source>Please wait while Wireshark is initializing</source>
         <translation>Wiresharkが初期化している間お待ちください</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1667"/>
-=======
         <location filename="main_window_slots.cpp" line="1801"/>
->>>>>>> upstream/master-2.4
         <source> before closing the file</source>
         <translation>ファイルを閉じる前に</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1749"/>
-=======
         <location filename="main_window_slots.cpp" line="1883"/>
->>>>>>> upstream/master-2.4
         <source>Export Selected Packet Bytes</source>
         <translation>選択したパケットバイト列をエクスポート</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1815"/>
-=======
         <location filename="main_window_slots.cpp" line="1949"/>
->>>>>>> upstream/master-2.4
         <source>No Keys</source>
         <translation>キーはありません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1816"/>
-=======
         <location filename="main_window_slots.cpp" line="1950"/>
->>>>>>> upstream/master-2.4
         <source>There are no SSL Session Keys to save.</source>
         <translation>保存するSSLセッション鍵はありません</translation>
     </message>
     <message numerus="yes">
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1822"/>
-=======
         <location filename="main_window_slots.cpp" line="1956"/>
->>>>>>> upstream/master-2.4
         <source>Export SSL Session Keys (%Ln key(s))</source>
         <oldsource>Export SSL Session Keys (%1 key%2</oldsource>
         <translation>
@@ -10118,128 +9587,74 @@ a:hover {
         </translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1751"/>
-=======
         <location filename="main_window_slots.cpp" line="1885"/>
->>>>>>> upstream/master-2.4
         <source>Raw data (*.bin *.dat *.raw);;All Files (</source>
         <translation>Raw(無加工)データ形式 (*.bin *.dat *.raw);;すべてのファイル(</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1826"/>
-=======
         <location filename="main_window_slots.cpp" line="840"/>
         <source>Merging files</source>
         <translation>ファイルを結合します</translation>
     </message>
     <message>
         <location filename="main_window_slots.cpp" line="1960"/>
->>>>>>> upstream/master-2.4
         <source>SSL Session Keys (*.keys *.txt);;All Files (</source>
         <translation>SSLセッション鍵 (*.keys *.txt);;すべてのファイル (</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="1964"/>
-=======
         <location filename="main_window_slots.cpp" line="2078"/>
->>>>>>> upstream/master-2.4
         <source>Couldn&apos;t copy text. Try another item.</source>
         <translation>テキストをコピーできません 別の項目を試してみてください</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="2374"/>
-        <location filename="main_window_slots.cpp" line="3476"/>
-=======
         <location filename="main_window_slots.cpp" line="2496"/>
         <location filename="main_window_slots.cpp" line="3605"/>
->>>>>>> upstream/master-2.4
         <source>Unable to build conversation filter.</source>
         <translation>会話フィルタを作成できません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="2524"/>
-        <location filename="main_window_slots.cpp" line="2537"/>
-=======
         <location filename="main_window_slots.cpp" line="2654"/>
         <location filename="main_window_slots.cpp" line="2667"/>
->>>>>>> upstream/master-2.4
         <source> before reloading the file</source>
         <translation>ファイルを再読み込みする前に</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="2571"/>
-=======
         <location filename="main_window_slots.cpp" line="2701"/>
->>>>>>> upstream/master-2.4
         <source>No filter available. Try another </source>
         <translation>フィルタが利用できません 別のものを試してください</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="3483"/>
-=======
         <location filename="main_window_slots.cpp" line="3612"/>
->>>>>>> upstream/master-2.4
         <source>Error compiling filter for this conversation.</source>
         <translation>この対話の間のフィルタ翻訳エラー</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="3492"/>
-=======
         <location filename="main_window_slots.cpp" line="3621"/>
->>>>>>> upstream/master-2.4
         <source>No previous/next packet in conversation.</source>
         <translation>対話の前/次のパケットがありません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="3569"/>
-=======
         <location filename="main_window_slots.cpp" line="3698"/>
->>>>>>> upstream/master-2.4
         <source>No Interface Selected</source>
         <translation>インターフェースが選択されていません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="3576"/>
-=======
         <location filename="main_window_slots.cpp" line="3705"/>
->>>>>>> upstream/master-2.4
         <source> before starting a new capture</source>
         <translation>新規キャプチャを開始する前に</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="3594"/>
-=======
         <location filename="main_window_slots.cpp" line="3723"/>
->>>>>>> upstream/master-2.4
         <source> before restarting the capture</source>
         <translation>キャプチャを再スタートする前に</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="3797"/>
-=======
         <location filename="main_window_slots.cpp" line="3934"/>
->>>>>>> upstream/master-2.4
         <source>Wiki Page for %1</source>
         <translation>%1 の Wikiページ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window_slots.cpp" line="3798"/>
-=======
         <location filename="main_window_slots.cpp" line="3935"/>
->>>>>>> upstream/master-2.4
         <source>&lt;p&gt;The Wireshark Wiki is maintained by the community.&lt;/p&gt;&lt;p&gt;The page you are about to load might be wonderful, incomplete, wrong, or nonexistent.&lt;/p&gt;&lt;p&gt;Proceed to the wiki?&lt;/p&gt;</source>
         <translation>&lt;p&gt;ワイヤーシャークWikiはコミュニティによって運営されています &lt;/p&gt;&lt;p&gt;いま見ているページはすばらしかったり、不完全だったり、間違っていたり、存在しないかもしれません。&lt;/p&gt;&lt;p&gt;Wikiに移動しますか？&lt;/p&gt;</translation>
     </message>
@@ -10898,20 +10313,12 @@ a:hover {
 <context>
     <name>PacketListModel</name>
     <message>
-<<<<<<< HEAD
-        <location filename="packet_list_model.cpp" line="319"/>
-=======
         <location filename="packet_list_model.cpp" line="320"/>
->>>>>>> upstream/master-2.4
         <source>Dissecting</source>
         <translation>解析中</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="packet_list_model.cpp" line="341"/>
-=======
         <location filename="packet_list_model.cpp" line="342"/>
->>>>>>> upstream/master-2.4
         <source>Sorting &quot;%1&quot;</source>
         <translation>ソート中 &quot;%1&quot;</translation>
     </message>
@@ -11366,20 +10773,12 @@ a:hover {
         <translation>YAMLとして</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="protocol_hierarchy_dialog.cpp" line="304"/>
-=======
         <location filename="protocol_hierarchy_dialog.cpp" line="305"/>
->>>>>>> upstream/master-2.4
         <source>No display filter.</source>
         <translation>表示フィルタがありません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="protocol_hierarchy_dialog.cpp" line="306"/>
-=======
         <location filename="protocol_hierarchy_dialog.cpp" line="307"/>
->>>>>>> upstream/master-2.4
         <source>Display filter: %1</source>
         <translation>表示フィルタ: %1</translation>
     </message>
@@ -11465,173 +10864,97 @@ a:hover {
         <translation>ウインドウサイズ(バイト)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1952"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2010"/>
->>>>>>> upstream/master-2.4
         <source>Packets</source>
         <translation>パケット数</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1953"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2011"/>
->>>>>>> upstream/master-2.4
         <source>Bytes</source>
         <translation>バイト数</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1954"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2012"/>
->>>>>>> upstream/master-2.4
         <source>Bits</source>
         <translation>ビット数</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1955"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2013"/>
->>>>>>> upstream/master-2.4
         <source>SUM(Y Field)</source>
         <translation>SUM(Yフィールド)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1956"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2014"/>
->>>>>>> upstream/master-2.4
         <source>COUNT FRAMES(Y Field)</source>
         <translation>COUNT FRAMES(Yフィールド)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1957"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2015"/>
->>>>>>> upstream/master-2.4
         <source>COUNT FIELDS(Y Field)</source>
         <translation>COUNT FIELDS(Yフィールド)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1958"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2016"/>
->>>>>>> upstream/master-2.4
         <source>MAX(Y Field)</source>
         <translation>MAX(Yフィールド)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1959"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2017"/>
->>>>>>> upstream/master-2.4
         <source>MIN(Y Field)</source>
         <translation>MIN(Yフィールド)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1960"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2018"/>
->>>>>>> upstream/master-2.4
         <source>AVG(Y Field)</source>
         <translation>AVG(Yフィールド)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1961"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2019"/>
->>>>>>> upstream/master-2.4
         <source>LOAD(Y Field)</source>
         <translation>LOAD(Yフィールド)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1970"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2028"/>
->>>>>>> upstream/master-2.4
         <source>Line</source>
         <translation>線</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1971"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2029"/>
->>>>>>> upstream/master-2.4
         <source>Impulse</source>
         <translation>点線</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1972"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2030"/>
->>>>>>> upstream/master-2.4
         <source>Bar</source>
         <translation>棒</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1973"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2031"/>
->>>>>>> upstream/master-2.4
         <source>Stacked Bar</source>
         <translation>積み棒</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1974"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2032"/>
->>>>>>> upstream/master-2.4
         <source>Dot</source>
         <translation>点</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1975"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2033"/>
->>>>>>> upstream/master-2.4
         <source>Square</source>
         <translation>四角</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1976"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2034"/>
->>>>>>> upstream/master-2.4
         <source>Diamond</source>
         <translation>菱形</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1987"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2045"/>
->>>>>>> upstream/master-2.4
         <source>None</source>
         <translation>なし</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="io_graph_dialog.cpp" line="1989"/>
-=======
         <location filename="io_graph_dialog.cpp" line="2047"/>
->>>>>>> upstream/master-2.4
         <source>%1 interval SMA</source>
         <translation>%1 インターバル SMA</translation>
     </message>
@@ -11646,11 +10969,7 @@ a:hover {
         <translation>新規色付けルール</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="conversation_dialog.cpp" line="65"/>
-=======
         <location filename="conversation_dialog.cpp" line="66"/>
->>>>>>> upstream/master-2.4
         <source>Conversation</source>
         <translation>対話</translation>
     </message>
@@ -11733,11 +11052,7 @@ a:hover {
         <translation>すべて </translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_window.cpp" line="232"/>
-=======
         <location filename="simple_dialog.cpp" line="115"/>
->>>>>>> upstream/master-2.4
         <source>Don&apos;t show this message again.</source>
         <translation>このメッセージは再度表示されません</translation>
     </message>
@@ -11762,20 +11077,12 @@ a:hover {
         <translation>%1 エントリ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="module_preferences_scroll_area.cpp" line="191"/>
-=======
         <location filename="module_preferences_scroll_area.cpp" line="184"/>
->>>>>>> upstream/master-2.4
         <source>Edit</source>
         <translation>編集</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="module_preferences_scroll_area.cpp" line="218"/>
-=======
         <location filename="module_preferences_scroll_area.cpp" line="212"/>
->>>>>>> upstream/master-2.4
         <source>Browse</source>
         <translation>参照</translation>
     </message>
@@ -12051,19 +11358,6 @@ a:hover {
         <translation>優先度</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="main_welcome.cpp" line="455"/>
-        <source>Show in Finder</source>
-        <translation>ファインダーで表示</translation>
-    </message>
-    <message>
-        <location filename="main_welcome.cpp" line="457"/>
-        <source>Show in Folder</source>
-        <translation>フォルダで表示</translation>
-    </message>
-    <message>
-=======
->>>>>>> upstream/master-2.4
         <location filename="filter_expressions_preferences_frame.cpp" line="279"/>
         <source>My Filter</source>
         <translation>自分のフィルタ</translation>
@@ -12144,25 +11438,22 @@ a:hover {
     <message>
         <location filename="remote_capture_dialog.cpp" line="60"/>
         <location filename="remote_capture_dialog.cpp" line="92"/>
-        <location filename="remote_capture_dialog.cpp" line="145"/>
+        <location filename="remote_capture_dialog.cpp" line="140"/>
         <source>Clear list</source>
         <translation>一覧消去</translation>
     </message>
     <message>
         <location filename="remote_capture_dialog.cpp" line="132"/>
-        <location filename="remote_capture_dialog.cpp" line="134"/>
-        <location filename="remote_capture_dialog.cpp" line="136"/>
-        <location filename="remote_capture_dialog.cpp" line="138"/>
         <source>Error</source>
         <translation>エラー</translation>
     </message>
     <message>
-        <location filename="remote_capture_dialog.cpp" line="132"/>
+        <location filename="remote_capture_dialog.cpp" line="133"/>
         <source>No remote interfaces found.</source>
         <translation>リモートインターフェースは見つかりませんでした</translation>
     </message>
     <message>
-        <location filename="remote_capture_dialog.cpp" line="136"/>
+        <location filename="remote_capture_dialog.cpp" line="133"/>
         <source>PCAP not found</source>
         <translation>PCAPは見つかりません</translation>
     </message>
@@ -12661,37 +11952,6 @@ a:hover {
     </message>
     <message>
         <location filename="rtp_analysis_dialog.ui" line="333"/>
-<<<<<<< HEAD
-        <source>Audio</source>
-        <translation>音声</translation>
-    </message>
-    <message>
-        <location filename="rtp_analysis_dialog.ui" line="336"/>
-        <source>Save the audio data for both channels.</source>
-        <translation>両チャンネルの音声データを保存します</translation>
-    </message>
-    <message>
-        <location filename="rtp_analysis_dialog.ui" line="341"/>
-        <source>Forward Stream Audio</source>
-        <translation>順方向のストリーム音声</translation>
-    </message>
-    <message>
-        <location filename="rtp_analysis_dialog.ui" line="344"/>
-        <source>Save the forward stream audio data.</source>
-        <translation>順方向のストリーム音声データを保存します</translation>
-    </message>
-    <message>
-        <location filename="rtp_analysis_dialog.ui" line="349"/>
-        <source>Reverse Stream Audio</source>
-        <translation>逆方向のストリーム音声</translation>
-    </message>
-    <message>
-        <location filename="rtp_analysis_dialog.ui" line="352"/>
-        <source>Save the reverse stream audio data.</source>
-        <translation>逆方向のストリーム音声データを保存します</translation>
-    </message>
-    <message>
-=======
         <source>Unsynchronized Forward and Reverse Audio</source>
         <translation>同期されていない順方向と逆方向の音声</translation>
     </message>
@@ -12786,7 +12046,6 @@ a:hover {
         <translation>同期されていない逆方向音声ストリームデータを保存します</translation>
     </message>
     <message>
->>>>>>> upstream/master-2.4
         <location filename="rtp_analysis_dialog.ui" line="357"/>
         <source>CSV</source>
         <translation>CSV</translation>
@@ -13151,50 +12410,31 @@ a:hover {
     </message>
     <message>
         <location filename="rtp_player_dialog.ui" line="165"/>
-<<<<<<< HEAD
-=======
         <source>Output Device:</source>
         <translation>出力デバイス</translation>
     </message>
     <message>
         <location filename="rtp_player_dialog.ui" line="192"/>
->>>>>>> upstream/master-2.4
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="168"/>
-=======
         <location filename="rtp_player_dialog.ui" line="195"/>
->>>>>>> upstream/master-2.4
         <source>Jitter Buffer:</source>
         <translation>ジッタバッファ:</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="175"/>
-=======
         <location filename="rtp_player_dialog.ui" line="202"/>
->>>>>>> upstream/master-2.4
         <source>The simulated jitter buffer in milliseconds.</source>
         <translation>ミリ秒で試算したジッタバッファ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="207"/>
-=======
         <location filename="rtp_player_dialog.ui" line="234"/>
->>>>>>> upstream/master-2.4
         <source>Playback Timing:</source>
         <translation>再生タイミング:</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="214"/>
-=======
         <location filename="rtp_player_dialog.ui" line="241"/>
->>>>>>> upstream/master-2.4
         <source>&lt;strong&gt;Jitter Buffer&lt;/strong&gt;: Use jitter buffer to simulate the RTP stream as heard by the end user.
 &lt;br/&gt;
 &lt;strong&gt;RTP Timestamp&lt;/strong&gt;: Use RTP Timestamp instead of the arriving packet time. This will not reproduce the RTP stream as the user heard it, but is useful when the RTP is being tunneled and the original packet timing is missing.
@@ -13212,302 +12452,168 @@ a:hover {
 &lt;strong&gt;Uninterrupted Mode&lt;/strong&gt;: RTPタイムスタンプを無視します。ストリームを完成させたかのようにして再生します。これはRTPタイムスタンプがない場合に有効です。</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="222"/>
-=======
         <location filename="rtp_player_dialog.ui" line="249"/>
->>>>>>> upstream/master-2.4
         <source>Jitter Buffer</source>
         <translation>ジッタバッファ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="227"/>
-=======
         <location filename="rtp_player_dialog.ui" line="254"/>
->>>>>>> upstream/master-2.4
         <source>RTP Timestamp</source>
         <translation>RTPタイムスタンプ</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="232"/>
-=======
         <location filename="rtp_player_dialog.ui" line="259"/>
->>>>>>> upstream/master-2.4
         <source>Uninterrupted Mode</source>
         <translation>非割込みモード</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="253"/>
-=======
         <location filename="rtp_player_dialog.ui" line="280"/>
->>>>>>> upstream/master-2.4
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;View the timestamps as time of day (checked) or seconds since beginning of capture (unchecked).&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;時刻表示(チェックされています）でタイムスタンプを表示するかパケットキャプチャ開始してからの秒数（チェックされていません）で表示します&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="256"/>
-=======
         <location filename="rtp_player_dialog.ui" line="283"/>
->>>>>>> upstream/master-2.4
         <source>Time of Day</source>
         <translation>時刻</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="275"/>
-=======
         <location filename="rtp_player_dialog.ui" line="315"/>
->>>>>>> upstream/master-2.4
         <source>Reset Graph</source>
         <translation>グラフをリセット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="278"/>
-=======
         <location filename="rtp_player_dialog.ui" line="318"/>
->>>>>>> upstream/master-2.4
         <source>Reset the graph to its initial state.</source>
         <translation>グラフを初期状態にリセットします</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="281"/>
-=======
         <location filename="rtp_player_dialog.ui" line="321"/>
->>>>>>> upstream/master-2.4
         <source>0</source>
         <translation>0</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="286"/>
-        <location filename="rtp_player_dialog.ui" line="289"/>
-=======
         <location filename="rtp_player_dialog.ui" line="326"/>
         <location filename="rtp_player_dialog.ui" line="329"/>
->>>>>>> upstream/master-2.4
         <source>Zoom In</source>
         <translation>拡大</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="292"/>
-=======
         <location filename="rtp_player_dialog.ui" line="332"/>
->>>>>>> upstream/master-2.4
         <source>+</source>
         <translation>+</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="297"/>
-        <location filename="rtp_player_dialog.ui" line="300"/>
-=======
         <location filename="rtp_player_dialog.ui" line="337"/>
         <location filename="rtp_player_dialog.ui" line="340"/>
->>>>>>> upstream/master-2.4
         <source>Zoom Out</source>
         <translation>縮小</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="303"/>
-=======
         <location filename="rtp_player_dialog.ui" line="343"/>
->>>>>>> upstream/master-2.4
         <source>-</source>
         <translation>-</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="308"/>
-        <location filename="rtp_player_dialog.ui" line="311"/>
-=======
         <location filename="rtp_player_dialog.ui" line="348"/>
         <location filename="rtp_player_dialog.ui" line="351"/>
->>>>>>> upstream/master-2.4
         <source>Move Left 10 Pixels</source>
         <translation>左に10ピクセル移動</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="314"/>
-=======
         <location filename="rtp_player_dialog.ui" line="354"/>
->>>>>>> upstream/master-2.4
         <source>Left</source>
         <translation>左</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="319"/>
-        <location filename="rtp_player_dialog.ui" line="322"/>
-=======
         <location filename="rtp_player_dialog.ui" line="359"/>
         <location filename="rtp_player_dialog.ui" line="362"/>
->>>>>>> upstream/master-2.4
         <source>Move Right 10 Pixels</source>
         <translation>右に10ピクセル移動</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="325"/>
-=======
         <location filename="rtp_player_dialog.ui" line="365"/>
->>>>>>> upstream/master-2.4
         <source>Right</source>
         <translation>右</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="330"/>
-        <location filename="rtp_player_dialog.ui" line="333"/>
-=======
         <location filename="rtp_player_dialog.ui" line="370"/>
         <location filename="rtp_player_dialog.ui" line="373"/>
->>>>>>> upstream/master-2.4
         <source>Move Left 1 Pixels</source>
         <translation>左に1ピクセル移動</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="336"/>
-=======
         <location filename="rtp_player_dialog.ui" line="376"/>
->>>>>>> upstream/master-2.4
         <source>Shift+Left</source>
         <translation>Shift+左</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="341"/>
-        <location filename="rtp_player_dialog.ui" line="344"/>
-=======
         <location filename="rtp_player_dialog.ui" line="381"/>
         <location filename="rtp_player_dialog.ui" line="384"/>
->>>>>>> upstream/master-2.4
         <source>Move Right 1 Pixels</source>
         <translation>右に1ピクセル移動</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="347"/>
-=======
         <location filename="rtp_player_dialog.ui" line="387"/>
->>>>>>> upstream/master-2.4
         <source>Shift+Right</source>
         <translation>Shift+右</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="352"/>
-=======
         <location filename="rtp_player_dialog.ui" line="392"/>
->>>>>>> upstream/master-2.4
         <source>Go To Packet Under Cursor</source>
         <translation>カーソル位置のパケットに移動</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="355"/>
-=======
         <location filename="rtp_player_dialog.ui" line="395"/>
->>>>>>> upstream/master-2.4
         <source>Go to packet currently under the cursor</source>
         <translation>現在カーソル位置のパケットに移動します</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="358"/>
-=======
         <location filename="rtp_player_dialog.ui" line="398"/>
->>>>>>> upstream/master-2.4
         <source>G</source>
         <translation>G</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="363"/>
-=======
         <location filename="rtp_player_dialog.ui" line="403"/>
->>>>>>> upstream/master-2.4
         <source>Drag / Zoom</source>
         <translation>ドラッグ/ズーム</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="366"/>
-=======
         <location filename="rtp_player_dialog.ui" line="406"/>
->>>>>>> upstream/master-2.4
         <source>Toggle mouse drag / zoom behavior</source>
         <translation>マウスのドラッグ/ズームの動作を切り替えます</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="369"/>
-=======
         <location filename="rtp_player_dialog.ui" line="409"/>
->>>>>>> upstream/master-2.4
         <source>Z</source>
         <translation>Z</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="374"/>
-=======
         <location filename="rtp_player_dialog.ui" line="414"/>
->>>>>>> upstream/master-2.4
         <source>Capture / Session Time Origin</source>
         <translation>キャプチャ/セッション時間起点</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="377"/>
-=======
         <location filename="rtp_player_dialog.ui" line="417"/>
->>>>>>> upstream/master-2.4
         <source>Toggle capture / session time origin</source>
         <translation>キャプチャ/セッション時間起点を切り替えます</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="380"/>
-=======
         <location filename="rtp_player_dialog.ui" line="420"/>
->>>>>>> upstream/master-2.4
         <source>T</source>
         <translation>T</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="385"/>
-=======
         <location filename="rtp_player_dialog.ui" line="425"/>
->>>>>>> upstream/master-2.4
         <source>Crosshairs</source>
         <translation>十字カーソル</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="388"/>
-=======
         <location filename="rtp_player_dialog.ui" line="428"/>
->>>>>>> upstream/master-2.4
         <source>Toggle crosshairs</source>
         <translation>十字カーソルの表示切り替え</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="rtp_player_dialog.ui" line="391"/>
-=======
         <location filename="rtp_player_dialog.ui" line="431"/>
->>>>>>> upstream/master-2.4
         <source>Space</source>
         <translation>スペース</translation>
     </message>
@@ -14847,87 +13953,51 @@ a:hover {
         <translation>として保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="339"/>
-=======
         <location filename="sequence_dialog.cpp" line="333"/>
->>>>>>> upstream/master-2.4
         <source>No data</source>
         <translation>データなし</translation>
     </message>
     <message numerus="yes">
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="341"/>
-=======
         <location filename="sequence_dialog.cpp" line="335"/>
->>>>>>> upstream/master-2.4
         <source>%Ln node(s)</source>
         <translation>
             <numerusform>%Ln ノード</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="342"/>
-=======
         <location filename="sequence_dialog.cpp" line="336"/>
->>>>>>> upstream/master-2.4
         <source>%Ln item(s)</source>
         <translation>
             <numerusform>%Ln 項目</numerusform>
         </translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="368"/>
-=======
         <location filename="sequence_dialog.cpp" line="362"/>
->>>>>>> upstream/master-2.4
         <source>Portable Document Format (*.pdf)</source>
         <translation>PDF形式 (*.pdf)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="369"/>
-=======
         <location filename="sequence_dialog.cpp" line="363"/>
->>>>>>> upstream/master-2.4
         <source>Portable Network Graphics (*.png)</source>
         <translation>PNG形式 (*.png)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="370"/>
-=======
         <location filename="sequence_dialog.cpp" line="364"/>
->>>>>>> upstream/master-2.4
         <source>Windows Bitmap (*.bmp)</source>
         <translation>Windowsビットマップ形式 (*.bmp)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="372"/>
-=======
         <location filename="sequence_dialog.cpp" line="366"/>
->>>>>>> upstream/master-2.4
         <source>JPEG File Interchange Format (*.jpeg *.jpg)</source>
         <translation>JPEG形式 (*.jpeg *.jpg)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="373"/>
-=======
         <location filename="sequence_dialog.cpp" line="367"/>
->>>>>>> upstream/master-2.4
         <source>ASCII (*.txt)</source>
         <translation>アスキー形式 (*.txt)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="sequence_dialog.cpp" line="384"/>
-=======
         <location filename="sequence_dialog.cpp" line="378"/>
->>>>>>> upstream/master-2.4
         <source>Save Graph As</source>
         <oldsource>Wireshark: Save Graph As...</oldsource>
         <translation>としてグラフを保存</translation>
@@ -15423,17 +14493,6 @@ a:hover {
     </message>
 </context>
 <context>
-<<<<<<< HEAD
-    <name>SimpleDialog</name>
-    <message>
-        <location filename="simple_dialog.cpp" line="197"/>
-        <source>Multiple problems found</source>
-        <translation>複数の問題が見つかりました</translation>
-    </message>
-</context>
-<context>
-=======
->>>>>>> upstream/master-2.4
     <name>SplashOverlay</name>
     <message>
         <location filename="splash_overlay.ui" line="17"/>
@@ -16075,13 +15134,8 @@ a:hover {
         <translation>スペース</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.ui" line="417"/>
-        <location filename="tcp_stream_dialog.cpp" line="722"/>
-=======
         <location filename="tcp_stream_dialog.ui" line="557"/>
         <location filename="tcp_stream_dialog.cpp" line="1365"/>
->>>>>>> upstream/master-2.4
         <source>Round Trip Time</source>
         <translation>往復遅延時間</translation>
     </message>
@@ -16096,14 +15150,9 @@ a:hover {
         <translation>1</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.ui" line="428"/>
-        <location filename="tcp_stream_dialog.cpp" line="645"/>
-=======
         <location filename="tcp_stream_dialog.ui" line="264"/>
         <location filename="tcp_stream_dialog.ui" line="568"/>
         <location filename="tcp_stream_dialog.cpp" line="1093"/>
->>>>>>> upstream/master-2.4
         <source>Throughput</source>
         <translation>スループット</translation>
     </message>
@@ -16133,13 +15182,8 @@ a:hover {
         <translation>3</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.ui" line="450"/>
-        <location filename="tcp_stream_dialog.cpp" line="776"/>
-=======
         <location filename="tcp_stream_dialog.ui" line="590"/>
         <location filename="tcp_stream_dialog.cpp" line="1460"/>
->>>>>>> upstream/master-2.4
         <source>Window Scaling</source>
         <translation>ウインドウスケーリング</translation>
     </message>
@@ -16219,174 +15263,97 @@ a:hover {
         <translation>として保存</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="408"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="507"/>
->>>>>>> upstream/master-2.4
         <source>No Capture Data</source>
         <translation>キャプチャデータがありません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="464"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="576"/>
->>>>>>> upstream/master-2.4
         <source>%1 %2 pkts, %3 %4 %5 pkts, %6 </source>
         <translation>%1 %2 pkts, %3 %4 %5 pkts, %6 </translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="571"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="730"/>
->>>>>>> upstream/master-2.4
         <source>Sequence Numbers (Stevens)</source>
         <translation>シーケンス番号 (Stevens)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="596"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="755"/>
->>>>>>> upstream/master-2.4
         <source>Sequence Numbers (tcptrace)</source>
         <translation>シーケンス番号 (tcptrace)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="647"/>
-        <source> (1s MA)</source>
-        <translation> (1s MA)</translation>
-    </message>
-    <message>
-        <location filename="tcp_stream_dialog.cpp" line="649"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1095"/>
         <source> (MA)</source>
         <translation> (MA)</translation>
     </message>
     <message>
         <location filename="tcp_stream_dialog.cpp" line="1097"/>
->>>>>>> upstream/master-2.4
         <source> (%1 Segment MA)</source>
         <translation> (%1 セグメント MA)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="664"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1118"/>
->>>>>>> upstream/master-2.4
         <source> [not enough data]</source>
         <translation> [十分なデータがありません]</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="803"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1515"/>
->>>>>>> upstream/master-2.4
         <source> for %1:%2 %3 %4:%5</source>
         <translation>for %1:%2 %3 %4:%5</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="986"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1702"/>
->>>>>>> upstream/master-2.4
         <source>%1 %2 (%3s len %4 seq %5 ack %6 win %7)</source>
         <translation>%1 %2 (%3s len %4 seq %5 ack %6 win %7)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="987"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1703"/>
->>>>>>> upstream/master-2.4
         <source>Click to select packet</source>
         <translation>クリックしてパケットを選んでください</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="987"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1703"/>
->>>>>>> upstream/master-2.4
         <source>Packet</source>
         <translation>パケット</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1001"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1717"/>
->>>>>>> upstream/master-2.4
         <source>Release to zoom, x = %1 to %2, y = %3 to %4</source>
         <translation>離してズーム, x = %1 から %2, y = %3 から %4</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1007"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1723"/>
->>>>>>> upstream/master-2.4
         <source>Unable to select range.</source>
         <translation>範囲を選択できません</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1010"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1726"/>
->>>>>>> upstream/master-2.4
         <source>Click to select a portion of the graph.</source>
         <translation>クリックしてグラフの割合を選びます</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1053"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1769"/>
->>>>>>> upstream/master-2.4
         <source>Portable Document Format (*.pdf)</source>
         <translation>PDF形式 (*.pdf)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1054"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1770"/>
->>>>>>> upstream/master-2.4
         <source>Portable Network Graphics (*.png)</source>
         <translation>PNG形式 (*.png)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1055"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1771"/>
->>>>>>> upstream/master-2.4
         <source>Windows Bitmap (*.bmp)</source>
         <translation>Winodwsビットマップ形式 (*.bmp)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1057"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1773"/>
->>>>>>> upstream/master-2.4
         <source>JPEG File Interchange Format (*.jpeg *.jpg)</source>
         <translation>JPEG形式 (*.jpeg *.jpg)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="tcp_stream_dialog.cpp" line="1064"/>
-=======
         <location filename="tcp_stream_dialog.cpp" line="1780"/>
->>>>>>> upstream/master-2.4
         <source>Save Graph As</source>
         <translation>としてグラフを保存</translation>
     </message>
@@ -16425,11 +15392,7 @@ a:hover {
     </message>
     <message>
         <location filename="tap_parameter_dialog.ui" line="79"/>
-<<<<<<< HEAD
-        <location filename="tap_parameter_dialog.cpp" line="90"/>
-=======
         <location filename="tap_parameter_dialog.cpp" line="87"/>
->>>>>>> upstream/master-2.4
         <source>Copy</source>
         <translation>コピー</translation>
     </message>
@@ -16565,20 +15528,12 @@ a:hover {
     <message>
         <location filename="traffic_table_dialog.ui" line="68"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Show absolute times in the start time column.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-<<<<<<< HEAD
-        <translation type="unfinished"></translation>
-=======
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;開始時間列に絶対的な時間を表示します&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
->>>>>>> upstream/master-2.4
     </message>
     <message>
         <location filename="traffic_table_dialog.ui" line="71"/>
         <source>Absolute start time</source>
-<<<<<<< HEAD
-        <translation type="unfinished"></translation>
-=======
         <translation>絶対的開始時間</translation>
->>>>>>> upstream/master-2.4
     </message>
     <message>
         <location filename="traffic_table_dialog.ui" line="91"/>
@@ -16654,115 +15609,42 @@ a:hover {
 <context>
     <name>VoipCallsDialog</name>
     <message>
-<<<<<<< HEAD
-        <location filename="voip_calls_dialog.ui" line="36"/>
-        <source>Start Time</source>
-        <translation>開始時間</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="41"/>
-        <source>Stop Time</source>
-        <translation>停止時間</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="46"/>
-        <source>Initial Speaker</source>
-        <translation>初期話者</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="51"/>
-        <source>From</source>
-        <translation>送信元</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="56"/>
-        <source>To</source>
-        <translation>宛先</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="61"/>
-        <source>Protocol</source>
-        <translation>プロトコル</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="66"/>
-        <source>Packets</source>
-        <translation>パケット</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="71"/>
-        <source>State</source>
-        <translation>状態</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="76"/>
-        <source>Comments</source>
-        <translation>コメント</translation>
-    </message>
-    <message>
-        <location filename="voip_calls_dialog.ui" line="84"/>
-=======
         <location filename="voip_calls_dialog.ui" line="39"/>
->>>>>>> upstream/master-2.4
         <source>&lt;small&gt;&lt;/small&gt;</source>
         <translation>&lt;small&gt;&lt;/small&gt;</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="voip_calls_dialog.ui" line="101"/>
-=======
         <location filename="voip_calls_dialog.ui" line="61"/>
         <source>Time of Day</source>
         <translation>時刻</translation>
     </message>
     <message>
         <location filename="voip_calls_dialog.ui" line="80"/>
->>>>>>> upstream/master-2.4
         <source>Select &amp;All</source>
         <translation>すべてを選択(&amp;A)</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="voip_calls_dialog.ui" line="104"/>
-=======
         <location filename="voip_calls_dialog.ui" line="83"/>
->>>>>>> upstream/master-2.4
         <source>Select all calls</source>
         <translation>すべての通話を選択します</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="voip_calls_dialog.ui" line="112"/>
-=======
         <location filename="voip_calls_dialog.ui" line="91"/>
->>>>>>> upstream/master-2.4
         <source>Copy as CSV</source>
         <translation>CSVとしてコピー</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="voip_calls_dialog.ui" line="115"/>
-=======
         <location filename="voip_calls_dialog.ui" line="94"/>
->>>>>>> upstream/master-2.4
         <source>Copy stream list as CSV.</source>
         <translation>CSVとしてストリーム一覧をコピーします</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="voip_calls_dialog.ui" line="120"/>
-=======
         <location filename="voip_calls_dialog.ui" line="99"/>
->>>>>>> upstream/master-2.4
         <source>Copy as YAML</source>
         <translation>YAMLとしてコピー</translation>
     </message>
     <message>
-<<<<<<< HEAD
-        <location filename="voip_calls_dialog.ui" line="123"/>
-=======
         <location filename="voip_calls_dialog.ui" line="102"/>
->>>>>>> upstream/master-2.4
         <source>Copy stream list as YAML.</source>
         <translation>YAMLとしてストリーム一覧をコピーします</translation>
     </message>

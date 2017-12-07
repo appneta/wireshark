@@ -6403,13 +6403,8 @@ isoft-p2p        3501/tcp # iSoft-P2P [David_Walling_2] [David_Walling_2]
 isoft-p2p        3501/udp # iSoft-P2P [David_Walling_2] [David_Walling_2]
 avinstalldisc    3502/tcp # Avocent Install Discovery [Brian_S_Stewart_2] [Brian_S_Stewart_2]
 avinstalldisc    3502/udp # Avocent Install Discovery [Brian_S_Stewart_2] [Brian_S_Stewart_2]
-<<<<<<< HEAD
-lsp-ping         3503/tcp # MPLS LSP-echo Port [RFC-ietf-mpls-rfc4379bis-09]
-lsp-ping         3503/udp # MPLS LSP-echo Port [RFC-ietf-mpls-rfc4379bis-09]
-=======
 lsp-ping         3503/tcp # MPLS LSP-echo Port [RFC8029]
 lsp-ping         3503/udp # MPLS LSP-echo Port [RFC8029]
->>>>>>> upstream/master-2.4
 ironstorm        3504/tcp # IronStorm game server [Arnaud_Clermonte] [Arnaud_Clermonte]
 ironstorm        3504/udp # IronStorm game server [Arnaud_Clermonte] [Arnaud_Clermonte]
 ccmcomm          3505/tcp # CCM communications port [Tom_Bougan] [Tom_Bougan]
@@ -8215,13 +8210,8 @@ snap             4752/tcp # Simple Network Audio Protocol [Dameon_Wagner] [Dameo
 snap             4752/udp # Simple Network Audio Protocol [Dameon_Wagner] [Dameon_Wagner] 2002-02
 simon            4753/tcp # Simple Invocation of Methods Over Network (SIMON) [Alexander_Christian] [Alexander_Christian] 2012-04-19
 simon-disc       4753/udp # Simple Invocation of Methods Over Network (SIMON) Discovery [Alexander_Christian] [Alexander_Christian] 2012-04-19
-<<<<<<< HEAD
-gre-in-udp       4754/udp # GRE-in-UDP Encapsulation [IESG] [IETF_Chair] 2016-10-05 [RFC-ietf-tsvwg-gre-in-udp-encap-19]
-gre-udp-dtls     4755/udp # GRE-in-UDP Encapsulation with DTLS [IESG] [IETF_Chair] 2016-10-05 [RFC-ietf-tsvwg-gre-in-udp-encap-19]
-=======
 gre-in-udp       4754/udp # GRE-in-UDP Encapsulation [IESG] [IETF_Chair] 2016-10-05 [RFC8086]
 gre-udp-dtls     4755/udp # GRE-in-UDP Encapsulation with DTLS [IESG] [IETF_Chair] 2016-10-05 [RFC8086]
->>>>>>> upstream/master-2.4
 RDCenter         4756/tcp # Reticle Decision Center [KLA_Tencor] [George_Hwa] 2016-10-17
 converge         4774/tcp # Converge RPC [Asteris_LLC] [Steven_Borrelli] 2016-09-16
 bfd-multi-ctl    4784/tcp # BFD Multihop Control [Dave_Katz][Dave_Ward] [Dave_Katz][Dave_Ward] 2006-02
@@ -10209,10 +10199,7 @@ sunwebadmin      8800/tcp # Sun Web Server Admin Service [Jyri_J_Virkki] [Jyri_J
 sunwebadmin      8800/udp # Sun Web Server Admin Service [Jyri_J_Virkki] [Jyri_J_Virkki] 2005-12
 truecm           8804/tcp # truecm [Scott_Kramer] [Scott_Kramer]
 truecm           8804/udp # truecm [Scott_Kramer] [Scott_Kramer]
-<<<<<<< HEAD
-=======
 pfcp             8805/udp # Destination Port number for PFCP [Kimmo_Kymalainen] [Kimmo_Kymalainen] 2017-05-08
->>>>>>> upstream/master-2.4
 ssports-bcast    8808/udp # STATSports Broadcast Service [Statsports_International] [Catalin_Caranfil] 2016-12-22
 dxspider         8873/tcp # dxspider linking protocol [Dirk_Koopman] [Dirk_Koopman] 2005-08
 dxspider         8873/udp # dxspider linking protocol [Dirk_Koopman] [Dirk_Koopman] 2005-08
@@ -11100,7 +11087,6 @@ athand-mmp      20999/udp # AT Hand MMP [Stepan_Riha] [Stepan_Riha]
 irtrans         21000/tcp # IRTrans Control [Marcus_Mueller] [Marcus_Mueller] 2004-11
 irtrans         21000/udp # IRTrans Control [Marcus_Mueller] [Marcus_Mueller] 2004-11
 notezilla-lan   21010/tcp # Notezilla.Lan Server [Conceptworld_Corporation] [Gautam_Jain] 2013-08-20
-trinket-agent   21212/tcp # Distributed artificial intelligence [Holvonix_LLC] [Advay_Mengle] 2017-11-29
 aigairserver    21221/tcp # Services for Air Server [AIG_S.L.] [Edelmiro_Gonzalez_Martinez] 2017-03-16
 rdm-tfs         21553/tcp # Raima RDM TFS [Paul_Johnson] [Paul_Johnson] 2011-05-02
 dfserver        21554/tcp # MineScape Design File Server [Michael_Purser] [Michael_Purser] 2006-06

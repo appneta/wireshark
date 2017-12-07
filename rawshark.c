@@ -797,17 +797,8 @@ main(int argc, char *argv[])
             if (!dfilter_compile(rfilters[i], &rfcodes[n_rfcodes], &err_msg)) {
                 cmdarg_err("%s", err_msg);
                 g_free(err_msg);
-<<<<<<< HEAD
-                epan_free(cfile.epan);
-                epan_cleanup();
-#ifdef HAVE_EXTCAP
-                extcap_cleanup();
-#endif
-                exit(2);
-=======
                 ret = INVALID_DFILTER;
                 goto clean_exit;
->>>>>>> upstream/master-2.4
             }
             n_rfcodes++;
         }
@@ -826,17 +817,8 @@ main(int argc, char *argv[])
         relinquish_special_privs_perm();
 
         if (raw_cf_open(&cfile, pipe_name) != CF_OK) {
-<<<<<<< HEAD
-            epan_free(cfile.epan);
-            epan_cleanup();
-#ifdef HAVE_EXTCAP
-            extcap_cleanup();
-#endif
-            exit(2);
-=======
             ret = OPEN_ERROR;
             goto clean_exit;
->>>>>>> upstream/master-2.4
         }
 
         /* Do we need to PCAP header and magic? */
@@ -856,17 +838,8 @@ main(int argc, char *argv[])
 
         /* Process the packets in the file */
         if (!load_cap_file(&cfile)) {
-<<<<<<< HEAD
-            epan_free(cfile.epan);
-            epan_cleanup();
-#ifdef HAVE_EXTCAP
-            extcap_cleanup();
-#endif
-            exit(2);
-=======
             ret = OPEN_ERROR;
             goto clean_exit;
->>>>>>> upstream/master-2.4
         }
     } else {
         /* If you want to capture live packets, use TShark. */
@@ -881,12 +854,8 @@ clean_exit:
 #ifdef HAVE_EXTCAP
     extcap_cleanup();
 #endif
-<<<<<<< HEAD
-    return 0;
-=======
     wtap_cleanup();
     return ret;
->>>>>>> upstream/master-2.4
 }
 
 /**

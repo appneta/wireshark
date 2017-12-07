@@ -939,10 +939,6 @@ text_import(text_import_info_t *info)
     packet_start = 0;
     packet_preamble_len = 0;
     ts_sec = time(0);            /* initialize to current time */
-<<<<<<< HEAD
-    /* We trust the OS not to provide a time before the Epoch. */
-    timecode_default = *localtime(&ts_sec);
-=======
     now_tm = localtime(&ts_sec);
     if (now_tm == NULL) {
         /*
@@ -954,7 +950,6 @@ text_import(text_import_info_t *info)
         exit(-1);
     }
     timecode_default = *now_tm;
->>>>>>> upstream/master-2.4
     timecode_default.tm_isdst = -1;     /* Unknown for now, depends on time given to the strptime() function */
     ts_usec = 0;
 

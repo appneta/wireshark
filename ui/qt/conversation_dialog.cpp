@@ -165,12 +165,9 @@ bool ConversationDialog::addTrafficTable(register_ct_t* table)
 
     trafficTableTabWidget()->addTab(conv_tree, table_name);
 
-<<<<<<< HEAD
-=======
     conv_tree->setItemDelegateForColumn(CONV_COLUMN_START, new TimelineDelegate(conv_tree));
     conv_tree->setItemDelegateForColumn(CONV_COLUMN_DURATION, new TimelineDelegate(conv_tree));
 
->>>>>>> upstream/master-2.4
     connect(conv_tree, SIGNAL(itemSelectionChanged()),
             this, SLOT(conversationSelectionChanged()));
     connect(conv_tree, SIGNAL(titleChanged(QWidget*,QString)),

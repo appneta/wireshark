@@ -113,11 +113,7 @@ void FileSetDialog::addFile(fileset_entry *entry) {
          * it will be 0.
          */
         if (entry->ctime > 0)
-<<<<<<< HEAD
-            created = QDateTime::fromTime_t(entry->ctime).toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
-=======
             created = QDateTime::fromTime_t(uint(entry->ctime)).toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
->>>>>>> upstream/master-2.4
         else
             created = "Not available";
     }

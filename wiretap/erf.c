@@ -274,13 +274,8 @@ erf_t *erf_priv_create(void)
   erf_priv->anchor_map = g_hash_table_new_full(erf_anchor_mapping_hash, erf_anchor_mapping_equal, erf_anchor_mapping_destroy, NULL);
   erf_priv->if_map = g_hash_table_new_full(erf_if_mapping_hash, erf_if_mapping_equal, erf_if_mapping_destroy, NULL);
   erf_priv->implicit_host_id = ERF_META_HOST_ID_IMPLICIT;
-<<<<<<< HEAD
-  erf_priv->capture_metadata = FALSE;
-  erf_priv->host_metadata = FALSE;
-=======
   erf_priv->capture_gentime = 0;
   erf_priv->host_gentime = 0;
->>>>>>> upstream/master-2.4
 
   return erf_priv;
 }
@@ -2307,11 +2302,8 @@ static int erf_update_implicit_host_id(erf_t *erf_priv, wtap *wth, guint64 impli
   struct erf_if_mapping* if_map = NULL;
   struct erf_if_mapping* if_map_other = NULL;
   struct erf_if_info* if_info = NULL;
-<<<<<<< HEAD
-=======
   struct erf_anchor_mapping* anchor_mapping = NULL;
   struct erf_anchor_mapping* anchor_mapping_other = NULL;
->>>>>>> upstream/master-2.4
   gchar *oldstr = NULL;
   char portstr_buf[16];
   int i;
@@ -2339,11 +2331,7 @@ static int erf_update_implicit_host_id(erf_t *erf_priv, wtap *wth, guint64 impli
         /* Pull mapping for update */
         /* XXX: Can't add while iterating hash table so use list instead */
         g_hash_table_iter_steal(&iter);
-<<<<<<< HEAD
-        implicit_list = g_list_append(implicit_list, if_map);
-=======
         implicit_list = g_list_prepend(implicit_list, if_map);
->>>>>>> upstream/master-2.4
       } else {
         /*
          * XXX: We have duplicate interfaces in this case, but not much else we

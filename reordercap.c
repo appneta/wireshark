@@ -208,11 +208,8 @@ main(int argc, char *argv[])
     char *infile;
     const char *outfile;
 
-<<<<<<< HEAD
-=======
     cmdarg_err_init(failure_warning_message, failure_message_cont);
 
->>>>>>> upstream/master-2.4
     /* Get the compile-time version information string */
     comp_info_str = get_compiled_version_info(NULL, NULL);
 
@@ -246,38 +243,10 @@ main(int argc, char *argv[])
         g_free(init_progfile_dir_error);
     }
 
-<<<<<<< HEAD
-    /*
-     * Get credential information for later use.
-     */
-    init_process_policies();
-
-    /*
-     * Attempt to get the pathname of the directory containing the
-     * executable file.
-     */
-    init_progfile_dir_error = init_progfile_dir(argv[0], main);
-    if (init_progfile_dir_error != NULL) {
-        fprintf(stderr,
-                "reordercap: Can't get pathname of directory containing the reordercap program: %s.\n",
-                init_progfile_dir_error);
-        g_free(init_progfile_dir_error);
-    }
-
-=======
->>>>>>> upstream/master-2.4
     wtap_init();
 
 #ifdef HAVE_PLUGINS
     /* Register wiretap plugins */
-<<<<<<< HEAD
-    init_report_err(failure_message,NULL,NULL,NULL);
-
-    /* Scan for plugins.  This does *not* call their registration routines;
-        that's done later. */
-    scan_plugins();
-
-=======
     init_report_message(failure_warning_message, failure_warning_message,
                         NULL, NULL, NULL);
 
@@ -289,7 +258,6 @@ main(int argc, char *argv[])
        libwireshark and dissector plugins need libwireshark). */
     scan_plugins(DONT_REPORT_LOAD_FAILURE);
 
->>>>>>> upstream/master-2.4
     /* Register all libwiretap plugin modules. */
     register_all_wiretap_modules();
 #endif

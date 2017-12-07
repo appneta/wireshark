@@ -430,11 +430,7 @@ create_shb_header(const merge_in_file_t *in_files, const guint in_file_count,
          */
         wtap_block_remove_option(shb_hdr, OPT_SHB_OS);
     }
-<<<<<<< HEAD
-    wtap_block_set_string_option_value(shb_hdr, OPT_SHB_USERAPPL, (char*)app_name, app_name ? strlen(app_name): 0 ); /* NULL if not available, UTF-8 string containing the name */
-=======
     wtap_block_set_string_option_value(shb_hdr, OPT_SHB_USERAPPL, app_name, app_name ? strlen(app_name): 0 ); /* NULL if not available, UTF-8 string containing the name */
->>>>>>> upstream/master-2.4
                                                                                       /*  of the application used to create this section.          */
 
     return shb_hdrs;
@@ -1040,11 +1036,7 @@ merge_files_to_tempfile(gchar **out_filenamep, const char *pfx,
     GArray             *shb_hdrs = NULL;
     wtapng_iface_descriptions_t *idb_inf = NULL;
 
-<<<<<<< HEAD
-    g_assert(out_fd >= 0);
-=======
     g_assert(out_filenamep != NULL);
->>>>>>> upstream/master-2.4
     g_assert(in_file_count > 0);
     g_assert(in_filenames != NULL);
     g_assert(err != NULL);

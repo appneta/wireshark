@@ -1,11 +1,8 @@
 %top {
 /* Include this before everything else, for various large-file definitions */
 #include "config.h"
-<<<<<<< HEAD
-=======
 /* Include this before everything else, as it declares functions used here. */
 #include "mate.h"
->>>>>>> upstream/master-2.4
 }
 
 /*

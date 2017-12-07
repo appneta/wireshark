@@ -1787,11 +1787,7 @@ parse_options (int argc, char *argv[])
     }
 
     if (strcmp(argv[optind], "-") != 0) {
-<<<<<<< HEAD
-        input_filename = g_strdup(argv[optind]);
-=======
         input_filename = argv[optind];
->>>>>>> upstream/master-2.4
         input_file = ws_fopen(input_filename, "rb");
         if (!input_file) {
             fprintf(stderr, "Cannot open file [%s] for reading: %s\n",
@@ -1805,11 +1801,7 @@ parse_options (int argc, char *argv[])
 
     if (strcmp(argv[optind+1], "-") != 0) {
         /* Write to a file.  Open the file, in binary mode. */
-<<<<<<< HEAD
-        output_filename = g_strdup(argv[optind+1]);
-=======
         output_filename = argv[optind+1];
->>>>>>> upstream/master-2.4
         output_file = ws_fopen(output_filename, "wb");
         if (!output_file) {
             fprintf(stderr, "Cannot open file [%s] for writing: %s\n",
@@ -1824,11 +1816,7 @@ parse_options (int argc, char *argv[])
             /* "Should not happen" */
             fprintf(stderr, "Cannot put standard output in binary mode: %s\n",
                     g_strerror(errno));
-<<<<<<< HEAD
-            exit(1);
-=======
             return EXIT_FAILURE;
->>>>>>> upstream/master-2.4
         }
 #endif
         output_filename = "Standard output";
@@ -1852,10 +1840,6 @@ parse_options (int argc, char *argv[])
     }
 
     ts_sec = time(0);               /* initialize to current time */
-<<<<<<< HEAD
-    /* We trust the OS to return a time after the Epoch. */
-    timecode_default = *localtime(&ts_sec);
-=======
     now_tm = localtime(&ts_sec);
     if (now_tm == NULL) {
         /*
@@ -1867,7 +1851,6 @@ parse_options (int argc, char *argv[])
         return EXIT_FAILURE;
     }
     timecode_default = *now_tm;
->>>>>>> upstream/master-2.4
     timecode_default.tm_isdst = -1; /* Unknown for now, depends on time given to the strptime() function */
 
     /* Display summary of our state */

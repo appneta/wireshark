@@ -574,10 +574,6 @@ void ProtoTree::itemDoubleClick(QTreeWidgetItem *item, int) {
     if (!fi || !fi->hfinfo) return;
 
     if (fi->hfinfo->type == FT_FRAMENUM) {
-<<<<<<< HEAD
-#if QT_VERSION >= QT_VERSION_CHECK(4, 8, 0)
-=======
->>>>>>> upstream/master-2.4
         if (QApplication::queryKeyboardModifiers() & Qt::ShiftModifier) {
             emit openPacketInNewWindow(true);
         } else {

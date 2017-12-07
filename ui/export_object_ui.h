@@ -34,27 +34,6 @@ extern "C" {
 /* Common between protocols */
 
 gboolean eo_save_entry(const gchar *save_as_filename, export_object_entry_t *entry, gboolean show_err);
-<<<<<<< HEAD:ui/export_object.h
-GString *eo_massage_str(const gchar *in_str, gsize maxlen, int dup);
-const char *ct2ext(const char *content_type);
-void eo_free_entry(export_object_entry_t *entry);
-
-
-/* Protocol specific */
-gboolean eo_dicom_packet(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_,
-        const void *data);
-gboolean eo_http_packet(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_,
-        const void *data);
-gboolean eo_smb_packet(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_,
-        const void *data);
-gboolean eo_tftp_packet(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_,
-        const void *data);
-
-void eo_smb_cleanup(void);
-void eo_tftp_cleanup(void);
-
-=======
->>>>>>> upstream/master-2.4:ui/export_object_ui.h
 
 #ifdef __cplusplus
 }

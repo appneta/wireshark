@@ -69,10 +69,7 @@ eo_reset(void *tapdata)
 
 } // extern "C"
 
-<<<<<<< HEAD
-=======
 
->>>>>>> upstream/master-2.4
 enum {
     COL_PACKET,
     COL_HOSTNAME,
@@ -147,11 +144,7 @@ private:
     export_object_entry_t *entry_;
 };
 
-<<<<<<< HEAD
-ExportObjectDialog::ExportObjectDialog(QWidget &parent, CaptureFile &cf, ObjectType object_type) :
-=======
 ExportObjectDialog::ExportObjectDialog(QWidget &parent, CaptureFile &cf, register_eo_t* eo) :
->>>>>>> upstream/master-2.4
     WiresharkDialog(parent, cf),
     eo_ui_(new Ui::ExportObjectDialog),
     save_bt_(NULL),
@@ -221,10 +214,6 @@ export_object_entry_t *ExportObjectDialog::objectEntry(int row)
 
 void ExportObjectDialog::resetObjects()
 {
-<<<<<<< HEAD
-    eo_ui_->objectTree->clear();
-    if (eo_protocoldata_resetfn_) eo_protocoldata_resetfn_();
-=======
     export_object_gui_reset_cb reset_cb = get_eo_reset_func(eo_);
 
     eo_ui_->objectTree->clear();
@@ -232,7 +221,6 @@ void ExportObjectDialog::resetObjects()
     if (reset_cb)
         reset_cb();
 
->>>>>>> upstream/master-2.4
     if (save_bt_) save_bt_->setEnabled(false);
     if (save_all_bt_) save_all_bt_->setEnabled(false);
 }
@@ -255,10 +243,6 @@ void ExportObjectDialog::show()
 
     eo_ui_->objectTree->setSortingEnabled(true);
     eo_ui_->objectTree->sortByColumn(COL_PACKET, Qt::AscendingOrder);
-<<<<<<< HEAD
-
-=======
->>>>>>> upstream/master-2.4
 }
 
 void ExportObjectDialog::accept()
@@ -365,20 +349,11 @@ void ExportObjectDialog::saveAllEntries()
     for (i = 0; (item = eo_ui_->objectTree->topLevelItem(i)) != NULL; i++) {
         int count = 0;
         gchar *save_as_fullpath = NULL;
-<<<<<<< HEAD
-
         ExportObjectTreeWidgetItem *eo_ti = dynamic_cast<ExportObjectTreeWidgetItem *>(item);
         if (!eo_ti) {
             continue;
         }
 
-=======
-        ExportObjectTreeWidgetItem *eo_ti = dynamic_cast<ExportObjectTreeWidgetItem *>(item);
-        if (!eo_ti) {
-            continue;
-        }
-
->>>>>>> upstream/master-2.4
         export_object_entry_t *entry = eo_ti->entry();
         if (!entry) continue;
 

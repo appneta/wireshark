@@ -1272,10 +1272,6 @@ decode_add_simple_page (decode_as_t *entry)
     if (entry->num_items == 1)
     {
         g_object_set_data(G_OBJECT(page), E_PAGE_VALUE, entry->values[0].build_values[0](&cfile.edt->pi));
-<<<<<<< HEAD
-        g_object_set_data(G_OBJECT(page), E_PAGE_CURR_LAYER_NUM, GUINT_TO_POINTER((guint)cfile.edt->pi.curr_layer_num));
-=======
->>>>>>> upstream/master-2.4
 
         /* Always enabled */
         entry->values->label_func(&cfile.edt->pi, prompt);

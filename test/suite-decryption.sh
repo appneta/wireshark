@@ -457,8 +457,6 @@ decryption_step_ikev1_unencrypted() {
 	test_step_ok
 }
 
-<<<<<<< HEAD
-=======
 # IKEv2 decryption test (3DES-CBC/SHA1_160)
 decryption_step_ikev2_3des_sha160() {
 	$TESTS_DIR/run_and_catch_crashes env $TS_DC_ENV $TSHARK $TS_DC_ARGS \
@@ -571,7 +569,6 @@ decryption_step_ikev2_aes256gcm8() {
 	test_step_ok
 }
 
->>>>>>> upstream/master-2.4
 # HTTP2 (HPACK)
 decryption_step_http2() {
 	if [ $HAVE_NGHTTP2 -ne 0 ]; then
@@ -653,8 +650,6 @@ tshark_decryption_suite() {
 	test_step_add "IKEv1 Decryption (certificates)" decryption_step_ikev1_certs
 	test_step_add "IKEv1 Decryption (simultaneous exchanges)" decryption_step_ikev1_simultaneous
 	test_step_add "IKEv1 Decryption (unencrypted phase 1)" decryption_step_ikev1_unencrypted
-<<<<<<< HEAD
-=======
 
 	test_step_add "IKEv2 Decryption (3DES-CBC/SHA1_160)" decryption_step_ikev2_3des_sha160
 	test_step_add "IKEv2 Decryption (AES-128-CCM-12)" decryption_step_ikev2_aes128_ccm12
@@ -665,7 +660,6 @@ tshark_decryption_suite() {
 	test_step_add "IKEv2 Decryption (AES-256-GCM-16)" decryption_step_ikev2_aes256gcm16
 	test_step_add "IKEv2 Decryption (AES-256-GCM-8)" decryption_step_ikev2_aes256gcm8
 
->>>>>>> upstream/master-2.4
 	test_step_add "HTTP2 (HPACK)" decryption_step_http2
 
 	test_step_add "Kerberos" decryption_step_kerberos

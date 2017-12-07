@@ -1302,43 +1302,6 @@ main(int argc, char *argv[])
       }
       else {
         cmdarg_err("Invalid -T parameter \"%s\"; it must be one of:", optarg);                   /* x */
-<<<<<<< HEAD
-        cmdarg_err_cont("\t\"fields\" The values of fields specified with the -e option, in a form\n"
-                        "\t         specified by the -E option.\n"
-                        "\t\"pdml\"   Packet Details Markup Language, an XML-based format for the\n"
-                        "\t         details of a decoded packet. This information is equivalent to\n"
-                        "\t         the packet details printed with the -V flag.\n"
-                        "\t\"ps\"     PostScript for a human-readable one-line summary of each of\n"
-                        "\t         the packets, or a multi-line view of the details of each of\n"
-                        "\t         the packets, depending on whether the -V flag was specified.\n"
-                        "\t\"psml\"   Packet Summary Markup Language, an XML-based format for the\n"
-                        "\t         summary information of a decoded packet. This information is\n"
-                        "\t         equivalent to the information shown in the one-line summary\n"
-                        "\t         printed by default.\n"
-                        "\t\"json\"   Packet Summary, an JSON-based format for the details\n"
-                        "\t         summary information of a decoded packet. This information is \n"
-                        "\t         equivalent to the packet details printed with the -V flag.\n"
-                        "\t\"ek\"     Packet Summary, an EK JSON-based format for the bulk insert \n"
-                        "\t         into elastic search cluster. This information is \n"
-                        "\t         equivalent to the packet details printed with the -V flag.\n"
-                        "\t\"text\"   Text of a human-readable one-line summary of each of the\n"
-                        "\t         packets, or a multi-line view of the details of each of the\n"
-                        "\t         packets, depending on whether the -V flag was specified.\n"
-                        "\t         This is the default.");
-        return 1;
-      }
-      break;
-    case 'u':        /* Seconds type */
-      if (strcmp(optarg, "s") == 0)
-        timestamp_set_seconds_type(TS_SECONDS_DEFAULT);
-      else if (strcmp(optarg, "hms") == 0)
-        timestamp_set_seconds_type(TS_SECONDS_HOUR_MIN_SEC);
-      else {
-        cmdarg_err("Invalid seconds type \"%s\"; it must be one of:", optarg);
-        cmdarg_err_cont("\t\"s\"   for seconds\n"
-                        "\t\"hms\" for hours, minutes and seconds");
-        return 1;
-=======
         cmdarg_err_cont("\t\"fields\"  The values of fields specified with the -e option, in a form\n"
                         "\t          specified by the -E option.\n"
                         "\t\"pdml\"    Packet Details Markup Language, an XML-based format for the\n"
@@ -1369,7 +1332,6 @@ main(int argc, char *argv[])
                         "\t          horizontal tab character.");
         exit_status = INVALID_OPTION;
         goto clean_exit;
->>>>>>> upstream/master-2.4
       }
       break;
     case 'U':        /* Export PDUs to file */
@@ -1403,12 +1365,8 @@ main(int argc, char *argv[])
 #ifdef HAVE_EXTCAP
       extcap_cleanup();
 #endif
-<<<<<<< HEAD
-      return 0;
-=======
       exit_status = EXIT_SUCCESS;
       goto clean_exit;
->>>>>>> upstream/master-2.4
     case 'O':        /* Only output these protocols */
       /* already processed; just ignore it now */
       break;
@@ -2025,12 +1983,8 @@ main(int argc, char *argv[])
 #ifdef HAVE_EXTCAP
       extcap_cleanup();
 #endif
-<<<<<<< HEAD
-      return 2;
-=======
       exit_status = INVALID_FILE;
       goto clean_exit;
->>>>>>> upstream/master-2.4
     }
 
     /* Process the packets in the file */

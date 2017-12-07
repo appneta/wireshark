@@ -72,8 +72,6 @@ char *
 simple_dialog_format_message(const char *msg)
 {
     return g_strdup(msg);
-<<<<<<< HEAD
-=======
 }
 
 gpointer
@@ -160,7 +158,6 @@ vsimple_warning_message_box(const char *msg_format, va_list ap)
 
     SimpleDialog sd(wsApp->mainWindow(), ESD_TYPE_WARN, ESD_BTN_OK, msg_format, ap);
     sd.exec();
->>>>>>> upstream/master-2.4
 }
 
 /*
@@ -189,11 +186,6 @@ SimpleDialog::SimpleDialog(QWidget *parent, ESD_TYPE_E type, int btn_mask, const
     message = QTextCodec::codecForLocale()->toUnicode(vmessage);
     g_free(vmessage);
 
-<<<<<<< HEAD
-    setTextFormat(Qt::PlainText);
-
-=======
->>>>>>> upstream/master-2.4
     MessagePair msg_pair = splitMessage(message);
     // Remove leading and trailing whitespace along with excessive newline runs.
     QString primary = msg_pair.first.trimmed();

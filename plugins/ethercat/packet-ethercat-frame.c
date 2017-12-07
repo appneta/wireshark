@@ -131,12 +131,7 @@ void proto_register_ethercat_frame(void)
          &ett_ethercat_frame
       };
 
-<<<<<<< HEAD
-   proto_ethercat_frame = proto_register_protocol("EtherCAT frame header",
-                                                  "ETHERCAT","ecatf");
-=======
    proto_ethercat_frame = proto_register_protocol("EtherCAT frame header", "ETHERCAT", "ecatf");
->>>>>>> upstream/master-2.4
    proto_register_field_array(proto_ethercat_frame,hf,array_length(hf));
    proto_register_subtree_array(ett, array_length(ett));
 

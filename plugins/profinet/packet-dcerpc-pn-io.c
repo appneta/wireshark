@@ -9453,11 +9453,7 @@ dissect_ExpectedSubmoduleBlockReq_block(tvbuff_t *tvb, int offset,
 
                     if(fp != NULL) {
                         /* ---- Get VendorID & DeviceID ---- */
-<<<<<<< HEAD
-                        while(fgets(puffer, MAX_LINE_LENGTH, fp) != NULL) {
-=======
                         while(pn_fgets(puffer, MAX_LINE_LENGTH, fp) != NULL) {
->>>>>>> upstream/master-2.4
                             /* ----- VendorID ------ */
                             if((strstr(puffer, vendorIdStr)) != NULL) {
                                 memset (convertStr, 0, sizeof(*convertStr));

@@ -206,22 +206,14 @@ add_library(wsutil ${LINK_MODE_LIB}
 	${CMAKE_BINARY_DIR}/image/libwsutil.rc
 )
 
-<<<<<<< HEAD
-set(FULL_SO_VERSION "7.0.0")
-=======
 set(FULL_SO_VERSION "8.0.0")
->>>>>>> upstream/master-2.4
 
 set_target_properties(wsutil PROPERTIES
 	PREFIX "lib"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
 	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
-<<<<<<< HEAD
-	VERSION ${FULL_SO_VERSION} SOVERSION 7
-=======
 	VERSION ${FULL_SO_VERSION} SOVERSION 8
->>>>>>> upstream/master-2.4
 	FOLDER "DLLs")
 
 if(ENABLE_APPLICATION_BUNDLE)

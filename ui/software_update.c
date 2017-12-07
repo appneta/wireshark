@@ -103,15 +103,8 @@ software_update_init(void) {
     win_sparkle_set_appcast_url(update_url);
     win_sparkle_set_automatic_check_for_updates(prefs.gui_update_enabled ? 1 : 0);
     win_sparkle_set_update_check_interval(prefs.gui_update_interval);
-<<<<<<< HEAD
-    /* Todo: Fix bugs 9687 and 12989.
-     * win_sparkle_set_can_shutdown_callback(...);
-     * win_sparkle_set_shutdown_request_callback(...);
-     */
-=======
     win_sparkle_set_can_shutdown_callback(software_update_can_shutdown_callback);
     win_sparkle_set_shutdown_request_callback(software_update_shutdown_request_callback);
->>>>>>> upstream/master-2.4
     win_sparkle_init();
 }
 

@@ -57,6 +57,7 @@ public:
     explicit ExportObjectDialog(QWidget &parent, CaptureFile &cf, register_eo_t* eo);
     ~ExportObjectDialog();
 
+
     void addObjectEntry(export_object_entry_t *entry);
     export_object_entry_t *objectEntry(int row);
     void resetObjects();

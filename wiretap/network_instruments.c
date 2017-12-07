@@ -636,7 +636,6 @@ gboolean network_instruments_dump_open(wtap_dumper *wdh, int *err)
     /* create the file comment TLV */
     {
         time(&system_time);
-        /* We trusst the OS not to return a time before the Epoch */
         current_time = localtime(&system_time);
         memset(&comment, 0x00, sizeof(comment));
         if (current_time != NULL)

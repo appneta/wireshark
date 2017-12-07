@@ -489,7 +489,6 @@ proto_tree_write_node_pdml(proto_node *node, gpointer data)
     if (wrap_in_fake_protocol) {
         /* Open fake protocol wrapper */
         fputs("<proto name=\"fake-field-wrapper\">\n", pdata->fh);
-        pdata->level++;
 
         print_indent(pdata->level + 1, pdata->fh);
     }
@@ -717,7 +716,6 @@ proto_tree_write_node_pdml(proto_node *node, gpointer data)
 
     /* Close off fake wrapper protocol */
     if (wrap_in_fake_protocol) {
-        print_indent(pdata->level + 1, pdata->fh);
         fputs("</proto>\n", pdata->fh);
     }
 }
