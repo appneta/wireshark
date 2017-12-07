@@ -216,7 +216,7 @@ static expert_field ei_btavrcp_unexpected_data = EI_INIT;
 
 static dissector_handle_t btavrcp_handle;
 
-#define OPCODE_VENDOR_DEPENDANT 0x00
+#define OPCODE_VENDOR_DEPENDENT 0x00
 #define OPCODE_UNIT             0x30
 #define OPCODE_SUBUNIT          0x31
 #define OPCODE_PASSTHROUGH      0x7C
@@ -345,7 +345,7 @@ static const value_string ctype_vals[] = {
 };
 
 static const value_string opcode_vals[] = {
-    { OPCODE_VENDOR_DEPENDANT,   "Vendor dependent" },
+    { OPCODE_VENDOR_DEPENDENT,   "Vendor dependent" },
     { OPCODE_UNIT,               "Unit Info" },
     { OPCODE_SUBUNIT,            "Subunit Info" },
     { OPCODE_PASSTHROUGH,        "Pass Through" },
@@ -593,6 +593,11 @@ static const value_string major_player_type_vals[] = {
 static const value_string player_subtype_vals[] = {
     { 0x00,   "Audio Book" },
     { 0x02,   "Podcast" },
+    { 0, NULL }
+};
+
+static const value_string unique_all_supported_attributes[] = {
+    { 0x00,   "All Supported Attributes" },
     { 0, NULL }
 };
 
@@ -1004,7 +1009,7 @@ dissect_subunit(tvbuff_t *tvb, proto_tree *tree, gint offset, gboolean is_comman
 
 
 static gint
-dissect_vendor_dependant(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+dissect_vendor_dependent(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                          gint offset, guint ctype, guint32 *op, guint32 *op_arg,
                          gboolean is_command, avrcp_proto_data_t *avrcp_proto_data)
 {
@@ -1477,9 +1482,8 @@ dissect_vendor_dependant(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 col_append_fstr(pinfo->cinfo, COL_INFO, " - 0x%08X%08X", (guint) (identifier >> 32), (guint) (identifier & 0xFFFFFFFF));
                 if (identifier == 0x00) col_append_str(pinfo->cinfo, COL_INFO, " (PLAYING)");
 
-                pitem = proto_tree_add_item(tree, hf_btavrcp_number_of_attributes, tvb, offset, 1, ENC_BIG_ENDIAN);
+                proto_tree_add_item(tree, hf_btavrcp_number_of_attributes, tvb, offset, 1, ENC_BIG_ENDIAN);
                 number_of_attributes = tvb_get_guint8(tvb, offset);
-                if (number_of_attributes == 0) proto_item_append_text(pitem, " (All Supported Attributes)");
                 offset += 1;
                 offset = dissect_attribute_id_list(tvb, tree, offset, number_of_attributes);
             } else {
@@ -2004,7 +2008,6 @@ dissect_browsing(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 guint64     uid;
                 guint       uid_counter;
                 guint       scope;
-                proto_item  *pitem = NULL;
 
                 proto_tree_add_item(tree, hf_btavrcp_scope, tvb, offset, 1, ENC_BIG_ENDIAN);
                 scope = tvb_get_guint8(tvb, offset);
@@ -2015,13 +2018,12 @@ dissect_browsing(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 proto_tree_add_item(tree, hf_btavrcp_uid_counter, tvb, offset, 2, ENC_BIG_ENDIAN);
                 uid_counter = tvb_get_ntohs(tvb, offset);
                 offset += 2;
-                pitem = proto_tree_add_item(tree, hf_btavrcp_number_of_attributes, tvb, offset, 1, ENC_BIG_ENDIAN);
+                proto_tree_add_item(tree, hf_btavrcp_number_of_attributes, tvb, offset, 1, ENC_BIG_ENDIAN);
                 number_of_attributes = tvb_get_guint8(tvb, offset);
 
                 col_append_fstr(pinfo->cinfo, COL_INFO, " - Scope: %s, Uid: 0x%016" G_GINT64_MODIFIER "x, UidCounter: 0x%04x",
                         val_to_str_const(scope, scope_vals, "unknown"), uid, uid_counter);
 
-                if (number_of_attributes == 0) proto_item_append_text(pitem, " (All Supported Attributes)");
                 offset += 1;
                 offset = dissect_attribute_id_list(tvb, tree, offset, number_of_attributes);
             } else {
@@ -2150,8 +2152,8 @@ dissect_btavrcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             case OPCODE_SUBUNIT:
                 offset = dissect_subunit(tvb, btavrcp_tree, offset, is_command);
                 break;
-            case OPCODE_VENDOR_DEPENDANT:
-                offset = dissect_vendor_dependant(tvb, pinfo, btavrcp_tree,
+            case OPCODE_VENDOR_DEPENDENT:
+                offset = dissect_vendor_dependent(tvb, pinfo, btavrcp_tree,
                         offset, ctype, &op, &op_arg, is_command, &avrcp_proto_data);
                 break;
         };
@@ -2467,7 +2469,7 @@ proto_register_btavrcp(void)
         },
         { &hf_btavrcp_folder_name,
             { "Folder Name",                    "btavrcp.folder_name",
-            FT_NONE, BASE_NONE, NULL, 0x00,
+            FT_STRING, BASE_NONE, NULL, 0x00,
             NULL, HFILL }
         },
         { &hf_btavrcp_search_length,
@@ -2482,7 +2484,7 @@ proto_register_btavrcp(void)
         },
         { &hf_btavrcp_number_of_attributes,
             { "Number of Attributes",            "btavrcp.number_of_attributes",
-            FT_UINT8, BASE_DEC, NULL, 0x00,
+            FT_UINT8, BASE_DEC|BASE_SPECIAL_VALS, VALS(unique_all_supported_attributes), 0x00,
             NULL, HFILL }
         },
         { &hf_btavrcp_attribute_count,

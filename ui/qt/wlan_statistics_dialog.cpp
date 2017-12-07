@@ -27,6 +27,7 @@
 
 #include <epan/dissectors/packet-ieee80211.h>
 
+#include <QElapsedTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
@@ -43,6 +44,8 @@ enum {
     col_channel_,
     col_ssid_,
     col_pct_packets_,
+    col_pct_retry_,
+    col_retry_packets_,
     col_beacons_,
     col_data_packets_,
     col_probe_reqs_,
@@ -64,6 +67,7 @@ public:
     WlanStationTreeWidgetItem(address *addr) :
         QTreeWidgetItem (wlan_station_row_type_),
         packets_(0),
+        retry_(0),
         sent_(0),
         received_(0),
         probe_req_(0),
@@ -80,6 +84,10 @@ public:
     }
     void update(wlan_hdr_t *wlan_hdr) {
         bool is_sender = addresses_equal(&addr_, &wlan_hdr->src);
+
+        if (wlan_hdr->stats.fc_retry != 0) {
+            retry_++;
+        }
 
         // XXX Should we count received probes and auths? This is what the
         // GTK+ UI does, but it seems odd.
@@ -120,9 +128,16 @@ public:
         if (wlan_hdr->type != MGT_BEACON) packets_++;
     }
     void draw(address *bssid, int num_packets) {
-        setData(col_pct_packets_, Qt::UserRole, QVariant::fromValue<double>(packets_ * 100.0 / num_packets));
+        if(packets_ && num_packets > 0) {
+            setData(col_pct_packets_, Qt::UserRole, QVariant::fromValue<double>(packets_ * 100.0 / num_packets));
+            setData(col_pct_retry_, Qt::UserRole, QVariant::fromValue<double>(retry_ * 100.0 / packets_));
+        } else {
+            setData(col_pct_packets_, Qt::UserRole, QVariant::fromValue<double>(0));
+            setData(col_pct_retry_, Qt::UserRole, QVariant::fromValue<double>(0));
+        }
         setText(col_beacons_, QString::number(sent_));
         setText(col_data_packets_, QString::number(received_));
+        setText(col_retry_packets_, QString::number(retry_));
         setText(col_probe_reqs_, QString::number(probe_req_));
         setText(col_probe_resps_, QString::number(probe_resp_));
         setText(col_auths_, QString::number(auth_));
@@ -157,6 +172,9 @@ public:
             return deauth_ < other_row->deauth_;
         case col_others_:
             return other_ < other_row->other_;
+        case col_retry_packets_:
+        case col_pct_retry_:
+            return retry_ < other_row->retry_;
         default:
             break;
         }
@@ -167,6 +185,7 @@ public:
         return QList<QVariant>()
                 << address_to_qstring(&addr_)
                 << data(col_pct_packets_, Qt::UserRole).toDouble()
+                << data(col_pct_retry_, Qt::UserRole).toDouble() << retry_
                 << sent_ << received_ << probe_req_ << probe_resp_
                 << auth_ << deauth_ << other_ << text(col_protection_);
     }
@@ -179,6 +198,7 @@ public:
 private:
     address addr_;
     int packets_;
+    int retry_;
     int sent_;
     int received_;
     int probe_req_;
@@ -186,6 +206,7 @@ private:
     int auth_;
     int deauth_;
     int other_;
+
 };
 
 class WlanNetworkTreeWidgetItem : public QTreeWidgetItem
@@ -195,6 +216,7 @@ public:
         QTreeWidgetItem (parent, wlan_network_row_type_),
         beacon_(0),
         data_packet_(0),
+        retry_packet_(0),
         probe_req_(0),
         probe_resp_(0),
         auth_(0),
@@ -212,7 +234,9 @@ public:
         } else if (wlan_hdr->stats.ssid_len == 1 && wlan_hdr->stats.ssid[0] == 0) {
             ssid_text = QObject::tr("<Hidden>");
         } else {
-            ssid_text = format_text(wlan_hdr->stats.ssid, wlan_hdr->stats.ssid_len);
+            gchar *str = format_text(NULL, wlan_hdr->stats.ssid, wlan_hdr->stats.ssid_len);
+            ssid_text = str;
+            wmem_free(NULL, str);
         }
 
         setText(col_ssid_, ssid_text);
@@ -281,8 +305,11 @@ public:
         }
 
         if (update_ssid) {
+            gchar* str;
             ssid_ = QByteArray::fromRawData((const char *)wlan_hdr->stats.ssid, wlan_hdr->stats.ssid_len);
-            setText(col_ssid_, format_text(wlan_hdr->stats.ssid, wlan_hdr->stats.ssid_len));
+            str = format_text(NULL, wlan_hdr->stats.ssid, wlan_hdr->stats.ssid_len);
+            setText(col_ssid_, str);
+            wmem_free(NULL, str);
             is_ssid_match = true;
         }
 
@@ -296,6 +323,10 @@ public:
         if (text(col_protection_).isEmpty() && wlan_hdr->stats.protection[0] != 0) {
             setText(col_protection_, wlan_hdr->stats.protection);
         }
+        if (wlan_hdr->stats.fc_retry != 0) {
+            retry_packet_++;
+        }
+
         switch (wlan_hdr->type) {
         case MGT_PROBE_REQ:
             probe_req_++;
@@ -351,6 +382,8 @@ public:
     void draw(int num_packets) {
         if (channel_ > 0) setText(col_channel_, QString::number(channel_));
         setData(col_pct_packets_, Qt::UserRole, QVariant::fromValue<double>(packets_ * 100.0 / num_packets));
+        setData(col_pct_retry_, Qt::UserRole, QVariant::fromValue<double>(retry_packet_ * 100.0 / packets_));
+        setText(col_retry_packets_, QString::number(retry_packet_));
         setText(col_beacons_, QString::number(beacon_));
         setText(col_data_packets_, QString::number(data_packet_));
         setText(col_probe_reqs_, QString::number(probe_req_));
@@ -412,15 +445,17 @@ public:
         return QList<QVariant>()
                 << address_to_qstring(&bssid_) << channel_ << text(col_ssid_)
                 << data(col_pct_packets_, Qt::UserRole).toDouble()
-                << beacon_ << data_packet_ << probe_req_ << probe_resp_
-                << auth_ << deauth_ << other_ << text(col_protection_);
+                << data(col_pct_retry_, Qt::UserRole).toDouble()
+                << retry_packet_ << beacon_  << data_packet_ << probe_req_
+                << probe_resp_ << auth_ << deauth_ << other_
+                << text(col_protection_);
     }
 
     const QString filterExpression() {
         QString filter_expr = QString("(wlan.bssid==%1")
                 .arg(address_to_qstring(&bssid_));
         if (!ssid_.isEmpty() && ssid_[0] != '\0') {
-            filter_expr += QString(" || wlan_mgt.ssid==\"%1\"")
+            filter_expr += QString(" || wlan.ssid==\"%1\"")
                     .arg(ssid_.constData());
         }
         filter_expr += ")";
@@ -434,6 +469,7 @@ private:
     QByteArray ssid_;
     int beacon_;
     int data_packet_;
+    int retry_packet_;
     int probe_req_;
     int probe_resp_;
     int auth_;
@@ -453,9 +489,9 @@ private:
 };
 
 static const QString network_col_0_title_ = QObject::tr("BSSID");
-static const QString network_col_4_title_ = QObject::tr("Beacons");
-static const QString network_col_5_title_ = QObject::tr("Data Pkts");
-static const QString network_col_11_title_ = QObject::tr("Protection");
+static const QString network_col_6_title_ = QObject::tr("Beacons");
+static const QString network_col_7_title_ = QObject::tr("Data Pkts");
+static const QString network_col_13_title_ = QObject::tr("Protection");
 
 static const QString node_col_0_title_ = QObject::tr("Address");
 static const QString node_col_4_title_ = QObject::tr("Pkts Sent");
@@ -464,18 +500,21 @@ static const QString node_col_11_title_ = QObject::tr("Comment");
 
 WlanStatisticsDialog::WlanStatisticsDialog(QWidget &parent, CaptureFile &cf, const char *filter) :
     TapParameterDialog(parent, cf, HELP_STATS_WLAN_TRAFFIC_DIALOG),
-    packet_count_(0)
+    packet_count_(0),
+    cur_network_(0),
+    add_station_timer_(0)
 {
     setWindowSubtitle(tr("Wireless LAN Statistics"));
     loadGeometry(parent.width() * 4 / 5, parent.height() * 3 / 4, "WlanStatisticsDialog");
 
     QStringList header_labels = QStringList()
-            << "" << tr("Channel") << tr("SSID") << tr("Percent Packets") << "" << ""
-            << tr("Probe Reqs") << tr("Probe Resp") << tr("Auths")
+            << "" << tr("Channel") << tr("SSID") << tr("Percent Packets") << tr("Percent Retry")
+            << tr("Retry") << "" << "" << tr("Probe Reqs") << tr("Probe Resp") << tr("Auths")
             << tr("Deauths") << tr("Other");
     statsTreeWidget()->setHeaderLabels(header_labels);
     updateHeaderLabels();
     statsTreeWidget()->setItemDelegateForColumn(col_pct_packets_, new PercentBarDelegate());
+    statsTreeWidget()->setItemDelegateForColumn(col_pct_retry_, new PercentBarDelegate());
     statsTreeWidget()->sortByColumn(col_bssid_, Qt::AscendingOrder);
 
     // resizeColumnToContents doesn't work well here, so set sizes manually.
@@ -489,6 +528,7 @@ WlanStatisticsDialog::WlanStatisticsDialog(QWidget &parent, CaptureFile &cf, con
             statsTreeWidget()->setColumnWidth(col, one_em * 8);
             break;
         case col_pct_packets_:
+        case col_pct_retry_:
         case col_protection_:
             statsTreeWidget()->setColumnWidth(col, one_em * 6);
             break;
@@ -506,12 +546,15 @@ WlanStatisticsDialog::WlanStatisticsDialog(QWidget &parent, CaptureFile &cf, con
         setDisplayFilter(filter);
     }
 
+    add_station_timer_ = new QElapsedTimer();
+
     connect(statsTreeWidget(), SIGNAL(itemSelectionChanged()),
             this, SLOT(updateHeaderLabels()));
 }
 
 WlanStatisticsDialog::~WlanStatisticsDialog()
 {
+    delete add_station_timer_;
 }
 
 void WlanStatisticsDialog::tapReset(void *ws_dlg_ptr)
@@ -538,6 +581,8 @@ gboolean WlanStatisticsDialog::tapPacket(void *ws_dlg_ptr, _packet_info *, epan_
 
     ws_dlg->packet_count_++;
 
+    // XXX This is very slow for large numbers of networks. We might be
+    // able to store networks in a cache keyed on BSSID+SSID instead.
     WlanNetworkTreeWidgetItem *wn_ti = NULL;
     for (int i = 0; i < ws_dlg->statsTreeWidget()->topLevelItemCount(); i++) {
         QTreeWidgetItem *ti = ws_dlg->statsTreeWidget()->topLevelItem(i);
@@ -605,16 +650,32 @@ void WlanStatisticsDialog::fillTree()
         return;
     }
 
+    statsTreeWidget()->setSortingEnabled(false);
     cap_file_.retapPackets();
     tapDraw(this);
     removeTapListeners();
+    statsTreeWidget()->setSortingEnabled(true);
 
-    for (int i = 0; i < statsTreeWidget()->topLevelItemCount(); i++) {
-        QTreeWidgetItem *ti = statsTreeWidget()->topLevelItem(i);
+    // Don't freeze if we have a large number of stations.
+    cur_network_ = 0;
+    QTimer::singleShot(0, this, SLOT(addStationTreeItems()));
+}
+
+static const int add_station_interval_ = 5; // ms
+void WlanStatisticsDialog::addStationTreeItems()
+{
+    add_station_timer_->start();
+    while (add_station_timer_->elapsed() < add_station_interval_ && cur_network_ < statsTreeWidget()->topLevelItemCount()) {
+        QTreeWidgetItem *ti = statsTreeWidget()->topLevelItem(cur_network_);
         if (ti->type() != wlan_network_row_type_) continue;
 
         WlanNetworkTreeWidgetItem *wn_ti = static_cast<WlanNetworkTreeWidgetItem*>(ti);
         wn_ti->addStations();
+        ++cur_network_;
+    }
+
+    if (cur_network_ < statsTreeWidget()->topLevelItemCount()) {
+        QTimer::singleShot(0, this, SLOT(addStationTreeItems()));
     }
 }
 
@@ -627,9 +688,9 @@ void WlanStatisticsDialog::updateHeaderLabels()
         statsTreeWidget()->headerItem()->setText(col_protection_, node_col_11_title_);
     } else {
         statsTreeWidget()->headerItem()->setText(col_bssid_, network_col_0_title_);
-        statsTreeWidget()->headerItem()->setText(col_beacons_, network_col_4_title_);
-        statsTreeWidget()->headerItem()->setText(col_data_packets_, network_col_5_title_);
-        statsTreeWidget()->headerItem()->setText(col_protection_, network_col_11_title_);
+        statsTreeWidget()->headerItem()->setText(col_beacons_, network_col_6_title_);
+        statsTreeWidget()->headerItem()->setText(col_data_packets_, network_col_7_title_);
+        statsTreeWidget()->headerItem()->setText(col_protection_, network_col_13_title_);
     }
 }
 

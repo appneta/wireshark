@@ -109,15 +109,6 @@ static gboolean pgm_check_checksum = TRUE;
 #define PGM_OPT_REDIRECT_SIZE 12
 #define PGM_OPT_FRAGMENT_SIZE 16
 
-/*
- * Udp port for UDP encapsulation
- */
-#define DEFAULT_UDP_ENCAP_UCAST_PORT 3055
-#define DEFAULT_UDP_ENCAP_MCAST_PORT 3056
-
-static guint udp_encap_ucast_port = 0;
-static guint udp_encap_mcast_port = 0;
-
 static int proto_pgm = -1;
 static int ett_pgm = -1;
 static int ett_pgm_optbits = -1;
@@ -243,6 +234,7 @@ static expert_field ei_pgm_genopt_len = EI_INIT;
 static expert_field ei_pgm_opt_tlen = EI_INIT;
 static expert_field ei_pgm_opt_type = EI_INIT;
 static expert_field ei_address_format_invalid = EI_INIT;
+static expert_field ei_pgm_main_cksum = EI_INIT;
 
 static dissector_table_t subdissector_table;
 static heur_dissector_list_t heur_subdissector_list;
@@ -910,7 +902,8 @@ dissect_pgm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 		if ((pgmhdr_type != PGM_RDATA_PCKT) && (pgmhdr_type != PGM_ODATA_PCKT) &&
 		    (pgmhdr_cksum == 0))
 		{
-			proto_tree_add_checksum(pgm_tree, tvb, ptvcursor_current_offset(cursor), hf_pgm_main_cksum, hf_pgm_main_cksum_status, NULL, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NOT_PRESENT);
+			proto_tree_add_checksum(pgm_tree, tvb, ptvcursor_current_offset(cursor), hf_pgm_main_cksum, hf_pgm_main_cksum_status, &ei_pgm_main_cksum,
+									pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NOT_PRESENT);
 		} else {
 			reportedlen = tvb_reported_length(tvb);
 			pgmlen = tvb_captured_length(tvb);
@@ -918,10 +911,11 @@ dissect_pgm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 				vec_t cksum_vec[1];
 
 				SET_CKSUM_VEC_TVB(cksum_vec[0], tvb, 0, pgmlen);
-				proto_tree_add_checksum(pgm_tree, tvb, ptvcursor_current_offset(cursor), hf_pgm_main_cksum_status, -1, NULL, pinfo,
-										in_cksum(&cksum_vec[0], 1), ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
+				proto_tree_add_checksum(pgm_tree, tvb, ptvcursor_current_offset(cursor), hf_pgm_main_cksum_status, hf_pgm_main_cksum_status, &ei_pgm_main_cksum,
+										pinfo, in_cksum(&cksum_vec[0], 1), ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
 			} else {
-				proto_tree_add_checksum(pgm_tree, tvb, ptvcursor_current_offset(cursor), hf_pgm_main_cksum, hf_pgm_main_cksum_status, NULL, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
+				proto_tree_add_checksum(pgm_tree, tvb, ptvcursor_current_offset(cursor), hf_pgm_main_cksum, hf_pgm_main_cksum_status, &ei_pgm_main_cksum,
+										pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
 			}
 		}
 		ptvcursor_advance(cursor, 2);
@@ -1374,13 +1368,13 @@ proto_register_pgm(void)
 		{ &ei_pgm_opt_tlen, { "pgm.opts.tlen.invalid", PI_PROTOCOL, PI_WARN, "Total Length invalid", EXPFILL }},
 		{ &ei_pgm_genopt_len, { "pgm.genopts.len.invalid", PI_PROTOCOL, PI_WARN, "Option length invalid", EXPFILL }},
 		{ &ei_address_format_invalid, { "pgm.address_format_invalid", PI_PROTOCOL, PI_WARN, "Can't handle this address format", EXPFILL }},
+		{ &ei_pgm_main_cksum, { "pgm.bad_checksum", PI_CHECKSUM, PI_ERROR, "Bad checksum", EXPFILL }},
 	};
 
 	module_t *pgm_module;
 	expert_module_t* expert_pgm;
 
-	proto_pgm = proto_register_protocol("Pragmatic General Multicast",
-					    "PGM", "pgm");
+	proto_pgm = proto_register_protocol("Pragmatic General Multicast", "PGM", "pgm");
 
 	proto_register_field_array(proto_pgm, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
@@ -1400,25 +1394,12 @@ proto_register_pgm(void)
 	 *        dissector_add_for_decode_as is called so that pgm
 	 *        is available for 'decode-as'
 	 */
-	pgm_module = prefs_register_protocol(proto_pgm, proto_reg_handoff_pgm);
+	pgm_module = prefs_register_protocol(proto_pgm, NULL);
 
 	prefs_register_bool_preference(pgm_module, "check_checksum",
 				       "Check the validity of the PGM checksum when possible",
 				       "Whether to check the validity of the PGM checksum",
 				       &pgm_check_checksum);
-
-	prefs_register_uint_preference(pgm_module, "udp.encap_ucast_port",
-				       "PGM Encap Unicast Port (standard is 3055)",
-				       "PGM Encap is PGM packets encapsulated in UDP packets"
-				       " (Note: This option is off, i.e. port is 0, by default)",
-				       10, &udp_encap_ucast_port);
-
-	prefs_register_uint_preference(pgm_module, "udp.encap_mcast_port",
-				       "PGM Encap Multicast Port (standard is 3056)",
-				       "PGM Encap is PGM packets encapsulated in UDP packets"
-				       " (Note: This option is off, i.e. port is 0, by default)",
-				       10, &udp_encap_mcast_port);
-
 }
 
 /* The registration hand-off routine */
@@ -1429,33 +1410,11 @@ proto_register_pgm(void)
 void
 proto_reg_handoff_pgm(void)
 {
-	static gboolean initialized = FALSE;
-	static dissector_handle_t pgm_handle;
-	static guint old_udp_encap_ucast_port;
-	static guint old_udp_encap_mcast_port;
+	dissector_handle_t pgm_handle;
 
-	if (! initialized) {
-		pgm_handle = create_dissector_handle(dissect_pgm, proto_pgm);
-		dissector_add_for_decode_as("udp.port", pgm_handle);
-		dissector_add_uint("ip.proto", IP_PROTO_PGM, pgm_handle);
-		initialized = TRUE;
-	} else {
-		if (old_udp_encap_ucast_port != 0) {
-			dissector_delete_uint("udp.port", old_udp_encap_ucast_port, pgm_handle);
-		}
-		if (old_udp_encap_mcast_port != 0) {
-			dissector_delete_uint("udp.port", old_udp_encap_mcast_port, pgm_handle);
-		}
-	}
-
-	if (udp_encap_ucast_port != 0) {
-		dissector_add_uint("udp.port", udp_encap_ucast_port, pgm_handle);
-	}
-	if (udp_encap_mcast_port != 0) {
-		dissector_add_uint("udp.port", udp_encap_mcast_port, pgm_handle);
-	}
-	old_udp_encap_ucast_port = udp_encap_ucast_port;
-	old_udp_encap_mcast_port = udp_encap_mcast_port;
+	pgm_handle = create_dissector_handle(dissect_pgm, proto_pgm);
+	dissector_add_uint_range_with_preference("udp.port", "", pgm_handle);
+	dissector_add_uint("ip.proto", IP_PROTO_PGM, pgm_handle);
 }
 
 /*

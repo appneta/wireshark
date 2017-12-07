@@ -39,6 +39,7 @@
 #include "epan/proto.h"
 #include "epan/tap.h"
 #include "epan/timestamp.h"
+#include "epan/decode_as.h"
 
 #include "ui/decode_as_utils.h"
 #include "ui/preference_utils.h"
@@ -56,12 +57,15 @@
 #include "log.h"
 #include "recent_file_status.h"
 
+#ifdef HAVE_EXTCAP
+#include "extcap.h"
+#endif
 #ifdef HAVE_LIBPCAP
 #include <caputils/iface_monitor.h>
 #endif
 
 #include "ui/capture.h"
-#include "filter_files.h"
+#include "ui/filter_files.h"
 #include "ui/capture_globals.h"
 #include "ui/software_update.h"
 #include "ui/last_open_dir.h"
@@ -72,16 +76,21 @@
 #ifdef _WIN32
 #  include "ui/win32/console_win32.h"
 #  include "wsutil/file_util.h"
+#  include <QMessageBox>
+#  include <QSettings>
 #endif /* _WIN32 */
 
 #include <QAction>
+#include <QApplication>
 #include <QDesktopServices>
 #include <QDir>
 #include <QEvent>
 #include <QFileOpenEvent>
 #include <QFontMetrics>
+#include <QFontInfo>
 #include <QLibraryInfo>
 #include <QLocale>
+#include <QMainWindow>
 #include <QMutableListIterator>
 #include <QSocketNotifier>
 #include <QThread>
@@ -98,7 +107,7 @@ WiresharkApplication *wsApp = NULL;
 
 // MUST be UTF-8
 static char *last_open_dir = NULL;
-static QList<recent_item_status *> recent_items_;
+static QList<recent_item_status *> recent_captures_;
 static QHash<int, QList<QAction *> > dynamic_menu_groups_;
 static QHash<int, QList<QAction *> > added_menu_groups_;
 static QHash<int, QList<QAction *> > removed_menu_groups_;
@@ -145,7 +154,7 @@ add_menu_recent_capture_file(const gchar *cf_name) {
      * item above count_max
      */
     unsigned int cnt = 1;
-    QMutableListIterator<recent_item_status *> rii(recent_items_);
+    QMutableListIterator<recent_item_status *> rii(recent_captures_);
     while (rii.hasNext()) {
         recent_item_status *ri = rii.next();
         /* if this element string is one of our special items (separator, ...) or
@@ -157,7 +166,14 @@ add_menu_recent_capture_file(const gchar *cf_name) {
             /* do a case insensitive compare on win32 */
             ri->filename.compare(normalized_cf_name, Qt::CaseInsensitive) == 0 ||
 #else   /* _WIN32 */
-            /* do a case sensitive compare on unix */
+            /*
+             * Do a case sensitive compare on UN*Xes.
+             *
+             * XXX - on UN*Xes such as macOS, where you can use pathconf()
+             * to check whether a given file system is case-sensitive or
+             * not, we should check whether this particular file system
+             * is case-sensitive and do the appropriate comparison.
+             */
             ri->filename.compare(normalized_cf_name) == 0 ||
 #endif
             cnt >= prefs.gui_recent_files_count_max) {
@@ -176,7 +192,7 @@ extern "C" void menu_recent_file_write_all(FILE *rf) {
     /* we have to iterate backwards through the children's list,
      * so we get the latest item last in the file.
      */
-    QListIterator<recent_item_status *> rii(recent_items_);
+    QListIterator<recent_item_status *> rii(recent_captures_);
     rii.toBack();
     while (rii.hasPrevious()) {
         QString cf_name;
@@ -188,17 +204,32 @@ extern "C" void menu_recent_file_write_all(FILE *rf) {
     }
 }
 
+#ifdef HAVE_SOFTWARE_UPDATE
+/** Check to see if Wireshark can shut down safely (e.g. offer to save the
+ *  current capture).
+ */
+extern "C" int software_update_can_shutdown_callback(void) {
+    return wsApp->softwareUpdateCanShutdown();
+}
+
+/** Shut down Wireshark in preparation for an upgrade.
+ */
+extern "C" void software_update_shutdown_request_callback(void) {
+    wsApp->softwareUpdateShutdownRequest();
+}
+#endif // HAVE_SOFTWARE_UPDATE
+
 // Check each recent item in a separate thread so that we don't hang while
 // calling stat(). This is called periodically because files and entire
 // volumes can disappear and reappear at any time.
-void WiresharkApplication::refreshRecentFiles(void) {
+void WiresharkApplication::refreshRecentCaptures(void) {
     recent_item_status *ri;
     RecentFileStatus *rf_status;
 
     // We're in the middle of a capture. Don't create traffic.
     if (active_captures_ > 0) return;
 
-    foreach (ri, recent_items_) {
+    foreach (ri, recent_captures_) {
         if (ri->in_thread) {
             continue;
         }
@@ -246,16 +277,25 @@ void WiresharkApplication::setMonospaceFont(const char *font_string) {
 
     if (font_string && strlen(font_string) > 0) {
         mono_font_.fromString(font_string);
-//        mono_bold_font_ = QFont(mono_regular_font_);
-//        mono_bold_font_.setBold(true);
-        return;
+
+        // Only accept the font name if it actually exists.
+        if (mono_font_.family() == QFontInfo(mono_font_).family()) {
+            return;
+        }
     }
 
     // http://en.wikipedia.org/wiki/Category:Monospaced_typefaces
     const char *win_default_font = "Consolas";
     const char *win_alt_font = "Lucida Console";
-    const char *osx_default_font = "Menlo";
-    const char *osx_alt_font = "Monaco";
+    // SF Mono might be a system font someday. Right now (Oct 2016) it appears
+    // to be limited to Xcode and Terminal.
+    // http://www.openradar.me/26790072
+    // http://www.openradar.me/26862220
+    const char *osx_default_font = "SF Mono";
+    const QStringList osx_alt_fonts = QStringList() << "Menlo" << "Monaco";
+    // XXX Detect Ubuntu systems (e.g. via /etc/os-release and/or
+    // /etc/lsb_release) and add "Ubuntu Mono Regular" there.
+    // http://font.ubuntu.com/
     const char *x11_default_font = "Liberation Mono";
     const QStringList x11_alt_fonts = QStringList() << "DejaVu Sans Mono" << "Bitstream Vera Sans Mono";
     const QStringList fallback_fonts = QStringList() << "Lucida Sans Typewriter" << "Inconsolata" << "Droid Sans Mono" << "Andale Mono" << "Courier New" << "monospace";
@@ -265,14 +305,14 @@ void WiresharkApplication::setMonospaceFont(const char *font_string) {
     // Try to pick the latest, shiniest fixed-width font for our OS.
 #if defined(Q_OS_WIN)
     const char *default_font = win_default_font;
-    substitutes << win_alt_font << osx_default_font << osx_alt_font << x11_default_font << x11_alt_fonts << fallback_fonts;
+    substitutes << win_alt_font << osx_default_font << osx_alt_fonts << x11_default_font << x11_alt_fonts << fallback_fonts;
     font_size_adjust = 2;
 #elif defined(Q_OS_MAC)
     const char *default_font = osx_default_font;
-    substitutes << osx_alt_font << win_default_font << win_alt_font << x11_default_font << x11_alt_fonts << fallback_fonts;
+    substitutes << osx_alt_fonts << win_default_font << win_alt_font << x11_default_font << x11_alt_fonts << fallback_fonts;
 #else
     const char *default_font = x11_default_font;
-    substitutes << x11_alt_fonts << win_default_font << win_alt_font << osx_default_font << osx_alt_font << fallback_fonts;
+    substitutes << x11_alt_fonts << win_default_font << win_alt_font << osx_default_font << osx_alt_fonts << fallback_fonts;
 #endif
 
     mono_font_.setFamily(default_font);
@@ -280,8 +320,8 @@ void WiresharkApplication::setMonospaceFont(const char *font_string) {
     mono_font_.setPointSize(wsApp->font().pointSize() + font_size_adjust);
     mono_font_.setBold(false);
 
-//    mono_bold_font_ = QFont(mono_font_);
-//    mono_bold_font_.setBold(true);
+    // Retrieve the effective font and apply it.
+    mono_font_.setFamily(QFontInfo(mono_font_).family());
 
     g_free(prefs.gui_qt_font_name);
     prefs.gui_qt_font_name = qstring_strdup(mono_font_.toString());
@@ -294,9 +334,8 @@ int WiresharkApplication::monospaceTextSize(const char *str)
     return fm.width(str);
 }
 
-void WiresharkApplication::setConfigurationProfile(const gchar *profile_name)
+void WiresharkApplication::setConfigurationProfile(const gchar *profile_name, bool write_recent)
 {
-    char  *gdp_path, *dp_path;
     char  *rf_path;
     int    rf_open_errno;
     gchar *err_msg = NULL;
@@ -338,7 +377,8 @@ void WiresharkApplication::setConfigurationProfile(const gchar *profile_name)
     /* Get the current geometry, before writing it to disk */
     emit profileChanging();
 
-    if (profile_exists(get_profile_name(), FALSE)) {
+    if (write_recent && profile_exists(get_profile_name(), FALSE))
+    {
         /* Write recent file for profile we are leaving, if it still exists */
         write_profile_recent();
     }
@@ -348,7 +388,7 @@ void WiresharkApplication::setConfigurationProfile(const gchar *profile_name)
     emit profileNameChanged(profile_name);
 
     /* Apply new preferences */
-    readConfigurationFiles (&gdp_path, &dp_path, true);
+    readConfigurationFiles(true);
 
     if (!recent_read_profile_static(&rf_path, &rf_open_errno)) {
         simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
@@ -376,18 +416,11 @@ void WiresharkApplication::setConfigurationProfile(const gchar *profile_name)
 
     emit columnsChanged();
     emit preferencesChanged();
-    emit recentFilesRead();
+    emit recentPreferencesRead();
     emit filterExpressionsChanged();
     emit checkDisplayFilter();
     emit captureFilterListChanged();
     emit displayFilterListChanged();
-
-    /* Enable all protocols and disable from the disabled list */
-    proto_enable_all();
-    if (gdp_path == NULL && dp_path == NULL) {
-        set_disabled_protos_list();
-        set_disabled_heur_dissector_list();
-    }
 
     /* Reload color filters */
     if (!color_filters_reload(&err_msg, color_filter_add_cb)) {
@@ -431,6 +464,18 @@ void WiresharkApplication::applyCustomColorsFromRecent()
     }
 }
 
+// Return the first top-level QMainWindow.
+QWidget *WiresharkApplication::mainWindow()
+{
+    foreach (QWidget *tlw, topLevelWidgets()) {
+        QMainWindow *tlmw = qobject_cast<QMainWindow *>(tlw);
+        if (tlmw && tlmw->isVisible()) {
+            return tlmw;
+        }
+    }
+    return 0;
+}
+
 void WiresharkApplication::storeCustomColorsInRecent()
 {
     if (QColorDialog::customCount()) {
@@ -446,6 +491,124 @@ void WiresharkApplication::storeCustomColorsInRecent()
         }
     }
 }
+
+#ifdef _WIN32
+// Dell Backup and Recovery is awful and terrible.
+// https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=12036
+// https://bugreports.qt.io/browse/QTBUG-41416
+// http://en.community.dell.com/support-forums/software-os/f/3526/t/19634253
+// http://stackoverflow.com/a/33697140/82195
+//
+// According to https://www.portraitprofessional.com/support/?qid=79 , which
+// points to http://cloudfront.portraitprofessional.com/Tools/unregister_dell_backup.cmd
+// DBAR's shell extension DLLs are named DBROverlayIconBackuped.dll,
+// DBROverlayIconNotBackuped.dll, and DBRShellExtension.dll.
+//
+// Look for them in the registry and show a warning if we find any of them.
+//
+// This is obnoxious, but so is crashing. Hopefully we can remove it at some
+// point.
+
+// Returns only the most significant (major + minor) 32 bits of the version number.
+unsigned int WiresharkApplication::fileVersion(QString file_path) {
+    unsigned int version = 0;
+    DWORD gfvi_size = GetFileVersionInfoSize((LPCWSTR) file_path.utf16(), NULL);
+
+    if (gfvi_size == 0) {
+        return 0;
+    }
+
+    LPSTR version_info = new char[gfvi_size];
+    if (GetFileVersionInfo((LPCWSTR) file_path.utf16(), 0, gfvi_size, version_info)) {
+        void *vqv_buffer = NULL;
+        UINT vqv_size = 0;
+        if (VerQueryValue(version_info, TEXT("\\"), &vqv_buffer, &vqv_size)) {
+            VS_FIXEDFILEINFO *vqv_fileinfo = (VS_FIXEDFILEINFO *)vqv_buffer;
+            if (vqv_size && vqv_buffer && vqv_fileinfo->dwSignature == 0xfeef04bd) {
+                version = vqv_fileinfo->dwFileVersionMS;
+            }
+        }
+    }
+
+    delete[] version_info;
+    return version;
+}
+
+void WiresharkApplication::checkForDbar()
+{
+    QStringList dbar_dlls = QStringList()
+        // << "7-Zip.dll" // For testing. I don't have DBAR.
+        // << "shell32.dll"
+        << "DBROverlayIconBackuped.dll"
+        << "DBROverlayIconNotBackuped.dll"
+        << "DBRShellExtension.dll";
+    // List of HKCR subkeys in which to look for "shellex\ContextMenuHandlers".
+    // This may be incomplete.
+    // https://msdn.microsoft.com/en-us/library/windows/desktop/cc144110
+    QStringList hkcr_subkeys = QStringList()
+        << "*"
+        << "AllFileSystemObjects"
+        << "Folder"
+        << "Directory"
+        << "Drive";
+    QRegExp uuid_re("^\\{.+\\}");
+    QSet<QString> clsids;
+
+    // Look for context menu handler CLSIDs. We might want to skip this and
+    // just iterate through all of the CLSID subkeys below.
+    foreach (QString subkey, hkcr_subkeys) {
+        QString cmh_path = QString("HKEY_CLASSES_ROOT\\%1\\shellex\\ContextMenuHandlers").arg(subkey);
+        QSettings cmh_reg(cmh_path, QSettings::NativeFormat);
+        foreach (QString cmh_key, cmh_reg.allKeys()) {
+            // Add anything that looks like a UUID.
+            if (!cmh_key.endsWith("/.")) continue; // No default key?
+
+            // "Registering Shell Extension Handlers" says the subkey name
+            // should be the class ID...
+            if (cmh_key.contains(uuid_re)) {
+                cmh_key.chop(2);
+                clsids += cmh_key;
+                continue;
+            }
+
+            // ...it then gives an example with the subkey named after the
+            // application, with the default key containing the class ID.
+            QString cmh_default = cmh_reg.value(cmh_key).toString();
+            if (cmh_default.contains(uuid_re)) clsids += cmh_default;
+
+        }
+    }
+
+    // We have a list of context menu handler CLSIDs. Now look for
+    // offending DLLs.
+    foreach (QString clsid, clsids.toList()) {
+        QString inproc_path = QString("HKEY_CLASSES_ROOT\\CLSID\\%1\\InprocServer32").arg(clsid);
+        QSettings inproc_reg(inproc_path, QSettings::NativeFormat);
+        QString inproc_default = inproc_reg.value(".").toString();
+        if (inproc_default.isEmpty()) continue;
+
+        foreach (QString dbar_dll, dbar_dlls) {
+            // XXX We don't expand environment variables in the path.
+            unsigned int dll_version = fileVersion(inproc_default);
+            unsigned int bad_version = 1 << 16 | 8; // Offending DBAR version is 1.8.
+            if (inproc_default.contains(dbar_dll, Qt::CaseInsensitive) && dll_version == bad_version) {
+                QMessageBox dbar_msgbox;
+                dbar_msgbox.setIcon(QMessageBox::Warning);
+                dbar_msgbox.setStandardButtons(QMessageBox::Ok);
+                dbar_msgbox.setWindowTitle(tr("Dell Backup and Recovery Found"));
+                dbar_msgbox.setText(tr("You appear to be running Dell Backup and Recovery 1.8."));
+                dbar_msgbox.setInformativeText(tr(
+                    "DBAR can make many applications crash"
+                    " <a href=\"https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=12036\">including Wireshark</a>."
+                ));
+                dbar_msgbox.setDetailedText(tr("Offending DLL: %1").arg(inproc_default));
+                dbar_msgbox.exec();
+                return;
+            }
+        }
+    }
+}
+#endif
 
 void WiresharkApplication::setLastOpenDir(const char *dir_name)
 {
@@ -487,10 +650,22 @@ bool WiresharkApplication::event(QEvent *event)
     return QApplication::event(event);
 }
 
-void WiresharkApplication::clearRecentItems() {
-    qDeleteAll(recent_items_);
-    recent_items_.clear();
-    emit updateRecentItemStatus(NULL, 0, false);
+void WiresharkApplication::captureStarted()
+{
+    active_captures_++;
+    emit captureActive(active_captures_);
+}
+
+void WiresharkApplication::captureFinished()
+{
+    active_captures_--;
+    emit captureActive(active_captures_);
+}
+
+void WiresharkApplication::clearRecentCaptures() {
+    qDeleteAll(recent_captures_);
+    recent_captures_.clear();
+    emit updateRecentCaptureStatus(NULL, 0, false);
 }
 
 void WiresharkApplication::captureFileReadStarted()
@@ -508,20 +683,20 @@ void WiresharkApplication::cleanup()
     write_profile_recent();
     write_recent();
 
-    qDeleteAll(recent_items_);
-    recent_items_.clear();
+    qDeleteAll(recent_captures_);
+    recent_captures_.clear();
 }
 
 void WiresharkApplication::itemStatusFinished(const QString filename, qint64 size, bool accessible) {
     recent_item_status *ri;
 
-    foreach (ri, recent_items_) {
+    foreach (ri, recent_captures_) {
         if (filename == ri->filename && (size != ri->size || accessible != ri->accessible)) {
             ri->size = size;
             ri->accessible = accessible;
             ri->in_thread = false;
 
-            emit updateRecentItemStatus(filename, size, accessible);
+            emit updateRecentCaptureStatus(filename, size, accessible);
         }
     }
 }
@@ -567,13 +742,13 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     //
     // QFileSystemWatcher should allow us to watch for files being
     // removed or renamed.  It uses kqueues and EVFILT_VNODE on FreeBSD,
-    // NetBSD, FSEvents on OS X, inotify on Linux if available, and
+    // NetBSD, FSEvents on macOS, inotify on Linux if available, and
     // FindFirstChagneNotification() on Windows.  On all other platforms,
     // it just periodically polls, as we're doing now.
     //
     // For unmounts:
     //
-    // OS X and FreeBSD deliver NOTE_REVOKE notes for EVFILT_VNODE, and
+    // macOS and FreeBSD deliver NOTE_REVOKE notes for EVFILT_VNODE, and
     // QFileSystemWatcher delivers signals for them, just as it does for
     // NOTE_DELETE and NOTE_RENAME.
     //
@@ -600,7 +775,7 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     //
     // Note also that remote file systems might not report file
     // removal or renames if they're done on the server or done by
-    // another client.  At least on OS X, they *will* get reported
+    // another client.  At least on macOS, they *will* get reported
     // if they're done on the machine running the program doing the
     // kqueue stuff, and, at least in newer versions, should get
     // reported on SMB-mounted (and AFP-mounted?) file systems
@@ -616,7 +791,7 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     // catch *that* would be to watch for mounts and re-check all
     // marked-as-inaccessible files.
     //
-    // OS X and FreeBSD also support EVFILT_FS events, which notify you
+    // macOS and FreeBSD also support EVFILT_FS events, which notify you
     // of file system mounts and unmounts.  We'd need to add our own
     // kqueue for that, if we can check those with QSocketNotifier.
     //
@@ -638,7 +813,7 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     // (Speaking of automounters, repeatedly polling recent files will
     // keep the file system from being unmounted, for what that's worth.)
     //
-    // At least on OS X, you can determine whether a file is on an
+    // At least on macOS, you can determine whether a file is on an
     // automounted file system by calling statfs() on its path and
     // checking whether MNT_AUTOMOUNTED is set in f_flags.  FreeBSD
     // appears to support that flag as well, but no other *BSD appears
@@ -647,7 +822,7 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     // I'm not sure what can be done on Linux.
     //
     recent_timer_.setParent(this);
-    connect(&recent_timer_, SIGNAL(timeout()), this, SLOT(refreshRecentFiles()));
+    connect(&recent_timer_, SIGNAL(timeout()), this, SLOT(refreshRecentCaptures()));
     recent_timer_.start(2000);
 
     addr_resolv_timer_.setParent(this);
@@ -662,7 +837,7 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     // Application-wide style sheet
     QString app_style_sheet = qApp->styleSheet();
 #if defined(Q_OS_MAC) && QT_VERSION < QT_VERSION_CHECK(5, 6, 0)
-    // Qt uses the HITheme API to draw splitters. In recent versions of OS X
+    // Qt uses the HITheme API to draw splitters. In recent versions of macOS
     // this looks particularly bad: https://bugreports.qt.io/browse/QTBUG-43425
     // This doesn't look native but it looks better than Yosemite's bit-rotten
     // rendering of HIThemeSplitterDrawInfo.
@@ -672,7 +847,24 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
 #endif
     qApp->setStyleSheet(app_style_sheet);
 
+    // If our window text is lighter than the window background, assume the theme is dark.
+    QPalette gui_pal = qApp->palette();
+    prefs_set_gui_theme_is_dark(gui_pal.windowText().color().value() > gui_pal.window().color().value());
+
+#ifdef HAVE_SOFTWARE_UPDATE
+    connect(this, SIGNAL(softwareUpdateQuit()), this, SLOT(quit()), Qt::QueuedConnection);
+#endif
+
+#ifdef _WIN32
+    checkForDbar();
+#endif
+
     connect(qApp, SIGNAL(aboutToQuit()), this, SLOT(cleanup()));
+}
+
+WiresharkApplication::~WiresharkApplication()
+{
+    free_filter_lists();
 }
 
 void WiresharkApplication::registerUpdate(register_action_e action, const char *message)
@@ -695,6 +887,9 @@ void WiresharkApplication::emitAppSignal(AppSignal signal)
     case FilterExpressionsChanged:
         emit filterExpressionsChanged();
         break;
+    case LocalInterfacesChanged:
+        emit localInterfaceListChanged();
+        break;
     case NameResolutionChanged:
         emit addressResolutionChanged();
         break;
@@ -704,8 +899,11 @@ void WiresharkApplication::emitAppSignal(AppSignal signal)
     case PacketDissectionChanged:
         emit packetDissectionChanged();
         break;
-    case RecentFilesRead:
-        emit recentFilesRead();
+    case RecentCapturesChanged:
+        emit updateRecentCaptureStatus(NULL, 0, false);
+        break;
+    case RecentPreferencesRead:
+        emit recentPreferencesRead();
         break;
     case FieldsChanged:
         emit fieldsChanged();
@@ -717,7 +915,7 @@ void WiresharkApplication::emitAppSignal(AppSignal signal)
 
 // Flush any collected app signals.
 //
-// On OS X emitting PacketDissectionChanged from a dialog can
+// On macOS emitting PacketDissectionChanged from a dialog can
 // render the application unusable:
 // https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=11361
 // https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=11448
@@ -879,6 +1077,10 @@ void WiresharkApplication::ifChangeEventsAvailable()
 
 void WiresharkApplication::refreshLocalInterfaces()
 {
+#ifdef HAVE_EXTCAP
+    extcap_clear_interfaces();
+#endif
+
 #ifdef HAVE_LIBPCAP
     /*
      * Reload the local interface list.
@@ -911,61 +1113,28 @@ void WiresharkApplication::allSystemsGo()
     err = iface_mon_start(&iface_mon_event_cb);
     if (err == 0) {
         if_notifier_ = new QSocketNotifier(iface_mon_get_sock(),
-                                           QSocketNotifier::Read);
+                                           QSocketNotifier::Read, this);
         connect(if_notifier_, SIGNAL(activated(int)), SLOT(ifChangeEventsAvailable()));
     }
 #endif
 }
 
-_e_prefs *WiresharkApplication::readConfigurationFiles(char **gdp_path, char **dp_path, bool reset)
+_e_prefs *WiresharkApplication::readConfigurationFiles(bool reset)
 {
-    int                  gpf_open_errno, gpf_read_errno;
-    int                  cf_open_errno, df_open_errno;
-    int                  gdp_open_errno, gdp_read_errno;
-    int                  dp_open_errno, dp_read_errno;
-    char                *gpf_path, *pf_path;
-    char                *cf_path, *df_path;
-    int                  pf_open_errno, pf_read_errno;
     e_prefs             *prefs_p;
 
     if (reset) {
-        // reset preferences before reading
+        //
+        // Reset current preferences and enabled/disabled protocols and
+        // heuristic dissectors before reading.
+        // (Needed except when this is called at startup.)
+        //
         prefs_reset();
+        proto_reenable_all();
     }
 
-    /* load the decode as entries of this profile */
-    load_decode_as_entries();
-
-    /* Read the preference files. */
-    prefs_p = read_prefs(&gpf_open_errno, &gpf_read_errno, &gpf_path,
-                         &pf_open_errno, &pf_read_errno, &pf_path);
-
-    if (gpf_path != NULL) {
-        if (gpf_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open global preferences file\n\"%s\": %s.", gpf_path,
-                          g_strerror(gpf_open_errno));
-        }
-        if (gpf_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading global preferences file\n\"%s\": %s.", gpf_path,
-                          g_strerror(gpf_read_errno));
-        }
-    }
-    if (pf_path != NULL) {
-        if (pf_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open your preferences file\n\"%s\": %s.", pf_path,
-                          g_strerror(pf_open_errno));
-        }
-        if (pf_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading your preferences file\n\"%s\": %s.", pf_path,
-                          g_strerror(pf_read_errno));
-        }
-        g_free(pf_path);
-        pf_path = NULL;
-    }
+    /* Load libwireshark settings from the current profile. */
+    prefs_p = epan_load_settings();
 
 #ifdef _WIN32
     /* if the user wants a console to be always there, well, we should open one for him */
@@ -975,62 +1144,16 @@ _e_prefs *WiresharkApplication::readConfigurationFiles(char **gdp_path, char **d
 #endif
 
     /* Read the capture filter file. */
-    read_filter_list(CFILTER_LIST, &cf_path, &cf_open_errno);
-    if (cf_path != NULL) {
-        simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                      "Could not open your capture filter file\n\"%s\": %s.", cf_path,
-                      g_strerror(cf_open_errno));
-        g_free(cf_path);
-    }
+    read_filter_list(CFILTER_LIST);
 
     /* Read the display filter file. */
-    read_filter_list(DFILTER_LIST, &df_path, &df_open_errno);
-    if (df_path != NULL) {
-        simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                      "Could not open your display filter file\n\"%s\": %s.", df_path,
-                      g_strerror(df_open_errno));
-        g_free(df_path);
-    }
-
-    /* Read the disabled protocols file. */
-    read_disabled_protos_list(gdp_path, &gdp_open_errno, &gdp_read_errno,
-                              dp_path, &dp_open_errno, &dp_read_errno);
-    read_disabled_heur_dissector_list(gdp_path, &gdp_open_errno, &gdp_read_errno,
-                              dp_path, &dp_open_errno, &dp_read_errno);
-    if (*gdp_path != NULL) {
-        if (gdp_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open global disabled protocols file\n\"%s\": %s.",
-                          *gdp_path, g_strerror(gdp_open_errno));
-        }
-        if (gdp_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading global disabled protocols file\n\"%s\": %s.",
-                          *gdp_path, g_strerror(gdp_read_errno));
-        }
-        g_free(*gdp_path);
-        *gdp_path = NULL;
-    }
-    if (*dp_path != NULL) {
-        if (dp_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open your disabled protocols file\n\"%s\": %s.", *dp_path,
-                          g_strerror(dp_open_errno));
-        }
-        if (dp_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading your disabled protocols file\n\"%s\": %s.", *dp_path,
-                          g_strerror(dp_read_errno));
-        }
-        g_free(*dp_path);
-        *dp_path = NULL;
-    }
+    read_filter_list(DFILTER_LIST);
 
     return prefs_p;
 }
 
 QList<recent_item_status *> WiresharkApplication::recentItems() const {
-    return recent_items_;
+    return recent_captures_;
 }
 
 void WiresharkApplication::addRecentItem(const QString filename, qint64 size, bool accessible) {
@@ -1040,9 +1163,36 @@ void WiresharkApplication::addRecentItem(const QString filename, qint64 size, bo
     ri->size = size;
     ri->accessible = accessible;
     ri->in_thread = false;
-    recent_items_.prepend(ri);
+    recent_captures_.prepend(ri);
 
     itemStatusFinished(filename, size, accessible);
+}
+
+void WiresharkApplication::removeRecentItem(const QString &filename)
+{
+    QMutableListIterator<recent_item_status *> rii(recent_captures_);
+
+    while (rii.hasNext()) {
+        recent_item_status *ri = rii.next();
+#ifdef _WIN32
+        /* Do a case insensitive compare on win32 */
+        if (ri->filename.compare(filename, Qt::CaseInsensitive) == 0) {
+#else
+        /* Do a case sensitive compare on UN*Xes.
+         *
+         * XXX - on UN*Xes such as macOS, where you can use pathconf()
+         * to check whether a given file system is case-sensitive or
+         * not, we should check whether this particular file system
+         * is case-sensitive and do the appropriate comparison.
+         */
+        if (ri->filename.compare(filename) == 0) {
+#endif
+            rii.remove();
+            delete(ri);
+        }
+    }
+
+    emit updateRecentCaptureStatus(NULL, 0, false);
 }
 
 static void switchTranslator(QTranslator& myTranslator, const QString& filename,
@@ -1091,6 +1241,48 @@ void WiresharkApplication::loadLanguage(const QString newLanguage)
             QLibraryInfo::location(QLibraryInfo::TranslationsPath));
     }
 }
+
+void WiresharkApplication::doTriggerMenuItem(MainMenuItem menuItem)
+{
+    switch (menuItem)
+    {
+    case FileOpenDialog:
+        emit openCaptureFile(QString(), QString(), WTAP_TYPE_AUTO);
+        break;
+    case CaptureOptionsDialog:
+        emit openCaptureOptions();
+        break;
+    }
+}
+
+#ifdef HAVE_SOFTWARE_UPDATE
+bool WiresharkApplication::softwareUpdateCanShutdown() {
+    software_update_ok_ = true;
+    // At this point the update is ready to install, but WinSparkle has
+    // not yet run the installer. We need to close our "Wireshark is
+    // running" mutexes along with those of our child processes, e.g.
+    // dumpcap.
+
+    // Step 1: See if we have any open files.
+    emit softwareUpdateRequested();
+    if (software_update_ok_ == true) {
+
+        // Step 2: Close the "running" mutexes.
+        emit softwareUpdateClose();
+        close_app_running_mutex();
+    }
+    return software_update_ok_;
+}
+
+void WiresharkApplication::softwareUpdateShutdownRequest() {
+    // At this point the installer has been launched. Neither Wireshark nor
+    // its children should have any "Wireshark is running" mutexes open.
+    // The main window should be closed.
+
+    // Step 3: Quit.
+    emit softwareUpdateQuit();
+}
+#endif
 
 /*
  * Editor modelines

@@ -273,6 +273,8 @@ static gint ett_opt_params      = -1;
 static gint ett_opt_param       = -1;
 static gint ett_dcs             = -1;
 
+static dissector_handle_t smpp_handle;
+
 /* Reassemble SMPP TCP segments */
 static gboolean reassemble_over_tcp = TRUE;
 
@@ -1959,7 +1961,7 @@ submit_sm(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo,
             /* Set SMPP source and destination address */
             set_address(&(pinfo->src), AT_STRINGZ, 1+(int)strlen(src_str), src_str);
             set_address(&(pinfo->dst), AT_STRINGZ, 1+(int)strlen(dst_str), dst_str);
-            tvb_msg = tvb_new_subset (tvb, offset,
+            tvb_msg = tvb_new_subset_length_caplen (tvb, offset,
                     MIN(length, tvb_reported_length(tvb) - offset), length);
             call_dissector (gsm_sms_handle, tvb_msg, pinfo, top_tree);
             /* Restore original addresses */
@@ -2389,7 +2391,7 @@ dissect_smpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
                 return offset;
             if (pdu_real_len > pdu_len)
                 pdu_real_len = pdu_len;
-            pdu_tvb = tvb_new_subset(tvb, offset, pdu_real_len, pdu_len);
+            pdu_tvb = tvb_new_subset_length_caplen(tvb, offset, pdu_real_len, pdu_len);
             dissect_smpp_pdu(pdu_tvb, pinfo, tree, data);
             offset += pdu_len;
             first = FALSE;
@@ -2491,11 +2493,11 @@ dissect_smpp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
          * Reported length: command_length
          */
         if (tvb_captured_length_remaining(tvb, offset - 16 + command_length) > 0) {
-            pdu_tvb = tvb_new_subset(tvb, offset - 16,
+            pdu_tvb = tvb_new_subset_length_caplen(tvb, offset - 16,
                     command_length,     /* Physical length */
                     command_length);    /* Length reported by the protocol */
         } else {
-            pdu_tvb = tvb_new_subset(tvb, offset - 16,
+            pdu_tvb = tvb_new_subset_length_caplen(tvb, offset - 16,
                     tvb_captured_length_remaining(tvb, offset - 16),/* Physical length */
                     command_length);    /* Length reported by the protocol */
         }
@@ -2547,7 +2549,7 @@ dissect_smpp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
              */
             if (command_length <= tvb_reported_length(pdu_tvb))
             {
-                tvbuff_t *tmp_tvb = tvb_new_subset(pdu_tvb, 16,
+                tvbuff_t *tmp_tvb = tvb_new_subset_length_caplen(pdu_tvb, 16,
                         -1, command_length - 16);
                 if (command_id & 0x80000000)
                 {
@@ -3741,7 +3743,7 @@ proto_register_smpp(void)
     proto_register_subtree_array(ett, array_length(ett));
 
     /* Allow other dissectors to find this one by name. */
-    register_dissector("smpp", dissect_smpp, proto_smpp);
+    smpp_handle = register_dissector("smpp", dissect_smpp, proto_smpp);
 
     /* Register for tapping */
     smpp_tap = register_tap("smpp");
@@ -3760,8 +3762,6 @@ proto_register_smpp(void)
 void
 proto_reg_handoff_smpp(void)
 {
-    dissector_handle_t smpp_handle;
-
     /*
      * SMPP can be spoken on any port under TCP or X.25
      * ...how *do* we do that under X.25?
@@ -3771,8 +3771,7 @@ proto_reg_handoff_smpp(void)
      * to specify that a given X.25 circuit is to be dissected as SMPP,
      * however.
      */
-    smpp_handle = find_dissector("smpp");
-    dissector_add_for_decode_as("tcp.port", smpp_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", smpp_handle);
     heur_dissector_add("tcp", dissect_smpp_heur, "SMPP over TCP", "smpp_tcp", proto_smpp, HEURISTIC_ENABLE);
     heur_dissector_add("x.25", dissect_smpp_heur, "SMPP over X.25", "smpp_x25", proto_smpp, HEURISTIC_ENABLE);
 

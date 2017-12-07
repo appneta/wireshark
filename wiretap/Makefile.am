@@ -189,7 +189,11 @@ libwiretap_la_SOURCES = \
 	ws_version_info.c
 
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
+<<<<<<< HEAD
 libwiretap_la_LDFLAGS = -version-info 6:4:0 @LDFLAGS_SHAREDLIB@
+=======
+libwiretap_la_LDFLAGS = -version-info 7:4:0 @LDFLAGS_SHAREDLIB@
+>>>>>>> upstream/master-2.4
 
 libwiretap_la_LIBADD = libwiretap_generated.la ${top_builddir}/wsutil/libwsutil.la $(GLIB_LIBS)
 
@@ -238,18 +242,22 @@ ascend.c: $(srcdir)/ascend.y ascend_scanner_lex.h
 	$(AM_V_YACC)$(YACC) -d -p ascend -o ascend.c $(srcdir)/ascend.y
 
 ws_version_info.c: $(top_srcdir)/ws_version_info.c
-	$(AM_V_LN_S)$(LN_S) $<
+	$(AM_V_LN_S)$(LN_S) $< $(builddir)
 
 # ABI compliance checker can be obtained from
 # http://ispras.linux-foundation.org/index.php/ABI_compliance_checker
 # Checked using version 1.21.12
+#
+# (f)lex generated headers are not part of API and may not include
+# all needed headers for used types
 dumpabi-libwiretap: all abi-descriptor.xml
 	rm -rf abi-check-headers abi_dumps .libs/*.abi.tar.gz
 	mkdir abi-check-headers
 	cp *.h ../ws_symbol_export.h abi-check-headers/
+	rm abi-check-headers/*_lex.h abi-check-headers/ascend.h
 	abi-compliance-checker -log-path abi_logs/log.txt -l libwiretap -v1 `readlink .libs/libwiretap.so | sed 's/.*\.so\.//'` \
 		-relpath $(abs_srcdir) -dump-abi abi-descriptor.xml || \
-		cat logs/libwiretap/[0-9]*/log.txt
+		cat abi_logs/log.txt
 	cp -f abi_dumps/libwiretap/libwiretap_* .libs/
 	cd .libs && ln -sf libwiretap_*.abi.tar.gz libwiretap.abi.tar.gz
 

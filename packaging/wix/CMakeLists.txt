@@ -90,7 +90,7 @@ set(WIRESHARK_LIB_DIR "${_wireshark_lib_dir}")
 set(WINPCAP_PACKAGE_VERSION ${WINPCAP_VERSION})
 string(REPLACE "_" "." PCAP_DISPLAY_VERSION "${WINPCAP_PACKAGE_VERSION}")
 
-set(USBPCAP_DISPLAY_VERSION "1.1.0.0-g794bf26-5")
+set(USBPCAP_DISPLAY_VERSION "1.2.0.3")
 
 set(PRODUCT_VERSION ${PROJECT_MAJOR_VERSION}.${PROJECT_MINOR_VERSION}.${PROJECT_PATCH_VERSION}.${PROJECT_BUILD_VERSION})
 
@@ -101,11 +101,27 @@ set(PRODUCT_VERSION ${PROJECT_MAJOR_VERSION}.${PROJECT_MINOR_VERSION}.${PROJECT_
 set (VERSION "${PROJECT_VERSION}")
 set (PRODUCT_VERSION=${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}.${VERSION_BUILD})
 
-# Use the merge module that comes with Visual Studio (From MSVC 2013?)
-# This is currently hardcoded for MSVC 2013
-set (MSVC_CRT_VERSION "VC120")
-set (MSVC_REDIST_DIR "$ENV{PROGRAMFILES}/Common Files/Merge Modules")
-message(STATUS "Using ${MSVC_REDIST_DIR}/Microsoft_${MSVC_CRT_VERSION}_CRT_${TARGET_MACHINE}.msm for the installer")
+# Use the merge module that comes with our version of Visual Studio
+if(MSVC_VERSION GREATER_EQUAL 1910)
+	set (MSVC_CRT_VERSION "VC141")
+elseif(MSVC_VERSION GREATER_EQUAL 1900)
+	set (MSVC_CRT_VERSION "VC140")
+elseif(MSVC_VERSION GREATER_EQUAL 1800)
+	set (MSVC_CRT_VERSION "VC120")
+endif()
+
+set(MERGE_MODULE "Microsoft_${MSVC_CRT_VERSION}_CRT_${TARGET_MACHINE}.msm")
+set (PF86_ENV "ProgramFiles(x86)")
+
+find_path(MERGE_MODULE_DIR ${MERGE_MODULE}
+	PATHS
+		#"$ENV{VCINSTALLDIR}/VC/Redist/MSVC/how-do-we-get-this-version/Merge Modules"
+		"$ENV{${PF86_ENV}}/Common Files/Merge Modules"
+		"$ENV{PROGRAMFILES}/Common Files/Merge Modules"
+	NO_DEFAULT_PATH
+)
+
+message(STATUS "Using ${MERGE_MODULE_DIR}/Microsoft_${MSVC_CRT_VERSION}_CRT_${TARGET_MACHINE}.msm for the installer")
 
 if(NOT ENABLE_STATIC)
 	# XXX Replace ENABLE_LIBWIRESHARK with !ENABLE_STATIC everywhere.
@@ -122,8 +138,9 @@ file(APPEND "${_all_manifest_wix}" "  <Fragment>\n")
 file(APPEND "${_all_manifest_wix}" "    <DirectoryRef Id=\"INSTALLFOLDER\">\n")
 SET(unique_component "")
 foreach(_dll ${GLIB2_DLLS} ${CARES_DLL} ${GCRYPT_DLLS} ${GEOIP_DLL}
-		${GNUTLS_DLLS} ${KERBEROS_DLLS} ${LUA_DLL} ${SMI_DLL} ${LIBSSH_DLL}
-		${WINSPARKLE_DLL} ${ZLIB_DLL}
+		${GNUTLS_DLLS} ${KERBEROS_DLLS} ${LIBSSH_DLL} ${LUA_DLL}
+		${LZ4_DLL} ${NGHTTP2_DLL} ${SBC_DLL} ${SMI_DLL} ${SNAPPY_DLL}
+		${SPANDSP_DLL} ${LIBXML2_DLL} ${WINSPARKLE_DLL} ${ZLIB_DLL}
 	)
 	#ensure uniqueness of files
 	IF(NOT "${unique_component}" MATCHES "(^|;)${_dll}(;|$)")
@@ -146,8 +163,9 @@ file(APPEND "${_all_manifest_wix}" "  <Fragment>\n")
 file(APPEND "${_all_manifest_wix}" "    <ComponentGroup Id=\"CG.RequiredDependencies\">\n")
 SET(unique_file "")
 foreach(_dll ${GLIB2_DLLS} ${CARES_DLL} ${GCRYPT_DLLS} ${GEOIP_DLL}
-		${GNUTLS_DLLS} ${KERBEROS_DLLS} ${LUA_DLL} ${SMI_DLL} ${LIBSSH_DLL}
-		${WINSPARKLE_DLL} ${ZLIB_DLL}
+		${GNUTLS_DLLS} ${KERBEROS_DLLS} ${LIBSSH_DLL} ${LUA_DLL}
+		${LZ4_DLL} ${NGHTTP2_DLL} ${SBC_DLL} ${SMI_DLL} ${SNAPPY_DLL}
+		${SPANDSP_DLL} ${LIBXML2_DLL} ${WINSPARKLE_DLL} ${ZLIB_DLL}
 	)
 	#ensure uniqueness of files
 	IF(NOT "${unique_file}" MATCHES "(^|;)${_dll}(;|$)")
@@ -292,12 +310,13 @@ set(WIX_CANDLE_DEFINES
 	-dWiresharkVersion=${PRODUCT_VERSION}
 	-dAssetDir=${CMAKE_SOURCE_DIR}/packaging/wix
 	-dBuildOutputDir=${EXECUTABLE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}
-	-dVCRedistVersion=${MSVC_CRT_VERSION}
-	-dVCRedistDir=${MSVC_REDIST_DIR}
-	-dSnmpMibDir=${ARCHIVE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/snmp/mibs
-	-dRadiusDictDir=${ARCHIVE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/radius
 	-dDiameterDir=${ARCHIVE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/diameter
+	-dIconDir=${CMAKE_SOURCE_DIR}/image
 	-dQtTranslationDir=${ARCHIVE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/translations
+	-dRadiusDictDir=${ARCHIVE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/radius
+	-dSnmpMibDir=${ARCHIVE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/snmp/mibs
+	-dVCRedistVersion=${MSVC_CRT_VERSION}
+	-dVCRedistDir=${MERGE_MODULE_DIR}
 	${use_gtk}
 	${use_smi}
 	${ENABLE_LIBWIRESHARK}
@@ -308,10 +327,12 @@ set(WIX_CANDLE_DEFINES
 	PARENT_SCOPE
 )
 
+# The NSIS CMakeFile sets the program name + version slightly differently.
 set(WIX_LIGHT_DEFINES
-	-out ${CMAKE_CURRENT_BINARY_DIR}/Wireshark.msi
+	-out ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}-${WIRESHARK_TARGET_PLATFORM}-${PROJECT_VERSION}.msi
 	-sw1076
 	-ext WixUIExtension
+	-loc ${CMAKE_CURRENT_SOURCE_DIR}/StringOverrides.wxl
 	PARENT_SCOPE
 )
 
@@ -329,7 +350,7 @@ macro( ADD_WIX_PACKAGE_TARGET )
 
 	# QtDependentComponents.wxs. Created using Wireshark.exe.
 	add_custom_command(OUTPUT ${_wix_binary_dir}/QtDependentComponents.wxs
-		COMMAND set "PATH=%PATH%;${QT_BIN_PATH}"
+		COMMAND set "PATH=${QT_BIN_PATH};%PATH%"
 		COMMAND ${POWERSHELL_COMMAND} "${_wix_source_dir}/windeployqt-to-wix.ps1"
 			-Executable $<TARGET_FILE:wireshark>
 			-FilePath ${_wix_binary_dir}/QtDependentComponents.wxs

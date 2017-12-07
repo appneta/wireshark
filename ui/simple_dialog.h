@@ -80,7 +80,11 @@ typedef enum {
 
 /** Create and show a simple dialog.
  *
+<<<<<<< HEAD
  * @param Type type of dialog, e.g. ESD_TYPE_WARN
+=======
+ * @param type type of dialog, e.g. ESD_TYPE_WARN
+>>>>>>> upstream/master-2.4
  * @param btn_mask The buttons to display, e.g. ESD_BTNS_OK_CANCEL
  * @param msg_format Printf like message format. Text must be plain.
  * @param ... Printf like parameters
@@ -147,6 +151,11 @@ extern void vsimple_error_message_box(const char *msg_format, va_list ap);
  * Error alert box, taking a format and a list of arguments.
  */
 extern void simple_error_message_box(const char *msg_format, ...) G_GNUC_PRINTF(1, 2);
+
+/*
+ * Warning alert box, taking a format and a va_list argument.
+ */
+extern void vsimple_warning_message_box(const char *msg_format, va_list ap);
 
 #ifdef __cplusplus
 }

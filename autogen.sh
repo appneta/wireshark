@@ -26,7 +26,7 @@ DIE=true
 PROJECT="Wireshark"
 
 # If you are going to use the non-default name for automake becase your OS
-# installaion has multiple versions, you need to call both aclocal and automake
+# installation has multiple versions, you need to call both aclocal and automake
 # with that version number, as they come from the same package.
 #AM_VERSION='-1.8'
 
@@ -135,13 +135,13 @@ fi
 
 $DIE
 
+LTARGS=" --copy --force"
+echo $LIBTOOLIZE $LTARGS
+$LIBTOOLIZE $LTARGS || exit 1
 aclocal_flags="-I m4"
 aclocalinclude="$ACLOCAL_FLAGS $aclocal_flags";
 echo $ACLOCAL $aclocalinclude
 $ACLOCAL $aclocalinclude || exit 1
-LTARGS=" --copy --force"
-echo $LIBTOOLIZE $LTARGS
-$LIBTOOLIZE $LTARGS || exit 1
 echo $AUTOHEADER
 $AUTOHEADER || exit 1
 echo $AUTOMAKE --add-missing --gnu $am_opt
@@ -149,12 +149,4 @@ $AUTOMAKE --add-missing --gnu $am_opt || exit 1
 echo $AUTOCONF
 $AUTOCONF || exit 1
 
-if [ `uname -s` = Darwin ] ; then
-    echo
-    echo "To configure Wireshark on OS X, you will need to type:"
-    echo "export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/X11/lib/pkgconfig"
-    echo "before you can run configure."
-fi
-
-echo
 echo "Now type \"./configure [options]\" and \"make\" to compile $PROJECT."

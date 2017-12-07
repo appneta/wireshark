@@ -36,7 +36,7 @@
 
 #include <wsutil/file_util.h>
 #include <wsutil/str_util.h>
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 
 #include <wsutil/filesystem.h>
 #include <epan/packet.h>
@@ -51,10 +51,6 @@
 
 static GPtrArray* all_uats = NULL;
 
-void uat_init(void) {
-    all_uats = g_ptr_array_new();
-}
-
 uat_t* uat_new(const char* name,
                size_t size,
                const char* filename,
@@ -67,6 +63,7 @@ uat_t* uat_new(const char* name,
                uat_update_cb_t update_cb,
                uat_free_cb_t free_cb,
                uat_post_update_cb_t post_update_cb,
+               uat_reset_cb_t reset_cb,
                uat_field_t* flds_array) {
     /* Create new uat */
     uat_t* uat = (uat_t *)g_malloc(sizeof(uat_t));
@@ -97,6 +94,7 @@ uat_t* uat_new(const char* name,
     uat->update_cb = update_cb;
     uat->free_cb = free_cb;
     uat->post_update_cb = post_update_cb;
+    uat->reset_cb = reset_cb;
     uat->fields = flds_array;
     uat->user_data = g_array_new(FALSE,FALSE,(guint)uat->record_size);
     uat->raw_data = g_array_new(FALSE,FALSE,(guint)uat->record_size);
@@ -106,7 +104,7 @@ uat_t* uat_new(const char* name,
     uat->from_global = FALSE;
     uat->rep = NULL;
     uat->free_rep = NULL;
-    uat->help = help;
+    uat->help = g_strdup(help);
     uat->flags = flags;
 
     for (i=0;flds_array[i].title;i++) {
@@ -131,14 +129,7 @@ void* uat_add_record(uat_t* uat, const void* data, gboolean valid_rec) {
     void* rec;
     gboolean* valid;
 
-    /* Save a copy of the raw (possibly that may contain invalid field values) data */
-    g_array_append_vals (uat->raw_data, data, 1);
-
-    rec = UAT_INDEX_PTR(uat, uat->raw_data->len - 1);
-
-    if (uat->copy_cb) {
-        uat->copy_cb(rec, data, (unsigned int) uat->record_size);
-    }
+    uat_insert_record_idx(uat, uat->raw_data->len, data);
 
     if (valid_rec) {
         /* Add a "known good" record to the list to be used by the dissector */
@@ -151,25 +142,24 @@ void* uat_add_record(uat_t* uat, const void* data, gboolean valid_rec) {
         }
 
         UAT_UPDATE(uat);
+
+        valid = &g_array_index(uat->valid_data, gboolean, uat->valid_data->len-1);
+        *valid = valid_rec;
     } else {
         rec = NULL;
     }
-
-    g_array_append_vals (uat->valid_data, &valid_rec, 1);
-    valid = &g_array_index(uat->valid_data, gboolean, uat->valid_data->len-1);
-    *valid = valid_rec;
 
     return rec;
 }
 
 /* Updates the validity of a record. */
-void uat_update_record(uat_t *uat, const void *data, gboolean valid_rec) {
+void uat_update_record(uat_t *uat, const void *record, gboolean valid_rec) {
     guint pos;
     gboolean *valid;
 
     /* Locate internal UAT data pointer. */
     for (pos = 0; pos < uat->raw_data->len; pos++) {
-        if (UAT_INDEX_PTR(uat, pos) == data) {
+        if (UAT_INDEX_PTR(uat, pos) == record) {
             break;
         }
     }
@@ -202,6 +192,25 @@ void uat_swap(uat_t* uat, guint a, guint b) {
     *(gboolean*)(uat->valid_data->data + (sizeof(gboolean) * (b))) = tmp_bool;
 
 
+}
+
+void uat_insert_record_idx(uat_t* uat, guint idx, const void *src_record) {
+    /* Allow insert before an existing item or append after the last item. */
+    g_assert( idx <= uat->raw_data->len );
+
+    /* Store a copy of the record and invoke copy_cb to clone pointers too. */
+    g_array_insert_vals(uat->raw_data, idx, src_record, 1);
+    void *rec = UAT_INDEX_PTR(uat, idx);
+    if (uat->copy_cb) {
+        uat->copy_cb(rec, src_record, (unsigned int) uat->record_size);
+    } else {
+        memcpy(rec, src_record, (unsigned int) uat->record_size);
+    }
+
+    /* Initially assume that the record is invalid, it is not copied to the
+     * user-visible records list. */
+    gboolean valid_rec = FALSE;
+    g_array_insert_val(uat->valid_data, idx, valid_rec);
 }
 
 void uat_remove_record_idx(uat_t* uat, guint idx) {
@@ -251,6 +260,42 @@ uat_t* uat_get_table_by_name(const char* name) {
     }
 
     return NULL;
+}
+
+char *uat_fld_tostr(void *rec, uat_field_t *f) {
+    guint        len;
+    char       *ptr;
+    char       *out;
+
+    f->cb.tostr(rec, &ptr, &len, f->cbdata.tostr, f->fld_data);
+
+    switch(f->mode) {
+        case PT_TXTMOD_NONE:
+        case PT_TXTMOD_STRING:
+        case PT_TXTMOD_ENUM:
+        case PT_TXTMOD_FILENAME:
+        case PT_TXTMOD_DIRECTORYNAME:
+            out = g_strndup(ptr, len);
+            break;
+        case PT_TXTMOD_HEXBYTES: {
+            GString *s = g_string_sized_new( len*2 + 1 );
+            guint i;
+
+            for (i=0; i<len;i++) g_string_append_printf(s, "%.2X", ((const guint8*)ptr)[i]);
+
+            out = g_strdup(s->str);
+
+            g_string_free(s, TRUE);
+            break;
+        }
+        default:
+            g_assert_not_reached();
+            out = NULL;
+            break;
+    }
+
+    g_free(ptr);
+    return out;
 }
 
 static void putfld(FILE* fp, void* rec, uat_field_t* f) {
@@ -342,8 +387,8 @@ gboolean uat_save(uat_t* uat, char** error) {
     /* Now copy "good" raw_data entries to user_data */
     for ( i = 0 ; i < uat->raw_data->len ; i++ ) {
         void *rec = UAT_INDEX_PTR(uat, i);
-        gboolean* valid = (gboolean*)(uat->valid_data->data + sizeof(gboolean)*i);
-        if (*valid) {
+        gboolean valid = g_array_index(uat->valid_data, gboolean, i);
+        if (valid) {
             g_array_append_vals(uat->user_data, rec, 1);
             if (uat->copy_cb) {
                 uat->copy_cb(UAT_USER_INDEX_PTR(uat, uat->user_data->len - 1),
@@ -377,12 +422,6 @@ gboolean uat_save(uat_t* uat, char** error) {
     uat->changed = FALSE;
 
     return TRUE;
-}
-
-void uat_destroy(uat_t* uat) {
-    /* XXX still missing a destructor */
-    g_ptr_array_remove(all_uats,uat);
-
 }
 
 uat_t *uat_find(gchar *name) {
@@ -419,6 +458,10 @@ void uat_clear(uat_t* uat) {
 
     *((uat)->user_ptr) = NULL;
     *((uat)->nrows_p) = 0;
+
+    if (uat->reset_cb) {
+        uat->reset_cb();
+    }
 }
 
 void uat_unload_all(void) {
@@ -434,15 +477,27 @@ void uat_unload_all(void) {
     }
 }
 
-#if 0
-static void uat_cleanup(void) {
-    while( all_uats->len ) {
-        uat_destroy((uat_t*)all_uats->pdata);
+void uat_cleanup(void) {
+    guint i;
+    guint j;
+    uat_t* uat;
+
+    for (i = 0; i < all_uats->len; i++) {
+        uat = (uat_t *)g_ptr_array_index(all_uats, i);
+        uat_clear(uat);
+        g_free(uat->help);
+        g_free(uat->name);
+        g_free(uat->filename);
+        g_array_free(uat->user_data, TRUE);
+        g_array_free(uat->raw_data, TRUE);
+        g_array_free(uat->valid_data, TRUE);
+        for (j = 0; uat->fields[j].title; j++)
+            g_free(uat->fields[j].priv);
+        g_free(uat);
     }
 
     g_ptr_array_free(all_uats,TRUE);
 }
-#endif
 
 void uat_foreach_table(uat_cb_t cb,void* user_data) {
     guint i;
@@ -451,7 +506,6 @@ void uat_foreach_table(uat_cb_t cb,void* user_data) {
         cb(g_ptr_array_index(all_uats,i), user_data);
 
 }
-
 
 void uat_load_all(void) {
     guint i;
@@ -600,7 +654,7 @@ gboolean uat_fld_chk_enum(void* u1 _U_, const char* strptr, guint len, const voi
 gboolean uat_fld_chk_range(void* u1 _U_, const char* strptr, guint len, const void* v _U_, const void* u3, char** err) {
     char* str = g_strndup(strptr,len);
     range_t* r = NULL;
-    convert_ret_t ret = range_convert_str(&r, str,GPOINTER_TO_UINT(u3));
+    convert_ret_t ret = range_convert_str(NULL, &r, str,GPOINTER_TO_UINT(u3));
     gboolean ret_value = FALSE;
 
     switch (  ret ) {
@@ -617,12 +671,13 @@ gboolean uat_fld_chk_range(void* u1 _U_, const char* strptr, guint len, const vo
             ret_value = FALSE;
             break;
         default:
-            *err = g_strdup("This should not happen, it is a bug in wireshark! please report to wireshark-dev@wireshark.org");
+            *err = g_strdup("Unable to convert range. Please report this to wireshark-dev@wireshark.org");
             ret_value = FALSE;
             break;
     }
 
     g_free(str);
+    wmem_free(NULL, r);
     return ret_value;
 }
 

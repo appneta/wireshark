@@ -68,6 +68,7 @@
 #include "packet-sflow.h"
 #include "packet-l2tp.h"
 #include "packet-vxlan.h"
+#include "packet-nsh.h"
 
 void proto_register_mpls(void);
 void proto_reg_handoff_mpls(void);
@@ -88,6 +89,7 @@ const value_string special_labels[] = {
     {MPLS_LABEL_IMPLICIT_NULL,       "Implicit-Null"},
     {MPLS_LABEL_OAM_ALERT,           "OAM Alert"},
     {MPLS_LABEL_GACH,                "Generic Associated Channel Label (GAL)"},
+    {MPLS_LABEL_ELI,                 "Entropy Label Indicator (ELI)"},
     {0, NULL }
 };
 
@@ -119,6 +121,9 @@ static expert_field ei_mpls_pw_ach_error_processing_message = EI_INIT;
 static expert_field ei_mpls_pw_ach_res = EI_INIT;
 static expert_field ei_mpls_pw_mcw_error_processing_message = EI_INIT;
 static expert_field ei_mpls_invalid_label = EI_INIT;
+
+static dissector_handle_t mpls_handle;
+static dissector_handle_t mpls_pwcw_handle;
 
 #if 0 /*not used yet*/
 /*
@@ -292,7 +297,7 @@ dissect_pw_ach(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
         call_data_dissector(next_tvb, pinfo, tree);
     }
 
-    if (channel_type == ACH_TYPE_BFD_CV)
+    if (channel_type == PW_ACH_TYPE_BFD_CV)
     {
         /* The BFD dissector has already been called, this is called in addition
            XXX - Perhaps a new dissector function that combines both is preferred.*/
@@ -413,7 +418,7 @@ dissect_mpls(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
             ti = proto_tree_add_item(tree, proto_mpls, tvb, offset, 4, ENC_NA);
             mpls_tree = proto_item_add_subtree(ti, ett_mpls);
 
-            if (mpls_bos_flowlabel) {
+            if (mpls_bos_flowlabel && bos) {
                 proto_item_append_text(ti, ", Label: %u (Flow Label)", label);
             } else {
                 proto_item_append_text(ti, ", Label: %u", label);
@@ -638,7 +643,8 @@ proto_register_mpls(void)
     expert_mpls = expert_register_protocol(proto_mpls);
     expert_register_field_array(expert_mpls, ei, array_length(ei));
 
-    register_dissector("mpls", dissect_mpls, proto_mpls);
+    mpls_handle = register_dissector("mpls", dissect_mpls, proto_mpls);
+    mpls_pwcw_handle = register_dissector("mplspwcw", dissect_pw_mcw, proto_pw_mcw );
 
     /* FF: mpls subdissector table is indexed by label */
     mpls_subdissector_table = register_dissector_table("mpls.label",
@@ -665,9 +671,6 @@ proto_register_mpls(void)
 void
 proto_reg_handoff_mpls(void)
 {
-    dissector_handle_t mpls_handle, mpls_pwcw_handle;
-
-    mpls_handle = find_dissector("mpls");
     dissector_add_uint("ethertype", ETHERTYPE_MPLS, mpls_handle);
     dissector_add_uint("ethertype", ETHERTYPE_MPLS_MULTI, mpls_handle);
     dissector_add_uint("ppp.protocol", PPP_MPLS_UNI, mpls_handle);
@@ -684,10 +687,10 @@ proto_reg_handoff_mpls(void)
     dissector_add_for_decode_as("pwach.channel_type", mpls_handle);
     dissector_add_uint("sflow_245.header_protocol", SFLOW_245_HEADER_MPLS, mpls_handle);
     dissector_add_uint("l2tp.pw_type", L2TPv3_PROTOCOL_MPLS, mpls_handle);
-    dissector_add_uint("udp.port", UDP_PORT_MPLS_OVER_UDP, mpls_handle);
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_MPLS_OVER_UDP, mpls_handle);
     dissector_add_uint("vxlan.next_proto", VXLAN_MPLS, mpls_handle);
+    dissector_add_uint("nsh.next_proto", NSH_MPLS, mpls_handle);
 
-    mpls_pwcw_handle = create_dissector_handle( dissect_pw_mcw, proto_pw_mcw );
     dissector_add_uint( "mpls.label", MPLS_LABEL_INVALID, mpls_pwcw_handle );
 
     dissector_ipv6                  = find_dissector_add_dependency("ipv6", proto_pw_mcw );

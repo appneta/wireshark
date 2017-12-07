@@ -156,6 +156,13 @@ static int hf_radiotap_vht_datarate[4] = { -1, -1, -1, -1 };
 static int hf_radiotap_vht_gid = -1;
 static int hf_radiotap_vht_p_aid = -1;
 static int hf_radiotap_vht_user = -1;
+static int hf_radiotap_timestamp = -1;
+static int hf_radiotap_timestamp_ts = -1;
+static int hf_radiotap_timestamp_accuracy = -1;
+static int hf_radiotap_timestamp_unit = -1;
+static int hf_radiotap_timestamp_spos = -1;
+static int hf_radiotap_timestamp_flags_32bit = -1;
+static int hf_radiotap_timestamp_flags_accuracy = -1;
 
 /* "Present" flags */
 static int hf_radiotap_present_word = -1;
@@ -179,6 +186,7 @@ static int hf_radiotap_present_xchannel = -1;
 static int hf_radiotap_present_mcs = -1;
 static int hf_radiotap_present_ampdu = -1;
 static int hf_radiotap_present_vht = -1;
+static int hf_radiotap_present_timestamp = -1;
 static int hf_radiotap_present_reserved = -1;
 static int hf_radiotap_present_rtap_ns = -1;
 static int hf_radiotap_present_vendor_ns = -1;
@@ -214,6 +222,8 @@ static gint ett_radiotap_ampdu_flags = -1;
 static gint ett_radiotap_vht = -1;
 static gint ett_radiotap_vht_known = -1;
 static gint ett_radiotap_vht_user = -1;
+static gint ett_radiotap_timestamp = -1;
+static gint ett_radiotap_timestamp_flags = -1;
 
 static expert_field ei_radiotap_data_past_header = EI_INIT;
 static expert_field ei_radiotap_present_reserved = EI_INIT;
@@ -221,6 +231,9 @@ static expert_field ei_radiotap_present = EI_INIT;
 static expert_field ei_radiotap_invalid_data_rate = EI_INIT;
 
 static dissector_handle_t ieee80211_radio_handle;
+
+static capture_dissector_handle_t ieee80211_cap_handle;
+static capture_dissector_handle_t ieee80211_datapad_cap_handle;
 
 static int radiotap_tap = -1;
 
@@ -534,6 +547,21 @@ static const true_false_string preamble_type = {
 	"Long",
 };
 
+static const value_string timestamp_unit[] = {
+	{ IEEE80211_RADIOTAP_TS_UNIT_MSEC, "msec" },
+	{ IEEE80211_RADIOTAP_TS_UNIT_USEC, "usec" },
+	{ IEEE80211_RADIOTAP_TS_UNIT_NSEC, "nsec" },
+	{ 0, NULL }
+};
+
+static const value_string timestamp_spos[] = {
+	{ IEEE80211_RADIOTAP_TS_SPOS_MPDU, "first MPDU bit/symbol" },
+	{ IEEE80211_RADIOTAP_TS_SPOS_ACQ, "signal acquisition" },
+	{ IEEE80211_RADIOTAP_TS_SPOS_EOF, "end of frame" },
+	{ IEEE80211_RADIOTAP_TS_SPOS_UNDEF, "undefined" },
+	{ 0, NULL }
+};
+
 /*
  * The NetBSD ieee80211_radiotap man page
  * (http://netbsd.gw.com/cgi-bin/man-cgi?ieee80211_radiotap+9+NetBSD-current)
@@ -629,9 +657,9 @@ capture_radiotap(const guchar * pd, int offset, int len, capture_packet_info_t *
 
 	/* 802.11 header follows */
 	if (rflags & IEEE80211_RADIOTAP_F_DATAPAD)
-		return capture_ieee80211_datapad(pd, offset + it_len, len, cpinfo, pseudo_header);
+		return call_capture_dissector(ieee80211_datapad_cap_handle, pd, offset + it_len, len, cpinfo, pseudo_header);
 
-	return capture_ieee80211(pd, offset + it_len, len, cpinfo, pseudo_header);
+	return call_capture_dissector(ieee80211_cap_handle, pd, offset + it_len, len, cpinfo, pseudo_header);
 }
 
 static int
@@ -850,6 +878,10 @@ dissect_radiotap(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* u
 			proto_tree_add_item(present_word_tree,
 					    hf_radiotap_present_vht, tvb,
 					    offset + 4, 4, ENC_LITTLE_ENDIAN);
+			proto_tree_add_item(present_word_tree,
+					    hf_radiotap_present_timestamp, tvb,
+					    offset + 4, 4, ENC_LITTLE_ENDIAN);
+
 			ti = proto_tree_add_item(present_word_tree,
 					    hf_radiotap_present_reserved, tvb,
 					    offset + 4, 4, ENC_LITTLE_ENDIAN);
@@ -976,7 +1008,7 @@ dissect_radiotap(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* u
 			/*
 			 * XXX On FreeBSD rate & 0x80 means we have an MCS. On
 			 * Linux and AirPcap it does not.  (What about
-			 * Mac OS X, NetBSD, OpenBSD, and DragonFly BSD?)
+			 * macOS, NetBSD, OpenBSD, and DragonFly BSD?)
 			 *
 			 * This is an issue either for proprietary extensions
 			 * to 11a or 11g, which do exist, or for 11n
@@ -1165,11 +1197,9 @@ dissect_radiotap(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* u
 			phdr.has_signal_dbm = TRUE;
 			phdr.signal_dbm = dbm;
 			col_add_fstr(pinfo->cinfo, COL_RSSI, "%d dBm", dbm);
-			proto_tree_add_int_format_value(radiotap_tree,
+			proto_tree_add_int(radiotap_tree,
 							  hf_radiotap_dbm_antsignal,
-							  tvb, offset, 1, dbm,
-							  "%d dBm",
-							  dbm);
+							  tvb, offset, 1, dbm);
 			radiotap_info->dbm_antsignal = dbm;
 			break;
 
@@ -1178,23 +1208,17 @@ dissect_radiotap(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* u
 			phdr.has_noise_dbm = TRUE;
 			phdr.noise_dbm = dbm;
 			if (tree) {
-				proto_tree_add_int_format_value(radiotap_tree,
+				proto_tree_add_int(radiotap_tree,
 							  hf_radiotap_dbm_antnoise,
-							  tvb, offset, 1, dbm,
-							  "%d dBm",
-							  dbm);
+							  tvb, offset, 1, dbm);
 			}
 			radiotap_info->dbm_antnoise = dbm;
 			break;
 
 		case IEEE80211_RADIOTAP_LOCK_QUALITY:
-			if (tree) {
-				proto_tree_add_uint(radiotap_tree,
+			proto_tree_add_item(radiotap_tree,
 						    hf_radiotap_quality, tvb,
-						    offset, 2,
-						    tvb_get_letohs(tvb,
-								   offset));
-			}
+						    offset, 2, ENC_LITTLE_ENDIAN);
 			break;
 
 		case IEEE80211_RADIOTAP_TX_ATTENUATION:
@@ -1210,45 +1234,30 @@ dissect_radiotap(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* u
 			break;
 
 		case IEEE80211_RADIOTAP_DBM_TX_POWER:
-			if (tree) {
-				proto_tree_add_int(radiotap_tree,
+			proto_tree_add_item(radiotap_tree,
 						   hf_radiotap_txpower, tvb,
-						   offset, 1,
-						   tvb_get_guint8(tvb, offset));
-			}
+						   offset, 1, ENC_NA);
 			break;
 
 		case IEEE80211_RADIOTAP_ANTENNA:
-			if (tree) {
-				proto_tree_add_uint(radiotap_tree,
+			proto_tree_add_item(radiotap_tree,
 						    hf_radiotap_antenna, tvb,
-						    offset, 1,
-						    tvb_get_guint8(tvb,
-								   offset));
-			}
+						    offset, 1, ENC_NA);
 			break;
 
 		case IEEE80211_RADIOTAP_DB_ANTSIGNAL:
 			db = tvb_get_guint8(tvb, offset);
 			col_add_fstr(pinfo->cinfo, COL_RSSI, "%u dB", db);
-			if (tree) {
-				proto_tree_add_uint_format_value(radiotap_tree,
+			proto_tree_add_uint(radiotap_tree,
 							   hf_radiotap_db_antsignal,
-							   tvb, offset, 1, db,
-							   "%u dB",
-							   db);
-			}
+							   tvb, offset, 1, db);
 			break;
 
 		case IEEE80211_RADIOTAP_DB_ANTNOISE:
 			db = tvb_get_guint8(tvb, offset);
-			if (tree) {
-				proto_tree_add_uint_format_value(radiotap_tree,
+			proto_tree_add_uint(radiotap_tree,
 							   hf_radiotap_db_antnoise,
-							   tvb, offset, 1, db,
-							   "%u dB",
-							   db);
-			}
+							   tvb, offset, 1, db);
 			break;
 
 		case IEEE80211_RADIOTAP_RX_FLAGS: {
@@ -1813,7 +1822,7 @@ dissect_radiotap(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* u
 									tvb, offset, 12, rate,
 									"Data Rate: %.1f Mb/s", rate);
 							PROTO_ITEM_SET_GENERATED(rate_ti);
-							if (ieee80211_vhtvalid[mcs].valid[bandwidth][nss] == FALSE)
+							if (ieee80211_vhtvalid[mcs].valid[bandwidth][nss-1] == FALSE)
 								expert_add_info(pinfo, rate_ti, &ei_radiotap_invalid_data_rate);
 
 						}
@@ -1838,6 +1847,32 @@ dissect_radiotap(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* u
 				}
 			}
 
+			break;
+		}
+		case IEEE80211_RADIOTAP_TIMESTAMP: {
+			proto_item *it_root;
+			proto_tree *ts_tree, *flg_tree;
+
+			it_root = proto_tree_add_item(radiotap_tree, hf_radiotap_timestamp,
+					tvb, offset, 12, ENC_NA);
+			ts_tree = proto_item_add_subtree(it_root, ett_radiotap_timestamp);
+
+			proto_tree_add_item(ts_tree, hf_radiotap_timestamp_ts,
+					tvb, offset, 8, ENC_LITTLE_ENDIAN);
+			if (tvb_get_letohs(tvb, offset + 11) & IEEE80211_RADIOTAP_TS_FLG_ACCURACY)
+				proto_tree_add_item(ts_tree, hf_radiotap_timestamp_accuracy,
+					tvb, offset + 8, 2, ENC_LITTLE_ENDIAN);
+			proto_tree_add_item(ts_tree, hf_radiotap_timestamp_unit,
+					tvb, offset + 10, 1, ENC_LITTLE_ENDIAN);
+			proto_tree_add_item(ts_tree, hf_radiotap_timestamp_spos,
+					tvb, offset + 10, 1, ENC_LITTLE_ENDIAN);
+			flg_tree = proto_item_add_subtree(ts_tree, ett_radiotap_timestamp_flags);
+			proto_tree_add_item(flg_tree,
+					hf_radiotap_timestamp_flags_32bit, tvb,
+					offset + 11, 1, ENC_LITTLE_ENDIAN);
+			proto_tree_add_item(flg_tree,
+					hf_radiotap_timestamp_flags_accuracy, tvb,
+					offset + 11, 1, ENC_LITTLE_ENDIAN);
 			break;
 		}
 		}
@@ -2033,6 +2068,11 @@ void proto_register_radiotap(void)
 		 {"VHT information", "radiotap.present.vht",
 		  FT_BOOLEAN, 32, TFS(&tfs_present_absent), RADIOTAP_MASK(VHT),
 		  "Specifies if the VHT field is present", HFILL}},
+
+		{&hf_radiotap_present_timestamp,
+		 {"frame timestamp", "radiotap.present.timestamp",
+		  FT_BOOLEAN, 32, TFS(&tfs_present_absent), RADIOTAP_MASK(TIMESTAMP),
+		  "Specifies if the timestamp field is present", HFILL}},
 
 		{&hf_radiotap_present_reserved,
 		 {"Reserved", "radiotap.present.reserved",
@@ -2320,24 +2360,24 @@ void proto_register_radiotap(void)
 
 		{&hf_radiotap_dbm_antsignal,
 		 {"SSI Signal", "radiotap.dbm_antsignal",
-		  FT_INT32, BASE_DEC, NULL, 0x0,
+		  FT_INT32, BASE_DEC|BASE_UNIT_STRING, &units_dbm, 0x0,
 		  "RF signal power at the antenna from a fixed,"
 		  " arbitrary value in decibels from one milliwatt", HFILL}},
 
 		{&hf_radiotap_db_antsignal,
 		 {"SSI Signal", "radiotap.db_antsignal",
-		  FT_UINT32, BASE_DEC, NULL, 0x0,
+		  FT_UINT32, BASE_DEC|BASE_UNIT_STRING, &units_decibels, 0x0,
 		  "RF signal power at the antenna from a fixed, arbitrary value in decibels", HFILL}},
 
 		{&hf_radiotap_dbm_antnoise,
 		 {"SSI Noise", "radiotap.dbm_antnoise",
-		  FT_INT32, BASE_DEC, NULL, 0x0,
+		  FT_INT32, BASE_DEC|BASE_UNIT_STRING, &units_dbm, 0x0,
 		  "RF noise power at the antenna from a fixed, arbitrary value"
 		  " in decibels per one milliwatt", HFILL}},
 
 		{&hf_radiotap_db_antnoise,
 		 {"SSI Noise", "radiotap.db_antnoise",
-		  FT_UINT32, BASE_DEC, NULL, 0x0,
+		  FT_UINT32, BASE_DEC|BASE_UNIT_STRING, &units_decibels, 0x0,
 		  "RF noise power at the antenna from a fixed, arbitrary value"
 		  " in decibels", HFILL}},
 
@@ -2693,6 +2733,43 @@ void proto_register_radiotap(void)
 		  FT_UINT16, BASE_DEC, NULL, 0x0,
 		  NULL, HFILL}},
 
+		{&hf_radiotap_timestamp,
+		 {"timestamp information", "radiotap.timestamp",
+		  FT_NONE, BASE_NONE, NULL, 0x0,
+		  NULL, HFILL}},
+
+		{&hf_radiotap_timestamp_ts,
+		 {"timestamp", "radiotap.timestamp.ts",
+		  FT_UINT64, BASE_DEC, NULL, 0x0,
+		  NULL, HFILL}},
+
+		{&hf_radiotap_timestamp_accuracy,
+		 {"accuracy", "radiotap.timestamp.accuracy",
+		  FT_UINT16, BASE_DEC, NULL, 0x0,
+		  NULL, HFILL}},
+
+		{&hf_radiotap_timestamp_unit,
+		 {"time unit", "radiotap.timestamp.unit",
+		  FT_UINT8, BASE_DEC, VALS(timestamp_unit),
+		  IEEE80211_RADIOTAP_TS_UNIT_MASK,
+		  NULL, HFILL}},
+
+		{&hf_radiotap_timestamp_spos,
+		 {"sampling position", "radiotap.timestamp.samplingpos",
+		  FT_UINT8, BASE_DEC, VALS(timestamp_spos),
+		  IEEE80211_RADIOTAP_TS_SPOS_MASK,
+		  NULL, HFILL}},
+
+		{&hf_radiotap_timestamp_flags_32bit,
+		 {"32-bit counter", "radiotap.timestamp.flags.32bit",
+		  FT_BOOLEAN, 8, TFS(&tfs_yes_no), IEEE80211_RADIOTAP_TS_FLG_32BIT,
+		  NULL, HFILL}},
+
+		{&hf_radiotap_timestamp_flags_accuracy,
+		 {"accuracy field", "radiotap.timestamp.flags.accuracy",
+		  FT_BOOLEAN, 8, TFS(&tfs_present_absent), IEEE80211_RADIOTAP_TS_FLG_ACCURACY,
+		  NULL, HFILL}},
+
 		{&hf_radiotap_vendor_ns,
 		 {"Vendor namespace", "radiotap.vendor_namespace",
 		  FT_BYTES, BASE_NONE, NULL, 0x0,
@@ -2740,7 +2817,9 @@ void proto_register_radiotap(void)
 		&ett_radiotap_ampdu_flags,
 		&ett_radiotap_vht,
 		&ett_radiotap_vht_known,
-		&ett_radiotap_vht_user
+		&ett_radiotap_vht_user,
+		&ett_radiotap_timestamp,
+		&ett_radiotap_timestamp_flags
 	};
 	static ei_register_info ei[] = {
 		{ &ei_radiotap_present, { "radiotap.present.radiotap_and_vendor", PI_MALFORMED, PI_ERROR, "Both radiotap and vendor namespace specified in bitmask word", EXPFILL }},
@@ -2780,6 +2859,7 @@ void proto_register_radiotap(void)
 void proto_reg_handoff_radiotap(void)
 {
 	dissector_handle_t radiotap_handle;
+	capture_dissector_handle_t radiotap_cap_handle;
 
 	/* handle for 802.11+radio information dissector */
 	ieee80211_radio_handle = find_dissector_add_dependency("wlan_radio", proto_radiotap);
@@ -2789,7 +2869,11 @@ void proto_reg_handoff_radiotap(void)
 	dissector_add_uint("wtap_encap", WTAP_ENCAP_IEEE_802_11_RADIOTAP,
 			   radiotap_handle);
 
-	register_capture_dissector("wtap_encap", WTAP_ENCAP_IEEE_802_11_RADIOTAP, capture_radiotap, proto_radiotap);
+	radiotap_cap_handle = create_capture_dissector_handle(capture_radiotap, proto_radiotap);
+	capture_dissector_add_uint("wtap_encap", WTAP_ENCAP_IEEE_802_11_RADIOTAP, radiotap_cap_handle);
+
+	ieee80211_cap_handle = find_capture_dissector("ieee80211");
+	ieee80211_datapad_cap_handle = find_capture_dissector("ieee80211_datapad");
 }
 
 /*

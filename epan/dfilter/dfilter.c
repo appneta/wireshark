@@ -32,6 +32,8 @@
 #include "dfilter.h"
 #include "dfilter-macro.h"
 #include "scanner_lex.h"
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
+
 
 #define DFILTER_TOKEN_ID_OFFSET	1
 
@@ -88,6 +90,8 @@ dfilter_init(void)
 void
 dfilter_cleanup(void)
 {
+	dfilter_macro_cleanup();
+
 	/* Free the Lemon Parser object */
 	if (ParserObj) {
 		DfilterFree(ParserObj, g_free);
@@ -233,6 +237,7 @@ dfilter_compile(const gchar *text, dfilter_t **dfp, gchar **err_msg)
 	}
 
 	if (df_lex_init(&scanner) != 0) {
+		wmem_free(NULL, expanded_text);
 		*dfp = NULL;
 		if (err_msg != NULL)
 			*err_msg = g_strdup_printf("Can't initialize scanner: %s",
@@ -396,6 +401,7 @@ FAILURE:
 		if (*err_msg == NULL)
 			*err_msg = g_strdup_printf("Unable to parse filter string \"%s\".", expanded_text);
 	}
+	wmem_free(NULL, expanded_text);
 	*dfp = NULL;
 	return FALSE;
 }
@@ -420,7 +426,7 @@ dfilter_prime_proto_tree(const dfilter_t *df, proto_tree *tree)
 	int i;
 
 	for (i = 0; i < df->num_interesting_fields; i++) {
-		proto_tree_prime_hfid(tree, df->interesting_fields[i]);
+		proto_tree_prime_with_hfid(tree, df->interesting_fields[i]);
 	}
 }
 
@@ -447,12 +453,12 @@ dfilter_dump(dfilter_t *df)
 	dfvm_dump(stdout, df);
 
 	if (df->deprecated && df->deprecated->len) {
-		printf("\nDeprecated tokens: ");
+		ws_debug_printf("\nDeprecated tokens: ");
 		for (i = 0; i < df->deprecated->len; i++) {
-			printf("%s\"%s\"", sep, (char *) g_ptr_array_index(df->deprecated, i));
+			ws_debug_printf("%s\"%s\"", sep, (char *) g_ptr_array_index(df->deprecated, i));
 			sep = ", ";
 		}
-		printf("\n");
+		ws_debug_printf("\n");
 	}
 }
 

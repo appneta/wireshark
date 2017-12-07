@@ -35,7 +35,7 @@
 #include "wireshark_application.h"
 
 // To do:
-// - Add an NSProgressIndicator to the dock icon on OS X.
+// - Add an NSProgressIndicator to the dock icon on macOS.
 // - Start adding the progress bar to dialogs.
 // - Don't complain so loudly when the user stops a capture.
 
@@ -87,9 +87,6 @@ update_progress_dlg(progdlg_t *dlg, gfloat percentage, const gchar *)
      * Flush out the update and process any input events.
      */
     WiresharkApplication::processEvents();
-
-    /* Redraw so the progress bar shows the update */
-    dlg->progress_frame->update();
 }
 
 /*
@@ -299,7 +296,7 @@ void ProgressFrame::show(bool animate, bool terminate_is_stop, gboolean *stop_fl
         QFrame::show();
     }
 #else
-    Q_UNUSED(animate);
+    Q_UNUSED(animate)
     QFrame::show();
 #endif
 

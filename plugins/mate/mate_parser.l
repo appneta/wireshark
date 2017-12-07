@@ -1,6 +1,11 @@
 %top {
 /* Include this before everything else, for various large-file definitions */
 #include "config.h"
+<<<<<<< HEAD
+=======
+/* Include this before everything else, as it declares functions used here. */
+#include "mate.h"
+>>>>>>> upstream/master-2.4
 }
 
 /*
@@ -78,7 +83,6 @@
 	* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 	*/
 
-#include "mate.h"
 #include "mate_grammar.h"
 
 #include <wsutil/file_util.h>
@@ -89,13 +93,6 @@
 #pragma warning (disable:4018)
 #endif
 
-	void MateParser(void*,int, gchar*, mate_config* matecfg);
-#if (GLIB_MAJOR_VERSION > 2 || (GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION >= 16))
-	void *MateParserAlloc(void *(*)(gsize));
-#else
-	void *MateParserAlloc(void *(*)(gulong));
-#endif
-	void MateParserFree( void*, void(*)(void*) );
 	void MateParseTrace(FILE*,char*);
 
 #define MAX_INCLUDE_DEPTH 10

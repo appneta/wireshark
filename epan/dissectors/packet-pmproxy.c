@@ -116,7 +116,7 @@ static int is_banner_exchange_for(const gchar *type, tvbuff_t *tvb) {
 
     pmproxy_exchange_string = (gchar *) tvb_get_string_enc(wmem_packet_scope(), tvb, PMPROXY_START_OF_PACKET,
                                                            PMPROXY_CLIENT_SERVER_VERSION_LENGTH, ENC_ASCII);
-    return g_strcmp0(pmproxy_exchange_string, g_strdup_printf("pmproxy-%s 1\n", type)) == 0;
+    return g_strcmp0(pmproxy_exchange_string, wmem_strdup_printf(wmem_packet_scope(), "pmproxy-%s 1\n", type)) == 0;
 }
 
 static int is_server_exchange(tvbuff_t *tvb) {
@@ -258,7 +258,7 @@ void proto_reg_handoff_pmproxy(void) {
     pmproxy_handle = create_dissector_handle(dissect_pmproxy, proto_pmproxy);
     pcp_handle = find_dissector_add_dependency("pcp", proto_pmproxy);
 
-    dissector_add_uint("tcp.port", PMPROXY_PORT, pmproxy_handle);
+    dissector_add_uint_with_preference("tcp.port", PMPROXY_PORT, pmproxy_handle);
 
 }
 

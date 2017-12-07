@@ -43,8 +43,10 @@
 #include <epan/conversation.h>
 #include <epan/tap.h>
 #include <epan/rtd_table.h>
+#include <epan/expert.h>
 #include "packet-mgcp.h"
 
+#include <wsutil/strtoi.h>
 
 #define TCP_PORT_MGCP_GATEWAY 2427
 #define UDP_PORT_MGCP_GATEWAY 2427
@@ -142,6 +144,8 @@ static int hf_mgcp_rsp_dup = -1;
 static int hf_mgcp_rsp_dup_frame = -1;
 static int hf_mgcp_unknown_parameter = -1;
 static int hf_mgcp_malformed_parameter = -1;
+
+static expert_field ei_mgcp_rsp_rspcode_invalid = EI_INIT;
 
 static const value_string mgcp_return_code_vals[] = {
 	{000, "Response Acknowledgement"},
@@ -401,7 +405,7 @@ typedef struct _mgcp_call_info_key
 	conversation_t *conversation;
 } mgcp_call_info_key;
 
-static GHashTable *mgcp_calls;
+static wmem_map_t *mgcp_calls;
 
 /* Compare 2 keys */
 static gint mgcp_call_equal(gconstpointer k1, gconstpointer k2)
@@ -470,7 +474,7 @@ static int dissect_mgcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
 		sectionlen = tvb_find_dot_line(tvb, tvb_sectionbegin, -1, &tvb_sectionend);
 		if (sectionlen != -1)
 		{
-			dissect_mgcp_message(tvb_new_subset(tvb, tvb_sectionbegin,
+			dissect_mgcp_message(tvb_new_subset_length_caplen(tvb, tvb_sectionbegin,
 						sectionlen, sectionlen),
 					pinfo, tree, mgcp_tree, ti);
 			tvb_sectionbegin = tvb_sectionend;
@@ -573,7 +577,7 @@ static void dissect_mgcp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
 		sectionlen = tvb_find_line_end(tvb, 0, -1, &tvb_sectionend, FALSE);
 		if (sectionlen > 0)
 		{
-			dissect_mgcp_firstline(tvb_new_subset(tvb, tvb_sectionbegin,
+			dissect_mgcp_firstline(tvb_new_subset_length_caplen(tvb, tvb_sectionbegin,
 			                       sectionlen, sectionlen), pinfo,
 			                       mgcp_tree, mi);
 		}
@@ -586,7 +590,7 @@ static void dissect_mgcp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
 			                                &tvb_sectionend);
 			if (sectionlen > 0)
 			{
-				dissect_mgcp_params(tvb_new_subset(tvb, tvb_sectionbegin, sectionlen, sectionlen),
+				dissect_mgcp_params(tvb_new_subset_length_caplen(tvb, tvb_sectionbegin, sectionlen, sectionlen),
 				                                   mgcp_tree, mi);
 			}
 		}
@@ -632,18 +636,6 @@ static void mgcp_raw_text_add(tvbuff_t *tvb, proto_tree *tree)
 		tvb_linebegin = tvb_lineend;
 	} while (tvb_offset_exists(tvb, tvb_lineend));
 }
-
-/* Discard and init any state we've saved */
-static void mgcp_init_protocol(void)
-{
-	mgcp_calls = g_hash_table_new(mgcp_call_hash, mgcp_call_equal);
-}
-
-static void mgcp_cleanup_protocol(void)
-{
-	g_hash_table_destroy(mgcp_calls);
-}
-
 
 /*
  * is_mgcp_verb - A function for determining whether there is a
@@ -1101,9 +1093,9 @@ static void dissect_mgcp_firstline(tvbuff_t *tvb, packet_info *pinfo, proto_tree
 	mgcp_call_info_key *new_mgcp_call_key = NULL;
 	mgcp_call_t *mgcp_call = NULL;
 	nstime_t delta;
-	gint rspcode = 0;
 	const gchar *verb_description = "";
 	char code_with_verb[64] = "";  /* To fit "<4-letter-code> (<longest-verb>)" */
+	proto_item* pi;
 
 	static address null_address = ADDRESS_INIT_NONE;
 	tvb_previous_offset = 0;
@@ -1156,11 +1148,13 @@ static void dissect_mgcp_firstline(tvbuff_t *tvb, packet_info *pinfo, proto_tree
 				else
 				if (is_mgcp_rspcode(tvb, tvb_previous_offset, tvb_current_len))
 				{
+					gboolean rspcode_valid;
 					mgcp_type = MGCP_RESPONSE;
-					rspcode = atoi(code);
-					mi->rspcode = rspcode;
-					proto_tree_add_uint(tree, hf_mgcp_rsp_rspcode, tvb,
-					                    tvb_previous_offset, tokenlen, rspcode);
+					rspcode_valid = ws_strtou32(code, NULL, &mi->rspcode);
+					pi = proto_tree_add_uint(tree, hf_mgcp_rsp_rspcode, tvb,
+					                    tvb_previous_offset, tokenlen, mi->rspcode);
+					if (!rspcode_valid)
+						expert_add_info(pinfo, pi, &ei_mgcp_rsp_rspcode_invalid);
 				}
 				else
 				{
@@ -1274,7 +1268,7 @@ static void dissect_mgcp_firstline(tvbuff_t *tvb, packet_info *pinfo, proto_tree
 					   matching conversation is available. */
 					mgcp_call_key.transid = mi->transid;
 					mgcp_call_key.conversation = conversation;
-					mgcp_call = (mgcp_call_t *)g_hash_table_lookup(mgcp_calls, &mgcp_call_key);
+					mgcp_call = (mgcp_call_t *)wmem_map_lookup(mgcp_calls, &mgcp_call_key);
 					if (mgcp_call)
 					{
 						/* Indicate the frame to which this is a reply. */
@@ -1393,7 +1387,7 @@ static void dissect_mgcp_firstline(tvbuff_t *tvb, packet_info *pinfo, proto_tree
 				mgcp_call_key.conversation = conversation;
 
 				/* Look up the request */
-				mgcp_call = (mgcp_call_t *)g_hash_table_lookup(mgcp_calls, &mgcp_call_key);
+				mgcp_call = (mgcp_call_t *)wmem_map_lookup(mgcp_calls, &mgcp_call_key);
 				if (mgcp_call != NULL)
 				{
 					/* We've seen a request with this TRANSID, with the same
@@ -1437,7 +1431,7 @@ static void dissect_mgcp_firstline(tvbuff_t *tvb, packet_info *pinfo, proto_tree
 					g_strlcpy(mgcp_call->code, mi->code, 5);
 
 					/* Store it */
-					g_hash_table_insert(mgcp_calls, new_mgcp_call_key, mgcp_call);
+					wmem_map_insert(mgcp_calls, new_mgcp_call_key, mgcp_call);
 				}
 				if (mgcp_call->rsp_num)
 				{
@@ -1996,6 +1990,8 @@ void proto_reg_handoff_mgcp(void);
 
 void proto_register_mgcp(void)
 {
+	expert_module_t* expert_mgcp;
+
 	static hf_register_info hf[] =
 		{
 			{ &hf_mgcp_req,
@@ -2266,14 +2262,19 @@ void proto_register_mgcp(void)
 			&ett_mgcp_param_localconnectionoptions
 		};
 
+	static ei_register_info ei[] = {
+		{ &ei_mgcp_rsp_rspcode_invalid, { "mgcp.rsp.rspcode.invalid", PI_MALFORMED, PI_ERROR,
+		"RSP code must be a string containing an integer", EXPFILL }}
+	};
+
 	module_t *mgcp_module;
 
 	/* Register protocol */
 	proto_mgcp = proto_register_protocol("Media Gateway Control Protocol", "MGCP", "mgcp");
 	proto_register_field_array(proto_mgcp, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
-	register_init_routine(&mgcp_init_protocol);
-	register_cleanup_routine(&mgcp_cleanup_protocol);
+
+	mgcp_calls = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), mgcp_call_hash, mgcp_call_equal);
 
 	mgcp_handle = register_dissector("mgcp", dissect_mgcp, proto_mgcp);
 
@@ -2324,6 +2325,10 @@ void proto_register_mgcp(void)
 	mgcp_tap = register_tap("mgcp");
 
 	register_rtd_table(proto_mgcp, NULL, 1, NUM_TIMESTATS, mgcp_mesage_type, mgcpstat_packet, NULL);
+
+	expert_mgcp = expert_register_protocol(proto_mgcp);
+	expert_register_field_array(expert_mgcp, ei, array_length(ei));
+
 }
 
 /* The registration hand-off routine */
@@ -2362,6 +2367,7 @@ void proto_reg_handoff_mgcp(void)
 	callagent_tcp_port = global_mgcp_callagent_tcp_port;
 	callagent_udp_port = global_mgcp_callagent_udp_port;
 
+    /* Names of port preferences too specific to add "auto" preference here */
 	dissector_add_uint("tcp.port", global_mgcp_gateway_tcp_port,   mgcp_tpkt_handle);
 	dissector_add_uint("udp.port", global_mgcp_gateway_udp_port,   mgcp_handle);
 	dissector_add_uint("tcp.port", global_mgcp_callagent_tcp_port, mgcp_tpkt_handle);

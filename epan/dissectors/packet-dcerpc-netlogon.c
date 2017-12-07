@@ -26,10 +26,7 @@
 
 
 #include <epan/packet.h>
-#include <wsutil/rc4.h>
-#include <wsutil/md4.h>
-#include <wsutil/md5.h>
-#include <wsutil/des.h>
+#include <wsutil/wsgcrypt.h>
 
 /* for dissect_mscldap_string */
 #include "packet-ldap.h"
@@ -41,6 +38,8 @@
 /* for keytab format */
 #include <epan/asn1.h>
 #include "packet-kerberos.h"
+/* for routines to read the keytab file */
+#include "read_keytab_file.h"
 /* for decoding */
 
 void proto_register_dcerpc_netlogon(void);
@@ -99,8 +98,10 @@ static void printnbyte(const guint8* tab _U_,int nb _U_,const char* txt _U_,cons
 #define NETLOGON_FLAG_2               0x2
 #define NETLOGON_FLAG_1               0x1
 
-static GHashTable *netlogon_auths=NULL;
-static GHashTable *schannel_auths;
+static wmem_map_t *netlogon_auths=NULL;
+#if 0
+static wmem_map_t *schannel_auths;
+#endif
 static gint hf_netlogon_TrustedDomainName_string = -1;
 static gint hf_netlogon_UserName_string = -1;
 static gint DomainInfo_sid = -1;
@@ -2450,10 +2451,10 @@ netlogon_dissect_netrserverreqchallenge_rqst(tvbuff_t *tvb, int offset,
 
     key = wmem_new(wmem_file_scope(), netlogon_auth_key);
     generate_hash_key(pinfo,0,key,NULL);
-    existing_vars = (netlogon_auth_vars *)g_hash_table_lookup(netlogon_auths, key);
+    existing_vars = (netlogon_auth_vars *)wmem_map_lookup(netlogon_auths, key);
     if (!existing_vars) {
         debugprintf("Adding initial vars with this start packet = %d\n",vars->start);
-        g_hash_table_insert(netlogon_auths, key, vars);
+        wmem_map_insert(netlogon_auths, key, vars);
     }
     else {
         while(existing_vars->next != NULL && existing_vars->start < vars->start) {
@@ -2474,10 +2475,10 @@ netlogon_dissect_netrserverreqchallenge_rqst(tvbuff_t *tvb, int offset,
 #if 0
     generate_hash_key(pinfo,0,key,vars->client_name);
     existing_vars = NULL;
-    existing_vars = g_hash_table_lookup(schannel_auths, key);
+    existing_vars = wmem_map_lookup(schannel_auths, key);
     if (!existing_vars)
     {
-        g_hash_table_insert(schannel_auths, key, vars);
+        wmem_map_insert(schannel_auths, key, vars);
     }
     else
     {
@@ -2504,7 +2505,7 @@ netlogon_dissect_netrserverreqchallenge_reply(tvbuff_t *tvb, int offset,
     guint64 server_challenge;
 
     generate_hash_key(pinfo,1,&key,NULL);
-    vars = (netlogon_auth_vars *)g_hash_table_lookup(netlogon_auths,(gconstpointer*) &key);
+    vars = (netlogon_auth_vars *)wmem_map_lookup(netlogon_auths,(gconstpointer*) &key);
 
     offset = dissect_dcerpc_8bytes(tvb, offset, pinfo, tree, drep,
                                    hf_server_challenge, &server_challenge);
@@ -6586,7 +6587,7 @@ static guint32 get_keytab_as_list(md4_pass **p_pass_list, const char* ntlm_pass)
         debugprintf("Password: %s\n",ntlm_pass);
         password_len = (int)strlen(ntlm_pass);
         str_to_unicode(ntlm_pass,ntlm_pass_unicode);
-        crypt_md4(ntlm_pass_hash.md4,ntlm_pass_unicode,password_len*2);
+        gcry_md_hash_buffer(GCRY_MD_MD4, ntlm_pass_hash.md4, ntlm_pass_unicode, password_len*2);
         printnbyte(ntlm_pass_hash.md4,16,"Hash of the NT pass: ","\n");
         add_ntlm = 1;
     }
@@ -6634,7 +6635,7 @@ netlogon_dissect_netrserverauthenticate23_reply(tvbuff_t *tvb, int offset,
 
     generate_hash_key(pinfo, 1 , &key, NULL);
 
-    vars = (netlogon_auth_vars *)g_hash_table_lookup(netlogon_auths, &key);
+    vars = (netlogon_auth_vars *)wmem_map_lookup(netlogon_auths, &key);
     if(vars != NULL) {
         debugprintf("Found some vars (ie. server/client challenges), let's see if I can get a session key\n");
         while(vars != NULL && vars->next_start != -1 && vars->next_start < (int) pinfo->num ) {
@@ -6662,19 +6663,19 @@ netlogon_dissect_netrserverauthenticate23_reply(tvbuff_t *tvb, int offset,
 #endif
             if( flags & NETLOGON_FLAG_STRONGKEY ) {
 #ifdef HAVE_KERBEROS
-                guint8 zeros[4];
-                guint8 md5[16];
-                md5_state_t md5state;
-                guint8 buf[8];
+                guint8 zeros[4] = { 0 };
+                guint8 md5[HASH_MD5_LENGTH];
+                gcry_md_hd_t md5_handle;
+                guint8 buf[8] = { 0 };
                 guint64 calculated_cred;
 
-
-                memset(zeros,0,4);
-                md5_init(&md5state);
-                md5_append(&md5state,zeros,4);
-                md5_append(&md5state,(unsigned char*)&vars->client_challenge,8);
-                md5_append(&md5state,(unsigned char*)&vars->server_challenge,8);
-                md5_finish(&md5state,md5);
+                if (!gcry_md_open(&md5_handle, GCRY_MD_MD5, 0)) {
+                    gcry_md_write(md5_handle, zeros, 4);
+                    gcry_md_write(md5_handle, (guint8*)&vars->client_challenge, 8);
+                    gcry_md_write(md5_handle, (guint8*)&vars->server_challenge, 8);
+                    memcpy(md5, gcry_md_read(md5_handle, 0), 16);
+                    gcry_md_close(md5_handle);
+                }
                 printnbyte(md5,8,"MD5:","\n");
                 printnbyte((guint8*)&vars->client_challenge,8,"Client challenge:","\n");
                 printnbyte((guint8*)&vars->server_challenge,8,"Server challenge:","\n");
@@ -6682,25 +6683,28 @@ netlogon_dissect_netrserverauthenticate23_reply(tvbuff_t *tvb, int offset,
                 for(i=0;i<list_size;i++)
                 {
                     password = pass_list[i];
-                    md5_hmac(md5,16,(guint8*) &password,16,session_key);
-                    crypt_des_ecb(buf,(unsigned char*)&vars->server_challenge,session_key,1);
-                    crypt_des_ecb((unsigned char*)&calculated_cred,buf,session_key+7,1);
+                    if (!ws_hmac_buffer(GCRY_MD_MD5, session_key, md5, HASH_MD5_LENGTH, (guint8*) &password, 16)) {
+                        crypt_des_ecb(buf,(unsigned char*)&vars->server_challenge,session_key);
+                        crypt_des_ecb((unsigned char*)&calculated_cred,buf,session_key+7);
 #if 0
-                    printnbyte((guint8*)&calculated_cred,8,"Calculated creds:","\n");
+                        printnbyte((guint8*)&calculated_cred,8,"Calculated creds:","\n");
 #endif
-                    if(calculated_cred==server_cred) {
-                        found = 1;
-                        break;
+                        if(calculated_cred==server_cred) {
+                            found = 1;
+                            break;
+                        }
                     }
                 }
 #endif
             }
+#if 0 /* Fix -Wduplicated-branches */
             else if( flags&NETLOGON_FLAG_USEAES)
             {
-                /*Not implemented*/
+                /* Not implemented */
                 debugprintf("AES not supported yet\n");
                 memset(session_key,0,16);
             }
+#endif
             else
             {
                 /*Not implemented*/
@@ -7634,23 +7638,25 @@ static const value_string seal_algs[] = {
 
 static int get_seal_key(const guint8 *session_key,int key_len,guint64 sequence,guint8* seal_key)
 {
-    guint8 zeros[4];
+    guint8 zeros[4] = { 0 };
     guint8 *buf = (guint8 *)wmem_alloc(wmem_packet_scope(), key_len);
-    guint8 buf2[16];
+    guint8 buf2[HASH_MD5_LENGTH];
     guint8 zero_sk[16];
     int i = 0;
     memset(zero_sk,0,16);
     memset(seal_key,0,16);
     if(memcmp(session_key,zero_sk,16)) {
-        memset(zeros,0,4);
         for(i=0;i<key_len;i++) {
             buf[i] = session_key[i] ^ 0xF0;
         }
-        md5_hmac(zeros,4,buf,key_len,buf2);
-        md5_hmac((guint8*)&sequence,8,buf2,16,seal_key);
+        if (ws_hmac_buffer(GCRY_MD_MD5, buf2, zeros, 4, buf, key_len)) {
+            return 0;
+        }
+        if (ws_hmac_buffer(GCRY_MD_MD5, seal_key, (guint8*)&sequence, 8, buf2, HASH_MD5_LENGTH)) {
+            return 0;
+        }
         return 1;
-    }
-    else {
+    } else {
         return 0;
     }
 
@@ -7658,19 +7664,27 @@ static int get_seal_key(const guint8 *session_key,int key_len,guint64 sequence,g
 
 static guint64 uncrypt_sequence(guint8* session_key,guint64 checksum,guint64 enc_seq,unsigned char is_server _U_)
 {
-    guint8 zeros[4];
-    guint8 buf[16];
-    guint8 key[16];
-    rc4_state_struct rc4state;
+    guint8 zeros[4] = { 0 };
+    guint8 buf[HASH_MD5_LENGTH];
+    guint8 key[HASH_MD5_LENGTH];
+    gcry_cipher_hd_t rc4_handle;
     guint8 *p_seq = (guint8*) &enc_seq;
     /*guint32 temp;*/
 
-    memset(zeros,0,4);
-    md5_hmac(zeros,4,session_key,16,buf);
-    md5_hmac((guint8*)&checksum,8,buf,16,key);
+    if (ws_hmac_buffer(GCRY_MD_MD5, buf, zeros, 4, session_key, 16)) {
+        return 0;
+    }
 
-    crypt_rc4_init(&rc4state,key,16);
-    crypt_rc4(&rc4state,p_seq,8);
+    if (ws_hmac_buffer(GCRY_MD_MD5, key, (guint8*)&checksum, 8, buf, HASH_MD5_LENGTH)) {
+        return 0;
+    }
+
+    if (!gcry_cipher_open (&rc4_handle, GCRY_CIPHER_ARCFOUR, GCRY_CIPHER_MODE_STREAM, 0)) {
+      if (!gcry_cipher_setkey(rc4_handle, key, HASH_MD5_LENGTH)) {
+        gcry_cipher_decrypt(rc4_handle, p_seq, 8, NULL, 0);
+      }
+      gcry_cipher_close(rc4_handle);
+    }
     /*temp = *((guint32*)p_seq);
      *((guint32*)p_seq) = *((guint32*)p_seq+1);
      *((guint32*)p_seq+1) = temp;
@@ -7694,19 +7708,19 @@ dissect_packet_data(tvbuff_t *tvb ,tvbuff_t *auth_tvb _U_,
     /*debugprintf("Dissection of request data offset %d len=%d on packet %d\n",offset,tvb_length_remaining(tvb,offset),pinfo->num);*/
 
     generate_hash_key(pinfo,is_server,&key,NULL);
-    vars = (netlogon_auth_vars *)g_hash_table_lookup(netlogon_auths, &key);
+    vars = (netlogon_auth_vars *)wmem_map_lookup(netlogon_auths, &key);
 
     if(vars != NULL  ) {
         while(vars != NULL && vars->next_start != -1 && vars->next_start < (int) pinfo->num ) {
             vars = vars->next;
         }
         if(vars == NULL ) {
-            debugprintf("Vars not found %d (packet_data)\n",g_hash_table_size(netlogon_auths));
+            debugprintf("Vars not found %d (packet_data)\n",wmem_map_size(netlogon_auths));
             return(buf);
         }
         else {
             if(vars->can_decrypt == TRUE) {
-                rc4_state_struct rc4state;
+                gcry_cipher_hd_t rc4_handle;
                 int data_len;
                 guint64 copyconfounder = vars->confounder;
 
@@ -7714,11 +7728,18 @@ dissect_packet_data(tvbuff_t *tvb ,tvbuff_t *auth_tvb _U_,
                 if (data_len < 0) {
                     return NULL;
                 }
-                crypt_rc4_init(&rc4state,vars->encryption_key,16);
-                crypt_rc4(&rc4state,(guint8*)&copyconfounder,8);
+                if (gcry_cipher_open (&rc4_handle, GCRY_CIPHER_ARCFOUR, GCRY_CIPHER_MODE_STREAM, 0)) {
+                  return NULL;
+                }
+                if (gcry_cipher_setkey(rc4_handle, vars->encryption_key, 16)) {
+                  gcry_cipher_close(rc4_handle);
+                  return NULL;
+                }
+                gcry_cipher_decrypt(rc4_handle, (guint8*)&copyconfounder, 8, NULL, 0);
                 decrypted = (guint8*)tvb_memdup(pinfo->pool, tvb, offset,data_len);
-                crypt_rc4_init(&rc4state,vars->encryption_key,16);
-                crypt_rc4(&rc4state,decrypted,data_len);
+                gcry_cipher_reset(rc4_handle);
+                gcry_cipher_decrypt(rc4_handle, decrypted, data_len, NULL, 0);
+                gcry_cipher_close(rc4_handle);
                 buf = tvb_new_child_real_data(tvb, decrypted, data_len, data_len);
                 /* Note: caller does add_new_data_source(...) */
             }
@@ -7727,7 +7748,7 @@ dissect_packet_data(tvbuff_t *tvb ,tvbuff_t *auth_tvb _U_,
             }
         }
     } else {
-        debugprintf("Vars not found  %d (packet_data)\n",g_hash_table_size(netlogon_auths));
+        debugprintf("Vars not found  %d (packet_data)\n",wmem_map_size(netlogon_auths));
         return(buf);
     }
 
@@ -7760,7 +7781,7 @@ dissect_secchan_verf(tvbuff_t *tvb, int offset, packet_info *pinfo,
     int update_vars = 0;
 
     generate_hash_key(pinfo,is_server,&key,NULL);
-    vars = (netlogon_auth_vars *)g_hash_table_lookup(netlogon_auths,(gconstpointer*) &key);
+    vars = (netlogon_auth_vars *)wmem_map_lookup(netlogon_auths,(gconstpointer*) &key);
     if(  ! (seen.isseen && seen.num == pinfo->num) ) {
         /*
          * Create a new tree, and split into x components ...
@@ -7797,7 +7818,7 @@ dissect_secchan_verf(tvbuff_t *tvb, int offset, packet_info *pinfo,
             vars = vars->next;
         }
         if(vars == NULL ) {
-            debugprintf("Vars not found %d (packet_data)\n",g_hash_table_size(netlogon_auths));
+            debugprintf("Vars not found %d (packet_data)\n",wmem_map_size(netlogon_auths));
             return(offset);
         }
         else {
@@ -7818,7 +7839,7 @@ dissect_secchan_verf(tvbuff_t *tvb, int offset, packet_info *pinfo,
     }
     else
     {
-        debugprintf("Vars not found (is null %d) %d (dissect_verf)\n",vars==NULL,g_hash_table_size(netlogon_auths));
+        debugprintf("Vars not found (is null %d) %d (dissect_verf)\n",vars==NULL,wmem_map_size(netlogon_auths));
     }
     /*debugprintf("Setting isseen to true, old packet %d new %d\n",seen.num,pinfo->num);*/
     seen.isseen = TRUE;
@@ -7847,19 +7868,6 @@ static const value_string sec_chan_type_vals[] = {
     { SEC_CHAN_BDC,    "Backup domain controller" },
     { 0, NULL }
 };
-static void
-netlogon_reassemble_init(void)
-{
-    netlogon_auths = g_hash_table_new (netlogon_auth_hash, netlogon_auth_equal);
-    schannel_auths = g_hash_table_new (netlogon_auth_hash, netlogon_auth_equal);
-}
-
-static void
-netlogon_reassemble_cleanup(void)
-{
-    g_hash_table_destroy(netlogon_auths);
-    g_hash_table_destroy(schannel_auths);
-}
 
 void
 proto_register_dcerpc_netlogon(void)
@@ -9263,15 +9271,15 @@ proto_register_dcerpc_netlogon(void)
         &ett_user_account_control
     };
 
-    proto_dcerpc_netlogon = proto_register_protocol(
-        "Microsoft Network Logon", "RPC_NETLOGON", "rpc_netlogon");
+    proto_dcerpc_netlogon = proto_register_protocol("Microsoft Network Logon", "RPC_NETLOGON", "rpc_netlogon");
 
-    proto_register_field_array(proto_dcerpc_netlogon, hf,
-                               array_length(hf));
+    proto_register_field_array(proto_dcerpc_netlogon, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
-    register_init_routine(netlogon_reassemble_init);
-    register_cleanup_routine(netlogon_reassemble_cleanup);
 
+    netlogon_auths = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), netlogon_auth_hash, netlogon_auth_equal);
+#if 0
+    schannel_auths = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), netlogon_auth_hash, netlogon_auth_equal);
+#endif
 }
 
 static dcerpc_auth_subdissector_fns secchan_auth_fns = {

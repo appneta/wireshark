@@ -275,7 +275,10 @@ static gboolean dissect_ircomm_parameters(tvbuff_t* tvb, guint offset, packet_in
 
                     g_strlcat(buf, ")", 256);
 
-                    proto_item_append_text(ti, "%s", buf+2);
+                    if (strlen(buf) > 2)
+                        proto_item_append_text(ti, "%s", buf+2);
+                    else
+                        proto_item_append_text(ti, "unknown)");
 
                     break;
 
@@ -290,7 +293,10 @@ static gboolean dissect_ircomm_parameters(tvbuff_t* tvb, guint offset, packet_in
 
                     g_strlcat(buf, ")", 256);
 
-                    proto_item_append_text(ti, "%s", buf+2);
+                    if (strlen(buf) > 2)
+                        proto_item_append_text(ti, "%s", buf+2);
+                    else
+                        proto_item_append_text(ti, "unknown)");
 
                     break;
 
@@ -400,8 +406,8 @@ void proto_register_ircomm(void)
 
     /* Register protocol names and descriptions */
     proto_ircomm = proto_register_protocol("IrCOMM Protocol", "IrCOMM", "ircomm");
-    register_dissector("ircomm_raw", dissect_raw_ircomm, proto_ircomm);
-    register_dissector("ircomm_cooked", dissect_cooked_ircomm, proto_ircomm);
+    ircomm_raw_handle = register_dissector("ircomm_raw", dissect_raw_ircomm, proto_ircomm);
+    ircomm_cooked_handle = register_dissector("ircomm_cooked", dissect_cooked_ircomm, proto_ircomm);
 
     /* Required function calls to register the header fields */
     proto_register_field_array(proto_ircomm, hf_ircomm, array_length(hf_ircomm));
@@ -414,12 +420,6 @@ void proto_register_ircomm(void)
         ett_p[i]     = &ett_param[i];
     }
     proto_register_subtree_array(ett_p, MAX_IAP_ENTRIES * MAX_PARAMETERS);
-}
-
-void
-proto_reg_handoff_ircomm(void) {
-    ircomm_raw_handle = find_dissector("ircomm_raw");
-    ircomm_cooked_handle = find_dissector("ircomm_cooked");
 }
 
 /*

@@ -30,6 +30,8 @@
 #include <epan/packet.h>
 #include <epan/epan_dissect.h>
 #include <epan/decode_as.h>
+#include <epan/prefs.h>
+#include <epan/prefs-int.h>
 #include <epan/dissectors/packet-dcerpc.h>
 
 #include "ui/decode_as_utils.h"
@@ -643,11 +645,12 @@ decode_simple (GtkWidget *notebook_pg)
     GtkTreeIter         iter;
     decode_as_t        *entry;
     gchar              *table_name, *abbrev;
-    dissector_handle_t  handle;
+    dissector_handle_t  handle, temp_handle;
     guint               value_loop, *selector_type;
     gpointer            ptr, value_ptr;
     gint                requested_index = 0;
     gboolean            add_reset_list  = FALSE;
+    dissector_table_t   sub_dissectors;
 
     list = (GtkWidget *)g_object_get_data(G_OBJECT(notebook_pg), E_PAGE_LIST);
     if (requested_action == E_DECODE_NO)
@@ -655,6 +658,7 @@ decode_simple (GtkWidget *notebook_pg)
 
     entry = (decode_as_t *)g_object_get_data(G_OBJECT(notebook_pg), E_PAGE_DECODE_AS_DATA);
     table_name = (gchar *)g_object_get_data(G_OBJECT(notebook_pg), E_PAGE_TABLE);
+    sub_dissectors = find_dissector_table(table_name);
 
     /* (sub)dissector selection */
     selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
@@ -678,13 +682,56 @@ decode_simple (GtkWidget *notebook_pg)
     /* Apply values to dissector table (stored in entry) */
     for (value_loop = 0; value_loop < entry->values[requested_index].num_values; value_loop++)
     {
+        pref_t* pref_value;
+        module_t *module;
+
         guint8 saved_curr_layer_num = cfile.edt->pi.curr_layer_num;
         cfile.edt->pi.curr_layer_num = (guint8)GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(notebook_pg), E_PAGE_CURR_LAYER_NUM));
         value_ptr = entry->values[requested_index].build_values[value_loop](&cfile.edt->pi);
         if (abbrev != NULL && strcmp(abbrev, "(default)") == 0) {
+
             add_reset_list = entry->reset_value(table_name, value_ptr);
+
+            /* For now, only numeric dissector tables can use preferences */
+            if (IS_FT_UINT(dissector_table_get_type(sub_dissectors))) {
+                /* Find the handle currently associated with the value */
+                temp_handle = dissector_get_uint_handle(sub_dissectors, GPOINTER_TO_UINT(value_ptr));
+                if (temp_handle != NULL) {
+                    module = prefs_find_module(proto_get_protocol_filter_name(dissector_handle_get_protocol_index(temp_handle)));
+                    pref_value = prefs_find_preference(module, table_name);
+                    if (pref_value != NULL) {
+                        module->prefs_changed = TRUE;
+                        prefs_remove_decode_as_value(pref_value, GPOINTER_TO_UINT(value_ptr), TRUE);
+                    }
+                }
+            }
         } else {
             add_reset_list = entry->change_value(table_name, value_ptr, &handle, abbrev);
+
+            /* For now, only numeric dissector tables can use preferences */
+            if (IS_FT_UINT(dissector_table_get_type(sub_dissectors))) {
+                if (requested_action != E_DECODE_NO) {
+                    module = prefs_find_module(proto_get_protocol_filter_name(dissector_handle_get_protocol_index(handle)));
+                    pref_value = prefs_find_preference(module, table_name);
+                    if (pref_value != NULL) {
+                        module->prefs_changed = TRUE;
+                        prefs_add_decode_as_value(pref_value, GPOINTER_TO_UINT(value_ptr), FALSE);
+                    }
+                }
+                else {
+                    /* Find the handle currently associated with the value */
+                    temp_handle = dissector_get_uint_handle(sub_dissectors, GPOINTER_TO_UINT(value_ptr));
+                    if (temp_handle != NULL) {
+                        module = prefs_find_module(proto_get_protocol_filter_name(dissector_handle_get_protocol_index(temp_handle)));
+                        pref_value = prefs_find_preference(module, table_name);
+                        if (pref_value != NULL) {
+                            module->prefs_changed = TRUE;
+                            prefs_remove_decode_as_value(pref_value, GPOINTER_TO_UINT(value_ptr), FALSE);
+                        }
+                    }
+
+                }
+            }
         }
         cfile.edt->pi.curr_layer_num = saved_curr_layer_num;
 
@@ -1220,11 +1267,15 @@ decode_add_simple_page (decode_as_t *entry)
     g_object_set_data(G_OBJECT(page), E_PAGE_ACTION, decode_simple);
     g_object_set_data(G_OBJECT(page), E_PAGE_TABLE, (gchar *) entry->table_name);
     g_object_set_data(G_OBJECT(page), E_PAGE_DECODE_AS_DATA, (gchar *)entry);
+    g_object_set_data(G_OBJECT(page), E_PAGE_CURR_LAYER_NUM, GUINT_TO_POINTER((guint)cfile.edt->pi.curr_layer_num));
 
     if (entry->num_items == 1)
     {
         g_object_set_data(G_OBJECT(page), E_PAGE_VALUE, entry->values[0].build_values[0](&cfile.edt->pi));
+<<<<<<< HEAD
         g_object_set_data(G_OBJECT(page), E_PAGE_CURR_LAYER_NUM, GUINT_TO_POINTER((guint)cfile.edt->pi.curr_layer_num));
+=======
+>>>>>>> upstream/master-2.4
 
         /* Always enabled */
         entry->values->label_func(&cfile.edt->pi, prompt);

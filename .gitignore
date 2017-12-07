@@ -85,7 +85,6 @@ depcomp
 dftest
 dumpcap
 editcap
-echld_test
 exntest
 install-sh
 libtool
@@ -105,12 +104,14 @@ randpktdump
 rawshark
 reordercap
 reassemble_test
+sharkd
 sshdump
 stamp-h1
 text2pcap
 tfshark
 tshark
 tvbtest
+udpdump
 wireshark
 wmem_test
 ylwrap
@@ -257,6 +258,7 @@ macosx-support-libs
 packaging/macosx/COPYING.txt
 packaging/macosx/Info.plist
 packaging/macosx/osx-dmg.sh
+packaging/macosx/PkgInfo
 packaging/macosx/Wireshark_package.pmdoc/index.xml
 packaging/nsis/config.nsh
 packaging/nsis/qt-dll-manifest.nsh

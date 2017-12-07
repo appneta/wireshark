@@ -107,7 +107,7 @@ static const char ngsniffer_magic[] = {
 struct vers_rec {
 	gint16	maj_vers;	/* major version number */
 	gint16	min_vers;	/* minor version number */
-	gint16	time;		/* DOS-format time */
+	gint16	time_dos;	/* DOS-format time */
 	gint16	date;		/* DOS-format date */
 	gint8	type;		/* what type of records follow */
 	guint8	network;	/* network type */
@@ -536,7 +536,7 @@ static gboolean ng_read_bytes(wtap *wth, void *buffer, unsigned int nbytes,
     gboolean is_random, int *err, gchar **err_info);
 static gboolean read_blob(FILE_T infile, ngsniffer_comp_stream_t *comp_stream,
     int *err, gchar **err_info);
-static gboolean ng_file_skip_seq(wtap *wth, gint64 delta, int *err,
+static gboolean ng_skip_bytes_seq(wtap *wth, unsigned int count, int *err,
     gchar **err_info);
 static gboolean ng_file_seek_rand(wtap *wth, gint64 offset, int *err,
     gchar **err_info);
@@ -746,7 +746,7 @@ ngsniffer_open(wtap *wth, int *err, gchar **err_info)
 	 * version-dependent?
 	 */
 #if 0
-	start_time = pletoh16(&version.time);
+	start_time = pletoh16(&version.time_dos);
 	tm.tm_hour = (start_time&0xf800)>>11;
 	tm.tm_min = (start_time&0x7e0)>>5;
 	tm.tm_sec = (start_time&0x1f)<<1;
@@ -1056,7 +1056,7 @@ ngsniffer_read(wtap *wth, int *err, gchar **err_info, gint64 *data_offset)
 			 * Skip any extra data in the record.
 			 */
 			if (padding != 0) {
-				if (!ng_file_skip_seq(wth, padding, err,
+				if (!ng_skip_bytes_seq(wth, padding, err,
 				    err_info))
 					return FALSE;
 			}
@@ -1077,7 +1077,7 @@ ngsniffer_read(wtap *wth, int *err, gchar **err_info, gint64 *data_offset)
 			 * and keep looping.
 			 */
 			if (padding != 0) {
-				if (!ng_file_skip_seq(wth, padding, err,
+				if (!ng_skip_bytes_seq(wth, padding, err,
 				    err_info))
 					return FALSE;
 			}
@@ -1300,7 +1300,7 @@ ngsniffer_process_record(wtap *wth, gboolean is_random, guint *padding,
 	}
 	/*
 	 * The maximum value of length is 65535, which is less than
-	 * WTAP_MAX_PACKET_SIZE will ever be, so we don't need to check
+	 * WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't need to check
 	 * it.
 	 */
 
@@ -2071,7 +2071,7 @@ ngsniffer_dump(wtap_dumper *wdh, const struct wtap_pkthdr *phdr,
 		min_vers = 0;
 		version.maj_vers = GUINT16_TO_LE(maj_vers);
 		version.min_vers = GUINT16_TO_LE(min_vers);
-		version.time = 0;
+		version.time_dos = 0;
 		version.date = GUINT16_TO_LE(start_date);
 		version.type = 4;
 		version.network = wtap_encap[wdh->encap];
@@ -2588,7 +2588,7 @@ read_blob(FILE_T infile, ngsniffer_comp_stream_t *comp_stream, int *err,
 
 /* Skip some number of bytes forward in the sequential stream. */
 static gboolean
-ng_file_skip_seq(wtap *wth, gint64 delta, int *err, gchar **err_info)
+ng_skip_bytes_seq(wtap *wth, unsigned int count, int *err, gchar **err_info)
 {
 	ngsniffer_t *ngsniffer;
 	char *buf;
@@ -2597,26 +2597,24 @@ ng_file_skip_seq(wtap *wth, gint64 delta, int *err, gchar **err_info)
 	ngsniffer = (ngsniffer_t *)wth->priv;
 
 	if (wth->file_type_subtype == WTAP_FILE_TYPE_SUBTYPE_NGSNIFFER_UNCOMPRESSED) {
-		ngsniffer->seq.uncomp_offset += delta;
-		return file_skip(wth->fh, delta, err);
+		ngsniffer->seq.uncomp_offset += count;
+		return wtap_read_bytes(wth->fh, NULL, count, err, err_info);
 	}
 
-	g_assert(delta >= 0);
-
-	/* Ok, now read and discard "delta" bytes. */
+	/* Ok, now read and discard "count" bytes. */
 	buf = (char *)g_malloc(INBUF_SIZE);
-	while (delta != 0) {
-		if (delta > INBUF_SIZE)
+	while (count != 0) {
+		if (count > INBUF_SIZE)
 			amount_to_read = INBUF_SIZE;
 		else
-			amount_to_read = (unsigned int) delta;
+			amount_to_read = count;
 
 		if (!ng_read_bytes(wth, buf, amount_to_read, FALSE, err, err_info)) {
 			g_free(buf);
 			return FALSE;	/* error */
 		}
 
-		delta -= amount_to_read;
+		count -= amount_to_read;
 	}
 
 	g_free(buf);

@@ -28,6 +28,8 @@
 
 #include "color_utils.h"
 
+#include <ui/qt/variant_pointer.h>
+
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QDesktopServices>
@@ -136,7 +138,7 @@ proto_tree_draw_node(proto_node *node, gpointer data)
     }
 
     item->setText(0, label);
-    item->setData(0, Qt::UserRole, qVariantFromValue(fi));
+    item->setData(0, Qt::UserRole, VariantPointer<field_info>::asQVariant(fi));
 
     if (is_branch) {
         if (tree_expanded(fi->tree_type)) {
@@ -241,6 +243,9 @@ ProtoTree::ProtoTree(QWidget *parent) :
         action = window()->findChild<QAction *>("actionContextCopyBytesBinary");
         submenu->addAction(action);
         copy_actions_ << action;
+        action = window()->findChild<QAction *>("actionContextCopyBytesEscapedString");
+        submenu->addAction(action);
+        copy_actions_ << action;
 
         action = window()->findChild<QAction *>("actionContextShowPacketBytes");
         ctx_menu_.addAction(action);
@@ -307,7 +312,7 @@ void ProtoTree::contextMenuEvent(QContextMenuEvent *event)
     field_info *fi = NULL;
     const char *module_name = NULL;
     if (selectedItems().count() > 0) {
-        fi = selectedItems()[0]->data(0, Qt::UserRole).value<field_info *>();
+        fi = VariantPointer<field_info>::asPtr(selectedItems()[0]->data(0, Qt::UserRole));
         if (fi && fi->hfinfo) {
             if (fi->hfinfo->parent == -1) {
                 module_name = fi->hfinfo->abbrev;
@@ -319,7 +324,7 @@ void ProtoTree::contextMenuEvent(QContextMenuEvent *event)
     proto_prefs_menu_.setModule(module_name);
 
     foreach (QAction *action, copy_actions_) {
-        action->setData(QVariant::fromValue<field_info *>(fi));
+        action->setData(VariantPointer<field_info>::asQVariant(fi));
     }
 
     decode_as_->setData(qVariantFromValue(true));
@@ -395,7 +400,7 @@ void ProtoTree::goToField(int hf_id)
 
     QTreeWidgetItemIterator iter(this);
     while (*iter) {
-        field_info *fi = (*iter)->data(0, Qt::UserRole).value<field_info *>();
+        field_info *fi = VariantPointer<field_info>::asPtr((*iter)->data(0, Qt::UserRole));
 
         if (fi && fi->hfinfo) {
             if (fi->hfinfo->id == hf_id) {
@@ -413,7 +418,7 @@ void ProtoTree::updateSelectionStatus(QTreeWidgetItem* item)
         field_info *fi;
         QString item_info;
 
-        fi = item->data(0, Qt::UserRole).value<field_info *>();
+        fi = VariantPointer<field_info>::asPtr(item->data(0, Qt::UserRole));
         if (!fi || !fi->hfinfo) return;
 
         if (fi->hfinfo->blurb != NULL && fi->hfinfo->blurb[0] != '\0') {
@@ -468,7 +473,7 @@ void ProtoTree::updateSelectionStatus(QTreeWidgetItem* item)
 void ProtoTree::expand(const QModelIndex & index) {
     field_info *fi;
 
-    fi = index.data(Qt::UserRole).value<field_info *>();
+    fi = VariantPointer<field_info>::asPtr(index.data(Qt::UserRole));
     if (!fi) return;
 
     if(prefs.gui_auto_scroll_on_expand) {
@@ -497,7 +502,7 @@ void ProtoTree::expand(const QModelIndex & index) {
 void ProtoTree::collapse(const QModelIndex & index) {
     field_info *fi;
 
-    fi = index.data(Qt::UserRole).value<field_info *>();
+    fi = VariantPointer<field_info>::asPtr(index.data(Qt::UserRole));
     if (!fi) return;
 
     /*
@@ -565,15 +570,15 @@ void ProtoTree::collapseAll()
 void ProtoTree::itemDoubleClick(QTreeWidgetItem *item, int) {
     field_info *fi;
 
-    fi = item->data(0, Qt::UserRole).value<field_info *>();
+    fi = VariantPointer<field_info>::asPtr(item->data(0, Qt::UserRole));
     if (!fi || !fi->hfinfo) return;
 
     if (fi->hfinfo->type == FT_FRAMENUM) {
+<<<<<<< HEAD
 #if QT_VERSION >= QT_VERSION_CHECK(4, 8, 0)
+=======
+>>>>>>> upstream/master-2.4
         if (QApplication::queryKeyboardModifiers() & Qt::ShiftModifier) {
-#else
-        if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
-#endif
             emit openPacketInNewWindow(true);
         } else {
             emit goToPacket(fi->value.value.uinteger);
@@ -593,7 +598,7 @@ void ProtoTree::selectField(field_info *fi)
 {
     QTreeWidgetItemIterator iter(this);
     while (*iter) {
-        if (fi == (*iter)->data(0, Qt::UserRole).value<field_info *>()) {
+        if (fi == VariantPointer<field_info>::asPtr((*iter)->data(0, Qt::UserRole))) {
             setCurrentItem(*iter);
             scrollToItem(*iter);
             break;
@@ -602,16 +607,58 @@ void ProtoTree::selectField(field_info *fi)
     }
 }
 
+// Finds position item at a level, counting only similar fields.
+static unsigned indexOfField(QTreeWidgetItem *item, header_field_info *hfi)
+{
+    QTreeWidgetItem *parent = item->parent();
+    unsigned pos = 0;
+    if (!parent) {
+        // In case multiple top-level layers are present for the same protocol,
+        // try to find its position (this will likely be the first match, zero).
+        QTreeWidget *tree = item->treeWidget();
+        for (int i = 0; i < tree->topLevelItemCount(); i++) {
+            QTreeWidgetItem *current = tree->topLevelItem(i);
+            if (current == item) {
+                return pos;
+            }
+            if (hfi == VariantPointer<field_info>::asPtr(current->data(0, Qt::UserRole))->hfinfo) {
+                pos++;
+            }
+        }
+    } else {
+        QTreeWidgetItemIterator iter(parent);
+        while (*iter) {
+            QTreeWidgetItem *current = *iter;
+            if (current == item) {
+                return pos;
+            }
+            if (hfi == VariantPointer<field_info>::asPtr(current->data(0, Qt::UserRole))->hfinfo) {
+                pos++;
+            }
+            ++iter;
+        }
+    }
+    // should not happen (child is not found at parent?!)
+    return 0;
+}
+
+// Assume about 2^8 items in tree and 2^24 different registered fields.
+// If there are more of each, then a collision may occur, but since the full
+// path is matched this is unlikely to be a problem.
+#define POS_SHIFT   24
+#define POS_MASK    (((unsigned)-1) << POS_SHIFT)
+
 // Remember the currently focussed field based on:
 // - current hf_id (obviously)
 // - parent items (to avoid selecting a text item in a different tree)
-// - position within a tree if there are multiple items (wishlist)
+// - position within a tree if there are multiple items
 static QList<int> serializeAsPath(QTreeWidgetItem *item)
 {
     QList<int> path;
     do {
-        field_info *fi = item->data(0, Qt::UserRole).value<field_info *>();
-        path.prepend(fi->hfinfo->id);
+        field_info *fi = VariantPointer<field_info>::asPtr(item->data(0, Qt::UserRole));
+        unsigned pos = indexOfField(item, fi->hfinfo);
+        path.prepend((pos << POS_SHIFT) | (fi->hfinfo->id & ~POS_MASK));
     } while ((item = item->parent()));
     return path;
 }
@@ -626,14 +673,21 @@ void ProtoTree::restoreSelectedField()
     if (selected_field_path_.isEmpty()) {
         return;
     }
-    int last_hf_id = selected_field_path_.last();
+    int last_hf_id = selected_field_path_.last() & ~POS_MASK;
     QTreeWidgetItemIterator iter(this);
     while (*iter) {
-        field_info *fi = (*iter)->data(0, Qt::UserRole).value<field_info *>();
+        field_info *fi = VariantPointer<field_info>::asPtr((*iter)->data(0, Qt::UserRole));
         if (last_hf_id == fi->hfinfo->id &&
             serializeAsPath(*iter) == selected_field_path_) {
-            setCurrentItem(*iter);
-            scrollToItem(*iter);
+            // focus the first item, but do not expand collapsed trees.
+            QTreeWidgetItem *item = *iter, *target = item;
+            do {
+                if (!item->isExpanded()) {
+                    target = item;
+                }
+            } while ((item = item->parent()));
+            setCurrentItem(target);
+            scrollToItem(target);
             break;
         }
         ++iter;

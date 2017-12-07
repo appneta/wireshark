@@ -28,7 +28,7 @@
 #include "capture_opts.h"
 
 #include <ui/capture_globals.h>
-#include <filter_files.h>
+#include <ui/filter_files.h>
 #include <wsutil/utf8_entities.h>
 
 #include "capture_filter_edit.h"
@@ -131,7 +131,7 @@ CaptureFilterEdit::CaptureFilterEdit(QWidget *parent, bool plain) :
     if (!plain_) {
         bookmark_button_ = new StockIconToolButton(this, "x-capture-filter-bookmark");
         bookmark_button_->setCursor(Qt::ArrowCursor);
-        bookmark_button_->setMenu(new QMenu());
+        bookmark_button_->setMenu(new QMenu(bookmark_button_));
         bookmark_button_->setPopupMode(QToolButton::InstantPopup);
         bookmark_button_->setToolTip(tr("Manage saved bookmarks."));
         bookmark_button_->setIconSize(QSize(14, 14));
@@ -240,30 +240,6 @@ void CaptureFilterEdit::paintEvent(QPaintEvent *evt) {
         QSize bksz = bookmark_button_->size();
         painter.drawLine(bksz.width(), cr.top(), bksz.width(), cr.bottom());
     }
-
-#if QT_VERSION < QT_VERSION_CHECK(4, 7, 0)
-    // http://wiki.forum.nokia.com/index.php/Custom_QLineEdit
-    if (text().isEmpty() && ! this->hasFocus()) {
-        QPainter p(this);
-        QFont f = font();
-        f.setItalic(true);
-        p.setFont(f);
-
-        QColor color(palette().color(foregroundRole()));
-        color.setAlphaF(0.5);
-        p.setPen(color);
-
-        QStyleOptionFrame opt;
-        initStyleOption(&opt);
-        QRect cr = style()->subElementRect(QStyle::SE_LineEditContents, &opt, this);
-        cr.setLeft(cr.left() + 2);
-        cr.setRight(cr.right() - 2);
-
-        p.drawText(cr, Qt::AlignLeft|Qt::AlignVCenter, placeholder_text_);
-    }
-    // else check filter syntax and set the background accordingly
-    // XXX - Should we add little warning/error icons as well?
-#endif // QT < 4.7
 }
 
 void CaptureFilterEdit::resizeEvent(QResizeEvent *)
@@ -304,9 +280,7 @@ void CaptureFilterEdit::setConflict(bool conflict)
         placeholder_text_ = QString(tr("Enter a capture filter %1")).arg(UTF8_HORIZONTAL_ELLIPSIS);
         setToolTip(QString());
     }
-#if QT_VERSION >= QT_VERSION_CHECK(4, 7, 0)
     setPlaceholderText(placeholder_text_);
-#endif
 }
 
 // XXX Make this private along with setConflict.
@@ -532,18 +506,7 @@ void CaptureFilterEdit::removeFilter()
         }
     }
 
-    char *f_path;
-    int f_save_errno;
-
-    save_filter_list(CFILTER_LIST, &f_path, &f_save_errno);
-    if (f_path != NULL) {
-        // We had an error saving the filter.
-        QString warning_title = tr("Unable to save capture filter settings.");
-        QString warning_msg = tr("Could not save to your capture filter file\n\"%1\": %2.").arg(f_path).arg(g_strerror(f_save_errno));
-
-        QMessageBox::warning(this, warning_title, warning_msg, QMessageBox::Ok);
-        g_free(f_path);
-    }
+    save_filter_list(CFILTER_LIST);
 
     updateBookmarkMenu();
 }

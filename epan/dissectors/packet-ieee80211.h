@@ -31,12 +31,22 @@
 extern "C" {
 #endif /* __cplusplus */
 
-extern
-gboolean capture_ieee80211 (const guchar *, int, int, capture_packet_info_t *cpinfo, const union wtap_pseudo_header *pseudo_header);
-gboolean capture_ieee80211_datapad (const guchar *, int, int, capture_packet_info_t *cpinfo, const union wtap_pseudo_header *pseudo_header);
+typedef struct {
+  gboolean association_has_mobility_domain_element;
+  gboolean has_ft_akm_suite;
+  gboolean has_non_ft_akm_suite;
+  proto_node *rsn_first_ft_akm_suite;
+  proto_node *rsn_first_non_ft_akm_suite;
+} association_sanity_check_t;
 
-extern
-gboolean capture_wlancap(const guchar *, int, int, capture_packet_info_t *cpinfo, const union wtap_pseudo_header *pseudo_header);
+typedef struct ieee80211_tagged_field_data
+{
+  int ftype;
+  association_sanity_check_t* sanity_check;
+  gboolean isDMG;
+  proto_item* item_tag;
+  proto_item* item_tag_length;
+} ieee80211_tagged_field_data_t;
 
 void dissect_wifi_p2p_ie(packet_info *pinfo, proto_tree *tree, tvbuff_t *tvb,
                          int offset, gint size);
@@ -52,7 +62,8 @@ void dissect_wifi_display_ie(packet_info *pinfo, proto_tree *tree,
 int add_tagged_field(packet_info *pinfo, proto_tree *tree,
                             tvbuff_t *tvb, int offset, int ftype,
                             const guint8 *valid_element_ids,
-                            guint valid_element_ids_count);
+                            guint valid_element_ids_count,
+                            association_sanity_check_t *association_sanity_check);
 
 #define MAX_SSID_LEN    32
 #define MAX_PROTECT_LEN 10
@@ -242,6 +253,7 @@ typedef struct _wlan_stats {
   guint8 ssid_len;
   guchar ssid[MAX_SSID_LEN];
   gchar protection[MAX_PROTECT_LEN];
+  gboolean fc_retry;
 } wlan_stats_t;
 
 typedef struct _wlan_hdr {

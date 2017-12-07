@@ -43,12 +43,10 @@
 #include <wsutil/filesystem.h>
 
 #include <epan/ex-opt.h>
-#include <epan/addr_resolv.h>
 #include <epan/packet.h>
 #include <epan/proto.h>
 #include <epan/prefs.h>
 #include <epan/prefs-int.h>
-#include <epan/timestamp.h>
 #include <epan/stat_tap_ui.h>
 
 #include "capture_opts.h"
@@ -58,12 +56,9 @@
 #include "recent.h"
 #include "decode_as_utils.h"
 
-#if defined(HAVE_HEIMDAL_KERBEROS) || defined(HAVE_MIT_KERBEROS)
-#include <epan/asn1.h>
-#include <epan/dissectors/packet-kerberos.h>
-#endif
-
 #include "../file.h"
+
+#include "ui/dissect_opts.h"
 
 #include "ui/commandline.h"
 
@@ -98,7 +93,11 @@ commandline_print_usage(gboolean for_help_option) {
     fprintf(output, "Capture interface:\n");
     fprintf(output, "  -i <interface>           name or idx of interface (def: first non-loopback)\n");
     fprintf(output, "  -f <capture filter>      packet filter in libpcap filter syntax\n");
-    fprintf(output, "  -s <snaplen>             packet snapshot length (def: 65535)\n");
+#ifdef HAVE_PCAP_CREATE
+    fprintf(output, "  -s <snaplen>             packet snapshot length (def: appropriate maximum)\n");
+#else
+    fprintf(output, "  -s <snaplen>             packet snapshot length (def: %u)\n", WTAP_MAX_PACKET_SIZE_STANDARD);
+#endif
     fprintf(output, "  -p                       don't capture in promiscuous mode\n");
     fprintf(output, "  -k                       start capturing immediately (def: do nothing)\n");
     fprintf(output, "  -S                       update packet display when new packets are captured\n");
@@ -140,6 +139,8 @@ commandline_print_usage(gboolean for_help_option) {
     fprintf(output, "  -d %s ...\n", DECODE_AS_ARG_TEMPLATE);
     fprintf(output, "                           \"Decode As\", see the man page for details\n");
     fprintf(output, "                           Example: tcp.port==8888,http\n");
+    fprintf(output, "  --enable-protocol <proto_name>\n");
+    fprintf(output, "                           enable dissection of proto_name\n");
     fprintf(output, "  --disable-protocol <proto_name>\n");
     fprintf(output, "                           disable dissection of proto_name\n");
     fprintf(output, "  --enable-heuristic <short_name>\n");
@@ -176,20 +177,34 @@ commandline_print_usage(gboolean for_help_option) {
 #ifndef _WIN32
     fprintf(output, "  --display=DISPLAY        X display to use\n");
 #endif
+    fprintf(output, "  --fullscreen             start Wireshark in full screen\n");
 
 #ifdef _WIN32
     destroy_console();
 #endif
 }
 
-#define OPTSTRING OPTSTRING_CAPTURE_COMMON "C:d:g:Hh" "jJ:kK:lm:nN:o:P:r:R:St:u:vw:X:Y:z:"
+/*
+ * For long options with no corresponding short options, we define values
+ * outside the range of ASCII graphic characters, make that the last
+ * component of the entry for the long option, and have a case for that
+ * option in the switch statement.
+ *
+ * We also pick values >= 65536, so as to leave values from 128 to 65535
+ * for capture and dissection options.
+ */
+#define LONGOPT_FULL_SCREEN       65536
+
+#define OPTSTRING OPTSTRING_CAPTURE_COMMON OPTSTRING_DISSECT_COMMON "C:g:Hh" "jJ:klm:o:P:r:R:Svw:X:Y:z:"
 static const struct option long_options[] = {
         {"help", no_argument, NULL, 'h'},
         {"read-file", required_argument, NULL, 'r' },
         {"read-filter", required_argument, NULL, 'R' },
         {"display-filter", required_argument, NULL, 'Y' },
         {"version", no_argument, NULL, 'v'},
+        {"fullscreen", no_argument, NULL, LONGOPT_FULL_SCREEN },
         LONGOPT_CAPTURE_COMMON
+        LONGOPT_DISSECT_COMMON
         {0, 0, 0, 0 }
     };
 static const char optstring[] = OPTSTRING;
@@ -342,11 +357,10 @@ void commandline_other_options(int argc, char *argv[], gboolean opt_reset)
 #else
     gboolean capture_option_specified;
 #endif
-    char badopt;
 
     /*
      * To reset the options parser, set optreset to 1 on platforms that
-     * have optreset (documented in *BSD and OS X, apparently present but
+     * have optreset (documented in *BSD and macOS, apparently present but
      * not documented in Solaris - the Illumos repository seems to
      * suggest that the first Solaris getopt_long(), at least as of 2004,
      * was based on the NetBSD one, it had optreset) and set optind to 1,
@@ -381,21 +395,19 @@ void commandline_other_options(int argc, char *argv[], gboolean opt_reset)
     }
 
     /* Initialize with default values */
+    dissect_opts_init();
     global_commandline_info.jump_backwards = SD_FORWARD;
     global_commandline_info.go_to_packet = 0;
     global_commandline_info.jfilter = NULL;
     global_commandline_info.cf_name = NULL;
     global_commandline_info.rfilter = NULL;
     global_commandline_info.dfilter = NULL;
-    global_commandline_info.time_format = TS_NOT_SET;
 #ifdef HAVE_LIBPCAP
     global_commandline_info.start_capture = FALSE;
     global_commandline_info.list_link_layer_types = FALSE;
     global_commandline_info.quit_after_cap = getenv("WIRESHARK_QUIT_AFTER_CAPTURE") ? TRUE : FALSE;
 #endif
-    global_commandline_info.disable_protocol_slist = NULL;
-    global_commandline_info.enable_heur_slist = NULL;
-    global_commandline_info.disable_heur_slist = NULL;
+    global_commandline_info.full_screen = FALSE;
 
     while ((opt = getopt_long(argc, argv, optstring, long_options, NULL)) != -1) {
         switch (opt) {
@@ -433,25 +445,15 @@ void commandline_other_options(int argc, char *argv[], gboolean opt_reset)
 #endif
                 break;
 
-#if defined(HAVE_HEIMDAL_KERBEROS) || defined(HAVE_MIT_KERBEROS)
-            case 'K':        /* Kerberos keytab file */
-                read_keytab_file(optarg);
-                break;
-#endif
-
             /*** all non capture option specific ***/
             case 'C':
                 /* Configuration profile settings were already processed just ignore them this time*/
-                break;
-            case 'd':        /* Decode as rule */
-                if (!decode_as_command_option(optarg))
-                    exit(1);
                 break;
             case 'j':        /* Search backwards for a matching packet from filter in option J */
                 global_commandline_info.jump_backwards = SD_BACKWARD;
                 break;
             case 'g':        /* Go to packet with the given packet number */
-                global_commandline_info.go_to_packet = get_positive_int(optarg, "go to packet");
+                global_commandline_info.go_to_packet = get_nonzero_guint32(optarg, "go to packet");
                 break;
             case 'J':        /* Jump to the first packet which matches the filter criteria */
                 global_commandline_info.jfilter = optarg;
@@ -472,27 +474,17 @@ void commandline_other_options(int argc, char *argv[], gboolean opt_reset)
                 arg_error = TRUE;
 #endif
                 break;
-            case 'm':        /* Fixed-width font for the display. GTK+ only. */
-                g_free(global_commandline_info.prefs_p->gui_gtk2_font_name);
-                global_commandline_info.prefs_p->gui_gtk2_font_name = g_strdup(optarg);
-                break;
-            case 'n':        /* No name resolution */
-                disable_name_resolution();
-                break;
-            case 'N':        /* Select what types of addresses/port #s to resolve */
-                badopt = string_to_name_resolve(optarg, &gbl_resolv_flags);
-                if (badopt != '\0') {
-                    cmdarg_err("-N specifies unknown resolving option '%c'; valid options are 'd', m', 'n', 'N', and 't'",
-                               badopt);
-                    exit(1);
-                }
-                break;
             case 'o':        /* Override preference from command line */
-                switch (prefs_set_pref(optarg)) {
+            {
+                char *errmsg = NULL;
+
+                switch (prefs_set_pref(optarg, &errmsg)) {
                     case PREFS_SET_OK:
                         break;
                     case PREFS_SET_SYNTAX_ERR:
-                        cmdarg_err("Invalid -o flag \"%s\"", optarg);
+                        cmdarg_err("Invalid -o flag \"%s\"%s%s", optarg,
+                                errmsg ? ": " : "", errmsg ? errmsg : "");
+                        g_free(errmsg);
                         exit(1);
                         break;
                     case PREFS_SET_NO_SUCH_PREF:
@@ -524,6 +516,7 @@ void commandline_other_options(int argc, char *argv[], gboolean opt_reset)
                         g_assert_not_reached();
                 }
                 break;
+            }
             case 'P':
                 /* Path settings were already processed just ignore them this time*/
                 break;
@@ -535,48 +528,6 @@ void commandline_other_options(int argc, char *argv[], gboolean opt_reset)
                 break;
             case 'R':        /* Read file filter */
                 global_commandline_info.rfilter = optarg;
-                break;
-            case 't':        /* Time stamp type */
-                if (strcmp(optarg, "r") == 0)
-                    global_commandline_info.time_format = TS_RELATIVE;
-                else if (strcmp(optarg, "a") == 0)
-                    global_commandline_info.time_format = TS_ABSOLUTE;
-                else if (strcmp(optarg, "ad") == 0)
-                    global_commandline_info.time_format = TS_ABSOLUTE_WITH_YMD;
-                else if (strcmp(optarg, "adoy") == 0)
-                    global_commandline_info.time_format = TS_ABSOLUTE_WITH_YDOY;
-                else if (strcmp(optarg, "d") == 0)
-                    global_commandline_info.time_format = TS_DELTA;
-                else if (strcmp(optarg, "dd") == 0)
-                    global_commandline_info.time_format = TS_DELTA_DIS;
-                else if (strcmp(optarg, "e") == 0)
-                    global_commandline_info.time_format = TS_EPOCH;
-                else if (strcmp(optarg, "u") == 0)
-                    global_commandline_info.time_format = TS_UTC;
-                else if (strcmp(optarg, "ud") == 0)
-                    global_commandline_info.time_format = TS_UTC_WITH_YMD;
-                else if (strcmp(optarg, "udoy") == 0)
-                    global_commandline_info.time_format = TS_UTC_WITH_YDOY;
-                else {
-                    cmdarg_err("Invalid time stamp type \"%s\"", optarg);
-                    cmdarg_err_cont("It must be \"a\" for absolute, \"ad\" for absolute with YYYY-MM-DD date,");
-                    cmdarg_err_cont("\"adoy\" for absolute with YYYY/DOY date, \"d\" for delta,");
-                    cmdarg_err_cont("\"dd\" for delta displayed, \"e\" for epoch, \"r\" for relative,");
-                    cmdarg_err_cont("\"u\" for absolute UTC, \"ud\" for absolute UTC with YYYY-MM-DD date,");
-                    cmdarg_err_cont("or \"udoy\" for absolute UTC with YYYY/DOY date.");
-                    exit(1);
-                }
-                break;
-            case 'u':        /* Seconds type */
-                if (strcmp(optarg, "s") == 0)
-                    timestamp_set_seconds_type(TS_SECONDS_DEFAULT);
-                else if (strcmp(optarg, "hms") == 0)
-                    timestamp_set_seconds_type(TS_SECONDS_HOUR_MIN_SEC);
-                else {
-                    cmdarg_err("Invalid seconds type \"%s\"", optarg);
-                    cmdarg_err_cont("It must be \"s\" for seconds or \"hms\" for hours, minutes and seconds.");
-                    exit(1);
-                }
                 break;
             case 'X':
                 /* ext ops were already processed just ignore them this time*/
@@ -602,14 +553,21 @@ void commandline_other_options(int argc, char *argv[], gboolean opt_reset)
                     exit(1);
                 }
                 break;
+            case 'd':        /* Decode as rule */
+            case 'K':        /* Kerberos keytab file */
+            case 'n':        /* No name resolution */
+            case 'N':        /* Select what types of addresses/port #s to resolve */
+            case 't':        /* time stamp type */
+            case 'u':        /* Seconds type */
             case LONGOPT_DISABLE_PROTOCOL: /* disable dissection of protocol */
-                global_commandline_info.disable_protocol_slist = g_slist_append(global_commandline_info.disable_protocol_slist, optarg);
-                break;
             case LONGOPT_ENABLE_HEURISTIC: /* enable heuristic dissection of protocol */
-                global_commandline_info.enable_heur_slist = g_slist_append(global_commandline_info.enable_heur_slist, optarg);
-                break;
             case LONGOPT_DISABLE_HEURISTIC: /* disable heuristic dissection of protocol */
-                global_commandline_info.disable_heur_slist = g_slist_append(global_commandline_info.disable_heur_slist, optarg);
+            case LONGOPT_ENABLE_PROTOCOL: /* enable dissection of protocol (that is disabled by default) */
+                if (!dissect_opts_handle_opt(opt, optarg))
+                   exit(1);
+                break;
+            case LONGOPT_FULL_SCREEN:
+                global_commandline_info.full_screen = TRUE;
                 break;
             default:
             case '?':        /* Bad flag - print usage message */

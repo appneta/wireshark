@@ -134,7 +134,7 @@ void ImportTextDialog::convertTextFile() {
     capfile_name_.append(tmpname ? tmpname : "temporary file");
     qDebug() << capfile_name_ << ":" << import_info_.wdh << import_info_.encapsulation << import_info_.max_frame_length;
     if (import_info_.wdh == NULL) {
-        open_failure_alert_box(capfile_name_.toUtf8().constData(), err, TRUE);
+        cfile_dump_open_failure_alert_box(capfile_name_.toUtf8().constData(), err, WTAP_FILE_TYPE_SUBTYPE_PCAP);
         fclose(import_info_.import_text_file);
         setResult(QDialog::Rejected);
         return;
@@ -155,7 +155,7 @@ void ImportTextDialog::convertTextFile() {
 
     if (!wtap_dump_close(import_info_.wdh, &err))
     {
-        write_failure_alert_box(capfile_name_.toUtf8().constData(), err);
+        cfile_close_failure_alert_box(capfile_name_.toUtf8().constData(), err);
     }
 }
 
@@ -437,7 +437,7 @@ void ImportTextDialog::check_line_edit(SyntaxLineEdit *le, bool &ok_enabled, con
         if (is_short) {
             *val_ptr = num_str.toUShort(&conv_ok, base);
         } else {
-            *val_ptr = num_str.toULong(&conv_ok, base);
+            *val_ptr = (guint)num_str.toULong(&conv_ok, base);
         }
         if (conv_ok && *val_ptr <= max_val) {
             syntax_state = SyntaxLineEdit::Valid;

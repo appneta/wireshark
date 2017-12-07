@@ -813,8 +813,8 @@ file_fdopen(int fd)
 #endif
 
     /* allocate buffers */
-    state->in = (unsigned char *)g_try_malloc(want);
-    state->out = (unsigned char *)g_try_malloc(want << 1);
+    state->in = (unsigned char *)g_try_malloc((gsize)want);
+    state->out = (unsigned char *)g_try_malloc(((gsize)want) << 1);
     state->size = want;
     if (state->in == NULL || state->out == NULL) {
         g_free(state->out);
@@ -1145,21 +1145,6 @@ file_seek(FILE_T file, gint64 offset, int whence, int *err)
     return file->pos + offset;
 }
 
-/*
- * Skip forward the specified number of bytes in the file.
- * Currently implemented as a wrapper around file_seek(),
- * but if, for example, we ever add support for reading
- * sequentially from a pipe, this could instead just skip
- * forward by reading the bytes in question.
- */
-gboolean
-file_skip(FILE_T file, gint64 delta, int *err)
-{
-    if (file_seek(file, delta, SEEK_CUR, err) == -1)
-        return FALSE;
-    return TRUE;
-}
-
 gint64
 file_tell(FILE_T stream)
 {
@@ -1206,16 +1191,25 @@ file_read(void *buf, unsigned int len, FILE_T file)
             return -1;
     }
 
-    /* get len bytes to buf, or less than len if at the end */
+    /*
+     * Get len bytes to buf, or less than len if at the end;
+     * if buf is null, just throw the bytes away.
+     */
     got = 0;
     do {
         if (file->have) {
             /* We have stuff in the output buffer; copy
                what we have. */
             n = file->have > len ? len : file->have;
-            memcpy(buf, file->next, n);
+            if (buf != NULL) {
+                memcpy(buf, file->next, n);
+                buf = (char *)buf + n;
+            }
             file->next += n;
             file->have -= n;
+            len -= n;
+            got += n;
+            file->pos += n;
         } else if (file->err) {
             /* We have nothing in the output buffer, and
                we have an error that may not have been
@@ -1236,13 +1230,7 @@ file_read(void *buf, unsigned int len, FILE_T file)
                in the output buffer. */
             if (fill_out_buffer(file) == -1)
                 return -1;
-            continue;       /* no progress yet -- go back to memcpy() above */
         }
-        /* update progress */
-        len -= n;
-        buf = (char *)buf + n;
-        got += n;
-        file->pos += n;
     } while (len);
 
     return (int)got;
@@ -1721,15 +1709,9 @@ gzwfile_flush(GZWFILE_T state)
 }
 
 /* Flush out all data written, and close the file.  Returns a Wiretap
-   error on failure; returns 0 on success.
-
-   If is_stdout is true, do all of that except for closing the file
-   descriptor, as we don't want to close the standard output file
-   descriptor out from under the program (even though, if the program
-   is writing a capture file to the standard output, it shouldn't be
-   doing anything *else* on the standard output). */
+   error on failure; returns 0 on success. */
 int
-gzwfile_close(GZWFILE_T state, gboolean is_stdout)
+gzwfile_close(GZWFILE_T state)
 {
     int ret = 0;
 
@@ -1740,10 +1722,8 @@ gzwfile_close(GZWFILE_T state, gboolean is_stdout)
     g_free(state->out);
     g_free(state->in);
     state->err = Z_OK;
-    if (!is_stdout) {
-        if (ws_close(state->fd) == -1 && ret == 0)
-            ret = errno;
-    }
+    if (ws_close(state->fd) == -1 && ret == 0)
+        ret = errno;
     g_free(state);
     return ret;
 }

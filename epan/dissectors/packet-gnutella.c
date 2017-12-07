@@ -385,7 +385,7 @@ static int dissect_gnutella_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *t
 			break;
 	}
 
-	col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "%s",
+	col_append_sep_str(pinfo->cinfo, COL_INFO, NULL,
 		    payload_descriptor_text);
 
 	if (tree) {
@@ -732,9 +732,7 @@ void proto_register_gnutella(void) {
 		&ett_gnutella,
 	};
 
-	proto_gnutella = proto_register_protocol("Gnutella Protocol",
-	    					"GNUTELLA",
-						"gnutella");
+	proto_gnutella = proto_register_protocol("Gnutella Protocol", "GNUTELLA", "gnutella");
 
 	proto_register_field_array(proto_gnutella, hf, array_length(hf));
 
@@ -744,9 +742,8 @@ void proto_register_gnutella(void) {
 void proto_reg_handoff_gnutella(void) {
 	dissector_handle_t gnutella_handle;
 
-	gnutella_handle = create_dissector_handle(dissect_gnutella,
-			proto_gnutella);
-	dissector_add_uint("tcp.port", GNUTELLA_TCP_PORT, gnutella_handle);
+	gnutella_handle = create_dissector_handle(dissect_gnutella, proto_gnutella);
+	dissector_add_uint_with_preference("tcp.port", GNUTELLA_TCP_PORT, gnutella_handle);
 }
 
 /*

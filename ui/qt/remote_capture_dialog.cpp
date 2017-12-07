@@ -38,8 +38,6 @@
 
 #include <QMessageBox>
 
-static guint num_selected = 0;
-
 RemoteCaptureDialog::RemoteCaptureDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::RemoteCaptureDialog)
@@ -60,7 +58,7 @@ RemoteCaptureDialog::~RemoteCaptureDialog()
 void RemoteCaptureDialog::hostChanged(QString host)
 {
     if (!host.compare(tr("Clear list"))) {
-        free_remote_host_list();
+        recent_free_remote_host_list();
         ui->hostCombo->clear();
     } else {
         struct remote_host *rh = recent_get_remote_host(host.toUtf8().constData());
@@ -84,11 +82,13 @@ static void fillBox(gpointer key, gpointer, gpointer user_data)
 
 void RemoteCaptureDialog::fillComboBox()
 {
-    GHashTable *ht = get_remote_host_list();
+    int remote_host_list_size;
+
     ui->hostCombo->addItem(QString(""));
-    if (g_hash_table_size(ht) > 0) {
-        g_hash_table_foreach(ht, fillBox, ui->hostCombo);
-        ui->hostCombo->insertSeparator(g_hash_table_size(ht)+1);
+    remote_host_list_size = recent_get_remote_host_list_size();
+    if (remote_host_list_size > 0) {
+        recent_remote_host_list_foreach(fillBox, ui->hostCombo);
+        ui->hostCombo->insertSeparator(remote_host_list_size+1);
         ui->hostCombo->addItem(QString(tr("Clear list")));
     }
 }
@@ -127,10 +127,15 @@ void RemoteCaptureDialog::apply_remote()
                                               global_remote_opts.remote_host_opts.auth_username,
                                               global_remote_opts.remote_host_opts.auth_password,
                                               &err, &err_str);
-    if (rlist == NULL &&
-        (err == CANT_GET_INTERFACE_LIST || err == DONT_HAVE_PCAP)) {
-        QMessageBox::warning(this, tr("Error"),
-                             (err == CANT_GET_INTERFACE_LIST?tr("No remote interfaces found."):tr("PCAP not found")));
+    if (rlist == NULL) {
+        if (err == 0)
+            QMessageBox::warning(this, tr("Error"), tr("No remote interfaces found."));
+        else if (err == CANT_GET_INTERFACE_LIST)
+            QMessageBox::critical(this, tr("Error"), err_str);
+        else if (err == DONT_HAVE_PCAP)
+            QMessageBox::critical(this, tr("Error"), tr("PCAP not found"));
+        else
+            QMessageBox::critical(this, tr("Error"), "Unknown error");
         return;
     }
     if (ui->hostCombo->count() == 0) {

@@ -31,6 +31,7 @@
 #include <epan/prefs.h>
 #include <epan/prefs-int.h>
 #include <epan/epan_dissect.h>
+#include <epan/decode_as.h>
 
 #include "ui/preference_utils.h"
 
@@ -126,20 +127,20 @@ pref_show(pref_t *pref, gpointer user_data)
   const char *type_name = prefs_pref_type_name(pref);
   char       *label_string;
   size_t      label_len;
-  char        uint_str[10+1];
+  char       *uint_str;
   char *tooltip_txt;
 
   /* Give this preference a label which is its title, followed by a colon,
      and left-align it. */
-  title = pref->title;
+  title = prefs_get_title(pref);
   label_len = strlen(title) + 2;
   label_string = (char *)g_malloc(label_len);
   g_strlcpy(label_string, title, label_len);
 
-  tooltip_txt = pref->description? g_strdup_printf("%s\n\nName: %s.%s\nType: %s",
-                                                   pref->description,
+  tooltip_txt = prefs_get_description(pref) ? g_strdup_printf("%s\n\nName: %s.%s\nType: %s",
+                                                   prefs_get_description(pref),
                                                    module->name,
-                                                   pref->name,
+                                                   prefs_get_name(pref),
                                                    type_name ? type_name : "Unknown"
                                                    ): NULL;
 
@@ -147,7 +148,7 @@ pref_show(pref_t *pref, gpointer user_data)
    * Sometimes we don't want to append a ':' after a static text string...
    * If it is needed, we will specify it in the string itself.
    */
-  if (pref->type != PREF_STATIC_TEXT)
+  if (prefs_get_type(pref) != PREF_STATIC_TEXT)
     g_strlcat(label_string, ":", label_len);
 
   pref_stash(pref, NULL);
@@ -155,99 +156,90 @@ pref_show(pref_t *pref, gpointer user_data)
   /* Save the current value of the preference, so that we can revert it if
      the user does "Apply" and then "Cancel", and create the control for
      editing the preference. */
-  switch (pref->type) {
+  switch (prefs_get_type(pref)) {
 
   case PREF_UINT:
+  case PREF_DECODE_AS_UINT:
     /* XXX - there are no uint spinbuttons, so we can't use a spinbutton.
        Even more annoyingly, even if there were, GLib doesn't define
        G_MAXUINT - but I think ANSI C may define UINT_MAX, so we could
        use that. */
-    switch (pref->info.base) {
-
-    case 10:
-      g_snprintf(uint_str, sizeof(uint_str), "%u", pref->stashed_val.uint);
-      break;
-
-    case 8:
-      g_snprintf(uint_str, sizeof(uint_str), "%o", pref->stashed_val.uint);
-      break;
-
-    case 16:
-      g_snprintf(uint_str, sizeof(uint_str), "%x", pref->stashed_val.uint);
-      break;
-    }
-    pref->control = create_preference_entry(main_grid, pref->ordinal,
+    uint_str = prefs_pref_to_str(pref, pref_stashed);
+    prefs_set_control(pref, create_preference_entry(main_grid, prefs_get_ordinal(pref),
                                             label_string, tooltip_txt,
-                                            uint_str);
+                                            uint_str));
+    g_free(uint_str);
     break;
 
   case PREF_BOOL:
-    pref->control = create_preference_check_button(main_grid, pref->ordinal,
+    prefs_set_control(pref, create_preference_check_button(main_grid, prefs_get_ordinal(pref),
                                                    label_string, tooltip_txt,
-                                                   pref->stashed_val.boolval);
+                                                   prefs_get_bool_value(pref, pref_stashed)));
     break;
 
   case PREF_ENUM:
-    if (pref->info.enum_info.radio_buttons) {
+    if (prefs_get_enum_radiobuttons(pref)) {
       /* Show it as radio buttons. */
-      pref->control = create_preference_radio_buttons(main_grid, pref->ordinal,
+      prefs_set_control(pref, create_preference_radio_buttons(main_grid, prefs_get_ordinal(pref),
                                                       label_string, tooltip_txt,
-                                                      pref->info.enum_info.enumvals,
-                                                      pref->stashed_val.enumval);
+                                                      prefs_get_enumvals(pref),
+                                                      prefs_get_enum_value(pref, pref_stashed)));
     } else {
       /* Show it as an option menu. */
-      pref->control = create_preference_option_menu(main_grid, pref->ordinal,
+      prefs_set_control(pref, create_preference_option_menu(main_grid, prefs_get_ordinal(pref),
                                                     label_string, tooltip_txt,
-                                                    pref->info.enum_info.enumvals,
-                                                    pref->stashed_val.enumval);
+                                                    prefs_get_enumvals(pref),
+                                                    prefs_get_enum_value(pref, pref_stashed)));
     }
     break;
 
   case PREF_STRING:
-    pref->control = create_preference_entry(main_grid, pref->ordinal,
+    prefs_set_control(pref, create_preference_entry(main_grid, prefs_get_ordinal(pref),
                                             label_string, tooltip_txt,
-                                            pref->stashed_val.string);
+                                            prefs_get_string_value(pref, pref_stashed)));
     break;
 
-  case PREF_FILENAME:
-    pref->control = create_preference_path_entry(main_grid, pref->ordinal,
+  case PREF_SAVE_FILENAME:
+  case PREF_OPEN_FILENAME:
+    prefs_set_control(pref, create_preference_path_entry(main_grid, prefs_get_ordinal(pref),
                                                      label_string,
                                                      tooltip_txt,
-                                                     pref->stashed_val.string, FALSE);
+                                                     prefs_get_string_value(pref, pref_stashed), FALSE));
     break;
 
   case PREF_DIRNAME:
-    pref->control = create_preference_path_entry(main_grid, pref->ordinal,
+    prefs_set_control(pref, create_preference_path_entry(main_grid, prefs_get_ordinal(pref),
                                                      label_string,
                                                      tooltip_txt,
-                                                     pref->stashed_val.string, TRUE);
+                                                     prefs_get_string_value(pref, pref_stashed), TRUE));
     break;
 
   case PREF_RANGE:
+  case PREF_DECODE_AS_RANGE:
   {
     char *range_str_p;
 
-    range_str_p = range_convert_range(NULL, *pref->varp.range);
-    pref->control = create_preference_entry(main_grid, pref->ordinal,
+    range_str_p = range_convert_range(NULL, prefs_get_range_value_real(pref, pref_current));
+    prefs_set_control(pref, create_preference_entry(main_grid, prefs_get_ordinal(pref),
                                             label_string, tooltip_txt,
-                                            range_str_p);
+                                            range_str_p));
     wmem_free(NULL, range_str_p);
     break;
   }
 
   case PREF_STATIC_TEXT:
   {
-    pref->control = create_preference_static_text(main_grid, pref->ordinal,
-                                                  label_string, tooltip_txt);
+    prefs_set_control(pref, create_preference_static_text(main_grid, prefs_get_ordinal(pref),
+                                                  label_string, tooltip_txt));
     break;
   }
 
   case PREF_UAT:
   {
-    if (pref->gui == GUI_ALL || pref->gui == GUI_GTK)
-        pref->control = create_preference_uat(main_grid, pref->ordinal,
+    if (prefs_get_gui_type(pref) == GUI_ALL || prefs_get_gui_type(pref) == GUI_GTK)
+        prefs_set_control(pref, create_preference_uat(main_grid, prefs_get_ordinal(pref),
                                               label_string, tooltip_txt,
-                                              pref->varp.uat);
+                                              prefs_get_uat_value(pref)));
     break;
   }
 
@@ -907,10 +899,13 @@ create_preference_static_text(GtkWidget *main_grid, int grid_position,
 {
   GtkWidget *label;
 
-  if (label_text != NULL)
+  if (label_text != NULL) {
     label = gtk_label_new(label_text);
-  else
+    gtk_label_set_line_wrap (GTK_LABEL (label), TRUE);
+    gtk_label_set_width_chars (GTK_LABEL (label), 80);
+  } else {
     label = gtk_label_new("");
+  }
   ws_gtk_grid_attach_defaults(GTK_GRID(main_grid), label, 0, grid_position, 2, 1);
   if (tooltip_text != NULL)
     gtk_widget_set_tooltip_text(label, tooltip_text);
@@ -948,10 +943,11 @@ pref_check(pref_t *pref, gpointer user_data)
   pref_t     **badpref = (pref_t **)user_data;
 
   /* Fetch the value of the preference, and check whether it's valid. */
-  switch (pref->type) {
+  switch (prefs_get_type(pref)) {
 
   case PREF_UINT:
-    str_val = gtk_entry_get_text(GTK_ENTRY(pref->control));
+  case PREF_DECODE_AS_UINT:
+    str_val = gtk_entry_get_text(GTK_ENTRY(prefs_get_control(pref)));
     errno = 0;
 
     /* XXX: The following ugly hack prevents a gcc warning
@@ -967,7 +963,7 @@ pref_check(pref_t *pref, gpointer user_data)
          and thus avoiding the need to check whether it's a valid number, would also be a good idea."
        ]
     */
-    if (strtoul(str_val, &p, pref->info.base)){}
+    if (strtoul(str_val, &p, prefs_get_uint_base(pref))){}
     if (p == str_val || *p != '\0' || errno != 0) {
       *badpref = pref;
       return PREFS_SET_SYNTAX_ERR;      /* number was bad */
@@ -983,22 +979,25 @@ pref_check(pref_t *pref, gpointer user_data)
     break;
 
   case PREF_STRING:
-  case PREF_FILENAME:
+  case PREF_SAVE_FILENAME:
+  case PREF_OPEN_FILENAME:
   case PREF_DIRNAME:
     /* Value can't be bad. */
     break;
 
   case PREF_RANGE:
-    str_val = gtk_entry_get_text(GTK_ENTRY(pref->control));
+  case PREF_DECODE_AS_RANGE:
+    str_val = gtk_entry_get_text(GTK_ENTRY(prefs_get_control(pref)));
 
     if (strlen(str_val) != 0) {
       range_t *newrange;
 
-      if (range_convert_str(&newrange, str_val, pref->info.max_value) != CVT_NO_ERROR) {
+      if (range_convert_str(NULL, &newrange, str_val, prefs_get_max_value(pref)) != CVT_NO_ERROR) {
         *badpref = pref;
+        wmem_free(NULL, newrange);
         return PREFS_SET_SYNTAX_ERR;    /* range was bad */
       }
-      g_free(newrange);
+      wmem_free(NULL, newrange);
     }
     break;
 
@@ -1036,61 +1035,84 @@ pref_fetch(pref_t *pref, gpointer user_data)
 {
   const char *str_val;
   char       *p;
-  guint       uval;
+  guint       uval, uval_stashed;
   gboolean    bval;
   gint        enumval;
-  gboolean   *pref_changed_p = (gboolean *)user_data;
+  module_t *module = (module_t *)user_data;
+  pref_unstash_data_t unstash_data;
 
   /* Fetch the value of the preference, and set the appropriate variable
      to it. */
-  switch (pref->type) {
+  switch (prefs_get_type(pref)) {
 
-  case PREF_UINT:
-    str_val = gtk_entry_get_text(GTK_ENTRY(pref->control));
-    uval = (guint)strtoul(str_val, &p, pref->info.base);
+  case PREF_DECODE_AS_UINT:
+    str_val = gtk_entry_get_text(GTK_ENTRY(prefs_get_control(pref)));
+    uval = (guint)strtoul(str_val, &p, prefs_get_uint_base(pref));
 #if 0
     if (p == value || *p != '\0')
       return PREFS_SET_SYNTAX_ERR;      /* number was bad */
 #endif
-    if (*pref->varp.uint != uval) {
-      *pref_changed_p = TRUE;
-      *pref->varp.uint = uval;
-    }
+    /* Save stashed value to use pref_unstash and restore it later */
+    uval_stashed = prefs_get_uint_value_real(pref, pref_stashed);
+    prefs_set_uint_value(pref, uval, pref_stashed);
+
+    unstash_data.module = module;
+    unstash_data.handle_decode_as = TRUE;
+    pref_unstash(pref, (gpointer)&unstash_data);
+
+    /* Restore stashed value */
+    prefs_set_uint_value(pref, uval_stashed, pref_stashed);
+    break;
+
+  case PREF_UINT:
+    str_val = gtk_entry_get_text(GTK_ENTRY(prefs_get_control(pref)));
+    uval = (guint)strtoul(str_val, &p, prefs_get_uint_base(pref));
+#if 0
+    if (p == value || *p != '\0')
+      return PREFS_SET_SYNTAX_ERR;      /* number was bad */
+#endif
+    module->prefs_changed |= prefs_set_uint_value(pref, uval, pref_current);
     break;
 
   case PREF_BOOL:
-    bval = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(pref->control));
-    if (*pref->varp.boolp != bval) {
-      *pref_changed_p = TRUE;
-      *pref->varp.boolp = bval;
-    }
+    bval = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(prefs_get_control(pref)));
+    module->prefs_changed |= prefs_set_bool_value(pref, bval, pref_current);
     break;
 
   case PREF_ENUM:
-    if (pref->info.enum_info.radio_buttons) {
-      enumval = fetch_preference_radio_buttons_val((GtkWidget *)pref->control,
-          pref->info.enum_info.enumvals);
+    if (prefs_get_enum_radiobuttons(pref)) {
+      enumval = fetch_preference_radio_buttons_val((GtkWidget *)prefs_get_control(pref),
+          prefs_get_enumvals(pref));
     } else {
-      enumval = fetch_preference_option_menu_val((GtkWidget *)pref->control,
-                                                 pref->info.enum_info.enumvals);
+      enumval = fetch_preference_option_menu_val((GtkWidget *)prefs_get_control(pref),
+                                                 prefs_get_enumvals(pref));
     }
 
-    if (*pref->varp.enump != enumval) {
-      *pref_changed_p = TRUE;
-      *pref->varp.enump = enumval;
-    }
+    module->prefs_changed |= prefs_set_enum_value(pref, enumval, pref_current);
     break;
 
   case PREF_STRING:
-  case PREF_FILENAME:
+  case PREF_SAVE_FILENAME:
+  case PREF_OPEN_FILENAME:
   case PREF_DIRNAME:
-    str_val = gtk_entry_get_text(GTK_ENTRY(pref->control));
-    prefs_set_string_like_value(pref, str_val, pref_changed_p);
+    str_val = gtk_entry_get_text(GTK_ENTRY(prefs_get_control(pref)));
+    module->prefs_changed |= prefs_set_string_value(pref, str_val, pref_current);
     break;
 
+  case PREF_DECODE_AS_RANGE:
+    {
+    str_val = gtk_entry_get_text(GTK_ENTRY(prefs_get_control(pref)));
+
+    module->prefs_changed |= prefs_set_stashed_range_value(pref, str_val);
+
+    unstash_data.module = module;
+    unstash_data.handle_decode_as = TRUE;
+    pref_unstash(pref, (gpointer)&unstash_data);
+    break;
+    }
   case PREF_RANGE:
-    str_val = gtk_entry_get_text(GTK_ENTRY(pref->control));
-    if (!prefs_set_range_value(pref, str_val, pref_changed_p))
+    str_val = gtk_entry_get_text(GTK_ENTRY(prefs_get_control(pref)));
+    if (!prefs_set_range_value_work(pref, str_val, TRUE, &module->prefs_changed))
 #if 0
       return PREFS_SET_SYNTAX_ERR;      /* range was bad */
 #else
@@ -1127,7 +1149,7 @@ module_prefs_fetch(module_t *module, gpointer user_data)
   /* For all preferences in this module, fetch its value from this
      module's notebook page.  Find out whether any of them changed. */
   module->prefs_changed = FALSE;        /* assume none of them changed */
-  prefs_pref_foreach(module, pref_fetch, &module->prefs_changed);
+  prefs_pref_foreach(module, pref_fetch, module);
 
   /* If any of them changed, indicate that we must redissect and refilter
      the current capture (if we have one), as the preference change
@@ -1233,18 +1255,20 @@ prefs_main_fetch_all(GtkWidget *dlg, gboolean *must_redissect)
   switch (prefs_modules_foreach(module_prefs_check, (gpointer)&badpref)) {
 
     case PREFS_SET_SYNTAX_ERR:
-      switch (badpref->type) {
+      switch (prefs_get_type(badpref)) {
 
     case PREF_UINT:
+    case PREF_DECODE_AS_UINT:
       simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                     "The value for \"%s\" isn't a valid number.",
-                    badpref->title);
+                    prefs_get_title(badpref));
       return FALSE;
 
     case PREF_RANGE:
+    case PREF_DECODE_AS_RANGE:
       simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                     "The value for \"%s\" isn't a valid range.",
-                    badpref->title);
+                    prefs_get_title(badpref));
       return FALSE;
 
     default:
@@ -1374,10 +1398,18 @@ static void prefs_copy(void) {
 static void
 overwrite_existing_prefs_cb(gpointer dialog _U_, gint btn, gpointer parent_w _U_)
 {
+  gchar* err = NULL;
+
   switch (btn) {
     case(ESD_BTN_SAVE):
       prefs_main_write();
       prefs.unknown_prefs = FALSE;
+
+      if (save_decode_as_entries(&err) < 0)
+      {
+          simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "%s", err);
+          g_free(err);
+      }
       break;
     case(ESD_BTN_DONT_SAVE):
       break;
@@ -1388,6 +1420,8 @@ overwrite_existing_prefs_cb(gpointer dialog _U_, gint btn, gpointer parent_w _U_
 static void
 prefs_main_save(gpointer parent_w)
 {
+  gchar* err = NULL;
+
   if (prefs.unknown_prefs) {
     gpointer dialog;
     const gchar *msg =
@@ -1408,6 +1442,12 @@ prefs_main_save(gpointer parent_w)
     simple_dialog_set_cb(dialog, overwrite_existing_prefs_cb, parent_w);
   } else {
     prefs_main_write();
+
+    if (save_decode_as_entries(&err) < 0)
+    {
+        simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "%s", err);
+        g_free(err);
+    }
   }
 }
 
@@ -1523,6 +1563,7 @@ static guint
 module_prefs_revert(module_t *module, gpointer user_data)
 {
   gboolean *must_redissect_p = (gboolean *)user_data;
+  pref_unstash_data_t unstashed_data;
 
   /* Ignore any preferences with their own interface */
   if (!module->use_gui) {
@@ -1533,7 +1574,9 @@ module_prefs_revert(module_t *module, gpointer user_data)
      it had when we popped up the Preferences dialog.  Find out whether
      this changes any of them. */
   module->prefs_changed = FALSE;        /* assume none of them changed */
-  prefs_pref_foreach(module, pref_unstash, &module->prefs_changed);
+  unstashed_data.module = module;
+  unstashed_data.handle_decode_as = FALSE;
+  prefs_pref_foreach(module, pref_unstash, &unstashed_data);
 
   /* If any of them changed, indicate that we must redissect and refilter
      the current capture (if we have one), as the preference change

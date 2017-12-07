@@ -32,6 +32,7 @@
 #include <epan/dissectors/packet-dcerpc.h>
 #include <epan/dissectors/packet-dcom.h>
 #include "packet-dcom-cba-acco.h"
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 
 void proto_register_dcom_cba_acco(void);
 void proto_reg_handoff_dcom_cba_acco(void);
@@ -153,6 +154,8 @@ static expert_field ei_cba_acco_no_request_info = EI_INIT;
 static expert_field ei_cba_acco_ipid_unknown = EI_INIT;
 static expert_field ei_cba_acco_qc = EI_INIT;
 static expert_field ei_cba_acco_pdev_find_unknown_interface = EI_INIT;
+static expert_field ei_cba_acco_disconnect = EI_INIT;
+static expert_field ei_cba_acco_connect = EI_INIT;
 
 static int proto_ICBAAccoMgt = -1;
 static gint ett_ICBAAccoMgt = -1;
@@ -390,7 +393,7 @@ static void
 cba_connection_dump(cba_connection_t *conn, const char *role)
 {
     if (conn->qostype != 0x30) {
-        g_warning("   %s#%5u: CID:0x%8x PID:0x%8x PItem:\"%s\" Type:%s QoS:%s/%u Ret:%s Data#%5u-#%5u",
+        ws_debug_printf("   %s#%5u: CID:0x%8x PID:0x%8x PItem:\"%s\" Type:%s QoS:%s/%u Ret:%s Data#%5u-#%5u",
             role,
             conn->packet_connect,
             conn->consid, conn->provid, conn->provitem,
@@ -399,7 +402,7 @@ cba_connection_dump(cba_connection_t *conn, const char *role)
             conn->connret==0xffffffff ? "[pending]" : val_to_str(conn->connret, dcom_hresult_vals, "Unknown (0x%08x)"),
             conn->packet_first, conn->packet_last);
     } else {
-        g_warning("   %s#%5u: CID:0x%8x PID:0x%8x PItem:\"%s\" Type:%s QoS:%s/%u Ret:%s Off:%u",
+        ws_debug_printf("   %s#%5u: CID:0x%8x PID:0x%8x PItem:\"%s\" Type:%s QoS:%s/%u Ret:%s Off:%u",
             role,
             conn->packet_connect,
             conn->consid, conn->provid, conn->provitem,
@@ -427,17 +430,17 @@ cba_object_dump(void)
     for(pdevs = cba_pdevs; pdevs != NULL; pdevs = g_list_next(pdevs)) {
         pdev = pdevs->data;
         set_address(&addr, AT_IPv4, 4, pdev->ip);
-        g_warning("PDev #%5u: %s IFs:%u", pdev->first_packet, address_to_str(wmem_packet_scope(), &addr),
+        ws_debug_printf("PDev #%5u: %s IFs:%u", pdev->first_packet, address_to_str(wmem_packet_scope(), &addr),
             pdev->object ? g_list_length(pdev->object->interfaces) : 0);
 
         for(ldevs = pdev->ldevs; ldevs != NULL; ldevs = g_list_next(ldevs)) {
             ldev = ldevs->data;
-            g_warning(" LDev#%5u: \"%s\" LDevIFs:%u AccoIFs:%u", ldev->first_packet, ldev->name,
+            ws_debug_printf(" LDev#%5u: \"%s\" LDevIFs:%u AccoIFs:%u", ldev->first_packet, ldev->name,
                 ldev->ldev_object ? g_list_length(ldev->ldev_object->interfaces) : 0,
                 ldev->acco_object ? g_list_length(ldev->acco_object->interfaces) : 0);
             for(frames = ldev->consframes; frames != NULL; frames = g_list_next(frames)) {
                 frame = frames->data;
-                g_warning("  ConsFrame#%5u: CCRID:0x%x PCRID:0x%x Len:%u Ret:%s Data#%5u-#%5u",
+                ws_debug_printf("  ConsFrame#%5u: CCRID:0x%x PCRID:0x%x Len:%u Ret:%s Data#%5u-#%5u",
                     frame->packet_connect, frame->conscrid, frame->provcrid, frame->length,
                     frame->conncrret==0xffffffff ? "[pending]" : val_to_str(frame->conncrret, dcom_hresult_vals, "Unknown (0x%08x)"),
                     frame->packet_first, frame->packet_last);
@@ -447,7 +450,7 @@ cba_object_dump(void)
             }
             for(frames = ldev->provframes; frames != NULL; frames = g_list_next(frames)) {
                 frame = frames->data;
-                g_warning("  ProvFrame#%5u: CCRID:0x%x PCRID:0x%x Len:%u Ret:%s Data#%5u-#%5u",
+                ws_debug_printf("  ProvFrame#%5u: CCRID:0x%x PCRID:0x%x Len:%u Ret:%s Data#%5u-#%5u",
                     frame->packet_connect, frame->conscrid, frame->provcrid, frame->length,
                     frame->conncrret==0xffffffff ? "[pending]" : val_to_str(frame->conncrret, dcom_hresult_vals, "Unknown (0x%08x)"),
                     frame->packet_first, frame->packet_last);
@@ -659,7 +662,7 @@ cba_packet_in_range(packet_info *pinfo, guint packet_connect, guint packet_disco
 {
 
     if (packet_connect == 0) {
-        g_warning("cba_packet_in_range#%u: packet_connect not set?", pinfo->num);
+        expert_add_info_format(pinfo, NULL, &ei_cba_acco_connect, "cba_packet_in_range#%u: packet_connect not set?", pinfo->num);
     }
 
     if (packet_connect == 0 || pinfo->num < packet_connect) {
@@ -787,7 +790,7 @@ cba_frame_disconnect(packet_info *pinfo, cba_frame_t *frame)
     }
 
     if (frame->packet_disconnect != pinfo->num) {
-        g_warning("cba_frame_disconnect#%u: frame already disconnected in #%u",
+        expert_add_info_format(pinfo, NULL, &ei_cba_acco_disconnect, "cba_frame_disconnect#%u: frame already disconnected in #%u",
             pinfo->num, frame->packet_disconnect);
     }
 }
@@ -813,7 +816,7 @@ cba_frame_disconnectme(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, cba_
             }
 
             if (frame->packet_disconnectme != pinfo->num) {
-                g_warning("cba_frame_disconnectme#%u: frame already disconnectme'd in #%u",
+                expert_add_info_format(pinfo, tree, &ei_cba_acco_disconnect, "cba_frame_disconnectme#%u: frame already disconnectme'd in #%u",
                     pinfo->num, frame->packet_disconnectme);
             }
         }
@@ -1029,7 +1032,7 @@ cba_connection_disconnect(packet_info *pinfo, cba_connection_t *conn)
     }
 
     if (conn->packet_disconnect != pinfo->num) {
-        g_warning("connection_disconnect#%u: already disconnected",
+        expert_add_info_format(pinfo, NULL, &ei_cba_acco_disconnect, "connection_disconnect#%u: already disconnected",
                   conn->packet_disconnect);
     }
 }
@@ -1055,7 +1058,7 @@ cba_connection_disconnectme(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             }
 
             if (conn->packet_disconnectme != pinfo->num) {
-                g_warning("connection_disconnectme#%u: already disconnectme'd",
+                expert_add_info_format(pinfo, tree, &ei_cba_acco_disconnect, "connection_disconnectme#%u: already disconnectme'd",
                           conn->packet_disconnectme);
             }
         }
@@ -5058,6 +5061,8 @@ proto_register_dcom_cba_acco (void)
         { &ei_cba_acco_conn_consumer, { "cba.acco.conn_consumer.invalid", PI_UNDECODED, PI_NOTE, "Consumer interface invalid", EXPFILL }},
         { &ei_cba_acco_no_request_info, { "cba.acco.no_request_info", PI_UNDECODED, PI_NOTE, "No request info, response data ignored", EXPFILL }},
         { &ei_cba_acco_qc, { "cba.acco.qc.expert", PI_RESPONSE_CODE, PI_CHAT, "expert QC", EXPFILL }},
+        { &ei_cba_acco_disconnect, { "cba.acco.disconnect", PI_SEQUENCE, PI_NOTE, "Disconnection sequence issue", EXPFILL }},
+        { &ei_cba_acco_connect, { "cba.acco.connect_not_set", PI_SEQUENCE, PI_NOTE, "packet_connect not set", EXPFILL }},
     };
 
     expert_module_t* expert_cba_acco;

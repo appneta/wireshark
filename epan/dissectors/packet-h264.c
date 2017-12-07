@@ -260,6 +260,8 @@ static expert_field ei_h264_bad_nal_length = EI_INIT;
 static expert_field ei_h264_nal_unit_type_reserved = EI_INIT;
 static expert_field ei_h264_nal_unit_type_unspecified = EI_INIT;
 
+static dissector_handle_t h264_name_handle;
+
 /* The dynamic payload type range which will be dissected as H.264 */
 
 #define RTP_PT_DEFAULT_RANGE "0"
@@ -2114,7 +2116,7 @@ dissect_h264_pacsi(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo, gint off
         else
         {
             /* Make a new subset of the existing buffer for the NAL unit */
-            nalu_tvb = tvb_new_subset(tvb, offset, tvb_captured_length_remaining(tvb,offset), nal_unit_size);
+            nalu_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_captured_length_remaining(tvb,offset), nal_unit_size);
             /* Decode the NAL unit */
             dissect_h264(nalu_tvb, pinfo, tree, NULL);
             offset += nal_unit_size;
@@ -2163,7 +2165,7 @@ dissect_h264_stap(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo _U_, gint 
         else
         {
             /* Make a new subset of the existing buffer for the NAL unit */
-            nalu_tvb = tvb_new_subset(tvb, offset, tvb_captured_length_remaining(tvb, offset), nal_unit_size);
+            nalu_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_captured_length_remaining(tvb, offset), nal_unit_size);
             /* Decode the NAL unit */
             dissect_h264(nalu_tvb, pinfo, tree, NULL);
             offset += nal_unit_size;
@@ -2220,7 +2222,7 @@ dissect_h264_mtap(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo _U_, gint 
         else
         {
             /* Make a new subset of the existing buffer for the NAL unit */
-            nalu_tvb = tvb_new_subset(tvb, offset, tvb_captured_length_remaining(tvb, offset), nal_unit_size);
+            nalu_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_captured_length_remaining(tvb, offset), nal_unit_size);
             /* Decode the NAL unit */
             dissect_h264(nalu_tvb, pinfo, tree, NULL);
             offset += nal_unit_size;
@@ -2286,7 +2288,7 @@ dissect_h264_nalu_extension (proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo
             else
             {
                 /* Make a new subset of the existing buffer for the NAL unit */
-                nalu_tvb = tvb_new_subset(tvb, offset, tvb_captured_length_remaining(tvb, offset), nal_unit_size);
+                nalu_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_captured_length_remaining(tvb, offset), nal_unit_size);
                 /* Decode the NAL unit */
                 dissect_h264(nalu_tvb, pinfo, nimtap_tree, NULL);
                 offset += nal_unit_size;
@@ -3700,7 +3702,7 @@ proto_register_h264(void)
                             "; Values must be in the range 96 - 127",
                             &temp_dynamic_payload_type_range, 127);
 
-    register_dissector("h264", dissect_h264, proto_h264);
+    h264_handle = register_dissector("h264", dissect_h264, proto_h264);
 }
 
 
@@ -3712,10 +3714,8 @@ proto_reg_handoff_h264(void)
     static gboolean  h264_prefs_initialized     = FALSE;
 
     if (!h264_prefs_initialized) {
-        dissector_handle_t h264_name_handle;
         h264_capability_t *ftr;
 
-        h264_handle = find_dissector("h264");
         dissector_add_string("rtp_dyn_payload_type","H264", h264_handle);
         dissector_add_string("rtp_dyn_payload_type","H264-SVC", h264_handle);
         dissector_add_string("rtp_dyn_payload_type","X-H264UC", h264_handle);
@@ -3730,10 +3730,10 @@ proto_reg_handoff_h264(void)
         h264_prefs_initialized = TRUE;
     } else {
         range_foreach(dynamic_payload_type_range, range_delete_h264_rtp_pt_callback);
-        g_free(dynamic_payload_type_range);
+        wmem_free(wmem_epan_scope(), dynamic_payload_type_range);
     }
 
-    dynamic_payload_type_range = range_copy(temp_dynamic_payload_type_range);
+    dynamic_payload_type_range = range_copy(wmem_epan_scope(), temp_dynamic_payload_type_range);
     range_foreach(dynamic_payload_type_range, range_add_h264_rtp_pt_callback);
 }
 

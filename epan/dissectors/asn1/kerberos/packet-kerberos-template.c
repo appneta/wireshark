@@ -63,6 +63,7 @@
 #include <epan/asn1.h>
 #include <epan/expert.h>
 #include <epan/prefs.h>
+#include <wsutil/wsgcrypt.h>
 #include <wsutil/file_util.h>
 #include <wsutil/str_util.h>
 #include "packet-kerberos.h"
@@ -72,6 +73,8 @@
 #include "packet-pkinit.h"
 #include "packet-cms.h"
 #include "packet-windows-common.h"
+
+#include "read_keytab_file.h"
 
 #include "packet-dcerpc-netlogon.h"
 #include "packet-dcerpc.h"
@@ -388,7 +391,7 @@ decrypt_krb5_data(proto_tree *tree _U_, packet_info *pinfo,
 	}
 
 	read_keytab_file_from_preferences();
-	data.data = (char *)g_malloc(length);
+	data.data = (char *)wmem_alloc(pinfo->pool, length);
 	data.length = length;
 
 	for(ek=enc_key_list;ek;ek=ek->next){
@@ -414,7 +417,6 @@ decrypt_krb5_data(proto_tree *tree _U_, packet_info *pinfo,
 								   "Decrypted keytype %d in frame %u using %s",
 								   ek->keytype, pinfo->num, ek->key_origin);
 
-			/* return a private g_malloced blob to the caller */
 			user_data=data.data;
 			if (datalen) {
 				*datalen = data.length;
@@ -422,7 +424,6 @@ decrypt_krb5_data(proto_tree *tree _U_, packet_info *pinfo,
 			return user_data;
 		}
 	}
-	g_free(data.data);
 
 	return NULL;
 }
@@ -553,12 +554,11 @@ decrypt_krb5_data(proto_tree *tree _U_, packet_info *pinfo,
 		   keys. So just give it a copy of the crypto data instead.
 		   This has been seen for RC4-HMAC blobs.
 		*/
-		cryptocopy = (guint8 *)g_memdup(cryptotext, length);
+		cryptocopy = (guint8 *)wmem_memdup(wmem_packet_scope(), cryptotext, length);
 		ret = krb5_decrypt_ivec(krb5_ctx, crypto, usage,
 								cryptocopy, length,
 								&data,
 								NULL);
-		g_free(cryptocopy);
 		if((ret == 0) && (length>0)){
 			char *user_data;
 
@@ -567,8 +567,8 @@ decrypt_krb5_data(proto_tree *tree _U_, packet_info *pinfo,
 								   ek->keytype, pinfo->num, ek->key_origin);
 
 			krb5_crypto_destroy(krb5_ctx, crypto);
-			/* return a private g_malloced blob to the caller */
-			user_data = (char *)g_memdup(data.data, (guint)data.length);
+			/* return a private wmem_alloced blob to the caller */
+			user_data = (char *)wmem_memdup(pinfo->pool, data.data, (guint)data.length);
 			if (datalen) {
 				*datalen = (int)data.length;
 			}
@@ -693,10 +693,10 @@ decrypt_krb5_data(proto_tree *tree, packet_info *pinfo,
 	int id_offset, offset;
 	guint8 key[DES3_KEY_SIZE];
 	guint8 initial_vector[DES_BLOCK_SIZE];
-	md5_state_t md5s;
-	md5_byte_t digest[16];
-	md5_byte_t zero_fill[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-	md5_byte_t confounder[8];
+	gcry_md_hd_t md5_handle;
+	guint8 *digest;
+	guint8 zero_fill[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	guint8 confounder[8];
 	gboolean ind;
 	GSList *ske;
 	service_key_t *sk;
@@ -719,14 +719,14 @@ decrypt_krb5_data(proto_tree *tree, packet_info *pinfo,
 		return NULL;
 	}
 
-	decrypted_data = g_malloc(length);
+	decrypted_data = wmem_alloc(wmem_packet_scope(), length);
 	for(ske = service_key_list; ske != NULL; ske = g_slist_next(ske)){
 		gboolean do_continue = FALSE;
+		gboolean digest_ok;
 		sk = (service_key_t *) ske->data;
 
 		des_fix_parity(DES3_KEY_SIZE, key, sk->contents);
 
-		md5_init(&md5s);
 		memset(initial_vector, 0, DES_BLOCK_SIZE);
 		des3_set_key(&ctx, key);
 		cbc_decrypt(&ctx, des3_decrypt, DES_BLOCK_SIZE, initial_vector,
@@ -758,26 +758,28 @@ decrypt_krb5_data(proto_tree *tree, packet_info *pinfo,
 			continue;
 		}
 
-		md5_append(&md5s, confounder, 8);
-		md5_append(&md5s, zero_fill, 16);
-		md5_append(&md5s, decrypted_data + CONFOUNDER_PLUS_CHECKSUM, data_len);
-		md5_finish(&md5s, digest);
+		if (gcry_md_open(&md5_handle, GCRY_MD_MD5, 0)) {
+			return NULL;
+		}
+		gcry_md_write(md5_handle, confounder, 8);
+		gcry_md_write(md5_handle, zero_fill, 16);
+		gcry_md_write(md5_handle, decrypted_data + CONFOUNDER_PLUS_CHECKSUM, data_len);
+		digest = gcry_md_read(md5_handle, 0);
 
-		if (tvb_memeql (encr_tvb, 8, digest, 16) == 0) {
-			plaintext = g_malloc(data_len);
-			tvb_memcpy(encr_tvb, plaintext, CONFOUNDER_PLUS_CHECKSUM, data_len);
+		digest_ok = (tvb_memeql (encr_tvb, 8, digest, HASH_MD5_LENGTH) == 0);
+		gcry_md_close(md5_handle);
+		if (digest_ok) {
+			plaintext = (guint8* )tvb_memdup(pinfo->pool, encr_tvb, CONFOUNDER_PLUS_CHECKSUM, data_len);
 			tvb_free(encr_tvb);
 
 			if (datalen) {
 				*datalen = data_len;
 			}
-			g_free(decrypted_data);
 			return(plaintext);
 		}
 		tvb_free(encr_tvb);
 	}
 
-	g_free(decrypted_data);
 	return NULL;
 }
 
@@ -1224,7 +1226,6 @@ dissect_krb5_decrypt_ticket_data (gboolean imp_tag _U_, tvbuff_t *tvb, int offse
 	if(plaintext){
 		tvbuff_t *child_tvb;
 		child_tvb = tvb_new_child_real_data(tvb, plaintext, length, length);
-		tvb_set_free_cb(child_tvb, g_free);
 
 		/* Add the decrypted data to the data source list. */
 		add_new_data_source(actx->pinfo, child_tvb, "Decrypted Krb5");
@@ -1261,7 +1262,6 @@ dissect_krb5_decrypt_authenticator_data (gboolean imp_tag _U_, tvbuff_t *tvb, in
 	if(plaintext){
 		tvbuff_t *child_tvb;
 		child_tvb = tvb_new_child_real_data(tvb, plaintext, length, length);
-		tvb_set_free_cb(child_tvb, g_free);
 
 		/* Add the decrypted data to the data source list. */
 		add_new_data_source(actx->pinfo, child_tvb, "Decrypted Krb5");
@@ -1303,7 +1303,6 @@ dissect_krb5_decrypt_KDC_REP_data (gboolean imp_tag _U_, tvbuff_t *tvb, int offs
 	if(plaintext){
 		tvbuff_t *child_tvb;
 		child_tvb = tvb_new_child_real_data(tvb, plaintext, length, length);
-		tvb_set_free_cb(child_tvb, g_free);
 
 		/* Add the decrypted data to the data source list. */
 		add_new_data_source(actx->pinfo, child_tvb, "Decrypted Krb5");
@@ -1335,7 +1334,6 @@ dissect_krb5_decrypt_PA_ENC_TIMESTAMP (gboolean imp_tag _U_, tvbuff_t *tvb, int 
 	if(plaintext){
 		tvbuff_t *child_tvb;
 		child_tvb = tvb_new_child_real_data(tvb, plaintext, length, length);
-		tvb_set_free_cb(child_tvb, g_free);
 
 		/* Add the decrypted data to the data source list. */
 		add_new_data_source(actx->pinfo, child_tvb, "Decrypted Krb5");
@@ -1366,7 +1364,6 @@ dissect_krb5_decrypt_AP_REP_data (gboolean imp_tag _U_, tvbuff_t *tvb, int offse
 	if(plaintext){
 		tvbuff_t *child_tvb;
 		child_tvb = tvb_new_child_real_data(tvb, plaintext, length, length);
-		tvb_set_free_cb(child_tvb, g_free);
 
 		/* Add the decrypted data to the data source list. */
 		add_new_data_source(actx->pinfo, child_tvb, "Decrypted Krb5");
@@ -1397,7 +1394,6 @@ dissect_krb5_decrypt_PRIV_data (gboolean imp_tag _U_, tvbuff_t *tvb, int offset,
 	if(plaintext){
 		tvbuff_t *child_tvb;
 		child_tvb = tvb_new_child_real_data(tvb, plaintext, length, length);
-		tvb_set_free_cb(child_tvb, g_free);
 
 		/* Add the decrypted data to the data source list. */
 		add_new_data_source(actx->pinfo, child_tvb, "Decrypted Krb5");
@@ -1428,7 +1424,6 @@ dissect_krb5_decrypt_CRED_data (gboolean imp_tag _U_, tvbuff_t *tvb, int offset,
 	if(plaintext){
 		tvbuff_t *child_tvb;
 		child_tvb = tvb_new_child_real_data(tvb, plaintext, length, length);
-		tvb_set_free_cb(child_tvb, g_free);
 
 		/* Add the decrypted data to the data source list. */
 		add_new_data_source(actx->pinfo, child_tvb, "Decrypted Krb5");
@@ -1803,7 +1798,7 @@ dissect_krb5_AD_WIN2K_PAC_struct(proto_tree *tree, tvbuff_t *tvb, int offset, as
 	proto_tree_add_uint(tr, hf_krb_w2k_pac_offset, tvb, offset, 4, pac_offset);
 	offset += 8;
 
-	next_tvb=tvb_new_subset(tvb, pac_offset, pac_size, pac_size);
+	next_tvb=tvb_new_subset_length_caplen(tvb, pac_offset, pac_size, pac_size);
 	switch(pac_type){
 	case PAC_LOGON_INFO:
 		dissect_krb5_PAC_LOGON_INFO(tr, next_tvb, 0, actx);
@@ -2289,7 +2284,7 @@ void proto_register_kerberos(void) {
 	prefs_register_filename_preference(krb_module, "file",
 				   "Kerberos keytab file",
 				   "The keytab file containing all the secrets",
-				   &keytab_filename);
+				   &keytab_filename, FALSE);
 #endif
 
 }
@@ -2351,8 +2346,8 @@ proto_reg_handoff_kerberos(void)
 	kerberos_handle_tcp = create_dissector_handle(dissect_kerberos_tcp,
 	proto_kerberos);
 
-	dissector_add_uint("udp.port", UDP_PORT_KERBEROS, kerberos_handle_udp);
-	dissector_add_uint("tcp.port", TCP_PORT_KERBEROS, kerberos_handle_tcp);
+	dissector_add_uint_with_preference("udp.port", UDP_PORT_KERBEROS, kerberos_handle_udp);
+	dissector_add_uint_with_preference("tcp.port", TCP_PORT_KERBEROS, kerberos_handle_tcp);
 
 	register_dcerpc_auth_subdissector(DCE_C_AUTHN_LEVEL_CONNECT,
 									  DCE_C_RPC_AUTHN_PROTOCOL_GSS_KERBEROS,

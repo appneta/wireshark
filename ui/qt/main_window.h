@@ -31,6 +31,7 @@
 #include "file.h"
 
 #include "ui/ui_util.h"
+#include "ui/iface_toolbar.h"
 
 #include <epan/prefs.h>
 #include <epan/plugin_if.h>
@@ -75,6 +76,12 @@ namespace Ui {
     class MainWindow;
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+Q_DECLARE_METATYPE(QToolBar *)
+#endif
+Q_DECLARE_METATYPE(ts_type)
+Q_DECLARE_METATYPE(ts_precision)
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -95,12 +102,20 @@ public:
     void gotoFrame(int packet_num);
     CaptureFile *captureFile() { return &capture_file_; }
 
+    void removeAdditionalToolbar(QString toolbarName);
+
+    void addInterfaceToolbar(const iface_toolbar *toolbar_entry);
+    void removeInterfaceToolbar(const gchar *menu_title);
+
 protected:
-    bool eventFilter(QObject *obj, QEvent *event);
-    void keyPressEvent(QKeyEvent *event);
-    void closeEvent(QCloseEvent *event);
-    void dragEnterEvent(QDragEnterEvent *event);
-    void dropEvent(QDropEvent *event);
+    virtual bool eventFilter(QObject *obj, QEvent *event);
+    virtual void keyPressEvent(QKeyEvent *event);
+    virtual void closeEvent(QCloseEvent *event);
+    virtual void dragEnterEvent(QDragEnterEvent *event);
+    virtual void dropEvent(QDropEvent *event);
+    virtual void changeEvent(QEvent* event);
+    virtual void resizeEvent(QResizeEvent *event);
+
 
 private:
     // XXX Move to FilterUtils
@@ -154,6 +169,7 @@ private:
     QMap<QAction *, ts_type> td_actions;
     QMap<QAction *, ts_precision> tp_actions;
     QToolBar *filter_expression_toolbar_;
+    bool was_maximized_;
 
     bool capture_stopping_;
     bool capture_filter_valid_;
@@ -178,6 +194,9 @@ private:
     QMenu *dock_menu_;
 #endif
 
+#ifdef HAVE_SOFTWARE_UPDATE
+    QAction *update_action_;
+#endif
 
     QWidget* getLayoutWidget(layout_pane_content_e type);
 
@@ -212,7 +231,7 @@ private:
 
     void externalMenuHelper(ext_menu_t * menu, QMenu  * subMenu, gint depth);
 
-    void setForCaptureInProgress(bool capture_in_progress = false);
+    void setForCaptureInProgress(bool capture_in_progress = false, GArray *ifaces = NULL);
     QMenu* findOrAddMenu(QMenu *parent_menu, QString& menu_text);
 
     void recursiveCopyProtoTreeItems(QTreeWidgetItem *item, QString &clip, int ident_level);
@@ -244,7 +263,7 @@ public slots:
      * @return True on success, false on failure.
      */
     // XXX We might want to return a cf_read_status_t or a CaptureFile.
-    bool openCaptureFile(QString cf_path, QString display_filter, unsigned int type);
+    bool openCaptureFile(QString cf_path, QString display_filter, unsigned int type, gboolean is_tempfile = FALSE);
     bool openCaptureFile(QString cf_path = QString(), QString display_filter = QString()) { return openCaptureFile(cf_path, display_filter, WTAP_TYPE_AUTO); }
     void filterPackets(QString new_filter = QString(), bool force = false);
     void updateForUnsavedChanges();
@@ -272,6 +291,8 @@ public slots:
     void captureFileRescanStarted() { setMenusForCaptureFile(true); captureFileReadStarted(tr("Rescanning")); }
     void captureFileRetapStarted();
     void captureFileRetapFinished();
+    void captureFileMergeStarted();
+    void captureFileMergeFinished();
     void captureFileFlushTapsData();
     void captureFileClosing();
     void captureFileClosed();
@@ -282,11 +303,14 @@ public slots:
     void launchRLCGraph(bool channelKnown, guint16 ueid, guint8 rlcMode,
                         guint16 channelType, guint16 channelId, guint8 direction);
 
+    void on_actionViewFullScreen_triggered(bool checked);
 private slots:
     // Manually connected slots (no "on_<object>_<signal>").
 
     void initViewColorizeMenu();
     void initConversationMenus();
+    static gboolean addExportObjectsMenuItem(const void *key, void *value, void *userdata);
+    void initExportObjectsMenus();
 
     // in main_window_slots.cpp
     /**
@@ -303,7 +327,7 @@ private slots:
     void loadWindowGeometry();
     void saveWindowGeometry();
     void mainStackChanged(int);
-    void updateRecentFiles();
+    void updateRecentCaptures();
     void recentActionTriggered();
     void setMenusForSelectedPacket();
     void setMenusForSelectedTreeRow(field_info *fi = NULL);
@@ -319,8 +343,9 @@ private slots:
     void addStatsPluginsToMenu();
     void addDynamicMenus();
     void reloadDynamicMenus();
-    void addExternalMenus();
+    void addPluginIFStructures();
     QMenu * searchSubMenu(QString objectName);
+    void activatePluginIFToolbar(bool);
 
     void startInterfaceCapture(bool valid, const QString capture_filter);
 
@@ -350,6 +375,10 @@ private slots:
     void openTapParameterDialog();
 
     void byteViewTabChanged(int tab_index);
+
+#ifdef HAVE_SOFTWARE_UPDATE
+    void softwareUpdateRequested();
+#endif
 
     // Automatically connected slots ("on_<object>_<signal>").
     //
@@ -382,10 +411,6 @@ private slots:
     void on_actionFileExportAsPDML_triggered();
     void on_actionFileExportAsJSON_triggered();
     void on_actionFileExportPacketBytes_triggered();
-    void on_actionFileExportObjectsDICOM_triggered();
-    void on_actionFileExportObjectsHTTP_triggered();
-    void on_actionFileExportObjectsSMB_triggered();
-    void on_actionFileExportObjectsTFTP_triggered();
     void on_actionFilePrint_triggered();
 
     void on_actionFileExportPDU_triggered();
@@ -440,6 +465,7 @@ private slots:
     void colorizeActionTriggered();
     void on_actionViewColorizeResetColorization_triggered();
     void on_actionViewColorizeNewColoringRule_triggered();
+    void on_actionViewResetLayout_triggered();
     void on_actionViewResizeColumns_triggered();
 
     void on_actionViewInternalsConversationHashTables_triggered();
@@ -459,8 +485,8 @@ private slots:
     void on_actionGoAutoScroll_toggled(bool checked);
     void resetPreviousFocus();
 
-#ifdef HAVE_LIBPCAP
     void on_actionCaptureOptions_triggered();
+#ifdef HAVE_LIBPCAP
     void on_actionCaptureRefreshInterfaces_triggered();
 #endif
     void on_actionCaptureCaptureFilters_triggered();
@@ -483,6 +509,7 @@ private slots:
     void on_actionAnalyzePAFOrNotSelected_triggered();
 
     void applyConversationFilter();
+    void applyExportObject();
 
     void on_actionAnalyzeEnabledProtocols_triggered();
     void on_actionAnalyzeDecodeAs_triggered();
@@ -596,6 +623,7 @@ private slots:
     void on_actionTelephonyIax2StreamAnalysis_triggered();
     void on_actionTelephonyISUPMessages_triggered();
     void on_actionTelephonyMtp3Summary_triggered();
+    void on_actionTelephonyOsmuxPacketCounter_triggered();
     void on_actionTelephonyRTPStreams_triggered();
     void on_actionTelephonyRTPStreamAnalysis_triggered();
     void on_actionTelephonyRTSPPacketCounter_triggered();
@@ -616,14 +644,12 @@ private slots:
     void on_actionContextCopyBytesPrintableText_triggered();
     void on_actionContextCopyBytesHexStream_triggered();
     void on_actionContextCopyBytesBinary_triggered();
+    void on_actionContextCopyBytesEscapedString_triggered();
 
     void on_actionContextShowPacketBytes_triggered();
 
     void on_actionContextWikiProtocolPage_triggered();
     void on_actionContextFilterFieldReference_triggered();
-
-    virtual void changeEvent(QEvent* event);
-    virtual void resizeEvent(QResizeEvent *event);
 
 #ifdef HAVE_EXTCAP
     void extcap_options_finished(int result);

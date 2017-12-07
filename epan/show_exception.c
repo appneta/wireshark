@@ -30,6 +30,7 @@
 #include <epan/prefs.h>
 #include <epan/prefs-int.h>
 #include <epan/show_exception.h>
+#include <wsutil/ws_printf.h> /* ws_g_warning */
 
 static int proto_short = -1;
 static int proto_malformed = -1;
@@ -99,7 +100,7 @@ show_exception(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 			pref_t *display_pref = prefs_find_preference(frame_module, "disable_packet_size_limited_in_summary");
 			if (display_pref)
 			{
-				if (*display_pref->varp.boolp)
+				if (prefs_get_bool_value(display_pref, pref_current))
 					display_info = FALSE;
 			}
 		}
@@ -140,7 +141,7 @@ show_exception(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 		    pinfo->current_proto,
 		    exception_message == NULL ?
 		        dissector_error_nomsg : exception_message);
-		g_warning("Dissector bug, protocol %s, in packet %u: %s",
+		ws_g_warning("Dissector bug, protocol %s, in packet %u: %s",
 		    pinfo->current_proto, pinfo->num,
 		    exception_message == NULL ?
 		        dissector_error_nomsg : exception_message);

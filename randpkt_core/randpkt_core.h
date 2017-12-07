@@ -27,8 +27,6 @@
 #include <glib.h>
 #include "wiretap/wtap.h"
 
-#define MAXBYTES_LIMIT 65536
-
 typedef struct {
 	const char*  abbrev;
 	const char*  longname;
@@ -57,7 +55,7 @@ int randpkt_parse_type(char *string);
 randpkt_example* randpkt_find_example(int type);
 
 /* Init a new example */
-void randpkt_example_init(randpkt_example* example, char* produce_filename, int produce_max_bytes);
+int randpkt_example_init(randpkt_example* example, char* produce_filename, int produce_max_bytes);
 
 /* Loop the packet generation */
 void randpkt_loop(randpkt_example* example, guint64 produce_count);

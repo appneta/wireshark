@@ -48,6 +48,7 @@
 #include <epan/stat_groups.h>
 #include "ui/tap-tcp-stream.h"
 #include <wsutil/utf8_entities.h>
+#include <wsutil/strtoi.h>
 
 #include "ui/gtk/gui_utils.h"
 #include "ui/gtk/dlg_utils.h"
@@ -479,7 +480,7 @@ static struct irect zoomrect;
 
 /* #define ORIGINAL_WIN32_BUTTONS 1 */
 
-/* XXX - what about OS X? */
+/* XXX - what about macOS? */
 /* XXX: Needs work to ensire that the columns line up properly in both Gtk2 & Gtk3  */
 /*      What is the proper way to do this ??                                        */
 static char helptext[] =
@@ -4229,7 +4230,7 @@ static void rtt_read_config(struct gtk_graph *g)
 static void rtt_initialize(struct gtk_graph *g)
 {
     struct segment *tmp, *first = NULL;
-    struct unack   *unack       = NULL, *u;
+    struct rtt_unack   *unack   = NULL, *u;
     double          rttmax      = 0;
     double          xx0, yy0, ymax;
     guint32         xmax        = 0;
@@ -4254,7 +4255,7 @@ static void rtt_initialize(struct gtk_graph *g)
             seqno -= seq_base;
             if (tmp->th_seglen && !rtt_is_retrans(unack, seqno)) {
                 double time_val = tmp->rel_secs + tmp->rel_usecs / 1000000.0;
-                u = rtt_get_new_unack(time_val, seqno);
+                u = rtt_get_new_unack(time_val, seqno, tmp->th_seglen);
                 if (!u) return;
                 rtt_put_unack_on_list(&unack, u);
             }
@@ -4262,22 +4263,33 @@ static void rtt_initialize(struct gtk_graph *g)
             if (seqno + tmp->th_seglen > xmax)
                 xmax = seqno + tmp->th_seglen;
         } else if (first) {
-            guint32       ackno    = tmp->th_ack -seq_base;
+            guint32       ackno    = tmp->th_ack - seq_base;
             double        time_val = tmp->rel_secs + tmp->rel_usecs / 1000000.0;
-            struct unack *v;
+            struct rtt_unack *v = NULL;
 
             for (u=unack; u; u=v) {
-                if (ackno > u->seqno) {
+                if (tcp_seq_after(ackno, u->seqno)) {
                     double rtt = time_val - u->time;
                     if (rtt > rttmax)
                         rttmax = rtt;
+                    if (tcp_seq_eq_or_after(ackno, u->end_seqno)) {
+                        // fully acked segment - can safely be deleted
+                        v = u->next;
+                        rtt_delete_unack_from_list(&unack, u);
+                    } else {
+                        // partial ACK of GSO segment -
+                        //   just modify segment to reflect ACKed bytes
+                        u->seqno = ackno;
+                    }
+                } else {
+                    // nothing was acked in this seg - just move along
                     v = u->next;
-                    rtt_delete_unack_from_list(&unack, u);
-                } else
-                    v = u->next;
+                }
             }
         }
     }
+    // it's possible there's still unacked segs - so be sure to free list!
+    rtt_destroy_unack_list(&unack);
 
     xx0  = seq_base;
     yy0  = 0;
@@ -4294,7 +4306,7 @@ static void rtt_initialize(struct gtk_graph *g)
 static void rtt_make_elmtlist(struct gtk_graph *g)
 {
     struct segment *tmp;
-    struct unack   *unack    = NULL, *u;
+    struct rtt_unack  *unack = NULL, *u;
     struct element *elements, *e;
     guint32         seq_base = (guint32) g->bounds.x0;
 
@@ -4317,17 +4329,17 @@ static void rtt_make_elmtlist(struct gtk_graph *g)
 
             if (tmp->th_seglen && !rtt_is_retrans(unack, seqno)) {
                 double time_val = tmp->rel_secs + tmp->rel_usecs / 1000000.0;
-                u = rtt_get_new_unack(time_val, seqno);
+                u = rtt_get_new_unack(time_val, seqno, tmp->th_seglen);
                 if (!u) return;
                 rtt_put_unack_on_list(&unack, u);
             }
         } else {
-            guint32       ackno    = tmp->th_ack -seq_base;
+            guint32       ackno    = tmp->th_ack - seq_base;
             double        time_val = tmp->rel_secs + tmp->rel_usecs / 1000000.0;
-            struct unack *v;
+            struct rtt_unack *v = NULL;
 
             for (u=unack; u; u=v) {
-                if (ackno > u->seqno) {
+                if (tcp_seq_after(ackno, u->seqno)) {
                     double rtt = time_val - u->time;
 
                     e->type   = ELMT_ELLIPSE;
@@ -4338,13 +4350,25 @@ static void rtt_make_elmtlist(struct gtk_graph *g)
                     e->p.ellipse.dim.y      = g->zoom.y * rtt + g->s.rtt.height/2.0;
                     e++;
 
+                    if (tcp_seq_eq_or_after(ackno, u->end_seqno)) {
+                        // fully acked segment - can safely be deleted
+                        v = u->next;
+                        rtt_delete_unack_from_list(&unack, u);
+                    } else {
+                        // partial ACK of GSO segment -
+                        //   just modify segment to reflect ACKed bytes
+                        u->seqno = ackno;
+                    }
+                } else {
+                    // nothing was acked in this seg - just move along
                     v = u->next;
-                    rtt_delete_unack_from_list(&unack, u);
-                } else
-                    v = u->next;
+                }
             }
         }
     }
+    // it's possible there's still unacked segs - so be sure to free list!
+    rtt_destroy_unack_list(&unack);
+
     e->type = ELMT_NONE;
     g->elists->elements = elements;
 }
@@ -4495,10 +4519,11 @@ static void wscale_make_elmtlist(struct gtk_graph *g)
 static int rint(double x)
 {
     char *buf;
-    int   i, dec, sig;
+    int i = 0;
+    int dec, sig;
 
     buf = _fcvt(x, 0, &dec, &sig);
-    i = atoi(buf);
+    ws_strtoi32(buf, NULL, &i);
     if (sig == 1) {
         i = i * -1;
     }

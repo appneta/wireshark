@@ -38,6 +38,7 @@
 #include "wsutil/wsgetopt.h"
 #endif
 
+#include <wsutil/cmdarg_err.h>
 #include <wsutil/crash_info.h>
 #include <wsutil/filesystem.h>
 #include <wsutil/file_util.h>
@@ -49,7 +50,13 @@
 #include <wsutil/plugins.h>
 #endif
 
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
+
+#include "ui/failure_message.h"
+
+#define INVALID_OPTION 1
+#define OPEN_ERROR 2
+#define OUTPUT_FILE_ERROR 1
 
 /* Show command-line usage */
 static void
@@ -88,7 +95,8 @@ typedef struct FrameRecord_t {
 
 static void
 frame_write(FrameRecord_t *frame, wtap *wth, wtap_dumper *pdh,
-            struct wtap_pkthdr *phdr, Buffer *buf, const char *infile)
+            struct wtap_pkthdr *phdr, Buffer *buf, const char *infile,
+            const char *outfile)
 {
     int    err;
     gchar  *err_info;
@@ -102,12 +110,9 @@ frame_write(FrameRecord_t *frame, wtap *wth, wtap_dumper *pdh,
         if (err != 0) {
             /* Print a message noting that the read failed somewhere along the line. */
             fprintf(stderr,
-                    "reordercap: An error occurred while re-reading \"%s\": %s.\n",
-                    infile, wtap_strerror(err));
-            if (err_info != NULL) {
-                fprintf(stderr, "(%s)\n", err_info);
-                g_free(err_info);
-            }
+                    "reordercap: An error occurred while re-reading \"%s\".\n",
+                    infile);
+            cfile_read_failure_message("reordercap", infile, err, err_info);
             exit(1);
         }
     }
@@ -119,12 +124,9 @@ frame_write(FrameRecord_t *frame, wtap *wth, wtap_dumper *pdh,
 
     /* Dump frame to outfile */
     if (!wtap_dump(pdh, phdr, ws_buffer_start_ptr(buf), &err, &err_info)) {
-        fprintf(stderr, "reordercap: Error (%s) writing frame to outfile\n",
-                wtap_strerror(err));
-        if (err_info != NULL) {
-            fprintf(stderr, "(%s)\n", err_info);
-            g_free(err_info);
-        }
+        cfile_write_failure_message("reordercap", infile, outfile, err,
+                                    err_info, frame->num,
+                                    wtap_file_type_subtype(wth));
         exit(1);
     }
 }
@@ -146,18 +148,27 @@ frames_compare(gconstpointer a, gconstpointer b)
     return nstime_cmp(time1, time2);
 }
 
-#ifdef HAVE_PLUGINS
 /*
- *  Don't report failures to load plugins because most (non-wiretap) plugins
- *  *should* fail to load (because we're not linked against libwireshark and
- *  dissector plugins need libwireshark).
+ * General errors and warnings are reported with an console message
+ * in reordercap.
  */
 static void
-failure_message(const char *msg_format _U_, va_list ap _U_)
+failure_warning_message(const char *msg_format, va_list ap)
 {
-    return;
+    fprintf(stderr, "reordercap: ");
+    vfprintf(stderr, msg_format, ap);
+    fprintf(stderr, "\n");
 }
-#endif
+
+/*
+ * Report additional information for an error in command-line arguments.
+ */
+static void
+failure_message_cont(const char *msg_format, va_list ap)
+{
+    vfprintf(stderr, msg_format, ap);
+    fprintf(stderr, "\n");
+}
 
 /********************************************************************/
 /* Main function.                                                   */
@@ -182,6 +193,7 @@ main(int argc, char *argv[])
     GArray                      *shb_hdrs = NULL;
     wtapng_iface_descriptions_t *idb_inf = NULL;
     GArray                      *nrb_hdrs = NULL;
+    int                          ret = EXIT_SUCCESS;
 
     GPtrArray *frames;
     FrameRecord_t *prevFrame = NULL;
@@ -196,6 +208,11 @@ main(int argc, char *argv[])
     char *infile;
     const char *outfile;
 
+<<<<<<< HEAD
+=======
+    cmdarg_err_init(failure_warning_message, failure_message_cont);
+
+>>>>>>> upstream/master-2.4
     /* Get the compile-time version information string */
     comp_info_str = get_compiled_version_info(NULL, NULL);
 
@@ -209,6 +226,8 @@ main(int argc, char *argv[])
          "\n"
          "%s",
       get_ws_vcs_version_info(), comp_info_str->str, runtime_info_str->str);
+    g_string_free(comp_info_str, TRUE);
+    g_string_free(runtime_info_str, TRUE);
 
     /*
      * Get credential information for later use.
@@ -227,16 +246,50 @@ main(int argc, char *argv[])
         g_free(init_progfile_dir_error);
     }
 
+<<<<<<< HEAD
+    /*
+     * Get credential information for later use.
+     */
+    init_process_policies();
+
+    /*
+     * Attempt to get the pathname of the directory containing the
+     * executable file.
+     */
+    init_progfile_dir_error = init_progfile_dir(argv[0], main);
+    if (init_progfile_dir_error != NULL) {
+        fprintf(stderr,
+                "reordercap: Can't get pathname of directory containing the reordercap program: %s.\n",
+                init_progfile_dir_error);
+        g_free(init_progfile_dir_error);
+    }
+
+=======
+>>>>>>> upstream/master-2.4
     wtap_init();
 
 #ifdef HAVE_PLUGINS
     /* Register wiretap plugins */
+<<<<<<< HEAD
     init_report_err(failure_message,NULL,NULL,NULL);
 
     /* Scan for plugins.  This does *not* call their registration routines;
         that's done later. */
     scan_plugins();
 
+=======
+    init_report_message(failure_warning_message, failure_warning_message,
+                        NULL, NULL, NULL);
+
+    /* Scan for plugins.  This does *not* call their registration routines;
+       that's done later.
+
+       Don't report failures to load plugins because most (non-wiretap)
+       plugins *should* fail to load (because we're not linked against
+       libwireshark and dissector plugins need libwireshark). */
+    scan_plugins(DONT_REPORT_LOAD_FAILURE);
+
+>>>>>>> upstream/master-2.4
     /* Register all libwiretap plugin modules. */
     register_all_wiretap_modules();
 #endif
@@ -253,15 +306,18 @@ main(int argc, char *argv[])
                        "See https://www.wireshark.org for more information.\n",
                        get_ws_vcs_version_info());
                 print_usage(stdout);
-                exit(0);
+                goto clean_exit;
             case 'v':
+                comp_info_str = get_compiled_version_info(NULL, NULL);
+                runtime_info_str = get_runtime_version_info(NULL);
                 show_version("Reordercap (Wireshark)", comp_info_str, runtime_info_str);
                 g_string_free(comp_info_str, TRUE);
                 g_string_free(runtime_info_str, TRUE);
-                exit(0);
+                goto clean_exit;
             case '?':
                 print_usage(stderr);
-                exit(1);
+                ret = INVALID_OPTION;
+                goto clean_exit;
         }
     }
 
@@ -273,7 +329,8 @@ main(int argc, char *argv[])
     }
     else {
         print_usage(stderr);
-        exit(1);
+        ret = INVALID_OPTION;
+        goto clean_exit;
     }
 
     /* Open infile */
@@ -281,13 +338,9 @@ main(int argc, char *argv[])
        open_routine reader to use, then the following needs to change. */
     wth = wtap_open_offline(infile, WTAP_TYPE_AUTO, &err, &err_info, TRUE);
     if (wth == NULL) {
-        fprintf(stderr, "reordercap: Can't open %s: %s\n", infile,
-                wtap_strerror(err));
-        if (err_info != NULL) {
-            fprintf(stderr, "(%s)\n", err_info);
-            g_free(err_info);
-        }
-        exit(1);
+        cfile_open_failure_message("reordercap", infile, err, err_info);
+        ret = OPEN_ERROR;
+        goto clean_exit;
     }
     DEBUG_PRINT("file_type_subtype is %d\n", wtap_file_type_subtype(wth));
 
@@ -298,21 +351,21 @@ main(int argc, char *argv[])
     /* Open outfile (same filetype/encap as input file) */
     if (strcmp(outfile, "-") == 0) {
       pdh = wtap_dump_open_stdout_ng(wtap_file_type_subtype(wth), wtap_file_encap(wth),
-                                     65535, FALSE, shb_hdrs, idb_inf, nrb_hdrs, &err);
-      outfile = "standard output";
+                                     wtap_snapshot_length(wth), FALSE, shb_hdrs, idb_inf, nrb_hdrs, &err);
     } else {
       pdh = wtap_dump_open_ng(outfile, wtap_file_type_subtype(wth), wtap_file_encap(wth),
-                              65535, FALSE, shb_hdrs, idb_inf, nrb_hdrs, &err);
+                              wtap_snapshot_length(wth), FALSE, shb_hdrs, idb_inf, nrb_hdrs, &err);
     }
     g_free(idb_inf);
     idb_inf = NULL;
 
     if (pdh == NULL) {
-        fprintf(stderr, "reordercap: Failed to open output file: (%s) - error %s\n",
-                outfile, wtap_strerror(err));
+        cfile_dump_open_failure_message("reordercap", outfile, err,
+                                        wtap_file_type_subtype(wth));
         wtap_block_array_free(shb_hdrs);
         wtap_block_array_free(nrb_hdrs);
-        exit(1);
+        ret = OUTPUT_FILE_ERROR;
+        goto clean_exit;
     }
 
     /* Allocate the array of frame pointers. */
@@ -342,13 +395,7 @@ main(int argc, char *argv[])
     }
     if (err != 0) {
       /* Print a message noting that the read failed somewhere along the line. */
-      fprintf(stderr,
-              "reordercap: An error occurred while reading \"%s\": %s.\n",
-              infile, wtap_strerror(err));
-      if (err_info != NULL) {
-          fprintf(stderr, "(%s)\n", err_info);
-          g_free(err_info);
-      }
+      cfile_read_failure_message("reordercap", infile, err, err_info);
     }
 
     printf("%u frames, %u out of order\n", frames->len, wrong_order_count);
@@ -366,7 +413,7 @@ main(int argc, char *argv[])
 
         /* Avoid writing if already sorted and configured to */
         if (write_output_regardless || (wrong_order_count > 0)) {
-            frame_write(frame, wth, pdh, &dump_phdr, &buf, infile);
+            frame_write(frame, wth, pdh, &dump_phdr, &buf, infile, outfile);
         }
         g_slice_free(FrameRecord_t, frame);
     }
@@ -374,7 +421,7 @@ main(int argc, char *argv[])
     ws_buffer_free(&buf);
 
     if (!write_output_regardless && (wrong_order_count == 0)) {
-        printf("Not writing output file because input file is already in order!\n");
+        printf("Not writing output file because input file is already in order.\n");
     }
 
     /* Free the whole array */
@@ -382,19 +429,25 @@ main(int argc, char *argv[])
 
     /* Close outfile */
     if (!wtap_dump_close(pdh, &err)) {
-        fprintf(stderr, "reordercap: Error closing %s: %s\n", outfile,
-                wtap_strerror(err));
+        cfile_close_failure_message(outfile, err);
         wtap_block_array_free(shb_hdrs);
         wtap_block_array_free(nrb_hdrs);
-        exit(1);
+        ret = OUTPUT_FILE_ERROR;
+        goto clean_exit;
     }
     wtap_block_array_free(shb_hdrs);
     wtap_block_array_free(nrb_hdrs);
 
-    /* Finally, close infile */
-    wtap_fdclose(wth);
+    /* Finally, close infile and release resources. */
+    wtap_close(wth);
 
-    return 0;
+clean_exit:
+    wtap_cleanup();
+    free_progdirs();
+#ifdef HAVE_PLUGINS
+    plugins_cleanup();
+#endif
+    return ret;
 }
 
 /*

@@ -225,7 +225,6 @@ static void
 check_tn3270_model(packet_info *pinfo _U_, const char *terminaltype)
 {
   int  model;
-  char str_model[2];
 
   if ((strcmp(terminaltype,"IBM-3278-2-E") == 0) || (strcmp(terminaltype,"IBM-3278-2") == 0) ||
       (strcmp(terminaltype,"IBM-3278-3") == 0) || (strcmp(terminaltype,"IBM-3278-4") == 0) ||
@@ -233,9 +232,7 @@ check_tn3270_model(packet_info *pinfo _U_, const char *terminaltype)
       (strcmp(terminaltype,"IBM-3279-3") == 0) || (strcmp(terminaltype,"IBM-3279-4") == 0) ||
       (strcmp(terminaltype,"IBM-3279-2-E") == 0) || (strcmp(terminaltype,"IBM-3279-2") == 0) ||
       (strcmp(terminaltype,"IBM-3279-4-E") == 0)) {
-    str_model[0] = terminaltype[9];
-    str_model[1] = '\0';
-    model = atoi(str_model);
+    model = terminaltype[9] - '0';
     add_tn3270_conversation(pinfo, 0, model);
   }
 }
@@ -334,7 +331,6 @@ dissect_tn3270_regime_subopt(packet_info *pinfo, const char *optname _U_, tvbuff
         proto_tree_add_uint_format(tree, hf_tn3270_regime_cmd, tvb, offset, 1, cmd, "IS");
       }
       proto_tree_add_item(tree, hf_tn3270_regime_subopt_value, tvb, offset + 1, len - 1, ENC_NA|ENC_ASCII);
-      len -= len;
       return;
     default:
       proto_tree_add_uint_format(tree, hf_tn3270_regime_cmd, tvb, offset, 1, cmd, "Bogus value: %u", cmd);
@@ -492,13 +488,13 @@ dissect_starttls_subopt(packet_info *pinfo _U_, const char *optname _U_, tvbuff_
 }
 
 static const value_string telnet_outmark_subopt_cmd_vals[] = {
-  { 6,   "ACK" },
-  { 21,  "NAK" },
-  { 'D', "Default" },
-  { 'T', "Top" },
-  { 'B', "Bottom" },
-  { 'L', "Left" },
-  { 'R', "Right" },
+  { '\x06', "ACK" },
+  { '\x15', "NAK" },
+  { 'D',    "Default" },
+  { 'T',    "Top" },
+  { 'B',    "Bottom" },
+  { 'L',    "Left" },
+  { 'R',    "Right" },
   { 0, NULL }
 };
 
@@ -509,7 +505,7 @@ dissect_outmark_subopt(packet_info *pinfo _U_, const char *optname _U_, tvbuff_t
   int    gs_offset, datalen;
 
   while (len > 0) {
-    proto_tree_add_item(tree, hf_telnet_outmark_subopt_cmd, tvb, offset, 1, ENC_BIG_ENDIAN);
+    proto_tree_add_item(tree, hf_telnet_outmark_subopt_cmd, tvb, offset, 1, ENC_ASCII | ENC_NA);
 
     offset++;
     len--;
@@ -1989,7 +1985,7 @@ proto_register_telnet(void)
         NULL, 0, NULL, HFILL }
     },
     { &hf_telnet_outmark_subopt_cmd,
-      { "Command", "telnet.outmark_subopt.cmd", FT_UINT8, BASE_DEC,
+      { "Command", "telnet.outmark_subopt.cmd", FT_CHAR, BASE_HEX,
         VALS(telnet_outmark_subopt_cmd_vals), 0, NULL, HFILL }
     },
     { &hf_telnet_outmark_subopt_banner,
@@ -2194,7 +2190,7 @@ proto_register_telnet(void)
 void
 proto_reg_handoff_telnet(void)
 {
-  dissector_add_uint("tcp.port", TCP_PORT_TELNET, telnet_handle);
+  dissector_add_uint_with_preference("tcp.port", TCP_PORT_TELNET, telnet_handle);
   tn3270_handle = find_dissector_add_dependency("tn3270", proto_telnet);
   tn5250_handle = find_dissector_add_dependency("tn5250", proto_telnet);
   ssl_handle = find_dissector("ssl");

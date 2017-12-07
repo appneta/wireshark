@@ -9,8 +9,13 @@
 %bcond_with	lua
 
 # Set these to 1 if you want to ensure your package includes support for them:
+%global with_lz4_and_snappy 1
 %global with_c_ares 1
 %global with_portaudio 0
+%global with_spandsp 0
+%global with_libxml2 1
+%global with_nghttp2 1
+%global with_extcap 1
 
 # Set at most one of these two:
 # Note that setcap requires rpmbuild 4.7.0 or later.
@@ -37,9 +42,9 @@ Version:	@RPM_VERSION@
 Release:	1
 License:	GPLv2+
 Group:		Applications/Internet
-Source:		https://wireshark.org/download/src/%{name}-%{package_version}.tar.bz2
+Source:		https://www.wireshark.org/download/src/%{name}-%{package_version}.tar.xz
 # Or this URL for automated builds:
-#Source:	https://wireshark.org/download/automated/src/%{name}-%{package_version}.tar.bz2
+#Source:	https://www.wireshark.org/download/automated/src/%{name}-%{package_version}.tar.xz
 URL:		https://www.wireshark.org/
 Packager:	Gerald Combs <gerald[AT]wireshark.org>
 # Some distributions create a wireshark-devel package; get rid of it
@@ -66,6 +71,20 @@ Requires:	libpcap
 BuildRequires:	zlib-devel
 Requires:	zlib
 
+%if %{with_lz4_and_snappy}
+%if 0%{?suse_version}
+BuildRequires:	liblz4-devel
+BuildRequires:	snappy-devel
+Requires:	libsnappy1
+Requires:	liblz4-1
+%else
+BuildRequires:	lz4-devel
+BuildRequires:	snappy-devel
+Requires:	snappy
+Requires:	lz4
+%endif
+%endif
+
 %if %{with_c_ares}
 %if 0%{?suse_version}
 # SuSE uses these package names (yes 2!):
@@ -78,9 +97,15 @@ BuildRequires:	c-ares-devel
 Requires:	c-ares
 %endif
 %endif
+
 %if %{with lua}
 BuildRequires:	lua-devel < 5.3
 Requires:	lua < 5.3
+%endif
+
+%if %{with_nghttp2}
+BuildRequires:	libnghttp2-devel
+Requires:	libnghttp2
 %endif
 
 # Uncomment these if you want to be sure you get them...
@@ -212,6 +237,14 @@ BuildRequires:	update-desktop-files
 BuildRequires:	portaudio-devel
 Requires:	portaudio
 %endif
+%if %{with_spandsp}
+BuildRequires:	spandsp-devel
+Requires:	spandsp
+%endif
+%if %{with_libxml2}
+BuildRequires:	libxml2-devel
+Requires:	libxml2
+%endif
 
 # Uncomment these if you want to be sure you get them...
 #BuildRequires:	GeoIP-devel
@@ -245,6 +278,19 @@ This package contains the GTK+ Wireshark GUI and desktop integration files.
 %endif
 %if %{with_portaudio}
   --with-portaudio \
+%endif
+%if %{with_spandsp}
+  --with-spandsp \
+%endif
+%if %{with_libxml2}
+  --with-libxml2 \
+%else
+  --without-libxml2 \
+%endif
+%if %{with_extcap}
+  --with-extcap \
+  %else
+  --with-extcap=no \
 %endif
 %if %{with qt}
   --with-qt=4 \
@@ -440,6 +486,21 @@ fi
 %endif
 
 %changelog
+* Tue Apr  4 2017 Ahmad Fatoum
+- Added libxml2 (as an option, defaulting to required).
+
+* Tue Dec 20 2016 Anders Broman
+- Add with extcap (as an option, defaulting to yes).
+
+* Mon Dec  5 2016 Jeff Morriss
+- Add spandsp (as an option, defaulting to not required).
+
+* Tue Oct 18 2016 Benoit Canet
+- Add LZ4 and snappy compression support.
+
+* Mon Aug 29 2016 Jeff Morriss
+- Add libnghttp2 (as an option, defaulting to required).
+
 * Wed Aug 17 2016 Jeff Morriss
 - wireshark.pc is now installed with Wireshark, include it in the RPM.
 

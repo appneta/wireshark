@@ -137,6 +137,7 @@ static gint ett_ac_if_input_channelconfig = -1;
 static gint ett_ac_if_mu_channelconfig = -1;
 
 static dissector_handle_t sysex_handle;
+static dissector_handle_t usb_audio_bulk_handle;
 
 #define AUDIO_IF_SUBCLASS_UNDEFINED        0x00
 #define AUDIO_IF_SUBCLASS_AUDIOCONTROL     0x01
@@ -260,7 +261,7 @@ static const value_string terminal_types_vals[] = {
     {0x0605, "S/PDIF interface"},
     {0x0606, "1394 DA stream"},
     {0x0607, "1394 DV stream soudtrack"},
-    /* Embedded Funciton Terminal Types */
+    /* Embedded Function Terminal Types */
     {0x0700, "Embedded Undefined"},
     {0x0701, "Level Calibration Noise Source"},
     {0x0702, "Equalization Noise"},
@@ -962,19 +963,6 @@ dissect_usb_audio_bulk(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tre
     return length;
 }
 
-static void
-midi_data_reassemble_init(void)
-{
-    reassembly_table_init(&midi_data_reassembly_table,
-                          &addresses_reassembly_table_functions);
-}
-
-static void
-midi_data_reassemble_cleanup(void)
-{
-    reassembly_table_destroy(&midi_data_reassembly_table);
-}
-
 void
 proto_register_usb_audio(void)
 {
@@ -1299,22 +1287,21 @@ proto_register_usb_audio(void)
     proto_register_subtree_array(usb_audio_subtrees, array_length(usb_audio_subtrees));
     expert_usb_audio = expert_register_protocol(proto_usb_audio);
     expert_register_field_array(expert_usb_audio, ei, array_length(ei));
-    register_init_routine(&midi_data_reassemble_init);
-    register_cleanup_routine(&midi_data_reassemble_cleanup);
+    reassembly_table_register(&midi_data_reassembly_table,
+                          &addresses_reassembly_table_functions);
 
-    register_dissector("usbaudio", dissect_usb_audio_bulk, proto_usb_audio);
+    usb_audio_bulk_handle = register_dissector("usbaudio", dissect_usb_audio_bulk, proto_usb_audio);
 }
 
 void
 proto_reg_handoff_usb_audio(void)
 {
-    dissector_handle_t usb_audio_bulk_handle, usb_audio_descr_handle;
+    dissector_handle_t usb_audio_descr_handle;
 
     usb_audio_descr_handle = create_dissector_handle(
             dissect_usb_audio_descriptor, proto_usb_audio);
     dissector_add_uint("usb.descriptor", IF_CLASS_AUDIO, usb_audio_descr_handle);
 
-    usb_audio_bulk_handle = find_dissector("usbaudio");
     dissector_add_uint("usb.bulk", IF_CLASS_AUDIO, usb_audio_bulk_handle);
 
     sysex_handle = find_dissector_add_dependency("sysex", proto_usb_audio);

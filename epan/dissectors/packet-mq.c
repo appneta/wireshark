@@ -48,7 +48,14 @@
  *   MQ is popular on mainframes because it was available before TCP/IP.
  *   MQ supports both ASCII-based and EBCDIC-based character sets.
  *
- *   MQ API documentation is called "WebSphere MQ Application Programming Reference"
+ *   MQ API documentation is called "WebSphere MQ Application Programming
+ *   Reference"
+ *
+ *   See:
+ *
+ *       http://www-01.ibm.com/support/docview.wss?uid=pub1sc34606203
+ *
+ *       http://www-01.ibm.com/support/docview.wss?uid=pub1sc34694001
  *
  *   Possible structures combinations :
  *   TSH [ ID ^ UID ^ CONN ^ INQ ^ OD ]
@@ -71,7 +78,7 @@
 #include <epan/ptvcursor.h>
 #include <epan/exceptions.h>
 #include <epan/reassemble.h>
-
+#include <epan/expert.h>
 #include <epan/prefs.h>
 #include <epan/strutil.h>
 
@@ -646,6 +653,10 @@ static int hf_mq_pmo_putmsgrecofs = -1;
 static int hf_mq_pmo_resprecofs = -1;
 static int hf_mq_pmo_putmsgrecptr = -1;
 static int hf_mq_pmo_resprecptr = -1;
+static int hf_mq_pmo_originalmsghandle = -1;
+static int hf_mq_pmo_newmsghandle = -1;
+static int hf_mq_pmo_action = -1;
+static int hf_mq_pmo_publevel = -1;
 
 static int hf_mq_xa_length = -1;
 static int hf_mq_xa_returnvalue = -1;
@@ -948,6 +959,8 @@ static gint ett_mq_reaasemb = -1;
 static gint ett_mq_notif = -1;
 
 static gint ett_mq_structid = -1;
+
+static expert_field ei_mq_reassembly_error = EI_INIT;
 
 static dissector_handle_t mq_handle;
 static dissector_handle_t mq_spx_handle;
@@ -2053,6 +2066,8 @@ static gint dissect_mq_gmo(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
 static gint dissect_mq_pmo(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gint offset, mq_parm_t *p_mq_parm, gint *iDistributionListSize)
 {
     gint iSize = 0;
+    gint iPosV2 = offset + 128;
+    gint offsetb = offset;
 
     p_mq_parm->mq_strucID = (tvb_reported_length_remaining(tvb, offset) >= 4) ? tvb_get_ntohl(tvb, offset) : MQ_STRUCTID_NULL;
     if (p_mq_parm->mq_strucID == MQ_STRUCTID_PMO || p_mq_parm->mq_strucID == MQ_STRUCTID_PMO_EBCDIC)
@@ -2062,8 +2077,9 @@ static gint dissect_mq_pmo(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         /* Compute length according to version */
         switch (iVersion)
         {
-        case 1: iSize = 128; break;
-        case 2: iSize = 152;break;
+            case 1: iSize = 128; break;
+            case 2: iSize = 152; break;
+            case 3: iSize = 176; break;
         }
 
         if (iSize != 0 && tvb_reported_length_remaining(tvb, offset) >= iSize)
@@ -2093,15 +2109,23 @@ static gint dissect_mq_pmo(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
                 proto_tree_add_item(mq_tree, hf_mq_pmo_invaldstcnt, tvb, offset + 28, 4, p_mq_parm->mq_int_enc);
                 proto_tree_add_item(mq_tree, hf_mq_pmo_resolvqname, tvb, offset + 32, 48, p_mq_parm->mq_str_enc);
                 proto_tree_add_item(mq_tree, hf_mq_pmo_resolvqmgr , tvb, offset + 80, 48, p_mq_parm->mq_str_enc);
-
+                offset += 128;
                 if (iVersion >= 2)
                 {
-                    proto_tree_add_item(mq_tree, hf_mq_pmo_recspresent , tvb, offset + 128, 4, p_mq_parm->mq_int_enc);
-                    proto_tree_add_item(mq_tree, hf_mq_pmo_putmsgrecfld, tvb, offset + 132, 4, p_mq_parm->mq_int_enc);
-                    proto_tree_add_item(mq_tree, hf_mq_pmo_putmsgrecofs, tvb, offset + 136, 4, p_mq_parm->mq_int_enc);
-                    proto_tree_add_item(mq_tree, hf_mq_pmo_resprecofs  , tvb, offset + 140, 4, p_mq_parm->mq_int_enc);
-                    proto_tree_add_item(mq_tree, hf_mq_pmo_putmsgrecptr, tvb, offset + 144, 4, p_mq_parm->mq_int_enc);
-                    proto_tree_add_item(mq_tree, hf_mq_pmo_resprecptr  , tvb, offset + 148, 4, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_recspresent , tvb, offset, 4, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_putmsgrecfld, tvb, offset + 4, 4, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_putmsgrecofs, tvb, offset + 8, 4, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_resprecofs  , tvb, offset + 12, 4, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_putmsgrecptr, tvb, offset + 16, 4, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_resprecptr  , tvb, offset + 20, 4, p_mq_parm->mq_int_enc);
+                    offset += 24;
+                }
+                if (iVersion >= 3)
+                {
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_originalmsghandle, tvb, offset, 8, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_newmsghandle, tvb, offset + 8, 8, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_action, tvb, offset + 16, 4, p_mq_parm->mq_int_enc);
+                    proto_tree_add_item(mq_tree, hf_mq_pmo_publevel, tvb, offset + 20, 4, p_mq_parm->mq_int_enc);
                 }
             }
             if (iVersion >= 2)
@@ -2109,8 +2133,8 @@ static gint dissect_mq_pmo(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
                 gint iNbrRecords = 0;
                 guint32 iRecFlags = 0;
 
-                iNbrRecords = tvb_get_guint32(tvb, offset + 128, p_mq_parm->mq_int_enc);
-                iRecFlags = tvb_get_guint32(tvb, offset + 132, p_mq_parm->mq_int_enc);
+                iNbrRecords = tvb_get_guint32(tvb, iPosV2, p_mq_parm->mq_int_enc);
+                iRecFlags = tvb_get_guint32(tvb, iPosV2 + 4, p_mq_parm->mq_int_enc);
 
                 if (iNbrRecords > 0)
                 {
@@ -2118,10 +2142,10 @@ static gint dissect_mq_pmo(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
                     gint iOffsetRR = 0;
 
                     *iDistributionListSize = iNbrRecords;
-                    iOffsetPMR = tvb_get_guint32(tvb, offset + 136, p_mq_parm->mq_int_enc);
-                    iOffsetRR  = tvb_get_guint32(tvb, offset + 140, p_mq_parm->mq_int_enc);
-                    iSize += dissect_mq_pmr(tvb, tree, offset + iSize, iNbrRecords, iOffsetPMR, iRecFlags, p_mq_parm);
-                    iSize += dissect_mq_rr(tvb, tree, offset + iSize, iNbrRecords, iOffsetRR, p_mq_parm);
+                    iOffsetPMR = tvb_get_guint32(tvb, iPosV2 + 8, p_mq_parm->mq_int_enc);
+                    iOffsetRR  = tvb_get_guint32(tvb, iPosV2 + 12, p_mq_parm->mq_int_enc);
+                    iSize += dissect_mq_pmr(tvb, tree, offsetb + iSize, iNbrRecords, iOffsetPMR, iRecFlags, p_mq_parm);
+                    iSize += dissect_mq_rr(tvb, tree, offsetb + iSize, iNbrRecords, iOffsetRR, p_mq_parm);
                 }
             }
         }
@@ -2829,12 +2853,12 @@ static void dissect_mq_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
                             }
                             iApp = tvb_get_guint32(tvb, offset + 48 + 28, iCod);
 
-                            sApplicationName = format_text_chr(tvb_get_string_enc(wmem_packet_scope(), tvb, offset + 48, 28, iEnc), 28, '.');
+                            sApplicationName = format_text_chr(wmem_packet_scope(), tvb_get_string_enc(wmem_packet_scope(), tvb, offset + 48, 28, iEnc), 28, '.');
                             if (strip_trailing_blanks((guint8 *)sApplicationName, 28) > 0)
                             {
                                 col_append_fstr(pinfo->cinfo, COL_INFO, " App=%s", sApplicationName);
                             }
-                            sQMgr = format_text_chr(tvb_get_string_enc(wmem_packet_scope(), tvb, offset, 48, iEnc), 48, '.');
+                            sQMgr = format_text_chr(wmem_packet_scope(), tvb_get_string_enc(wmem_packet_scope(), tvb, offset, 48, iEnc), 48, '.');
                             if (strip_trailing_blanks((guint8 *)sQMgr, 48) > 0)
                             {
                                 col_append_fstr(pinfo->cinfo, COL_INFO, " QM=%s", sQMgr);
@@ -3725,7 +3749,7 @@ static void dissect_mq_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
                                                     if (*sStr)
                                                         strip_trailing_blanks(sStr, iLenStr);
                                                     if (*sStr)
-                                                        format_text_chr(sStr, strlen((const char *)sStr), '.');
+                                                        sStr = (guint8*)format_text_chr(wmem_packet_scope(), sStr, strlen((const char *)sStr), '.');
 
                                                     rfh_tree = proto_tree_add_subtree_format(mq_tree, tvb, iPos, iLenStr+4, ett_mq_rfh_ValueName, NULL, "NameValue: %s",  sStr);
 
@@ -3899,6 +3923,8 @@ static int reassemble_mq(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
             {
                 fragment_head *fd_head;
                 guint32 iConnectionId = (pinfo->srcport + pinfo->destport);
+                gboolean reassembly_error = FALSE;
+
                 iHdrL = 28 + iMulS;
 
                 /* Get the MQ Handle of the Object */
@@ -3933,10 +3959,16 @@ static int reassemble_mq(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
                 */
                 iBegL = (bSeg1st) ? 0 : iNxtP;
 
-                fd_head = fragment_add_seq_next(&mq_reassembly_table,
-                    tvb, iBegL,
-                    pinfo, iConnectionId, NULL,
-                    iSegL - iBegL, bMore);
+                if (iSegL <= iBegL) {
+                    /* negative or null fragment length - something is wrong; skip reassembly */
+                    fd_head = NULL;
+                    reassembly_error = TRUE;
+                } else {
+                    fd_head = fragment_add_seq_next(&mq_reassembly_table,
+                        tvb, iBegL,
+                        pinfo, iConnectionId, NULL,
+                        iSegL - iBegL, bMore);
+                }
 
                 if (tree)
                 {
@@ -3956,6 +3988,11 @@ static int reassemble_mq(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
                         dissect_mq_addCR_colinfo(pinfo, &mq_parm);
                         proto_item_append_text(ti, " Hdl=0x%04x GlbMsgIdx=%d, SegIdx=%d, SegLen=%d",
                             iHdl, iGlbMsgIdx, iSegmIndex, iSegLength);
+                    }
+                    if (reassembly_error)
+                    {
+                        expert_add_info_format(pinfo, ti, &ei_mq_reassembly_error,
+                                               "Wrong fragment length (%d) - skipping reassembly", iSegL - iBegL);
                     }
                     mq_tree = proto_item_add_subtree(ti, ett_mq_reaasemb);
                 }
@@ -4083,17 +4120,6 @@ static gboolean    dissect_mq_heur_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_
     return dissect_mq_heur(tvb, pinfo, tree, FALSE, app_handle);
 }
 
-static void mq_init(void)
-{
-    reassembly_table_init(&mq_reassembly_table,
-        &addresses_reassembly_table_functions);
-}
-
-static void mq_cleanup(void)
-{
-    reassembly_table_destroy(&mq_reassembly_table);
-}
-
 void proto_register_mq(void)
 {
     static hf_register_info hf[] =
@@ -4123,7 +4149,7 @@ void proto_register_mq(void)
         { &hf_mq_tsh_tcf2_HdrComp  , {"HDR Comp", "mq.tsh.tcf2.hdrcomp", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_TCF2_HDRCOMP      , "TSH TCF2 Header Compressed", HFILL }},
         { &hf_mq_tsh_tcf2_MsgComp  , {"MSG Comp", "mq.tsh.tcf2.msgcomp", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_TCF2_MSGCOMP      , "TSH TCF2 Message Compressed", HFILL }},
         { &hf_mq_tsh_tcf2_CSH      , {"CSH", "mq.tsh.tcf2.csh"    , FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_TCF2_CSH          , "TSH TCF2 CSH", HFILL }},
-        { &hf_mq_tsh_tcf2_CmitIntv , {"ComitIntvl", "mq.tsh.tcf.cmitintv", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_TCF2_CMIT_INTERVAL, "TSH TCF2 Commit Interval", HFILL }},
+        { &hf_mq_tsh_tcf2_CmitIntv , {"CommitIntvl", "mq.tsh.tcf.cmitintv", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_TCF2_CMIT_INTERVAL, "TSH TCF2 Commit Interval", HFILL }},
 
         { &hf_mq_api_replylen , {"Reply len..", "mq.api.replylength", FT_UINT32, BASE_DEC, NULL, 0x0, "API Reply length", HFILL }},
         { &hf_mq_api_compcode , {"Compl Code.", "mq.api.completioncode", FT_UINT32, BASE_DEC, VALS(GET_VALSV(mqcc)), 0x0, "API Completion code", HFILL }},
@@ -4208,7 +4234,7 @@ void proto_register_mq(void)
         { &hf_mq_id_icf2_CanTrcRte, {"Trace Rte Capab", "mq.id.icf2.cantraceroute" , FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_ICF2_TRACE_ROUTE_CAPABLE, "ID ICF2 Trace Route Capable", HFILL }},
 
         { &hf_mq_id_icf3_CanMsgPrp, {"Msg Property Cap", "mq.id.icf.msgprpcap", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_ICF3_MSG_PROP_CAPABLE, "ID ICF3 Message PropertyCapable", HFILL }},
-        { &hf_mq_id_icf3_Unknown02, {"Unknownx02", "mq.id.icf.unknown02", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_ICF3_UNKNOWNX02, "ID ICF3 Unknown Falg x02", HFILL }},
+        { &hf_mq_id_icf3_Unknown02, {"Unknownx02", "mq.id.icf.unknown02", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_ICF3_UNKNOWNX02, "ID ICF3 Unknown Flag x02", HFILL }},
 
         { &hf_mq_id_ief1_ccsid  , {"Invalid CCSID", "mq.id.ief1.ccsid", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_IEF1_CCSID, "ID invalid CCSID", HFILL }},
         { &hf_mq_id_ief1_enc    , {"Invalid encoding", "mq.id.ief1.enc", FT_BOOLEAN, 8, TFS(&tfs_set_notset), MQ_IEF1_ENCODING, "ID invalid encoding", HFILL }},
@@ -4523,9 +4549,9 @@ void proto_register_mq(void)
         { &hf_mq_lpoo_unknown6      , {"Unknown6......", "mq.lpoo.unknown6", FT_UINT32, BASE_HEX, NULL, 0x0, "LPOO unknown6", HFILL }},
         { &hf_mq_lpoo_xtradata      , {"ExtraData.....", "mq.lpoo.extradata", FT_UINT32, BASE_DEC, NULL, 0x0, "LPOO Extra Data", HFILL }},
 
-        { &hf_mq_pmo_StructID    , {"StructID.", "mq.pmo.structid", FT_STRINGZ, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_mq_pmo_version     , {"Version..", "mq.pmo.version", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO version", HFILL }},
-        { &hf_mq_pmo_options     , {"Options..", "mq.pmo.options", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO options", HFILL }},
+        { &hf_mq_pmo_StructID    , {"StructID...", "mq.pmo.structid", FT_STRINGZ, BASE_NONE, NULL, 0x0, NULL, HFILL }},
+        { &hf_mq_pmo_version     , {"Version....", "mq.pmo.version", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO version", HFILL }},
+        { &hf_mq_pmo_options     , {"Options....", "mq.pmo.options", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO options", HFILL }},
         { &hf_mq_pmo_options_NOT_OWN_SUBS            , {"NOT_OWN_SUBS", "mq.pmo.options.NOT_OWN_SUBS", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_MQPMO_NOT_OWN_SUBS , "PMO options NOT_OWN_SUBS", HFILL }},
         { &hf_mq_pmo_options_SUPPRESS_REPLYTO        , {"SUPPRESS_REPLYTO", "mq.pmo.options.SUPPRESS_REPLYTO", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_MQPMO_SUPPRESS_REPLYTO , "PMO options SUPPRESS_REPLYTO", HFILL }},
         { &hf_mq_pmo_options_SCOPE_QMGR              , {"SCOPE_QMGR", "mq.pmo.options.SCOPE_QMGR", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_MQPMO_SCOPE_QMGR , "PMO options SCOPE_QMGR", HFILL }},
@@ -4549,25 +4575,29 @@ void proto_register_mq(void)
         { &hf_mq_pmo_options_NO_SYNCPOINT            , {"NO_SYNCPOINT", "mq.pmo.options.NO_SYNCPOINT", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_MQPMO_NO_SYNCPOINT , "PMO options NO_SYNCPOINT", HFILL }},
         { &hf_mq_pmo_options_SYNCPOINT               , {"SYNCPOINT", "mq.pmo.options.SYNCPOINT", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_MQPMO_SYNCPOINT , "PMO options SYNCPOINT", HFILL }},
 
-        { &hf_mq_pmo_timeout     , {"Timeout..", "mq.pmo.timeout", FT_INT32, BASE_DEC, NULL, 0x0, "PMO time out", HFILL }},
-        { &hf_mq_pmo_context     , {"Context..", "mq.pmo.context", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO context", HFILL }},
-        { &hf_mq_pmo_knowndstcnt , {"KnDstCnt.", "mq.pmo.kdstcount", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO known destination count", HFILL }},
-        { &hf_mq_pmo_unkndstcnt  , {"UkDstCnt.", "mq.pmo.udestcount", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO unknown destination count", HFILL }},
-        { &hf_mq_pmo_invaldstcnt , {"InDstCnt.", "mq.pmo.idestcount", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO invalid destination count", HFILL }},
-        { &hf_mq_pmo_resolvqname , {"ResQName.", "mq.pmo.resolvq", FT_STRINGZ, BASE_NONE, NULL, 0x0, "PMO resolved queue name", HFILL }},
-        { &hf_mq_pmo_resolvqmgr  , {"ResQMgr..", "mq.pmo.resolvqmgr", FT_STRINGZ, BASE_NONE, NULL, 0x0, "PMO resolved queue manager name", HFILL }},
-        { &hf_mq_pmo_recspresent , {"NumRecs..", "mq.pmo.nbrrec", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO number of records", HFILL }},
-        { &hf_mq_pmo_putmsgrecfld, {"PMR Flag.", "mq.pmo.flagspmr", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO flags PMR fields", HFILL }},
-        { &hf_mq_pmo_putmsgrecofs, {"Ofs1stPMR", "mq.pmo.offsetpmr", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO offset of first PMR", HFILL }},
-        { &hf_mq_pmo_resprecofs  , {"Off1stRR.", "mq.pmo.offsetrr", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO offset of first RR", HFILL }},
-        { &hf_mq_pmo_putmsgrecptr, {"Adr1stPMR", "mq.pmo.addrrec", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO address of first record", HFILL }},
-        { &hf_mq_pmo_resprecptr  , {"Adr1stRR.", "mq.pmo.addrres", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO address of first response record", HFILL }},
+        { &hf_mq_pmo_timeout     , {"Timeout....", "mq.pmo.timeout", FT_INT32, BASE_DEC, NULL, 0x0, "PMO time out", HFILL }},
+        { &hf_mq_pmo_context     , {"Context....", "mq.pmo.context", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO context", HFILL }},
+        { &hf_mq_pmo_knowndstcnt , {"KnDstCnt...", "mq.pmo.kdstcount", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO known destination count", HFILL }},
+        { &hf_mq_pmo_unkndstcnt  , {"UkDstCnt...", "mq.pmo.udestcount", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO unknown destination count", HFILL }},
+        { &hf_mq_pmo_invaldstcnt , {"InDstCnt...", "mq.pmo.idestcount", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO invalid destination count", HFILL }},
+        { &hf_mq_pmo_resolvqname , {"ResQName...", "mq.pmo.resolvq", FT_STRINGZ, BASE_NONE, NULL, 0x0, "PMO resolved queue name", HFILL }},
+        { &hf_mq_pmo_resolvqmgr  , {"ResQMgr....", "mq.pmo.resolvqmgr", FT_STRINGZ, BASE_NONE, NULL, 0x0, "PMO resolved queue manager name", HFILL }},
+        { &hf_mq_pmo_recspresent , {"NumRecs....", "mq.pmo.nbrrec", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO number of records", HFILL }},
+        { &hf_mq_pmo_putmsgrecfld, {"PMR Flag...", "mq.pmo.flagspmr", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO flags PMR fields", HFILL }},
+        { &hf_mq_pmo_putmsgrecofs, {"Ofs1stPMR..", "mq.pmo.offsetpmr", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO offset of first PMR", HFILL }},
+        { &hf_mq_pmo_resprecofs  , {"Off1stRR...", "mq.pmo.offsetrr", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO offset of first RR", HFILL }},
+        { &hf_mq_pmo_putmsgrecptr, {"Adr1stPMR..", "mq.pmo.addrrec", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO address of first record", HFILL }},
+        { &hf_mq_pmo_resprecptr  , {"Adr1stRR...", "mq.pmo.addrres", FT_UINT32, BASE_HEX, NULL, 0x0, "PMO address of first response record", HFILL }},
+        { &hf_mq_pmo_originalmsghandle ,{"OrigMsgHdl.", "mq.pmo.originalmsghandle", FT_UINT64, BASE_HEX, NULL, 0x0, "PMO original message handle", HFILL}},
+        { &hf_mq_pmo_newmsghandle, {"NewMsgHdl..", "mq.pmo.newmsghandle", FT_UINT64, BASE_HEX, NULL, 0x0, "PMO new message handle", HFILL}},
+        { &hf_mq_pmo_action      , {"Action.....", "mq.pmo.action", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO action", HFILL}},
+        { &hf_mq_pmo_publevel    , {"PubLevel...", "mq.pmo.publevel", FT_UINT32, BASE_DEC, NULL, 0x0, "PMO pub level", HFILL}},
 
-        { &hf_mq_xa_length        , {"Length.......", "mq.xa.length", FT_UINT32, BASE_DEC, NULL, 0x0, "XA Length", HFILL }},
-        { &hf_mq_xa_returnvalue   , {"Return value.", "mq.xa.returnvalue", FT_INT32, BASE_DEC, VALS(mq_xaer_vals), 0x0, "XA Return Value", HFILL }},
-        { &hf_mq_xa_tmflags       , {"TransMgrFlags", "mq.xa.tmflags", FT_UINT32, BASE_HEX, NULL, 0x0, "XA Transaction Manager Flags", HFILL }},
-        { &hf_mq_xa_rmid          , {"ResourceMgrID", "mq.xa.rmid", FT_UINT32, BASE_DEC, NULL, 0x0, "XA Resource Manager ID", HFILL }},
-        { &hf_mq_xa_count         , {"Number of Xid", "mq.xa.nbxid", FT_UINT32, BASE_DEC, NULL, 0x0, "XA Number of Xid", HFILL }},
+        { &hf_mq_xa_length       , {"Length.......", "mq.xa.length", FT_UINT32, BASE_DEC, NULL, 0x0, "XA Length", HFILL }},
+        { &hf_mq_xa_returnvalue  , {"Return value.", "mq.xa.returnvalue", FT_INT32, BASE_DEC, VALS(mq_xaer_vals), 0x0, "XA Return Value", HFILL }},
+        { &hf_mq_xa_tmflags      , {"TransMgrFlags", "mq.xa.tmflags", FT_UINT32, BASE_HEX, NULL, 0x0, "XA Transaction Manager Flags", HFILL }},
+        { &hf_mq_xa_rmid         , {"ResourceMgrID", "mq.xa.rmid", FT_UINT32, BASE_DEC, NULL, 0x0, "XA Resource Manager ID", HFILL }},
+        { &hf_mq_xa_count        , {"Number of Xid", "mq.xa.nbxid", FT_UINT32, BASE_DEC, NULL, 0x0, "XA Number of Xid", HFILL }},
         { &hf_mq_xa_tmflags_join      , {"JOIN", "mq.xa.tmflags.join", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_XA_TMJOIN, "XA TM Flags JOIN", HFILL }},
         { &hf_mq_xa_tmflags_endrscan  , {"ENDRSCAN", "mq.xa.tmflags.endrscan", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_XA_TMENDRSCAN, "XA TM Flags ENDRSCAN", HFILL }},
         { &hf_mq_xa_tmflags_startrscan, {"STARTRSCAN", "mq.xa.tmflags.startrscan", FT_BOOLEAN, 32, TFS(&tfs_set_notset), MQ_XA_TMSTARTRSCAN, "XA TM Flags STARTRSCAN", HFILL }},
@@ -4751,14 +4781,24 @@ void proto_register_mq(void)
     };
 
     module_t *mq_module;
+    expert_module_t *expert_mq;
+
+    static ei_register_info ei[] = {
+        { &ei_mq_reassembly_error, { "mq.reassembly_error",
+          PI_REASSEMBLE, PI_ERROR, "Reassembly error", EXPFILL }}
+    };
 
     proto_mq = proto_register_protocol("WebSphere MQ", "MQ", "mq");
     proto_register_field_array(proto_mq, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
 
+    expert_mq = expert_register_protocol(proto_mq);
+    expert_register_field_array(expert_mq, ei, array_length(ei));
+
     mq_heur_subdissector_list = register_heur_dissector_list("mq", proto_mq);
-    register_init_routine(mq_init);
-    register_cleanup_routine(mq_cleanup);
+
+    reassembly_table_register(&mq_reassembly_table,
+        &addresses_reassembly_table_functions);
 
     mq_module = prefs_register_protocol(proto_mq, NULL);
     mq_handle = register_dissector("mq", dissect_mq_tcp, proto_mq);
@@ -4782,7 +4822,7 @@ void proto_reg_handoff_mq(void)
 
     mq_spx_handle = create_dissector_handle(dissect_mq_spx, proto_mq);
 
-    dissector_add_for_decode_as("tcp.port", mq_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", mq_handle);
     ssl_dissector_add(0, mq_handle);
     heur_dissector_add("tcp",     dissect_mq_heur_tcp, "WebSphere MQ over TCP", "mq_tcp", proto_mq, HEURISTIC_ENABLE);
     heur_dissector_add("netbios", dissect_mq_heur_nontcp, "WebSphere MQ over Netbios", "mq_netbios", proto_mq, HEURISTIC_ENABLE);

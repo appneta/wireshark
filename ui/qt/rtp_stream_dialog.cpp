@@ -468,8 +468,9 @@ void RtpStreamDialog::on_actionAnalyze_triggered()
 
     if (stream_a == NULL && stream_b == NULL) return;
 
-    RtpAnalysisDialog rtp_analysis_dialog(*this, cap_file_, stream_a, stream_b);
-    rtp_analysis_dialog.exec();
+    RtpAnalysisDialog *rtp_analysis_dialog = new RtpAnalysisDialog(*this, cap_file_, stream_a, stream_b);
+    connect(rtp_analysis_dialog, SIGNAL(goToPacket(int)), this, SIGNAL(goToPacket(int)));
+    rtp_analysis_dialog->show();
 }
 
 void RtpStreamDialog::on_actionCopyAsCsv_triggered()
@@ -639,7 +640,9 @@ void RtpStreamDialog::on_streamTreeWidget_itemSelectionChanged()
 
 void RtpStreamDialog::on_buttonBox_clicked(QAbstractButton *button)
 {
-    if (button == prepare_button_) {
+    if (button == find_reverse_button_) {
+        on_actionFindReverse_triggered();
+    } else if (button == prepare_button_) {
         on_actionPrepareFilter_triggered();
     } else if (button == export_button_) {
         on_actionExportAsRtpDump_triggered();

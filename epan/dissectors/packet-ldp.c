@@ -345,9 +345,6 @@ static expert_field ei_ldp_tlv_fec = EI_INIT;
 /* desegmentation of LDP over TCP */
 static gboolean ldp_desegment = TRUE;
 
-static guint32 global_ldp_tcp_port = TCP_PORT_LDP;
-static guint32 global_ldp_udp_port = UDP_PORT_LDP;
-
 /*
  * The following define all the TLV types I know about
  * http://www.iana.org/assignments/ldp-namespaces
@@ -361,6 +358,7 @@ static guint32 global_ldp_udp_port = UDP_PORT_LDP;
 #define TLV_ATM_LABEL                 0x0201
 #define TLV_FRAME_LABEL               0x0202
 #define TLV_FT_PROTECTION             0x0203
+#define TLV_ENTROPY_LABEL             0x0206
 #define TLV_STATUS                    0x0300
 #define TLV_EXTENDED_STATUS           0x0301
 #define TLV_RETURNED_PDU              0x0302
@@ -437,6 +435,7 @@ static const value_string tlv_type_names[] = {
     { TLV_ATM_LABEL,                 "ATM Label TLV"},
     { TLV_FRAME_LABEL,               "Frame Label TLV"},
     { TLV_FT_PROTECTION,             "FT Protection TLV"},
+    { TLV_ENTROPY_LABEL,             "Entropy Label Capability TLV"},
     { TLV_STATUS,                    "Status TLV"},
     { TLV_EXTENDED_STATUS,           "Extended Status TLV"},
     { TLV_RETURNED_PDU,              "Returned PDU TLV"},
@@ -592,8 +591,15 @@ const value_string fec_types_vals[] = {
 };
 
 
+/*
+ * MPLS Pseudowire Types
+ *
+ * RFC 4446
+ *
+ * http://www.iana.org/assignments/pwe3-parameters/pwe3-parameters.xhtml#pwe3-parameters-2
+ */
 const value_string fec_vc_types_vals[] = {
-    {0x0001, "Frame Relay DLCI"},
+    {0x0001, "Frame Relay DLCI (Martini Mode)"},
     {0x0002, "ATM AAL5 SDU VCC transport"},
     {0x0003, "ATM transparent cell transport"},
     {0x0004, "Ethernet VLAN"},
@@ -617,6 +623,7 @@ const value_string fec_vc_types_vals[] = {
     {0x0016, "TDMoIP basic mode"},
     {0x0017, "CESoPSN TDM with CAS"},
     {0x0018, "TDMoIP TDM with CAS"},
+    {0x0019, "Frame Relay DLCI"},
     {0, NULL}
 };
 
@@ -2420,6 +2427,13 @@ dissect_tlv(tvbuff_t *tvb, packet_info *pinfo, guint offset, proto_tree *tree, i
                                     offset + 4,length, ENC_BIG_ENDIAN);
             break;
 
+        case TLV_ENTROPY_LABEL:
+            if( length != 0 ) /* Length must be 0 bytes */
+                proto_tree_add_expert_format(tlv_tree, pinfo, &ei_ldp_tlv_fec_len, tvb, offset + 4, length,
+                                    "Error processing Entropy Label Capability TLV: length is %d, should be 0",
+                                    length);
+            break;
+
         case TLV_STATUS:
             dissect_tlv_status(tvb, pinfo, offset + 4, tlv_tree, length);
             break;
@@ -3194,7 +3208,7 @@ dissect_ldp_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
         length = length_remaining;
         if (length > plen + 4)
             length = plen + 4;
-        next_tvb = tvb_new_subset(tvb, offset, length, plen + 4);
+        next_tvb = tvb_new_subset_length_caplen(tvb, offset, length, plen + 4);
 
         /*
          * Dissect the LDP packet.
@@ -4268,8 +4282,7 @@ proto_register_ldp(void)
     module_t *ldp_module;
     expert_module_t* expert_ldp;
 
-    proto_ldp = proto_register_protocol("Label Distribution Protocol",
-                                        "LDP", "ldp");
+    proto_ldp = proto_register_protocol("Label Distribution Protocol", "LDP", "ldp");
 
     proto_register_field_array(proto_ldp, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
@@ -4278,17 +4291,7 @@ proto_register_ldp(void)
 
     /* Register our configuration options for , particularly our port */
 
-    ldp_module = prefs_register_protocol(proto_ldp, proto_reg_handoff_ldp);
-
-    prefs_register_uint_preference(ldp_module, "tcp.port", "LDP TCP Port",
-                                   "Set the TCP port for messages (if other"
-                                   " than the default of 646)",
-                                   10, &global_ldp_tcp_port);
-
-    prefs_register_uint_preference(ldp_module, "udp.port", "LDP UDP Port",
-                                   "Set the UDP port for messages (if other"
-                                   " than the default of 646)",
-                                   10, &global_ldp_udp_port);
+    ldp_module = prefs_register_protocol(proto_ldp, NULL);
 
     prefs_register_bool_preference(ldp_module, "desegment_ldp_messages",
                                    "Reassemble LDP messages spanning multiple TCP segments",
@@ -4302,35 +4305,12 @@ proto_register_ldp(void)
 void
 proto_reg_handoff_ldp(void)
 {
-    static gboolean ldp_prefs_initialized = FALSE;
-    static dissector_handle_t ldp_tcp_handle, ldp_handle;
-    static int tcp_port;
-    static int udp_port;
+    dissector_handle_t ldp_tcp_handle, ldp_handle;
 
-
-    if (!ldp_prefs_initialized) {
-
-        ldp_tcp_handle = create_dissector_handle(dissect_ldp_tcp, proto_ldp);
-        ldp_handle = create_dissector_handle(dissect_ldp, proto_ldp);
-
-        ldp_prefs_initialized = TRUE;
-
-    }
-    else {
-
-        dissector_delete_uint("tcp.port", tcp_port, ldp_tcp_handle);
-        dissector_delete_uint("udp.port", udp_port, ldp_handle);
-
-    }
-
-    /* Set our port number for future use */
-
-    tcp_port = global_ldp_tcp_port;
-    udp_port = global_ldp_udp_port;
-
-    dissector_add_uint("tcp.port", global_ldp_tcp_port, ldp_tcp_handle);
-    dissector_add_uint("udp.port", global_ldp_udp_port, ldp_handle);
-
+    ldp_tcp_handle = create_dissector_handle(dissect_ldp_tcp, proto_ldp);
+    ldp_handle = create_dissector_handle(dissect_ldp, proto_ldp);
+    dissector_add_uint_with_preference("tcp.port", TCP_PORT_LDP, ldp_tcp_handle);
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_LDP, ldp_handle);
 }
 
 /*

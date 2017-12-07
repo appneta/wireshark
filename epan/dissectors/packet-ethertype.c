@@ -78,12 +78,15 @@ const value_string etype_vals[] = {
 	{ ETHERTYPE_QNX_QNET6,            "QNX 6 QNET protocol" },
 	{ ETHERTYPE_PPPOED,               "PPPoE Discovery" },
 	{ ETHERTYPE_PPPOES,               "PPPoE Session" },
+	{ ETHERTYPE_LINK_CTL,             "HomePNA, wlan link local tunnel" },
 	{ ETHERTYPE_INTEL_ANS,            "Intel ANS probe" },
 	{ ETHERTYPE_MS_NLB_HEARTBEAT,     "MS NLB heartbeat" },
 	{ ETHERTYPE_JUMBO_LLC,            "Jumbo LLC" },
 	{ ETHERTYPE_HOMEPLUG,             "Homeplug" },
 	{ ETHERTYPE_HOMEPLUG_AV,          "Homeplug AV" },
+	{ ETHERTYPE_MRP,                  "MRP" },
 	{ ETHERTYPE_IEEE_802_1AD,         "802.1ad Provider Bridge (Q-in-Q)" },
+	{ ETHERTYPE_MACSEC,               "802.1AE (MACsec)" },
 	{ ETHERTYPE_IEEE_802_1AH,         "802.1ah Provider Backbone Bridge (mac-in-mac)" },
 	{ ETHERTYPE_IEEE_802_1BR,         "802.1br Bridge Port Extension E-Tag" },
 	{ ETHERTYPE_EAPOL,                "802.1X Authentication" },
@@ -105,6 +108,7 @@ const value_string etype_vals[] = {
 	{ ETHERTYPE_GIGAMON,              "Gigamon Header" },
 	{ ETHERTYPE_MSRP,                 "802.1Qat Multiple Stream Reservation Protocol" },
 	{ ETHERTYPE_MMRP,                 "802.1ak Multiple Mac Registration Protocol" },
+	{ ETHERTYPE_NSH,                  "Network Service Header" },
 	{ ETHERTYPE_AVBTP,                "IEEE 1722 Audio Video Bridging Transport Protocol" },
 	{ ETHERTYPE_ROHC,                 "Robust Header Compression(RoHC)" },
 	{ ETHERTYPE_TRILL,                "TRansparent Interconnection of Lots of Links" },
@@ -116,6 +120,7 @@ const value_string etype_vals[] = {
 	{ ETHERTYPE_CDMA2000_A10_UBS,     "CDMA2000 A10 Unstructured byte stream" },
 	{ ETHERTYPE_ATMOE,                "ATM over Ethernet" },
 	{ ETHERTYPE_PROFINET,             "PROFINET" },
+	{ ETHERTYPE_REALTEK,              "Realtek Layer 2 Protocols" },
 	{ ETHERTYPE_AOE,                  "ATA over Ethernet" },
 	{ ETHERTYPE_ECATF,                "EtherCAT frame" },
 	{ ETHERTYPE_TELKONET,             "Telkonet powerline" },
@@ -174,6 +179,7 @@ const value_string etype_vals[] = {
 	{ ETHERTYPE_TDMOE,                "Digium TDM over Ethernet Protocol" },
 	{ ETHERTYPE_WAI,                  "WAI Authentication Protocol" },
 	{ ETHERTYPE_VNTAG,                "VN-Tag" },
+	{ ETHERTYPE_SEL_L2,               "Schweitzer Engineering Labs Layer 2 Protocol" },
 	{ ETHERTYPE_HSR,                  "High-availability Seamless Redundancy (IEC62439 Part 3)" },
 	{ ETHERTYPE_BPQ,                  "AX.25" },
 	{ ETHERTYPE_CMD,                  "CiscoMetaData" },
@@ -187,12 +193,12 @@ const value_string etype_vals[] = {
 static void eth_prompt(packet_info *pinfo, gchar* result)
 {
 	g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Ethertype 0x%04x as",
-		GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, proto_ethertype, 0)));
+		GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, proto_ethertype, pinfo->curr_layer_num)));
 }
 
 static gpointer eth_value(packet_info *pinfo)
 {
-	return p_get_proto_data(pinfo->pool, pinfo, proto_ethertype, 0);
+	return p_get_proto_data(pinfo->pool, pinfo, proto_ethertype, pinfo->curr_layer_num);
 }
 
 static void add_dix_trailer(packet_info *pinfo, proto_tree *tree, proto_tree *fh_tree,
@@ -248,10 +254,10 @@ dissect_ethertype(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
 				captured_length = reported_length;
 		}
 	}
-	next_tvb = tvb_new_subset(tvb, ethertype_data->offset_after_ethertype, captured_length,
+	next_tvb = tvb_new_subset_length_caplen(tvb, ethertype_data->offset_after_ethertype, captured_length,
 				  reported_length);
 
-	p_add_proto_data(pinfo->pool, pinfo, proto_ethertype, 0, GUINT_TO_POINTER((guint)ethertype_data->etype));
+	p_add_proto_data(pinfo->pool, pinfo, proto_ethertype, pinfo->curr_layer_num, GUINT_TO_POINTER((guint)ethertype_data->etype));
 
 	/* Look for sub-dissector, and call it if found.
 	   Catch exceptions, so that if the reported length of "next_tvb"

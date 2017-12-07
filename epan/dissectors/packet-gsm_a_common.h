@@ -39,7 +39,7 @@
  *   Mobile radio interface Layer 3 specification;
  *   Core network protocols;
  *   Stage 3
- *   (3GPP TS 24.008 version 13.6.0 Release 13)
+ *   (3GPP TS 24.008 version 13.7.0 Release 13)
  *
  * Copyright 2003, Michael Lum <mlum [AT] telostech.com>,
  * In association with Telos Technology Inc.
@@ -72,6 +72,7 @@
 #include <epan/proto.h>
 
 #include "packet-sccp.h"
+#include "packet-e212.h"
 #include "ws_symbol_export.h"
 
 /* PROTOTYPES/FORWARDS */
@@ -410,7 +411,6 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
             (EMT_elem_name_addition == NULL) ? "" : EMT_elem_name_addition \
             ); \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 /* This is a version where the length field can be one or two octets depending
  * if the extension bit is set or not (TS 48.016 p 10.1.2).
@@ -436,7 +436,6 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
             (EMT_elem_name_addition == NULL) ? "" : EMT_elem_name_addition \
             ); \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_MAND_TLV_E(EMT_iei, EMT_pdu_type, EMT_elem_idx, EMT_elem_name_addition, ei_mandatory) \
@@ -457,36 +456,35 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
             (EMT_elem_name_addition == NULL) ? "" : EMT_elem_name_addition \
             ); \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 #define ELEM_OPT_TLV(EOT_iei, EOT_pdu_type, EOT_elem_idx, EOT_elem_name_addition) \
 {\
+    if ((signed)curr_len <= 0) return; \
     if ((consumed = elem_tlv(tvb, tree, pinfo, (guint8) EOT_iei, EOT_pdu_type, EOT_elem_idx, curr_offset, curr_len, EOT_elem_name_addition)) > 0) \
     { \
         curr_offset += consumed; \
         curr_len -= consumed; \
     } \
-        if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_OPT_TELV(EOT_iei, EOT_pdu_type, EOT_elem_idx, EOT_elem_name_addition) \
 {\
+    if ((signed)curr_len <= 0) return; \
     if ((consumed = elem_telv(tvb, tree, pinfo, (guint8) EOT_iei, EOT_pdu_type, EOT_elem_idx, curr_offset, curr_len, EOT_elem_name_addition)) > 0) \
     { \
         curr_offset += consumed; \
         curr_len -= consumed; \
     } \
-        if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_OPT_TLV_E(EOT_iei, EOT_pdu_type, EOT_elem_idx, EOT_elem_name_addition) \
 {\
+    if ((signed)curr_len <= 0) return; \
     if ((consumed = elem_tlv_e(tvb, tree, pinfo, (guint8) EOT_iei, EOT_pdu_type, EOT_elem_idx, curr_offset, curr_len, EOT_elem_name_addition)) > 0) \
     { \
         curr_offset += consumed; \
         curr_len -= consumed; \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_MAND_TV(EMT_iei, EMT_pdu_type, EMT_elem_idx, EMT_elem_name_addition, ei_mandatory) \
@@ -507,37 +505,36 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
             (EMT_elem_name_addition == NULL) ? "" : EMT_elem_name_addition \
         ); \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_OPT_TV(EOT_iei, EOT_pdu_type, EOT_elem_idx, EOT_elem_name_addition) \
 {\
+    if ((signed)curr_len <= 0) return; \
     if ((consumed = elem_tv(tvb, tree, pinfo, (guint8) EOT_iei, EOT_pdu_type, EOT_elem_idx, curr_offset, EOT_elem_name_addition)) > 0) \
     { \
         curr_offset += consumed; \
         curr_len -= consumed; \
     } \
-        if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_OPT_TV_SHORT(EOT_iei, EOT_pdu_type, EOT_elem_idx, EOT_elem_name_addition) \
 {\
+    if ((signed)curr_len <= 0) return; \
     if ((consumed = elem_tv_short(tvb, tree, pinfo, EOT_iei, EOT_pdu_type, EOT_elem_idx, curr_offset, EOT_elem_name_addition)) > 0) \
     { \
         curr_offset += consumed; \
         curr_len -= consumed; \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_OPT_T(EOT_iei, EOT_pdu_type, EOT_elem_idx, EOT_elem_name_addition) \
 {\
+    if ((signed)curr_len <= 0) return; \
     if ((consumed = elem_t(tvb, tree, pinfo, (guint8) EOT_iei, EOT_pdu_type, EOT_elem_idx, curr_offset, EOT_elem_name_addition)) > 0) \
     { \
         curr_offset += consumed; \
         curr_len -= consumed; \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_MAND_LV(EML_pdu_type, EML_elem_idx, EML_elem_name_addition) \
@@ -551,7 +548,6 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
     { \
         /* Mandatory, but nothing we can do */ \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_MAND_LV_E(EML_pdu_type, EML_elem_idx, EML_elem_name_addition) \
@@ -565,7 +561,6 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
     { \
         /* Mandatory, but nothing we can do */ \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_MAND_V(EMV_pdu_type, EMV_elem_idx, EMV_elem_name_addition) \
@@ -579,7 +574,6 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
     { \
         /* Mandatory, but nothing we can do */ \
     } \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 #define ELEM_MAND_VV_SHORT(EMV_pdu_type1, EMV_elem_idx1, EMV_pdu_type2, EMV_elem_idx2) \
@@ -588,7 +582,6 @@ WS_DLL_PUBLIC guint16 elem_v_short(tvbuff_t *tvb, proto_tree *tree, packet_info 
     elem_v_short(tvb, tree, pinfo, EMV_pdu_type2, EMV_elem_idx2, curr_offset, LEFT_NIBBLE); \
     curr_offset ++ ; /* consumed length is 1, regardless of contents */ \
     curr_len -- ; \
-    if ((signed)curr_len <= 0) return;      \
 }
 
 /*
@@ -631,6 +624,7 @@ void bssmap_new_bss_to_old_bss_info(tvbuff_t *tvb, proto_tree *tree, packet_info
 void dtap_mm_mm_info(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len);
 
 guint16 be_cell_id_aux(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len, guint8 disc);
+guint16 be_cell_id_type(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len, guint8 disc, e212_number_type_t number_type);
 guint16 be_cell_id_list(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len);
 guint16 be_chan_type(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len);
 guint16 be_prio(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len);
@@ -679,6 +673,7 @@ guint16 de_gmm_voice_domain_pref(tvbuff_t *tvb, proto_tree *tree, packet_info *p
 
 guint16 de_sup_codec_list(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len);
 
+guint16 de_gc_timer3(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len);
 
 WS_DLL_PUBLIC
 guint16 de_rr_cause(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string, int string_len);
@@ -755,6 +750,8 @@ extern value_string_ext gsm_a_rr_rxlev_vals_ext;
 extern const value_string gsm_a_gm_type_of_ciph_alg_vals[];
 
 extern value_string_ext nas_eps_emm_cause_values_ext;
+extern const value_string nas_eps_emm_cause_values[];
+extern const value_string nas_eps_esm_cause_vals[];
 
 typedef enum
 {
@@ -1125,7 +1122,7 @@ typedef enum
     DE_ATTACH_RES,                  /* [7] 10.5.5.1 Attach Result*/
     DE_ATTACH_TYPE,                 /* [7] 10.5.5.2 Attach Type */
     DE_CIPH_ALG,                    /* [7] 10.5.5.3 Ciphering Algorithm */
-    DE_INTEG_PROT_ALG,              /* [11] 10.5.5.3a Integrity Protection Algorithm */
+    DE_INTEG_ALG,                   /* [11] 10.5.5.3a Integrity Algorithm */
     DE_TMSI_STAT,                   /* [7] 10.5.5.4 TMSI Status */
     DE_DETACH_TYPE,                 /* [7] 10.5.5.5 Detach Type */
     DE_DRX_PARAM,                   /* [7] 10.5.5.6 DRX Parameter */
@@ -1160,6 +1157,7 @@ typedef enum
     DE_NET_RES_ID_CONT,             /* [11] 10.5.5.31 Network resource identifier container */
     DE_EXT_DRX_PARAMS,              /* [11] 10.5.5.32 Extended DRX parameters */
     DE_MAC,                         /* [11] 10.5.5.33 Message Authentication Code */
+    DE_UP_INTEG_IND,                /* [11] 10.5.5.34 User Plane integrity indicator */
     /* Session Management Information Elements [3] 10.5.6 */
     DE_ACC_POINT_NAME,              /* Access Point Name */
     DE_NET_SAPI,                    /* Network Service Access Point Identifier */
@@ -1293,6 +1291,7 @@ typedef enum
  * [3] 10.5.2.37g SI 19 Rest Octets
  * [3] 10.5.2.37h SI 18 Rest Octets
  * [3] 10.5.2.37i SI 20 Rest Octets */
+    DE_RR_SI21_REST_OCT,            /* [3] 10.5.2.37m SI21 Rest Octets */
     DE_RR_STARTING_TIME,            /* [3] 10.5.2.38 Starting Time                  */
     DE_RR_TIMING_ADV,               /* [3] 10.5.2.40 Timing Advance                 */
     DE_RR_TIME_DIFF,                /* [3] 10.5.2.41 Time Difference                */

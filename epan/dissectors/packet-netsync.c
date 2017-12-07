@@ -37,7 +37,7 @@ void proto_reg_handoff_netsync(void);
 /*
  * See
  *
- *	http://www.venge.net/monotone/
+ *	http://www.monotone.ca
  */
 
 /* Define TCP ports for Monotone netsync */
@@ -152,7 +152,6 @@ static int ett_netsync = -1;
  * for monotone netsync
  */
 
-static guint global_tcp_port_netsync = TCP_PORT_NETSYNC;
 static gboolean netsync_desegment = TRUE;
 
 static gint dissect_netsync_cmd_error( tvbuff_t *tvb,  gint offset, proto_tree *tree, guint size _U_)
@@ -467,7 +466,7 @@ dissect_netsync_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* d
 
 			size |= (tmp & 0x7F) << shift;
 			shift += 7;
-		} while (tmp & 0x80);
+		} while ((tmp & 0x80) && (shift < 32));
 
 
 		proto_tree_add_uint(netsync_tree, hf_netsync_size, tvb,
@@ -725,14 +724,7 @@ proto_register_netsync(void)
 	proto_register_field_array(proto_netsync, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 
-	netsync_module = prefs_register_protocol(proto_netsync,
-						proto_reg_handoff_netsync);
-
-	prefs_register_uint_preference(netsync_module, "tcp_port",
-					"Monotone Netsync TCP Port",
-					"The TCP port on which Monotone Netsync packets will be sent",
-					10, &global_tcp_port_netsync);
-
+	netsync_module = prefs_register_protocol(proto_netsync, NULL);
 
 	prefs_register_bool_preference(netsync_module, "desegment_netsync_messages",
 		"Reassemble Netsync messages spanning multiple TCP segments",
@@ -745,19 +737,11 @@ proto_register_netsync(void)
 void
 proto_reg_handoff_netsync(void)
 {
-	static dissector_handle_t netsync_handle;
-	static guint tcp_port_netsync;
-	static gboolean initialized = FALSE;
+	dissector_handle_t netsync_handle;
 
-	if (!initialized) {
-		netsync_handle = create_dissector_handle(dissect_netsync, proto_netsync);
-		initialized = TRUE;
-	} else {
-		dissector_delete_uint("tcp.port", tcp_port_netsync, netsync_handle);
-	}
+	netsync_handle = create_dissector_handle(dissect_netsync, proto_netsync);
 
-	tcp_port_netsync = global_tcp_port_netsync;
-	dissector_add_uint("tcp.port", global_tcp_port_netsync, netsync_handle);
+	dissector_add_uint_with_preference("tcp.port", TCP_PORT_NETSYNC, netsync_handle);
 }
 
 /*

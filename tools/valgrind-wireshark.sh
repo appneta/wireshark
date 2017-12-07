@@ -39,7 +39,7 @@ TOOL="memcheck"
 while getopts ":2a:b:C:lmnpP:rstTYwcevWdG" OPTCHAR ; do
     case $OPTCHAR in
         2) COMMAND_ARGS="-2 $COMMAND_ARGS" ;;
-        a) ADDITIONAL_SUPPRESSION_FILE="--suppressions=$OPTARG" ;;
+        a) ADDITIONAL_SUPPRESSION_FILE="$ADDITIONAL_SUPPRESSION_FILE --suppressions=$OPTARG" ;;
         b) WIRESHARK_BIN_DIR=$OPTARG ;;
         C) COMMAND_ARGS="-C $OPTARG $COMMAND_ARGS" ;;
         l) LEAK_CHECK="--leak-check=full" ;;
@@ -62,7 +62,7 @@ while getopts ":2a:b:C:lmnpP:rstTYwcevWdG" OPTCHAR ; do
            COMMAND_ARGS="-E 0.02"
            # We don't care about the output of editcap
            COMMAND_ARGS2="/dev/null" ;;
-        v) VERBOSE="--num-callers=256" ;;
+        v) VERBOSE="--num-callers=256 -v" ;;
         W) COMMAND=wireshark
            COMMAND_ARGS=""
            VALID=1 ;;
@@ -78,6 +78,13 @@ while getopts ":2a:b:C:lmnpP:rstTYwcevWdG" OPTCHAR ; do
 done
 shift $(($OPTIND - 1))
 
+# Sanitize parameters
+if [ "$COMMAND" != "tshark" ] && [[ $COMMAND_ARGS =~ Vx ]]
+then
+    printf "\nYou can't use -T if you're not using tshark\n\n" >&2
+    exit 1
+fi
+
 if [ $# -ge 1 ]
 then
     PCAP=$1
@@ -86,7 +93,25 @@ fi
 
 if [ $VALID -eq 0 ]
 then
-    printf "Usage: $0 [-2] [-a file] [-b bin_dir] [-c] [-e] [-C config_profile] [-l] [-m] [-n] [-p] [-r] [-s] [-t] [-T] [-w] [-v] /path/to/file.pcap\n"
+    printf "\nUsage: $(basename $0) [-2] [-a file] [-b bin_dir] [-c] [-e] [-C config_profile] "
+    printf "[-l] [-m] [-n] [-p] [-r] [-s] [-t] [-T] [-w] [-v] /path/to/file.pcap\n"
+    printf "\n"
+    printf "[-2]: run tshark with 2-pass analysis\n"
+    printf "[-a]: additional valgrind suppression file\n"
+    printf "[-b]: tshark binary dir\n"
+    printf "[-e]: use 'editcap -E 0.02' instead of tshark\n"
+    printf "[-c]: use capinfos instead of tshark\n"
+    printf "[-C]: binary profile file\n"
+    printf "[-l]: add valgring option --leak-check=full\n"
+    printf "[-m]: use valgrind massif tool\n"
+    printf "[-n]: print binary version\n"
+    printf "[-p]: use callgrind massif tool\n"
+    printf "[-r]: add valgrind option --show-reachable=yes\n"
+    printf "[-s]: add valgrind option --gen-suppressions=yes\n"
+    printf "[-t]: add valgrind option --track-origins=yes\n"
+    printf "[-T]: build the tshark tree (-Vx)\n"
+    printf "[-w]: use wireshark instead of tshark\n"
+    printf "[-v]: run in verbose mode (--num-callers=256)\n"
     exit 1
 fi
 
@@ -113,10 +138,11 @@ else
 fi
 
 cmdline="$LIBTOOL valgrind --suppressions=`dirname $0`/vg-suppressions $ADDITIONAL_SUPPRESSION_FILE \
+--suppressions=`dirname $0`/gtk.suppression \
 --tool=$TOOL $CALLGRIND_OUT_FILE $VERBOSE $LEAK_CHECK $REACHABLE $GEN_SUPPRESSIONS $TRACK_ORIGINS \
 $COMMAND $COMMAND_ARGS $PCAP $COMMAND_ARGS2"
 
-if [ $VERBOSE ];then
+if [ "$VERBOSE" != "" ];then
   echo -e "\n$cmdline\n"
 fi
 

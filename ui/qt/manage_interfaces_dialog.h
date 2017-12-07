@@ -27,6 +27,9 @@
 #include <glib.h>
 #include "capture_opts.h"
 
+#include "ui/qt/interface_tree_cache_model.h"
+#include "ui/qt/interface_sort_filter_model.h"
+
 #include "geometry_state_dialog.h"
 #include <QStyledItemDelegate>
 
@@ -35,31 +38,6 @@ class QTreeWidgetItem;
 class QStandardItemModel;
 
 class QLineEdit;
-
-class PathChooserDelegate : public QStyledItemDelegate
-{
-    Q_OBJECT
-
-private:
-    QTreeWidget* tree_;
-    mutable QTreeWidgetItem *path_item_;
-    mutable QWidget *path_editor_;
-    mutable QLineEdit *path_le_;
-
-public:
-    PathChooserDelegate(QObject *parent = 0);
-    ~PathChooserDelegate();
-
-    void setTree(QTreeWidget* tree) { tree_ = tree; }
-
-protected:
-    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const;
-    void updateEditorGeometry (QWidget * editor, const QStyleOptionViewItem & option, const QModelIndex & index) const;
-
-private slots:
-    void stopEditor();
-    void browse_button_clicked();
-};
 
 
 namespace Ui {
@@ -76,16 +54,12 @@ public:
 
 private:
     Ui::ManageInterfacesDialog *ui;
-    PathChooserDelegate new_pipe_item_delegate_;
 
-    void showPipes();
-    void showLocalInterfaces();
+    InterfaceTreeCacheModel * sourceModel;
+    InterfaceSortFilterModel * proxyModel;
+    InterfaceSortFilterModel * pipeProxyModel;
+
     void showRemoteInterfaces();
-    void saveLocalHideChanges(QTreeWidgetItem *item);
-    void saveLocalCommentChanges(QTreeWidgetItem *item);
-#if 0 // Not needed?
-    void checkBoxChanged(QTreeWidgetItem *item);
-#endif
 
 signals:
     void ifsChanged();
@@ -101,11 +75,8 @@ private slots:
 
     void on_addPipe_clicked();
     void on_delPipe_clicked();
-    void pipeAccepted();
-    void on_pipeList_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 
-    void localAccepted();
-    void localListItemDoubleClicked(QTreeWidgetItem * item, int column);
+    void onSelectionChanged(const QItemSelection &sel, const QItemSelection &desel);
 
 #ifdef HAVE_PCAP_REMOTE
     void on_addRemote_clicked();
@@ -114,6 +85,7 @@ private slots:
     void on_remoteList_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
     void on_remoteList_itemClicked(QTreeWidgetItem *item, int column);
     void addRemoteInterfaces(GList *rlist, remote_options *roptions);
+    void updateRemoteInterfaceList(GList *rlist, remote_options *roptions);
     void setRemoteSettings(interface_t *iface);
     void remoteSelectionChanged(QTreeWidgetItem* item, int col);
     void on_remoteSettings_clicked();

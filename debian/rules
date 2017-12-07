@@ -28,6 +28,7 @@ export docdir = /usr/share/doc/wireshark-doc
 
 override_dh_auto_configure:
 	dh_auto_configure -- -DENABLE_HTML_GUIDES=ON -DCMAKE_INSTALL_LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) \
+	-DBUILD_wireshark_gtk=ON \
 #	-DENABLE_QT5=OFF
 
 override_dh_auto_build:
@@ -44,13 +45,6 @@ override_dh_auto_install:
 	rm -f debian/*.shlibs
 	rm -rf $(CURDIR)/debian/tmp/usr/share/wireshark/COPYING
 	cp debian/license-text-about-dialog $(CURDIR)/debian/tmp/usr/share/wireshark/ABOUT.GPL
-	# icons conforming to freedesktop.org standards
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/icons/hicolor/scalable/apps/ \
-		$(CURDIR)/debian/tmp/usr/share/mime/packages/
-	install -m 644 image/wsicon.svg $(CURDIR)/debian/tmp/usr/share/icons/hicolor/scalable/apps/wireshark.svg
-	install -m 644 wireshark-mime-package.xml $(CURDIR)/debian/tmp/usr/share/mime/packages/wireshark.xml
-	# upstream uses wireshark for binary's name
-	# mv $(CURDIR)/debian/tmp/usr/bin/wireshark $(CURDIR)/debian/tmp/usr/bin/wireshark-qt
 	mkdir -p $(CURDIR)/debian/tmp/etc/wireshark/
 	mv $(CURDIR)/debian/tmp/usr/share/wireshark/init.lua \
 		$(CURDIR)/debian/tmp/etc/wireshark/

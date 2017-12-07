@@ -786,6 +786,7 @@ void proto_register_lbttcp(void)
         lbttcp_tag_update_cb,
         lbttcp_tag_free_cb,
         NULL,
+        NULL,
         lbttcp_tag_array);
     prefs_register_uat_preference(lbttcp_module,
         "tnw_lbttcp_tags",
@@ -802,7 +803,7 @@ void proto_reg_handoff_lbttcp(void)
     if (!already_registered)
     {
         lbttcp_dissector_handle = create_dissector_handle(dissect_lbttcp, proto_lbttcp);
-        dissector_add_for_decode_as("tcp.port", lbttcp_dissector_handle);
+        dissector_add_for_decode_as_with_preference("tcp.port", lbttcp_dissector_handle);
         heur_dissector_add("tcp", test_lbttcp_packet, "LBT over TCP", "lbttcp_tcp", proto_lbttcp, HEURISTIC_ENABLE);
     }
 

@@ -42,10 +42,10 @@ add_custom_command(
 
 add_custom_target(x11-dissector
 	COMMAND ${PERL_EXECUTABLE}
-		${CMAKE_SOURCE_DIR}/tools/process-x11-fields.pl ${CMAKE_CURRENT_SOURCE_DIR}/dissectors
+		${CMAKE_SOURCE_DIR}/tools/process-x11-fields.pl ${CMAKE_CURRENT_SOURCE_DIR}
 		< ${CMAKE_CURRENT_SOURCE_DIR}/x11-fields
 	COMMAND ${PERL_EXECUTABLE}
-		${CMAKE_SOURCE_DIR}/tools/process-x11-xcb.pl ${CMAKE_CURRENT_SOURCE_DIR}/dissectors
+		${CMAKE_SOURCE_DIR}/tools/process-x11-xcb.pl ${CMAKE_CURRENT_SOURCE_DIR}
 	DEPENDS
 		x11-fields
 		${CMAKE_SOURCE_DIR}/tools/process-x11-fields.pl
@@ -56,7 +56,7 @@ add_custom_target(x11-dissector
 
 set_target_properties(x11-dissector PROPERTIES FOLDER "Generated Dissectors/X11")
 
-set(ASN1_DISSECTOR_SRC
+set(CLEAN_ASN1_DISSECTOR_SRC
 	packet-ansi_map.c
 	packet-acp133.c
 	packet-acse.c
@@ -107,10 +107,12 @@ set(ASN1_DISSECTOR_SRC
 	packet-lppa.c
 	packet-lppe.c
 	packet-lte-rrc.c
+	packet-m2ap.c
 	packet-m3ap.c
 	packet-mms.c
 	packet-mpeg-audio.c
 	packet-mpeg-pes.c
+	packet-mudurl.c
 	packet-nbap.c
 	packet-novell_pkis.c
 	packet-ns_cert_exts.c
@@ -164,6 +166,11 @@ set(ASN1_DISSECTOR_SRC
 set(DIRTY_ASN1_DISSECTOR_SRC
 )
 
+set(ASN1_DISSECTOR_SRC
+	${CLEAN_ASN1_DISSECTOR_SRC}
+	${DIRTY_ASN1_DISSECTOR_SRC}
+)
+
 set(DIRTY_CORBA_IDL_DISSECTOR_SRC
 	packet-cosnaming.c
 	packet-gias.c
@@ -171,30 +178,37 @@ set(DIRTY_CORBA_IDL_DISSECTOR_SRC
 	packet-tango.c
 )
 
-set(CORBA_IDL_DISSECTOR_SRC
+set(CLEAN_CORBA_IDL_DISSECTOR_SRC
 	packet-coseventcomm.c
 )
 
-set(CORBA_IDL_DISSECTOR_FILES
-	${CORBA_IDL_DISSECTOR_SRC}
+set(CORBA_IDL_DISSECTOR_SRC
+	${CLEAN_CORBA_IDL_DISSECTOR_SRC}
 	${DIRTY_CORBA_IDL_DISSECTOR_SRC}
 )
 
-source_group(dissectors-corba FILES ${CORBA_IDL_DISSECTOR_FILES})
+source_group(dissectors-corba FILES ${CORBA_IDL_DISSECTOR_SRC})
 
 add_library(dissectors-corba OBJECT
-	${CORBA_IDL_DISSECTOR_FILES}
+	${CORBA_IDL_DISSECTOR_SRC}
 )
 
 set_target_properties(dissectors-corba PROPERTIES
 	FOLDER "Libs/epan/dissectors"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 )
 
 if(WIN32 AND "${CMAKE_GENERATOR}" STREQUAL "Visual Studio 12 2013 Win64")
 	# CORBA IDL dissectors are triggering a MSVC 2013 x64 /O2 bug leading to a NULL pointer dereference (see bug 12495)
 	target_compile_options(dissectors-corba PRIVATE $<$<CONFIG:Release>:/Ox> $<$<CONFIG:RelWithDebInfo>:/Ox>)
 endif()
+
+set(NCP2222_DISSECTOR_SRC
+	packet-ncp2222.c
+)
+
+source_group(dissectors-ncp2222 FILES ${NCP2222_DISSECTOR_SRC})
 
 set(DISSECTOR_SRC
 	file-btsnoop.c
@@ -228,27 +242,6 @@ set(DISSECTOR_SRC
 	packet-afp.c
 	packet-afs.c
 	packet-agentx.c
-	packet-aim-admin.c
-	packet-aim-adverts.c
-	packet-aim-bos.c
-	packet-aim-buddylist.c
-	packet-aim-chat.c
-	packet-aim-chatnav.c
-	packet-aim-directory.c
-	packet-aim-email.c
-	packet-aim-generic.c
-	packet-aim-icq.c
-	packet-aim-invitation.c
-	packet-aim-location.c
-	packet-aim-messaging.c
-	packet-aim-oft.c
-	packet-aim-popup.c
-	packet-aim-signon.c
-	packet-aim-ssi.c
-	packet-aim-sst.c
-	packet-aim-stats.c
-	packet-aim-translate.c
-	packet-aim-userlookup.c
 	packet-aim.c
 	packet-ajp13.c
 	packet-alcap.c
@@ -499,6 +492,7 @@ set(DISSECTOR_SRC
 	packet-dns.c
 	packet-dof.c
 	packet-dplay.c
+	packet-dpnet.c
 	packet-dpnss-link.c
 	packet-dpnss.c
 	packet-drda.c
@@ -544,6 +538,7 @@ set(DISSECTOR_SRC
 	packet-enrp.c
 	packet-enttec.c
 	packet-epl.c
+	packet-epl-profile-parser.c
 	packet-epl_v1.c
 	packet-epmd.c
 	packet-epon.c
@@ -562,6 +557,7 @@ set(DISSECTOR_SRC
 	packet-exec.c
 	packet-exported_pdu.c
 	packet-extreme.c
+	packet-fc00.c
 	packet-fc.c
 	packet-fcct.c
 	packet-fcdns.c
@@ -577,6 +573,7 @@ set(DISSECTOR_SRC
 	packet-fcsb3.c
 	packet-fcsp.c
 	packet-fcswils.c
+	packet-fbzero.c
 	packet-fddi.c
 	packet-fefd.c
 	packet-ff.c
@@ -636,16 +633,20 @@ set(DISSECTOR_SRC
 	packet-gsm_a_rr.c
 	packet-gsm_abis_om2000.c
 	packet-gsm_abis_oml.c
+	packet-gsm_abis_tfp.c
+	packet-gsm_abis_pgsl.c
 	packet-gsm_bsslap.c
 	packet-gsm_bssmap_le.c
 	packet-gsm_cbch.c
 	packet-gsm_ipa.c
+	packet-gsm_osmux.c
 	packet-gsm_rlcmac.c
 	packet-gsm_sim.c
 	packet-gsm_sms.c
 	packet-gsm_sms_ud.c
 	packet-gsm_um.c
 	packet-gsmtap.c
+	packet-gsmtap_log.c
 	packet-gssapi.c
 	packet-gtp.c
 	packet-gtpv2.c
@@ -682,13 +683,16 @@ set(DISSECTOR_SRC
 	packet-hip.c
 	packet-hiqnet.c
 	packet-hislip.c
+	packet-hl7.c
 	packet-homeplug-av.c
 	packet-homeplug.c
+	packet-homepna.c
 	packet-hp-erm.c
 	packet-hpext.c
 	packet-hpfeeds.c
 	packet-hpsw.c
 	packet-hpteam.c
+	packet-hsms.c
 	packet-hsr-prp-supervision.c
 	packet-hsr.c
 	packet-hsrp.c
@@ -728,6 +732,8 @@ set(DISSECTOR_SRC
 	packet-igrp.c
 	packet-imap.c
 	packet-imf.c
+	packet-indigocare-icall.c
+	packet-indigocare-netrix.c
 	packet-infiniband.c
 	packet-infiniband_sdp.c
 	packet-interlink.c
@@ -735,6 +741,7 @@ set(DISSECTOR_SRC
 	packet-ipars.c
 	packet-ipdc.c
 	packet-ipdr.c
+	packet-iperf.c
 	packet-ipfc.c
 	packet-ipmi.c
 	packet-ipmi-app.c
@@ -777,6 +784,7 @@ set(DISSECTOR_SRC
 	packet-ismp.c
 	packet-isns.c
 	packet-iso14443.c
+	packet-iso15765.c
 	packet-iso7816.c
 	packet-iso8583.c
 	packet-isup.c
@@ -848,6 +856,7 @@ set(DISSECTOR_SRC
 	packet-loop.c
 	packet-lpd.c
 	packet-lsc.c
+	packet-lsd.c
 	packet-ltp.c
 	packet-lwapp.c
 	packet-lwm.c
@@ -885,6 +894,7 @@ set(DISSECTOR_SRC
 	packet-mip.c
 	packet-mip6.c
 	packet-mka.c
+	packet-mle.c
 	packet-mmse.c
 	packet-mndp.c
 	packet-mojito.c
@@ -952,8 +962,11 @@ set(DISSECTOR_SRC
 	packet-netanalyzer.c
 	packet-netbios.c
 	packet-netdump.c
+	packet-netgear-ensemble.c
 	packet-netflow.c
+	packet-netlink-generic.c
 	packet-netlink-netfilter.c
+	packet-netlink-nl80211.c
 	packet-netlink-route.c
 	packet-netlink-sock_diag.c
 	packet-netlink.c
@@ -972,6 +985,10 @@ set(DISSECTOR_SRC
 	packet-nlsp.c
 	packet-nntp.c
 	packet-noe.c
+	packet-nordic_ble.c
+	packet-ns-ha.c
+	packet-ns-mep.c
+	packet-ns-rpc.c
 	packet-nsip.c
 	packet-nsh.c
 	packet-nsrp.c
@@ -981,9 +998,12 @@ set(DISSECTOR_SRC
 	packet-ntlmssp.c
 	packet-ntp.c
 	packet-null.c
+	packet-nvme.c
+	packet-nvme-rdma.c
 	packet-nwmtp.c
 	packet-nwp.c
 	packet-oampdu.c
+	packet-obd-ii.c
 	packet-obex.c
 	packet-ocfs2.c
 	packet-oicq.c
@@ -999,7 +1019,9 @@ set(DISSECTOR_SRC
 	packet-openflow_v1.c
 	packet-openflow_v4.c
 	packet-openflow_v5.c
+	packet-openflow_v6.c
 	packet-opensafety.c
+	packet-openthread.c
 	packet-openvpn.c
 	packet-openwire.c
 	packet-opsi.c
@@ -1091,6 +1113,7 @@ set(DISSECTOR_SRC
 	packet-rfid-mifare.c
 	packet-rfid-pn532.c
 	packet-rfid-pn532-hci.c
+	packet-rftap.c
 	packet-rgmp.c
 	packet-riemann.c
 	packet-rip.c
@@ -1157,6 +1180,7 @@ set(DISSECTOR_SRC
 	packet-scsi-smc.c
 	packet-scsi-ssc.c
 	packet-scsi.c
+	packet-scte35.c
 	packet-sctp.c
 	packet-sdh.c
 	packet-sdlc.c
@@ -1197,6 +1221,7 @@ set(DISSECTOR_SRC
 	packet-snaeth.c
 	packet-sndcp-xid.c
 	packet-sndcp.c
+	packet-snort.c
 	packet-socketcan.c
 	packet-socks.c
 	packet-soupbintcp.c
@@ -1246,6 +1271,7 @@ set(DISSECTOR_SRC
 	packet-text-media.c
 	packet-tfp.c
 	packet-tftp.c
+	packet-thread.c
 	packet-thrift.c
 	packet-time.c
 	packet-tipc.c
@@ -1275,6 +1301,8 @@ set(DISSECTOR_SRC
 	packet-ucp.c
 	packet-udld.c
 	packet-udp.c
+	packet-udp-nm.c
+	packet-uds.c
 	packet-udt.c
 	packet-uftp.c
 	packet-uftp4.c
@@ -1288,6 +1316,7 @@ set(DISSECTOR_SRC
 	packet-usb-dfu.c
 	packet-usb-hid.c
 	packet-usb-hub.c
+	packet-usb-i1d3.c
 	packet-usb-masstorage.c
 	packet-usb-video.c
 	packet-usb.c
@@ -1312,6 +1341,7 @@ set(DISSECTOR_SRC
 	packet-vrrp.c
 	packet-vrt.c
 	packet-vsip.c
+	packet-vsock.c
 	packet-vssmonitoring.c
 	packet-vtp.c
 	packet-vuze-dht.c
@@ -1395,64 +1425,61 @@ set(DISSECTOR_SRC
 set(DISSECTOR_SUPPORT_SRC
 	packet-dcerpc-nt.c
 	usb.c
-)
-source_group(dissector-support FILES ${DISSECTOR_SUPPORT_SRC})
-
-set(DISSECTOR_GENERATED_FILES
-	packet-ncp2222.c
+	snort-config.c
 	register.c
 )
-source_group(dissector-generated FILES ${DISSECTOR_GENERATED_FILES})
+source_group(dissector-support FILES ${DISSECTOR_SUPPORT_SRC})
 
 set(DISSECTOR_FILES
 	${DISSECTOR_SRC}
 	${PIDL_DISSECTOR_SRC}
 	${PIDL_DISSECTOR_AUTOGEN_SRC}
 	${ASN1_DISSECTOR_SRC}
-	${DIRTY_ASN1_DISSECTOR_SRC}
+	${NCP2222_DISSECTOR_SRC}
 	${CUSTOM_DISSECTOR_SRC}
 	${CUSTOM_DIRTY_ASN1_DISSECTOR_SRC}
 )
 source_group(dissectors FILES ${DISSECTOR_FILES})
 
+set(ALL_DISSECTOR_SRC
+	${DISSECTOR_FILES}
+	${CORBA_IDL_DISSECTOR_SRC}
+)
+
 register_dissector_files(register.c
 	dissectors
-	${DISSECTOR_FILES}
-	${CORBA_IDL_DISSECTOR_FILES}
-	packet-ncp2222.c
+	${ALL_DISSECTOR_SRC}
 )
 
 set(CLEAN_FILES
 	${DISSECTOR_SRC}
 	${PIDL_DISSECTOR_SRC}
-	${ASN1_DISSECTOR_SRC}
-	${CORBA_IDL_DISSECTOR_SRC}
+	${CLEAN_ASN1_DISSECTOR_SRC}
+	${CLEAN_CORBA_IDL_DISSECTOR_SRC}
+	${NCP2222_DISSECTOR_SRC}
 	${DISSECTOR_SUPPORT_SRC}
-	${DISSECTOR_GENERATED_FILES}
 )
 
-if(WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${CLEAN_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${CLEAN_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 add_library(dissectors OBJECT
 	${DISSECTOR_FILES}
 	${DISSECTOR_SUPPORT_SRC}
-	${DISSECTOR_GENERATED_FILES}
 )
 
 set_target_properties(dissectors PROPERTIES
 	FOLDER "Libs/epan/dissectors"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 )
 
 set(CHECKAPI_FILE_LIST "${CMAKE_CURRENT_BINARY_DIR}/files.txt")
 file(GLOB DISSECTOR_HEADERS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "*.h")
-file(WRITE "${CHECKAPI_FILE_LIST}" "${DISSECTOR_FILES}" "${CORBA_IDL_DISSECTOR_FILES}")
+file(WRITE "${CHECKAPI_FILE_LIST}" "${DISSECTOR_FILES}" ";" "${CORBA_IDL_DISSECTOR_SRC}")
 CHECKAPI(
 	NAME
 	  dissectors

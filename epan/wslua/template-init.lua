@@ -109,35 +109,35 @@ function package.prepend_path(name)
     package.path = name .. sep .. "?.lua;" .. package.path
 end
 
--- %WTAP_ENCAPS%
+%WTAP_ENCAPS%
 
--- %WTAP_FILETYPES%
+%WTAP_FILETYPES%
 
--- %WTAP_TSPRECS%
+%WTAP_TSPRECS%
 
--- %WTAP_COMMENTTYPES%
+%WTAP_COMMENTTYPES%
 
--- %FT_TYPES%
+%FT_TYPES%
 
 -- the following table is since 2.0
--- %FT_FRAME_TYPES%
+%FT_FRAME_TYPES%
 
 -- the following table is since 1.12
--- %WTAP_REC_TYPES%
+%WTAP_REC_TYPES%
 
 -- the following table is since 1.11.3
--- %WTAP_PRESENCE_FLAGS%
+%WTAP_PRESENCE_FLAGS%
 
--- %BASES%
+%BASES%
 
--- %ENCODINGS%
+%ENCODINGS%
 
--- %EXPERT%
+%EXPERT%
 
 -- the following table is since 1.11.3
--- %EXPERT_TABLE%
+%EXPERT_TABLE%
 
--- %MENU_GROUPS%
+%MENU_GROUPS%
 
 -- other useful constants
 GUI_ENABLED = gui_enabled()

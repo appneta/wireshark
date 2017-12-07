@@ -1021,11 +1021,6 @@ static struct _9p_hashval *_9p_hash_new_val(gsize len)
 	return val;
 }
 
-static void _9p_hash_init(void)
-{
-	_9p_hashtable = wmem_map_new(wmem_file_scope(), _9p_hash_hash, _9p_hash_equal);
-}
-
 static void _9p_hash_set(packet_info *pinfo, guint16 tag, guint32 fid, struct _9p_hashval *val)
 {
 	struct _9p_hashkey *key;
@@ -1527,7 +1522,7 @@ static int dissect_9P_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 
 		len = tvb_reported_length_remaining(tvb, offset);
 		reportedlen = ((gint)u32&0xffff) > len ? len : (gint)u32&0xffff;
-		next_tvb = tvb_new_subset(tvb, offset, len, reportedlen);
+		next_tvb = tvb_new_subset_length_caplen(tvb, offset, len, reportedlen);
 		call_data_dissector(next_tvb, pinfo, tree);
 		offset += len;
 
@@ -1548,7 +1543,7 @@ static int dissect_9P_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 		offset += 4;
 		len = tvb_reported_length_remaining(tvb, offset);
 		reportedlen = ((gint)u32&0xffff) > len ? len : (gint)u32&0xffff;
-		next_tvb = tvb_new_subset(tvb, offset, len, reportedlen);
+		next_tvb = tvb_new_subset_length_caplen(tvb, offset, len, reportedlen);
 		call_data_dissector(next_tvb, pinfo, tree);
 		offset += len;
 
@@ -2726,7 +2721,7 @@ void proto_register_9P(void)
 	expert_9P = expert_register_protocol(proto_9P);
 	expert_register_field_array(expert_9P, ei, array_length(ei));
 
-	register_init_routine(_9p_hash_init);
+	_9p_hashtable = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), _9p_hash_hash, _9p_hash_equal);
 }
 
 void proto_reg_handoff_9P(void)
@@ -2735,7 +2730,7 @@ void proto_reg_handoff_9P(void)
 
 	ninep_handle = create_dissector_handle(dissect_9P, proto_9P);
 
-	dissector_add_uint("tcp.port", NINEPORT, ninep_handle);
+	dissector_add_uint_with_preference("tcp.port", NINEPORT, ninep_handle);
 }
 
 

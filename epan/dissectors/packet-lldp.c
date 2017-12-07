@@ -12,6 +12,9 @@
  * Gregor Miernik <gregor.miernik@hytec.de>
  * Expansion of dissector for Hytec-OUI
  *
+ * August 2016
+ * Added Avaya IP Phone OUI, Uli Heilmeier <uh@heilmeier.eu>
+ *
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
@@ -38,7 +41,25 @@
 #include <epan/afn.h>
 #include <epan/addr_resolv.h>
 #include <epan/expert.h>
+#include <epan/prefs.h>
+#include <epan/wmem/wmem.h>
 #include "oui.h"
+
+
+#define DEFAULT_COLUMN_INFO            1
+#define PROFINET_SPECIAL_COLUMN_INFO   2
+
+/* Structure for general station information */
+typedef struct _profinet_lldp_column_info {
+	/* general information */
+	gchar    *chassis_id_mac;
+	gchar    *chassis_id_locally_assigned;
+	gchar    *port_id_locally_assigned;
+	gboolean is_nos_assigned;
+	gboolean is_port_id_assigned;
+}profinet_lldp_column_info;
+
+static gint column_info_selection = DEFAULT_COLUMN_INFO;
 
 void proto_register_lldp(void);
 void proto_reg_handoff_lldp(void);
@@ -355,6 +376,16 @@ static int hf_hytec_incoming_port_name = -1;
 static int hf_hytec_trace_identifier = -1;
 static int hf_hytec_invalid_object_data = -1;
 static int hf_hytec_unknown_identifier_content = -1;
+static int hf_avaya_subtype = -1;
+static int hf_avaya_poe = -1;
+static int hf_avaya_call_server = -1;
+static int hf_avaya_cna_server = -1;
+static int hf_avaya_file_server = -1;
+static int hf_avaya_dot1q = -1;
+static int hf_avaya_ipphone = -1;
+static int hf_avaya_ipphone_ip = -1;
+static int hf_avaya_ipphone_mask = -1;
+static int hf_avaya_ipphone_gateway = -1;
 static int hf_unknown_subtype = -1;
 static int hf_unknown_subtype_content = -1;
 
@@ -426,6 +457,7 @@ static gint ett_802_1qbg_capabilities_flags = -1;
 static gint ett_media_capabilities = -1;
 static gint ett_profinet_period = -1;
 static gint ett_cisco_fourwire_tlv = -1;
+static gint ett_avaya_ipphone_tlv = -1;
 static gint ett_org_spc_hytec_subtype_transceiver = -1;
 static gint ett_org_spc_hytec_subtype_trace = -1;
 static gint ett_org_spc_hytec_trace_request = -1;
@@ -561,9 +593,9 @@ static const value_string dcbx_ieee_8021az_sf[] = {
 	{ 2,	"Port over TCP/SCTP" },
 	{ 3,	"Port over UDP/DCCP" },
 	{ 4,	"Port over TCP/SCTP/UDP/DCCP" },
-	{ 5,    "Reserved" },
-	{ 6,    "Reserved" },
-	{ 7,    "Reserved" },
+	{ 5,	"Reserved" },
+	{ 6,	"Reserved" },
+	{ 7,	"Reserved" },
 	{ 0, NULL }
 };
 
@@ -572,8 +604,8 @@ static const value_string ieee_802_3_subtypes[] = {
 	{ 0x01,	"MAC/PHY Configuration/Status" },
 	{ 0x02,	"Power Via MDI" },
 	{ 0x03,	"Link Aggregation" },
-	{ 0x04, "Maximum Frame Size" },
-	{ 0x05, "EEE (Energy-Efficient Ethernet)" },
+	{ 0x04,	"Maximum Frame Size" },
+	{ 0x05,	"EEE (Energy-Efficient Ethernet)" },
 	{ 0, NULL }
 };
 
@@ -631,6 +663,24 @@ static const value_string profinet_subtypes[] = {
 /* Cisco Subtypes */
 static const value_string cisco_subtypes[] = {
 	{ 1, "Four-wire Power-via-MDI" },
+	{ 0, NULL }
+};
+
+/* Avaya Subtypes */
+static const value_string avaya_subtypes[] = {
+	{ 1, "PoE Conservation Level Support" },
+	{ 3, "Call Server IP Address" },
+	{ 4, "IP Phone Addresses" },
+	{ 5, "CNA Server IP Address" },
+	{ 6, "File Server" },
+	{ 7, "802.1Q Framing" },
+	{ 0, NULL }
+};
+
+/* Avaya 802.1Q Framing Subtypes */
+static const value_string avaya_dot1q_subtypes[] = {
+	{ 1, "Tagging" },
+	{ 2, "No Tagging" },
 	{ 0, NULL }
 };
 
@@ -1034,6 +1084,8 @@ static const value_string ieee_802_1qbg_subtypes[] = {
 	{ 0, NULL }
 };
 
+static const unit_name_string units_m = { " m", NULL };
+
 static void
 mdi_power_base(gchar *buf, guint32 value) {
 	g_snprintf(buf, ITEM_LABEL_LENGTH, "%u.%u. Watt", value/10, value%10);
@@ -1115,7 +1167,8 @@ longitude_base(gchar *buf, guint64 value) {
 
 /* Dissect Chassis Id TLV (Mandatory) */
 static gint32
-dissect_lldp_chassis_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 offset)
+dissect_lldp_chassis_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 offset,
+	profinet_lldp_column_info *pn_lldp_column_info)
 {
 	guint8 tlvsubType;
 	guint16 tempShort;
@@ -1177,7 +1230,7 @@ dissect_lldp_chassis_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gui
 
 		strPtr = tvb_ether_to_str(tvb, offset);
 		proto_tree_add_item(chassis_tree, hf_chassis_id_mac, tvb, offset, 6, ENC_NA);
-		col_append_fstr(pinfo->cinfo, COL_INFO, "NoS = %s ", strPtr);
+		pn_lldp_column_info->chassis_id_mac = wmem_strdup(wmem_packet_scope(), strPtr);
 		offset += (dataLen - 1);
 		break;
 	}
@@ -1249,7 +1302,7 @@ dissect_lldp_chassis_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gui
 			break;
 		case 7: /* Locally assigned */
 			strPtr = tvb_format_stringzpad(tvb, offset, (dataLen-1));
-			col_append_fstr(pinfo->cinfo, COL_INFO, "NoS = %s ", strPtr);
+			pn_lldp_column_info->chassis_id_locally_assigned = wmem_strdup(wmem_packet_scope(), strPtr);
 			break;
 		case 1: /* Chassis component */
 			strPtr = tvb_format_stringzpad(tvb, offset, (dataLen - 1));
@@ -1278,7 +1331,8 @@ dissect_lldp_chassis_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gui
 
 /* Dissect Port Id TLV (Mandatory) */
 static gint32
-dissect_lldp_port_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 offset)
+dissect_lldp_port_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 offset,
+	profinet_lldp_column_info *pn_lldp_column_info)
 {
 	guint8 tlvsubType;
 	guint16 tempShort;
@@ -1411,10 +1465,7 @@ dissect_lldp_port_id(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint3
 			break;
 		case 7: /* Locally assigned */
 			strPtr = tvb_format_stringzpad(tvb, offset, (dataLen-1));
-			col_append_fstr(pinfo->cinfo, COL_INFO, "Port Id = %s " ,strPtr);
-			/* Create fence in the column that prevents subsequent 'col_...'
-			calls from clearing the data currently in that column */
-			col_set_fence(pinfo->cinfo, COL_INFO);
+			pn_lldp_column_info->port_id_locally_assigned = wmem_strdup(wmem_packet_scope(), strPtr);
 			break;
 		default:
 			strPtr = "Reserved";
@@ -1451,8 +1502,10 @@ dissect_lldp_time_to_live(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, g
 	/* Get tlv length and seconds field */
 	dataLen = TLV_INFO_LEN(tempShort);
 	tempShort = tvb_get_ntohs(tvb, (offset+2));
-
-	col_append_fstr(pinfo->cinfo, COL_INFO, "TTL = %u ", tempShort);
+	if (column_info_selection == DEFAULT_COLUMN_INFO)
+	{
+		col_append_fstr(pinfo->cinfo, COL_INFO, "TTL = %u ", tempShort);
+	}
 
 	/* Set port tree */
 	time_to_live_tree = proto_tree_add_subtree_format(tree, tvb, offset, (dataLen + 2),
@@ -1553,11 +1606,17 @@ dissect_lldp_system_name(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree
 	if (tlvsubType == SYSTEM_NAME_TLV_TYPE) {
 		system_subtree = proto_tree_add_subtree_format(tree, tvb, offset, (dataLen + 2),
 										ett_system_name, NULL, "System Name = %s", strPtr);
-		col_append_fstr(pinfo->cinfo, COL_INFO, "System Name = %s ", strPtr);
+		if (column_info_selection == DEFAULT_COLUMN_INFO)
+		{
+			col_append_fstr(pinfo->cinfo, COL_INFO, "System Name = %s ", strPtr);
+		}
 	} else {
 		system_subtree = proto_tree_add_subtree_format(tree, tvb, offset, (dataLen + 2),
 										ett_system_desc, NULL, "System Description = %s", strPtr);
-		col_append_fstr(pinfo->cinfo, COL_INFO, "System Description = %s ", strPtr);
+		if (column_info_selection == DEFAULT_COLUMN_INFO)
+		{
+			col_append_fstr(pinfo->cinfo, COL_INFO, "System Description = %s ", strPtr);
+		}
 	}
 
 	proto_tree_add_item(system_subtree, hf_lldp_tlv_type, tvb, offset, 2, ENC_BIG_ENDIAN);
@@ -2942,10 +3001,79 @@ dissect_profinet_period(tvbuff_t *tvb, proto_tree *tree, guint32 offset, const g
 	return offset;
 }
 
+static void
+select_source_of_name_of_station
+(packet_info *pinfo _U_, profinet_lldp_column_info *pn_lldp_column_info)
+{
+	if (pn_lldp_column_info->chassis_id_locally_assigned != NULL)
+	{
+		pn_lldp_column_info->is_nos_assigned = TRUE;
+		col_append_fstr(pinfo->cinfo, COL_INFO, "NoS = %s ", pn_lldp_column_info->chassis_id_locally_assigned);
+	}
+	else
+	{
+		if (pn_lldp_column_info->chassis_id_mac != NULL)
+		{
+			pn_lldp_column_info->is_nos_assigned = TRUE;
+			col_append_fstr(pinfo->cinfo, COL_INFO, "NoS = %s ", pn_lldp_column_info->chassis_id_mac);
+		}
+	}
+}
+
+static void
+set_name_of_station_for_profinet_specialized_column_info
+(packet_info *pinfo _U_, profinet_lldp_column_info *pn_lldp_column_info)
+{
+	const char *delimForProfinetv23 = ".";
+	char* foundDot = NULL;
+	gchar* tokenPortId = NULL;
+	gchar* tokenNameOfStation = NULL;
+	gchar* lldpPortIdCombinedWithNameOfStation = NULL;
+
+	if (pn_lldp_column_info->is_nos_assigned != TRUE)
+	{
+		if (pn_lldp_column_info->port_id_locally_assigned != NULL)
+		{
+			foundDot = strstr(pn_lldp_column_info->port_id_locally_assigned, delimForProfinetv23);
+			if (foundDot != NULL)
+			{
+				pn_lldp_column_info->is_nos_assigned = TRUE;
+				pn_lldp_column_info->is_port_id_assigned = TRUE;
+				lldpPortIdCombinedWithNameOfStation = wmem_strdup(wmem_packet_scope(), pn_lldp_column_info->port_id_locally_assigned);
+				tokenPortId = strtok(lldpPortIdCombinedWithNameOfStation, delimForProfinetv23);
+				tokenNameOfStation = strtok(NULL, delimForProfinetv23);
+				col_append_fstr(pinfo->cinfo, COL_INFO, "NoS = %s ", tokenNameOfStation);
+				col_append_fstr(pinfo->cinfo, COL_INFO, "Port Id = %s ", tokenPortId);
+			}
+			else
+			{
+				select_source_of_name_of_station(pinfo, pn_lldp_column_info);
+			}
+		}
+		else
+		{
+			select_source_of_name_of_station(pinfo, pn_lldp_column_info);
+		}
+	}
+}
+
+static void
+set_port_id_for_profinet_specialized_column_info
+(packet_info *pinfo _U_, profinet_lldp_column_info *pn_lldp_column_info)
+{
+	if (pn_lldp_column_info->is_port_id_assigned != TRUE)
+	{
+        if (pn_lldp_column_info->port_id_locally_assigned != NULL)
+		{
+			pn_lldp_column_info->is_port_id_assigned = TRUE;
+			col_append_fstr(pinfo->cinfo, COL_INFO, "Port Id = %s ", pn_lldp_column_info->port_id_locally_assigned);
+		}
+	}
+}
 
 /* Dissect PROFINET TLVs */
 static void
-dissect_profinet_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint32 offset)
+dissect_profinet_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint32 offset, profinet_lldp_column_info *pn_lldp_column_info)
 {
 	guint8 subType;
 	proto_item	*tf = NULL;
@@ -2962,6 +3090,12 @@ dissect_profinet_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, gu
 	subType = tvb_get_guint8(tvb, offset);
 	proto_tree_add_uint(tree, hf_profinet_tlv_subtype, tvb, offset, 1, subType);
 	offset++;
+
+	if (column_info_selection == PROFINET_SPECIAL_COLUMN_INFO)
+	{
+		set_name_of_station_for_profinet_specialized_column_info(pinfo, pn_lldp_column_info);
+		set_port_id_for_profinet_specialized_column_info(pinfo, pn_lldp_column_info);
+	}
 
 	switch (subType)
 	{
@@ -3021,8 +3155,6 @@ dissect_profinet_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, gu
 		proto_tree_add_uint(tree, hf_profinet_class3_port_status_PreambleLength, tvb, offset, 2, class3_PortStatus);
 
 		class3_PortStatus = class3_PortStatus & 0x7;
-		/* When Profinet tlv is used, delete previous column info which is consist of "ttl and system description" */
-		col_clear(pinfo->cinfo, COL_INFO);
 		col_append_fstr(pinfo->cinfo, COL_INFO, "RTClass3 Port Status = %s", val_to_str(class3_PortStatus, profinet_port3_status_vals, "Unknown %d"));
 		/*offset+=2;*/
 		break;
@@ -3115,7 +3247,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 	gint32 bit_offset, msg_len, expected_data_length, maximum_data_length, temp_gint32;
 	proto_tree *hytec_data = NULL;
 	proto_item *tf = NULL;
-	proto_item *tlm, *group_proto_item, *identifier_proto_item;
+	proto_item *group_proto_item, *identifier_proto_item;
 	float float_value = 0.0f;
 
 	subtype = tvb_get_guint8(tvb, offset);
@@ -3169,8 +3301,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 			case HYTEC_TBD__SINGLE_MODE:
 				if(msg_len == expected_data_length)
 				{
-					tlm = proto_tree_add_item(tree, hf_hytec_single_mode, tvb, offset, msg_len, ENC_BIG_ENDIAN);
-					proto_item_append_text(tlm, " m");
+					proto_tree_add_item(tree, hf_hytec_single_mode, tvb, offset, msg_len, ENC_BIG_ENDIAN);
 				}
 				else
 				{ /* unexpected length */
@@ -3181,8 +3312,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 			case HYTEC_TBD__MULTI_MODE_50:
 				if(msg_len == expected_data_length)
 				{
-					tlm = proto_tree_add_item(tree, hf_hytec_multi_mode_50, tvb, offset, msg_len, ENC_BIG_ENDIAN);
-					proto_item_append_text(tlm, " m");
+					proto_tree_add_item(tree, hf_hytec_multi_mode_50, tvb, offset, msg_len, ENC_BIG_ENDIAN);
 				}
 				else
 				{ /* unexpected length */
@@ -3193,8 +3323,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 			case HYTEC_TBD__MULTI_MODE_62_5:
 				if(msg_len == expected_data_length)
 				{
-					tlm = proto_tree_add_item(tree, hf_hytec_multi_mode_62_5, tvb, offset, msg_len, ENC_BIG_ENDIAN);
-					proto_item_append_text(tlm, " m");
+					proto_tree_add_item(tree, hf_hytec_multi_mode_62_5, tvb, offset, msg_len, ENC_BIG_ENDIAN);
 				}
 				else
 				{ /* unexpected length */
@@ -3216,8 +3345,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 				{
 					temp_gint32 = (gint32) tvb_get_ntohl(tvb, offset);
 					float_value = (float) 0.1 * (float) temp_gint32;
-					tlm = proto_tree_add_float(tree, hf_hytec_tx_current_output_power, tvb, offset, msg_len, float_value);
-					proto_item_append_text(tlm, " uW");
+					proto_tree_add_float(tree, hf_hytec_tx_current_output_power, tvb, offset, msg_len, float_value);
 				}
 				else
 				{ /* unexpected length */
@@ -3230,8 +3358,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 				{
 					temp_gint32 = (gint32) tvb_get_ntohl(tvb, offset);
 					float_value = (float) 0.1 * (float) temp_gint32;
-					tlm = proto_tree_add_float(tree, hf_hytec_rx_current_input_power, tvb, offset, msg_len, float_value);
-					proto_item_append_text(tlm, " uW");
+					proto_tree_add_float(tree, hf_hytec_rx_current_input_power, tvb, offset, msg_len, float_value);
 				}
 				else
 				{ /* unexpected length */
@@ -3246,8 +3373,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 					if(temp_gint32 < 0) float_value = (float)-1.0 * (float)((~temp_gint32) >> 8);
 					else float_value = (float) (temp_gint32 >> 8);
 					float_value += (float)(temp_gint32 & 0xFF) * (float)0.00390625; /* 0.00390625 == 0.5 ^ 8 */
-					tlm = proto_tree_add_float(tree, hf_hytec_rx_input_snr, tvb, offset, msg_len, float_value);
-					proto_item_append_text(tlm, " dB");
+					proto_tree_add_float(tree, hf_hytec_rx_input_snr, tvb, offset, msg_len, float_value);
 				}
 				else
 				{ /* unexpected length */
@@ -3262,8 +3388,7 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 					if(temp_gint32 < 0) float_value = (float)-1.0 * (float)((~temp_gint32) >> 8);
 					else float_value = (float) (temp_gint32 >> 8);
 					float_value += (float)(temp_gint32 & 0xFF) * (float)0.00390625; /* 0.5 ^ 8 */
-					tlm = proto_tree_add_float(tree, hf_hytec_lineloss, tvb, offset, msg_len, float_value);
-					proto_item_append_text(tlm, " dB");
+					proto_tree_add_float(tree, hf_hytec_lineloss, tvb, offset, msg_len, float_value);
 				}
 				else
 				{ /* unexpected length */
@@ -3410,9 +3535,67 @@ dissect_hytec_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 	proto_item_append_text(identifier_proto_item, ")");
 }
 
+/* Dissect Avaya OUI TLVs */
+static void
+dissect_avaya_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint32 offset)
+{
+	guint8 subType;
+
+	proto_tree *avaya_data = NULL;
+	proto_item *tf = NULL;
+
+	/* Get subtype */
+	subType = tvb_get_guint8(tvb, offset);
+
+	proto_tree_add_item(tree, hf_avaya_subtype, tvb, offset, 1, ENC_BIG_ENDIAN);
+
+	offset++;
+
+	switch (subType)
+	{
+	case 0x01:	/* PoE Conservation Level Support */
+	{
+		proto_tree_add_item(tree, hf_avaya_poe, tvb, offset, 7, ENC_NA);
+		break;
+	}
+	case 0x03:	/* Call Server IP Address */
+	{
+		proto_tree_add_item(tree, hf_avaya_call_server, tvb, offset, 4, ENC_NA);
+		break;
+	}
+	case 0x04:	/* IP Phone Addresses */
+	{
+		tf = proto_tree_add_item(tree, hf_avaya_ipphone, tvb, offset, 12, ENC_NA);
+		avaya_data = proto_item_add_subtree(tf, ett_avaya_ipphone_tlv);
+		proto_tree_add_item(avaya_data, hf_avaya_ipphone_ip, tvb, offset, 4, ENC_NA);
+		proto_tree_add_item(avaya_data, hf_avaya_ipphone_mask, tvb, offset+4, 4, ENC_NA);
+		proto_tree_add_item(avaya_data, hf_avaya_ipphone_gateway, tvb, offset+8, 4, ENC_NA);
+		break;
+	}
+	case 0x05:	/* CNA Server IP Address */
+	{
+		proto_tree_add_item(tree, hf_avaya_cna_server, tvb, offset, 4, ENC_NA);
+		break;
+	}
+	case 0x06:	/* File Server */
+	{
+		proto_tree_add_item(tree, hf_avaya_file_server, tvb, offset, 4, ENC_NA);
+		break;
+	}
+	case 0x07:	/* 802.1Q Framing */
+	{
+		proto_tree_add_item(tree, hf_avaya_dot1q, tvb, offset, 1, ENC_NA);
+		break;
+	}
+	default:
+		proto_tree_add_item(tree, hf_unknown_subtype_content, tvb, offset, -1, ENC_NA);
+		break;
+	}
+}
+
 /* Dissect Organizational Specific TLV */
 static gint32
-dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 offset)
+dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 offset, profinet_lldp_column_info *pn_lldp_column_info)
 {
 	guint16 dataLen;
 	guint16 tempShort;
@@ -3560,6 +3743,9 @@ dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tre
 			break;
 		}
 		break;
+	case OUI_AVAYA:
+		subTypeStr = val_to_str(subType, avaya_subtypes, "Unknown subtype (0x%x)");
+		break;
 	default:
 		subTypeStr = wmem_strdup_printf(wmem_packet_scope(), "Unknown (%d)",subType);
 		break;
@@ -3594,7 +3780,7 @@ dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tre
 		dissect_media_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
 		break;
 	case OUI_PROFINET:
-		dissect_profinet_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
+		dissect_profinet_tlv(tvb, pinfo, org_tlv_tree, (offset + 5), pn_lldp_column_info);
 		break;
 	case OUI_CISCO_2:
 		dissect_cisco_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
@@ -3604,6 +3790,9 @@ dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tre
 		break;
 	case OUI_HYTEC_GER:
 		dissect_hytec_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
+		break;
+	case OUI_AVAYA:
+		dissect_avaya_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
 		break;
 	default:
 		dissect_oui_default_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
@@ -3652,7 +3841,7 @@ dissect_lldp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 	guint16 tempShort;
 	guint8 tlvType;
 	gboolean reachedEnd = FALSE;
-
+	profinet_lldp_column_info *pn_lldp_column_info = NULL;
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "LLDP");
 
 	/* Clear the information column on summary display */
@@ -3665,7 +3854,10 @@ dissect_lldp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 	tempShort = tvb_get_ntohs(tvb, offset);
 	new_tvb = tvb_new_subset_length(tvb, offset, TLV_INFO_LEN(tempShort)+2);
 
-	rtnValue = dissect_lldp_chassis_id(new_tvb, pinfo, lldp_tree, 0);
+	/* allocation */
+	pn_lldp_column_info = wmem_new0(wmem_packet_scope(), profinet_lldp_column_info);
+
+	rtnValue = dissect_lldp_chassis_id(new_tvb, pinfo, lldp_tree, 0, pn_lldp_column_info);
 	if (rtnValue < 0)
 	{
 		col_set_str(pinfo->cinfo, COL_INFO, "Invalid Chassis ID TLV");
@@ -3678,7 +3870,7 @@ dissect_lldp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 	tempShort = tvb_get_ntohs(tvb, offset);
 	new_tvb = tvb_new_subset_length(tvb, offset, TLV_INFO_LEN(tempShort)+2);
 
-	rtnValue = dissect_lldp_port_id(new_tvb, pinfo, lldp_tree, 0);
+	rtnValue = dissect_lldp_port_id(new_tvb, pinfo, lldp_tree, 0, pn_lldp_column_info);
 	if (rtnValue < 0)
 	{
 		col_set_str(pinfo->cinfo, COL_INFO, "Invalid Port ID TLV");
@@ -3711,19 +3903,28 @@ dissect_lldp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 		switch (tlvType)
 		{
 		case CHASSIS_ID_TLV_TYPE:
-			dissect_lldp_chassis_id(new_tvb, pinfo, lldp_tree, 0);
+			dissect_lldp_chassis_id(new_tvb, pinfo, lldp_tree, 0, pn_lldp_column_info);
 			rtnValue = -1;	/* Duplicate chassis id tlv */
-			col_set_str(pinfo->cinfo, COL_INFO, "Duplicate Chassis ID TLV");
+			if (column_info_selection == DEFAULT_COLUMN_INFO)
+			{
+				col_set_str(pinfo->cinfo, COL_INFO, "Duplicate Chassis ID TLV");
+			}
 			break;
 		case PORT_ID_TLV_TYPE:
-			dissect_lldp_port_id(new_tvb, pinfo, lldp_tree, 0);
+			dissect_lldp_port_id(new_tvb, pinfo, lldp_tree, 0, pn_lldp_column_info);
 			rtnValue = -1;	/* Duplicate port id tlv */
-			col_set_str(pinfo->cinfo, COL_INFO, "Duplicate Port ID TLV");
+			if (column_info_selection == DEFAULT_COLUMN_INFO)
+			{
+				col_set_str(pinfo->cinfo, COL_INFO, "Duplicate Port ID TLV");
+			}
 			break;
 		case TIME_TO_LIVE_TLV_TYPE:
 			dissect_lldp_time_to_live(new_tvb, pinfo, lldp_tree, 0);
 			rtnValue = -1;	/* Duplicate time-to-live tlv */
-			col_set_str(pinfo->cinfo, COL_INFO, "Duplicate Time-To-Live TLV");
+			if (column_info_selection == DEFAULT_COLUMN_INFO)
+			{
+				col_set_str(pinfo->cinfo, COL_INFO, "Duplicate Time-To-Live TLV");
+			}
 			break;
 		case END_OF_LLDPDU_TLV_TYPE:
 			rtnValue = dissect_lldp_end_of_lldpdu(new_tvb, pinfo, lldp_tree, 0);
@@ -3742,7 +3943,7 @@ dissect_lldp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 			rtnValue = dissect_lldp_management_address(new_tvb, pinfo, lldp_tree, 0);
 			break;
 		case ORGANIZATION_SPECIFIC_TLV_TYPE:
-			rtnValue = dissect_organizational_specific_tlv(new_tvb, pinfo, lldp_tree, 0);
+			rtnValue = dissect_organizational_specific_tlv(new_tvb, pinfo, lldp_tree, 0, pn_lldp_column_info);
 			break;
 		default:
 			rtnValue = dissect_lldp_unknown_tlv(new_tvb, pinfo, lldp_tree, 0);
@@ -3762,6 +3963,7 @@ dissect_lldp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 void
 proto_register_lldp(void)
 {
+	module_t *lldp_module;
 	expert_module_t *expert_lldp;
 
 	/* Setup list of header fields */
@@ -4904,32 +5106,32 @@ proto_register_lldp(void)
 			NULL, 0x0, NULL, HFILL }
 		},
 		{ &hf_hytec_single_mode,
-			{ HYTEC_TBD__SINGLE_MODE_STR, "lldp.hytec.single_mode", FT_UINT32, BASE_DEC,
-			NULL, 0x0, NULL, HFILL}
+			{ HYTEC_TBD__SINGLE_MODE_STR, "lldp.hytec.single_mode", FT_UINT32, BASE_DEC|BASE_UNIT_STRING,
+			&units_m, 0x0, NULL, HFILL}
 		},
 		{ &hf_hytec_multi_mode_50,
-			{ HYTEC_TBD__MULTI_MODE_50_STR, "lldp.hytec.multi_mode_50", FT_UINT32, BASE_DEC,
-			NULL, 0x0, NULL, HFILL}
+			{ HYTEC_TBD__MULTI_MODE_50_STR, "lldp.hytec.multi_mode_50", FT_UINT32, BASE_DEC|BASE_UNIT_STRING,
+			&units_m, 0x0, NULL, HFILL}
 		},
 		{ &hf_hytec_multi_mode_62_5,
-			{ HYTEC_TBD__MULTI_MODE_62_5_STR, "lldp.hytec.multi_mode_62_5", FT_UINT32, BASE_DEC,
-			NULL, 0x0, NULL, HFILL}
+			{ HYTEC_TBD__MULTI_MODE_62_5_STR, "lldp.hytec.multi_mode_62_5", FT_UINT32, BASE_DEC|BASE_UNIT_STRING,
+			&units_m, 0x0, NULL, HFILL}
 		},
 		{ &hf_hytec_tx_current_output_power,
-			{ HYTEC_MD__TX_CURRENT_OUTPUT_POWER_STR, "lldp.hytec.tx_current_output_power", FT_FLOAT, BASE_NONE,
-			NULL, 0x0, NULL, HFILL}
+			{ HYTEC_MD__TX_CURRENT_OUTPUT_POWER_STR, "lldp.hytec.tx_current_output_power", FT_FLOAT, BASE_NONE|BASE_UNIT_STRING,
+			&units_microwatts, 0x0, NULL, HFILL}
 		},
 		{ &hf_hytec_rx_current_input_power,
-			{ HYTEC_MD__RX_CURRENT_INPUT_POWER_STR, "lldp.hytec.rx_current_input_power", FT_FLOAT, BASE_NONE,
-			NULL, 0x0, NULL, HFILL}
+			{ HYTEC_MD__RX_CURRENT_INPUT_POWER_STR, "lldp.hytec.rx_current_input_power", FT_FLOAT, BASE_NONE|BASE_UNIT_STRING,
+			&units_microwatts, 0x0, NULL, HFILL}
 		},
 		{ &hf_hytec_rx_input_snr,
-			{ HYTEC_MD__RX_INPUT_SNR_STR, "lldp.hytec.rx_input_snr", FT_FLOAT, BASE_NONE,
-			NULL, 0x0, NULL, HFILL}
+			{ HYTEC_MD__RX_INPUT_SNR_STR, "lldp.hytec.rx_input_snr", FT_FLOAT, BASE_NONE|BASE_UNIT_STRING,
+			&units_decibels, 0x0, NULL, HFILL}
 		},
 		{ &hf_hytec_lineloss,
-			{ HYTEC_MD__LINELOSS_STR, "lldp.hytec.lineloss", FT_FLOAT, BASE_NONE,
-			NULL, 0x0, NULL, HFILL}
+			{ HYTEC_MD__LINELOSS_STR, "lldp.hytec.lineloss", FT_FLOAT, BASE_NONE|BASE_UNIT_STRING,
+			&units_decibels, 0x0, NULL, HFILL}
 		},
 		{ &hf_hytec_mac_trace_request,
 			{ HYTEC_MC__MAC_TRACE_REQUEST_STR, "lldp.hytec.mac_trace_request", FT_NONE, BASE_NONE,
@@ -4993,6 +5195,46 @@ proto_register_lldp(void)
 		},
 		{ &hf_hytec_unknown_identifier_content,
 			{ "Unknown Identifier Content","lldp.hytec.unknown_identifier_content", FT_BYTES, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_subtype,
+			{ "Avaya Subtype", "lldp.avaya.subtype", FT_UINT8, BASE_HEX,
+			VALS(avaya_subtypes), 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_poe,
+			{ "PoE Conservation Level Support", "lldp.avaya.poe", FT_BYTES, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_call_server,
+			{ "Call Server IP Address", "lldp.avaya.callserver", FT_IPv4, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_cna_server,
+			{ "CNA Server IP Address", "lldp.avaya.cnaserver", FT_IPv4, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_file_server,
+			{ "File Server", "lldp.avaya.fileserver", FT_IPv4, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_dot1q,
+			{ "802.1Q Framing", "lldp.avaya.dot1q", FT_UINT8, BASE_HEX,
+			VALS(avaya_dot1q_subtypes), 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_ipphone,
+			{ "IP Phone Addresses", "lldp.avaya.ipphone", FT_BYTES, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_ipphone_ip,
+			{ "IP Address", "lldp.avaya.ipphone.ip", FT_IPv4, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_ipphone_mask,
+			{ "Subnet Mask", "lldp.avaya.ipphone.mask", FT_IPv4, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_avaya_ipphone_gateway,
+			{ "Gateway IP", "lldp.avaya.ipphone.gateway", FT_IPv4, BASE_NONE,
 			NULL, 0x0, NULL, HFILL }
 		},
 		{ &hf_unknown_subtype,
@@ -5071,6 +5313,7 @@ proto_register_lldp(void)
 		&ett_media_capabilities,
 		&ett_profinet_period,
 		&ett_cisco_fourwire_tlv,
+		&ett_avaya_ipphone_tlv,
 		&ett_org_spc_hytec_subtype_transceiver,
 		&ett_org_spc_hytec_subtype_trace,
 		&ett_org_spc_hytec_trace_request,
@@ -5083,8 +5326,25 @@ proto_register_lldp(void)
 		{ &ei_lldp_bad_type, { "lldp.bad_type", PI_MALFORMED, PI_WARN, "Incorrect type", EXPFILL }},
 	};
 
+	static const enum_val_t column_info_options[] = {
+		{ "default_column_info", "Default Column Info", DEFAULT_COLUMN_INFO },
+		{ "profinet_special_column_info", "PROFINET Special Column Info", PROFINET_SPECIAL_COLUMN_INFO },
+		{ NULL, NULL, 0 }
+	};
+
 	/* Register the protocol name and description */
 	proto_lldp = proto_register_protocol("Link Layer Discovery Protocol", "LLDP", "lldp");
+
+	/* Register preferences */
+	lldp_module = prefs_register_protocol(proto_lldp, NULL);
+
+	prefs_register_enum_preference(lldp_module,
+		"column_info_selection",
+		"Select Column Info Display Style",
+		"Which Information will be showed at Column Information is decided by the selection",
+		&column_info_selection,
+		column_info_options,
+		FALSE);
 
 	/* Required function calls to register the header fields and subtrees used */
 	proto_register_field_array(proto_lldp, hf, array_length(hf));

@@ -752,12 +752,14 @@ static expert_field ei_gsm_a_dtap_end_mark_unexpected = EI_INIT;
 static expert_field ei_gsm_a_dtap_extraneous_data = EI_INIT;
 static expert_field ei_gsm_a_dtap_missing_mandatory_element = EI_INIT;
 static expert_field ei_gsm_a_dtap_coding_scheme = EI_INIT;
+static expert_field ei_gsm_a_dtap_ti_not_valid = EI_INIT;
 
 
 static dissector_table_t u2u_dissector_table;
 
 static dissector_handle_t gsm_map_handle;
 static dissector_handle_t rp_handle;
+static dissector_handle_t dtap_handle;
 
 static proto_tree *g_tree;
 
@@ -2706,8 +2708,8 @@ de_keypad_facility(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 
 
     proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, curr_offset<<3, 1, ENC_BIG_ENDIAN);
 
-    item = proto_tree_add_uint_format_value(tree, hf_gsm_a_dtap_keypad_information, tvb, curr_offset, 1,
-        keypad_char, "%c", keypad_char);
+    item = proto_tree_add_uint(tree, hf_gsm_a_dtap_keypad_information, tvb, curr_offset, 1,
+        keypad_char);
 
     if (((keypad_char < '0') || (keypad_char > '9')) &&
         ((keypad_char < 'A') || (keypad_char > 'D')) &&
@@ -3636,7 +3638,6 @@ de_tp_ue_test_loop_mode(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_,
     guint32 curr_offset;
     guchar  oct;
     guint8  lb_setup_length,i,j;
-    guint16 value;
     proto_tree* subtree;
 
     curr_offset = offset;
@@ -3654,8 +3655,7 @@ de_tp_ue_test_loop_mode(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_,
         for (i=0,j=0; (i<lb_setup_length) && (j<4); i+=3,j++)
         {
             subtree = proto_tree_add_subtree_format(tree, tvb, curr_offset, 3, ett_ue_test_loop_mode, NULL, "LB setup RB IE: %d",j+1);
-            value = tvb_get_ntohs(tvb, curr_offset);
-            proto_tree_add_uint_format_value(subtree, hf_gsm_a_dtap_uplink_rlc_sdu_size, tvb, curr_offset, 2, value, "%d bits", value);
+            proto_tree_add_item(subtree, hf_gsm_a_dtap_uplink_rlc_sdu_size, tvb, curr_offset, 2, ENC_BIG_ENDIAN);
             curr_offset += 2;
             proto_tree_add_item(subtree, hf_gsm_a_dtap_radio_bearer, tvb, curr_offset, 1, ENC_NA);
             curr_offset+= 1;
@@ -4823,8 +4823,6 @@ dtap_mm_auth_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, guint3
     curr_offset++;
     curr_len--;
 
-    if ((signed)curr_len <= 0) return;
-
     ELEM_MAND_V(GSM_A_PDU_TYPE_DTAP, DE_AUTH_PARAM_RAND, " - UMTS challenge or GSM challenge");
 
     ELEM_OPT_TLV(0x20, GSM_A_PDU_TYPE_DTAP, DE_AUTH_PARAM_AUTN, NULL);
@@ -4921,8 +4919,6 @@ dtap_mm_cm_reestab_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, 
 
     curr_offset++;
     curr_len--;
-
-    if ((signed)curr_len <= 0) return;
 
     ELEM_MAND_LV(GSM_A_PDU_TYPE_COMMON, DE_MS_CM_2, NULL);
 
@@ -5068,8 +5064,6 @@ dtap_mm_cm_srvc_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, gui
 
     curr_offset++;
     curr_len--;
-
-    if ((signed)curr_len <= 0) return;
 
     ELEM_MAND_LV(GSM_A_PDU_TYPE_COMMON, DE_MS_CM_2, NULL);
 
@@ -5306,8 +5300,6 @@ dtap_mm_loc_upd_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, gui
     curr_offset++;
     curr_len--;
 
-    if ((signed)curr_len <= 0) return;
-
     ELEM_MAND_V(GSM_A_PDU_TYPE_COMMON, DE_LAI, NULL);
 
     ELEM_MAND_V(GSM_A_PDU_TYPE_COMMON, DE_MS_CM_1, NULL);
@@ -5539,8 +5531,6 @@ dtap_cc_congestion_control(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _
 
     curr_offset++;
     curr_len--;
-
-    if ((signed)curr_len <= 0) return;
 
     ELEM_OPT_TLV(0x08, GSM_A_PDU_TYPE_DTAP, DE_CAUSE, NULL);
 
@@ -6746,6 +6736,10 @@ dissect_dtap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 
     if ((((oct_1 & DTAP_TI_MASK) >> 4) & DTAP_TIE_PRES_MASK) == DTAP_TIE_PRES_MASK)
     {
+        if (len == 2) {
+            proto_tree_add_expert(tree, pinfo, &ei_gsm_a_dtap_ti_not_valid, tvb, offset, 1);
+            return len;
+        }
         /*
          * eventhough we don't know if a TI should be in the message yet
          * we rely on the TI/SKIP indicator to be 0 to avoid taking this
@@ -6980,14 +6974,15 @@ dissect_dtap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 
     if (msg_str == NULL) return len;
 
-    if (offset >= len) return len;
-
     /*
      * decode elements
      */
     if (dtap_msg_fcn == NULL)
     {
-        proto_tree_add_item(dtap_tree, hf_gsm_a_dtap_message_elements, tvb, offset, len - offset, ENC_NA);
+        if (offset < len)
+        {
+            proto_tree_add_item(dtap_tree, hf_gsm_a_dtap_message_elements, tvb, offset, len - offset, ENC_NA);
+        }
     }
     else
     {
@@ -8026,7 +8021,7 @@ proto_register_gsm_a_dtap(void)
         },
         { &hf_gsm_a_dtap_keypad_information,
           { "Keypad information", "gsm_a.dtap.keypad_information",
-            FT_UINT8, BASE_DEC, NULL, 0x7f,
+            FT_CHAR, BASE_HEX, NULL, 0x7f,
             NULL, HFILL }
         },
         { &hf_gsm_a_dtap_repeat_indicator,
@@ -8186,7 +8181,7 @@ proto_register_gsm_a_dtap(void)
         },
         { &hf_gsm_a_dtap_uplink_rlc_sdu_size,
           { "Uplink RLC SDU size", "gsm_a_dtap.uplink_rlc_sdu_size",
-          FT_UINT16, BASE_DEC, NULL, 0x0,
+          FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_bit_bits, 0x0,
           NULL, HFILL }
         },
         { &hf_gsm_a_dtap_radio_bearer,
@@ -8228,7 +8223,8 @@ proto_register_gsm_a_dtap(void)
         { &ei_gsm_a_dtap_keypad_info_not_dtmf_digit, { "gsm_a.dtap.keypad_info_not_dtmf_digit", PI_MALFORMED, PI_WARN, "Keypad information contains character that is not a DTMF digit", EXPFILL }},
         { &ei_gsm_a_dtap_extraneous_data, { "gsm_a.dtap.extraneous_data", PI_PROTOCOL, PI_NOTE, "Extraneous Data, dissector bug or later version spec(report to wireshark.org)", EXPFILL }},
         { &ei_gsm_a_dtap_missing_mandatory_element, { "gsm_a.dtap.missing_mandatory_element", PI_PROTOCOL, PI_WARN, "Missing Mandatory element, rest of dissection is suspect", EXPFILL }},
-        { &ei_gsm_a_dtap_coding_scheme, { "gsm_a.dtap.coding_scheme.unknown", PI_PROTOCOL, PI_WARN, "Text string encoded according to an unknown Coding Scheme", EXPFILL }},
+        { &ei_gsm_a_dtap_coding_scheme, { "gsm_a.dtap.coding_scheme.unknown", PI_PROTOCOL, PI_WARN, "Text string encoded according to an unknown Coding Scheme", EXPFILL } },
+        { &ei_gsm_a_dtap_ti_not_valid,{ "gsm_a.dtap.ti_not_valid", PI_PROTOCOL, PI_ERROR, "If TI bits = 7, length must be > 2", EXPFILL } },
     };
 
     expert_module_t* expert_a_dtap;
@@ -8307,7 +8303,7 @@ proto_register_gsm_a_dtap(void)
 
 
     /* subdissector code */
-    register_dissector("gsm_a_dtap", dissect_dtap, proto_a_dtap);
+    dtap_handle = register_dissector("gsm_a_dtap", dissect_dtap, proto_a_dtap);
     u2u_dissector_table = register_dissector_table("gsm_a.dtap.u2u_prot_discr", "GSM User to User Signalling",
                                                   proto_a_dtap, FT_UINT8, BASE_DEC);
 }
@@ -8315,9 +8311,6 @@ proto_register_gsm_a_dtap(void)
 void
 proto_reg_handoff_gsm_a_dtap(void)
 {
-    dissector_handle_t dtap_handle;
-
-    dtap_handle = find_dissector("gsm_a_dtap");
     dissector_add_uint("bssap.pdu_type", BSSAP_PDU_TYPE_DTAP, dtap_handle);
     dissector_add_uint("ranap.nas_pdu", BSSAP_PDU_TYPE_DTAP, dtap_handle);
     dissector_add_uint("llcgprs.sapi", 1 , dtap_handle); /* GPRS Mobility Management */

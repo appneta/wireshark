@@ -783,7 +783,7 @@ rtp_packet_save_payload(tap_rtp_save_info_t    *saveinfo,
 			saveinfo->error_type = TAP_RTP_FILE_WRITE_ERROR;
 			return 0;
 		}
-		saveinfo->count += ((int)rtpinfo->info_payload_len - rtpinfo->info_padding_count);
+		saveinfo->count += rtpinfo->info_payload_len - rtpinfo->info_padding_count;
 
 		fflush(saveinfo->fp);
 		saveinfo->saved = TRUE;
@@ -3897,8 +3897,8 @@ rtp_analysis_cb(GtkAction *action _U_, gpointer user_data _U_)
 	if (!cf_read_record(cf, fdata))
 		return;	/* error reading the record */
 	epan_dissect_init(&edt, cf->epan, TRUE, FALSE);
-	epan_dissect_prime_dfilter(&edt, sfcode);
-	epan_dissect_prime_hfid(&edt, hfid_rtp_ssrc);
+	epan_dissect_prime_with_dfilter(&edt, sfcode);
+	epan_dissect_prime_with_hfid(&edt, hfid_rtp_ssrc);
 	epan_dissect_run(&edt, cf->cd_t, &cf->phdr, frame_tvbuff_new_buffer(fdata, &cf->buf), fdata, NULL);
 
 	/*

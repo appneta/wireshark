@@ -27,21 +27,18 @@
 #include "extcap-base.h"
 
 #include "randpkt_core/randpkt_core.h"
+#include <wsutil/strtoi.h>
+#include <wsutil/filesystem.h>
 
 #define RANDPKT_EXTCAP_INTERFACE "randpkt"
 #define RANDPKTDUMP_VERSION_MAJOR "0"
 #define RANDPKTDUMP_VERSION_MINOR "1"
 #define RANDPKTDUMP_VERSION_RELEASE "0"
 
-#define verbose_print(...) { if (verbose) printf(__VA_ARGS__); }
-
-static gboolean verbose = TRUE;
-
 enum {
 	EXTCAP_BASE_OPTIONS_ENUM,
 	OPT_HELP,
 	OPT_VERSION,
-	OPT_VERBOSE,
 	OPT_MAXBYTES,
 	OPT_COUNT,
 	OPT_RANDOM_TYPE,
@@ -53,7 +50,6 @@ static struct option longopts[] = {
 	EXTCAP_BASE_OPTIONS,
 	{ "help",					no_argument,		NULL, OPT_HELP},
 	{ "version",				no_argument,		NULL, OPT_VERSION},
-	{ "verbose",				optional_argument,	NULL, OPT_VERBOSE},
 	{ "maxbytes",				required_argument,	NULL, OPT_MAXBYTES},
 	{ "count",					required_argument,	NULL, OPT_COUNT},
 	{ "random-type",			required_argument, 	NULL, OPT_RANDOM_TYPE},
@@ -63,36 +59,15 @@ static struct option longopts[] = {
 };
 
 
-static void help(const char* binname)
+static void help(extcap_parameters* extcap_conf)
 {
 	unsigned i = 0;
 	char** abbrev_list;
 	char** longname_list;
 
-	printf("Help\n");
-	printf(" Usage:\n");
-	printf(" %s --extcap-interfaces\n", binname);
-	printf(" %s --extcap-interface=INTERFACE --extcap-dlts\n", binname);
-	printf(" %s --extcap-interface=INTERFACE --extcap-config\n", binname);
-	printf(" %s --extcap-interface=INTERFACE --type dns --count 10"
-			"--fifo=FILENAME --capture\n", binname);
-	printf("\n\n");
-	printf("  --help: print this help\n");
-	printf("  --version: print the version\n");
-	printf("  --verbose: verbose mode\n");
-	printf("  --extcap-interfaces: list the extcap Interfaces\n");
-	printf("  --extcap-dlts: list the DLTs\n");
-	printf("  --extcap-interface <iface>: specify the extcap interface\n");
-	printf("  --extcap-config: list the additional configuration for an interface\n");
-	printf("  --capture: run the capture\n");
-	printf("  --extcap-capture-filter <filter>: the capture filter\n");
-	printf("  --fifo <file>: dump data to file or fifo\n");
-	printf("  --maxbytes <bytes>: max bytes per packet");
-	printf("  --count <num>: number of packets to generate\n");
-	printf("  --random-type: one random type is chosen for all packets\n");
-	printf("  --all-random: a random type is chosen for each packet\n");
-	printf("  --type <type>: the packet type\n");
-	printf("\n\nPacket types:\n");
+	extcap_help_print(extcap_conf);
+
+	printf("\nPacket types:\n");
 	randpkt_example_list(&abbrev_list, &longname_list);
 	while (abbrev_list[i] && longname_list[i]) {
 		printf("\t%-16s%s\n", abbrev_list[i], longname_list[i]);
@@ -101,7 +76,6 @@ static void help(const char* binname)
 	printf("\n");
 	g_strfreev(abbrev_list);
 	g_strfreev(longname_list);
-
 }
 
 static int list_config(char *interface)
@@ -112,12 +86,12 @@ static int list_config(char *interface)
 	char** longname_list;
 
 	if (!interface) {
-		errmsg_print("ERROR: No interface specified.");
+		g_warning("No interface specified.");
 		return EXIT_FAILURE;
 	}
 
 	if (g_strcmp0(interface, RANDPKT_EXTCAP_INTERFACE)) {
-		errmsg_print("ERROR: interface must be %s", RANDPKT_EXTCAP_INTERFACE);
+		g_warning("Interface must be %s", RANDPKT_EXTCAP_INTERFACE);
 		return EXIT_FAILURE;
 	}
 
@@ -154,7 +128,7 @@ int main(int argc, char *argv[])
 {
 	int option_idx = 0;
 	int result;
-	int maxbytes = 5000;
+	guint16 maxbytes = 5000;
 	guint64 count = 1000;
 	int random_type = FALSE;
 	int all_random = FALSE;
@@ -170,12 +144,35 @@ int main(int argc, char *argv[])
 #endif  /* _WIN32 */
 
 	extcap_parameters * extcap_conf = g_new0(extcap_parameters, 1);
+	char* help_url;
+	char* help_header = NULL;
 
-	extcap_base_set_util_info(extcap_conf, RANDPKTDUMP_VERSION_MAJOR, RANDPKTDUMP_VERSION_MINOR, RANDPKTDUMP_VERSION_RELEASE, NULL);
+	help_url = data_file_url("randpktdump.html");
+	extcap_base_set_util_info(extcap_conf, argv[0], RANDPKTDUMP_VERSION_MAJOR, RANDPKTDUMP_VERSION_MINOR,
+		RANDPKTDUMP_VERSION_RELEASE, help_url);
+	g_free(help_url);
 	extcap_base_register_interface(extcap_conf, RANDPKT_EXTCAP_INTERFACE, "Random packet generator", 147, "Generator dependent DLT");
 
+	help_header = g_strdup_printf(
+		" %s --extcap-interfaces\n"
+		" %s --extcap-interface=%s --extcap-dlts\n"
+		" %s --extcap-interface=%s --extcap-config\n"
+		" %s --extcap-interface=%s --type dns --count 10 "
+		"--fifo=FILENAME --capture\n", argv[0], argv[0], RANDPKT_EXTCAP_INTERFACE, argv[0], RANDPKT_EXTCAP_INTERFACE,
+		argv[0], RANDPKT_EXTCAP_INTERFACE);
+	extcap_help_add_header(extcap_conf, help_header);
+	g_free(help_header);
+
+	extcap_help_add_option(extcap_conf, "--help", "print this help");
+	extcap_help_add_option(extcap_conf, "--version", "print the version");
+	extcap_help_add_option(extcap_conf, "--maxbytes <bytes>", "max bytes per pack");
+	extcap_help_add_option(extcap_conf, "--count <num>", "number of packets to generate");
+	extcap_help_add_option(extcap_conf, "--random-type", "one random type is chosen for all packets");
+	extcap_help_add_option(extcap_conf, "--all-random", "a random type is chosen for each packet");
+	extcap_help_add_option(extcap_conf, "--type <type>", "the packet type");
+
 	if (argc == 1) {
-		help(argv[0]);
+		help(extcap_conf);
 		goto end;
 	}
 
@@ -183,37 +180,34 @@ int main(int argc, char *argv[])
 	attach_parent_console();
 #endif  /* _WIN32 */
 
-	for (i = 0; i < argc; i++) {
-		verbose_print("%s ", argv[i]);
-	}
-	verbose_print("\n");
+	for (i = 0; i < argc; i++)
+		g_debug("%s ", argv[i]);
 
 	while ((result = getopt_long(argc, argv, ":", longopts, &option_idx)) != -1) {
 		switch (result) {
 		case OPT_VERSION:
-			printf("%s.%s.%s\n", RANDPKTDUMP_VERSION_MAJOR, RANDPKTDUMP_VERSION_MINOR, RANDPKTDUMP_VERSION_RELEASE);
+			printf("%s\n", extcap_conf->version);
 			ret = EXIT_SUCCESS;
 			goto end;
 
-		case OPT_VERBOSE:
-			verbose = TRUE;
-			break;
-
 		case OPT_HELP:
-			help(argv[0]);
+			help(extcap_conf);
 			ret = EXIT_SUCCESS;
 			goto end;
 
 		case OPT_MAXBYTES:
-			maxbytes = atoi(optarg);
-			if (maxbytes > MAXBYTES_LIMIT) {
-				errmsg_print("randpktdump: Max bytes is %d", MAXBYTES_LIMIT);
+			if (!ws_strtou16(optarg, NULL, &maxbytes)) {
+				g_warning("Invalid parameter maxbytes: %s (max value is %u)",
+					optarg, G_MAXUINT16);
 				goto end;
 			}
 			break;
 
 		case OPT_COUNT:
-			count = g_ascii_strtoull(optarg, NULL, 10);
+			if (!ws_strtou64(optarg, NULL, &count)) {
+				g_warning("Invalid packet count: %s", optarg);
+				goto end;
+			}
 			break;
 
 		case OPT_RANDOM_TYPE:
@@ -235,21 +229,21 @@ int main(int argc, char *argv[])
 
 		case ':':
 			/* missing option argument */
-			errmsg_print("Option '%s' requires an argument", argv[optind - 1]);
+			g_warning("Option '%s' requires an argument", argv[optind - 1]);
 			break;
 
 		default:
 			/* Handle extcap specific options */
 			if (!extcap_base_parse_options(extcap_conf, result - EXTCAP_OPT_LIST_INTERFACES, optarg))
 			{
-				errmsg_print("Invalid option: %s", argv[optind - 1]);
+				g_warning("Invalid option: %s", argv[optind - 1]);
 				goto end;
 			}
 		}
 	}
 
 	if (optind != argc) {
-		errmsg_print("Invalid option: %s", argv[optind]);
+		g_warning("Invalid option: %s", argv[optind]);
 		goto end;
 	}
 
@@ -265,7 +259,7 @@ int main(int argc, char *argv[])
 
 	/* Some sanity checks */
 	if ((random_type) && (all_random)) {
-		errmsg_print("You can specify only one between: --random-type, --all-random");
+		g_warning("You can specify only one between: --random-type, --all-random");
 		goto end;
 	}
 
@@ -278,8 +272,7 @@ int main(int argc, char *argv[])
 #ifdef _WIN32
 	result = WSAStartup(MAKEWORD(1,1), &wsaData);
 	if (result != 0) {
-		if (verbose)
-			errmsg_print("ERROR: WSAStartup failed with error: %d", result);
+		g_warning("ERROR: WSAStartup failed with error: %d", result);
 		goto end;
 	}
 #endif  /* _WIN32 */
@@ -287,7 +280,7 @@ int main(int argc, char *argv[])
 	if (extcap_conf->capture) {
 
 		if (g_strcmp0(extcap_conf->interface, RANDPKT_EXTCAP_INTERFACE)) {
-			errmsg_print("ERROR: invalid interface");
+			g_warning("ERROR: invalid interface");
 			goto end;
 		}
 
@@ -298,7 +291,7 @@ int main(int argc, char *argv[])
 			if (!example)
 				goto end;
 
-			verbose_print("Generating packets: %s\n", example->abbrev);
+			g_debug("Generating packets: %s", example->abbrev);
 
 			randpkt_example_init(example, extcap_conf->fifo, maxbytes);
 			randpkt_loop(example, count);

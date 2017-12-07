@@ -845,7 +845,7 @@ dissect_ncp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     nw_connection = (header.conn_high*256)+header.conn_low;
 
     /* Ok, we need to track the conversation so that we can
-     * determine if a new server session is occuring for this
+     * determine if a new server session is occurring for this
      * connection.
      */
     conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
@@ -1135,7 +1135,7 @@ dissect_ncp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 break;
             }
         }
-        /* otherwise fall through */
+        /* fall through */
 
     case NCP_POSITIVE_ACK:        /* Positive Acknowledgement */
     case NCP_SERVICE_REQUEST:    /* Server NCP Request */
@@ -1263,7 +1263,7 @@ dissect_ncp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         } else {
             /*
              * XXX - do this by using -1 and -1 as the length
-             * arguments to "tvb_new_subset()" and then calling
+             * arguments to "tvb_new_subset_length_caplen()" and then calling
              * "tvb_set_reported_length()"?  That'll throw an
              * exception if "data_len" goes past the reported
              * length of the packet, but that's arguably a
@@ -1273,7 +1273,7 @@ dissect_ncp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             if (length_remaining > data_len)
                 length_remaining = data_len;
             if (data_len != 0) {
-                call_data_dissector(tvb_new_subset(tvb, offset,
+                call_data_dissector(tvb_new_subset_length_caplen(tvb, offset,
                     length_remaining, data_len),
                     pinfo, ncp_tree);
             }
@@ -1578,7 +1578,7 @@ proto_reg_handoff_ncp(void)
 
     ncp_handle = create_dissector_handle(dissect_ncp, proto_ncp);
     ncp_tcp_handle = create_dissector_handle(dissect_ncp_tcp, proto_ncp);
-    dissector_add_uint("tcp.port", TCP_PORT_NCP, ncp_tcp_handle);
+    dissector_add_uint_with_preference("tcp.port", TCP_PORT_NCP, ncp_tcp_handle);
     dissector_add_uint("udp.port", UDP_PORT_NCP, ncp_handle);
     dissector_add_uint("ipx.packet_type", IPX_PACKET_TYPE_NCP, ncp_handle);
     dissector_add_uint("ipx.socket", IPX_SOCKET_NCP, ncp_handle);

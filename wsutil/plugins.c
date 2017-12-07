@@ -37,9 +37,10 @@
 #include <wsutil/filesystem.h>
 #include <wsutil/privileges.h>
 #include <wsutil/file_util.h>
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 
 #include <wsutil/plugins.h>
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 
 /* linked list of all plugins */
 typedef struct _plugin {
@@ -142,7 +143,7 @@ call_plugin_callback(gpointer data, gpointer user_data)
 }
 
 static void
-plugins_scan_dir(const char *dirname)
+plugins_scan_dir(const char *dirname, plugin_load_failure_mode mode)
 {
 #define FILENAME_LEN        1024
     WS_DIR        *dir;             /* scanned directory */
@@ -154,6 +155,10 @@ plugins_scan_dir(const char *dirname)
     plugin        *new_plug;
     gchar         *dot;
     int            cr;
+
+    if (!g_file_test(dirname, G_FILE_TEST_EXISTS) || !g_file_test(dirname, G_FILE_TEST_IS_DIR)) {
+        return;
+    }
 
     if ((dir = ws_dir_open(dirname, 0, NULL)) != NULL)
     {
@@ -169,13 +174,34 @@ plugins_scan_dir(const char *dirname)
             dot = strrchr(name, '.');
             if (dot == NULL || strcmp(dot+1, G_MODULE_SUFFIX) != 0)
                 continue;
-
+#if WIN32
+            if (strncmp(name, "nordic_ble.dll", 14) == 0)
+                /*
+                 * Skip the Nordic BLE Sniffer dll on WIN32 because
+                 * the dissector has been added as internal.
+                 */
+                continue;
+#endif
             g_snprintf(filename, FILENAME_LEN, "%s" G_DIR_SEPARATOR_S "%s",
                        dirname, name);
+
             if ((handle = g_module_open(filename, G_MODULE_BIND_LOCAL)) == NULL)
             {
-                report_failure("Couldn't load module %s: %s", filename,
-                               g_module_error());
+                /*
+                 * Only report load failures if we were asked to.
+                 *
+                 * XXX - we really should put different types of plugins
+                 * (libwiretap, libwireshark) in different subdirectories,
+                 * give libwiretap and libwireshark init routines that
+                 * load the plugins, and have them scan the appropriate
+                 * subdirectories so tha we don't even *try* to, for
+                 * example, load libwireshark plugins in programs that
+                 * only use libwiretap.
+                 */
+                if (mode == REPORT_LOAD_FAILURE) {
+                    report_failure("Couldn't load module %s: %s", filename,
+                                   g_module_error());
+                }
                 continue;
             }
 
@@ -205,9 +231,24 @@ plugins_scan_dir(const char *dirname)
             {
                 /*
                  * No.
+                 *
+                 * Only report this failure if we were asked to; it might
+                 * just mean that it's a plugin type that this program
+                 * doesn't support, such as a libwireshark plugin in
+                 * a program that doesn't use libwireshark.
+                 *
+                 * XXX - we really should put different types of plugins
+                 * (libwiretap, libwireshark) in different subdirectories,
+                 * give libwiretap and libwireshark init routines that
+                 * load the plugins, and have them scan the appropriate
+                 * subdirectories so tha we don't even *try* to, for
+                 * example, load libwireshark plugins in programs that
+                 * only use libwiretap.
                  */
-                report_failure("The plugin '%s' has no registration routines",
-                               name);
+                if (mode == REPORT_LOAD_FAILURE) {
+                    report_failure("The plugin '%s' has no registration routines",
+                                   name);
+                }
                 g_module_close(handle);
                 g_free(new_plug->name);
                 g_free(new_plug);
@@ -229,7 +270,6 @@ plugins_scan_dir(const char *dirname)
                 g_free(new_plug);
                 continue;
             }
-
         }
         ws_dir_close(dir);
     }
@@ -240,7 +280,7 @@ plugins_scan_dir(const char *dirname)
  * Scan for plugins.
  */
 void
-scan_plugins(void)
+scan_plugins(plugin_load_failure_mode mode)
 {
     const char *plugin_dir;
     const char *name;
@@ -268,7 +308,7 @@ scan_plugins(void)
         {
             if ((dir = ws_dir_open(plugin_dir, 0, NULL)) != NULL)
             {
-                plugins_scan_dir(plugin_dir);
+                plugins_scan_dir(plugin_dir, mode);
                 while ((file = ws_dir_read_name(dir)) != NULL)
                 {
                     name = ws_dir_get_name(file);
@@ -294,14 +334,14 @@ scan_plugins(void)
                         plugin_dir_path = g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s",
                             plugin_dir, name);
                     }
-                    plugins_scan_dir(plugin_dir_path);
+                    plugins_scan_dir(plugin_dir_path, mode);
                     g_free(plugin_dir_path);
                 }
                 ws_dir_close(dir);
             }
         }
         else
-            plugins_scan_dir(plugin_dir);
+            plugins_scan_dir(plugin_dir, mode);
 
         /*
          * If the program wasn't started with special privileges,
@@ -314,7 +354,7 @@ scan_plugins(void)
         if (!started_with_special_privs())
         {
             plugins_pers_dir = get_plugins_pers_dir();
-            plugins_scan_dir(plugins_pers_dir);
+            plugins_scan_dir(plugins_pers_dir, mode);
             g_free(plugins_pers_dir);
         }
     }
@@ -377,13 +417,34 @@ print_plugin_description(const char *name, const char *version,
                          const char *description, const char *filename,
                          void *user_data _U_)
 {
-    printf("%s\t%s\t%s\t%s\n", name, version, description, filename);
+    ws_debug_printf("%s\t%s\t%s\t%s\n", name, version, description, filename);
 }
 
 void
 plugins_dump_all(void)
 {
     plugins_get_descriptions(print_plugin_description, NULL);
+}
+
+static void
+free_plugin_type(gpointer p, gpointer user_data _U_)
+{
+    g_free(p);
+}
+
+void
+plugins_cleanup(void)
+{
+    plugin* cur, *next;
+
+    for (cur = plugin_list; cur != NULL; cur = next) {
+        next = cur->next;
+        g_free(cur->name);
+        g_free(cur);
+    }
+
+    g_slist_foreach(plugin_types, free_plugin_type, NULL);
+    g_slist_free(plugin_types);
 }
 
 #endif /* HAVE_PLUGINS */

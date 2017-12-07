@@ -33,6 +33,7 @@
 #include <epan/asn1.h>
 #include <epan/prefs.h>
 #include <epan/sctpppids.h>
+#include <epan/expert.h>
 
 #include "packet-ber.h"
 #include "packet-per.h"
@@ -52,9 +53,6 @@
 void proto_register_lcsap(void);
 void proto_reg_handoff_lcsap(void);
 
-static dissector_handle_t lpp_handle;
-static dissector_handle_t lppa_handle;
-
 #define SCTP_PORT_LCSAP 9082
 #include "packet-lcsap-val.h"
 
@@ -72,8 +70,11 @@ static int hf_lcsap_gnss_pos_usage = -1;
 static int ett_lcsap = -1;
 static int ett_lcsap_plmnd_id = -1;
 static int ett_lcsap_imsi = -1;
+static int ett_lcsap_civic_address = -1;
 
 #include "packet-lcsap-ett.c"
+
+static expert_field ei_lcsap_civic_data_not_xml = EI_INIT;
 
 /* Global variables */
 static guint32 ProcedureCode;
@@ -82,7 +83,11 @@ static guint32 ProtocolExtensionID;
 static guint32 PayloadType = -1;
 static guint gbl_lcsapSctpPort=SCTP_PORT_LCSAP;
 
+/* Dissector handles */
 static dissector_handle_t lcsap_handle;
+static dissector_handle_t lpp_handle;
+static dissector_handle_t lppa_handle;
+static dissector_handle_t xml_handle;
 
 /* Dissector tables */
 static dissector_table_t lcsap_ies_dissector_table;
@@ -132,10 +137,10 @@ static const value_string lcsap_pos_method_vals[] = {
   { 0x19, "Reserved for network specific positioning methods" },
   { 0x1a, "Reserved for network specific positioning methods" },
   { 0x1b, "Reserved for network specific positioning methods" },
-  { 0x1c, "RReserved for network specific positioning methods" },
+  { 0x1c, "Reserved for network specific positioning methods" },
   { 0x1d, "Reserved for network specific positioning methods" },
   { 0x1e, "Reserved for network specific positioning methods" },
-  { 0x0f, "Reserved for network specific positioning methods" },
+  { 0x1f, "Reserved for network specific positioning methods" },
   { 0, NULL }
 };
 
@@ -244,6 +249,7 @@ proto_reg_handoff_lcsap(void)
   if (!Initialized) {
     lpp_handle = find_dissector_add_dependency("lpp", proto_lcsap);
     lppa_handle = find_dissector_add_dependency("lppa", proto_lcsap);
+    xml_handle = find_dissector_add_dependency("xml", proto_lcsap);
     dissector_add_for_decode_as("sctp.port", lcsap_handle);   /* for "decode-as"  */
     dissector_add_uint("sctp.ppi", LCS_AP_PAYLOAD_PROTOCOL_ID,   lcsap_handle);
     Initialized=TRUE;
@@ -300,10 +306,18 @@ void proto_register_lcsap(void) {
     &ett_lcsap,
     &ett_lcsap_plmnd_id,
     &ett_lcsap_imsi,
+    &ett_lcsap_civic_address,
 #include "packet-lcsap-ettarr.c"
  };
 
   module_t *lcsap_module;
+  expert_module_t *expert_lcsap;
+
+  static ei_register_info ei[] = {
+      { &ei_lcsap_civic_data_not_xml,
+      { "lcsap.civic_data_not_xml", PI_PROTOCOL, PI_ERROR, "Shold contain a UTF-8 encoded PIDF - LO XML document as defined in IETF RFC 4119", EXPFILL } },
+  };
+
 
   /* Register protocol */
   proto_lcsap = proto_register_protocol(PNAME, PSNAME, PFNAME);
@@ -316,6 +330,8 @@ void proto_register_lcsap(void) {
   /* Register dissector tables */
   lcsap_ies_dissector_table = register_dissector_table("lcsap.ies", "LCS-AP-PROTOCOL-IES", proto_lcsap, FT_UINT32, BASE_DEC);
 
+  expert_lcsap = expert_register_protocol(proto_lcsap);
+  expert_register_field_array(expert_lcsap, ei, array_length(ei));
 
   lcsap_extension_dissector_table = register_dissector_table("lcsap.extension", "LCS-AP-PROTOCOL-EXTENSION", proto_lcsap, FT_UINT32, BASE_DEC);
   lcsap_proc_imsg_dissector_table = register_dissector_table("lcsap.proc.imsg", "LCS-AP-ELEMENTARY-PROCEDURE InitiatingMessage", proto_lcsap, FT_UINT32, BASE_DEC);
@@ -330,7 +346,6 @@ void proto_register_lcsap(void) {
                                  "Set the SCTP port for LCSAP messages",
                                  10,
                                  &gbl_lcsapSctpPort);
-
 }
 
 /*

@@ -40,7 +40,7 @@ typedef struct _stat_cmd_arg {
     void* userdata;
 } stat_cmd_arg;
 
-static GList *stat_cmd_arg_list=NULL;
+static wmem_list_t *stat_cmd_arg_list=NULL;
 
 /* structure to keep track of what stats have been specified on the
    command line.
@@ -56,6 +56,12 @@ static GSList *stats_requested = NULL;
  * and initialization routine
  * ********************************************************************** */
 static gint
+search_duplicate(gconstpointer a, gconstpointer b)
+{
+    return strcmp(((const stat_cmd_arg *)a)->cmd, (const char *)b);
+}
+
+static gint
 sort_by_name(gconstpointer a, gconstpointer b)
 {
     return strcmp(((const stat_cmd_arg *)a)->cmd, ((const stat_cmd_arg *)b)->cmd);
@@ -66,11 +72,19 @@ register_stat_tap_ui(stat_tap_ui *ui, void *userdata)
 {
     stat_cmd_arg *newsca;
 
-    newsca=(stat_cmd_arg *)g_malloc(sizeof(stat_cmd_arg));
-    newsca->cmd=ui->cli_string;
+    if (stat_cmd_arg_list == NULL)
+        stat_cmd_arg_list = wmem_list_new(wmem_epan_scope());
+
+    /* Key is already present */
+    if (wmem_list_find_custom(stat_cmd_arg_list, ui->cli_string, search_duplicate))
+        return;
+
+    newsca = wmem_new(wmem_epan_scope(), stat_cmd_arg);
+    newsca->cmd= wmem_strdup(wmem_epan_scope(), ui->cli_string);
     newsca->func=ui->tap_init_cb;
     newsca->userdata=userdata;
-    stat_cmd_arg_list=g_list_insert_sorted(stat_cmd_arg_list, newsca, sort_by_name);
+
+    wmem_list_insert_sorted(stat_cmd_arg_list, newsca, sort_by_name);
 }
 
 /* **********************************************************************
@@ -79,17 +93,20 @@ register_stat_tap_ui(stat_tap_ui *ui, void *userdata)
 gboolean
 process_stat_cmd_arg(char *optstr)
 {
-    GList *entry;
+    wmem_list_frame_t *entry;
     stat_cmd_arg *sca;
     stat_requested *tr;
 
-    for(entry=g_list_last(stat_cmd_arg_list);entry;entry=g_list_previous(entry)){
-        sca=(stat_cmd_arg *)entry->data;
-        if(!strncmp(sca->cmd,optstr,strlen(sca->cmd))){
+    /* The strings "ipx" or "ipv6" must be tested before "ip" to select the
+      right tap so the sorting does matter.  And it's also why the list is
+      walked backwards */
+    for (entry = wmem_list_tail(stat_cmd_arg_list); entry; entry = wmem_list_frame_prev(entry)) {
+        sca = (stat_cmd_arg*)wmem_list_frame_data(entry);
+        if(!strncmp(sca->cmd, optstr, strlen(sca->cmd))) {
             tr=(stat_requested *)g_malloc(sizeof (stat_requested));
             tr->sca = sca;
             tr->arg=g_strdup(optstr);
-            stats_requested=g_slist_append(stats_requested, tr);
+            stats_requested = g_slist_append(stats_requested, tr);
             return TRUE;
         }
     }
@@ -99,16 +116,16 @@ process_stat_cmd_arg(char *optstr)
 /* **********************************************************************
  * Function to list all possible tap command-line arguments
  * ********************************************************************** */
+static void
+list_stat_cmd_args_func(gpointer data, gpointer userdata _U_)
+{
+    fprintf(stderr,"     %s\n", ((stat_cmd_arg*)data)->cmd);
+}
+
 void
 list_stat_cmd_args(void)
 {
-    GList *entry;
-    stat_cmd_arg *sca;
-
-    for(entry=stat_cmd_arg_list;entry;entry=g_list_next(entry)){
-        sca=(stat_cmd_arg *)entry->data;
-        fprintf(stderr,"     %s\n",sca->cmd);
-    }
+    wmem_list_foreach(stat_cmd_arg_list, list_stat_cmd_args_func, NULL);
 }
 
 /* **********************************************************************
@@ -128,25 +145,24 @@ start_requested_stats(void)
     }
 }
 
-static GSList *registered_stat_tables = NULL;
-
-static gint
-insert_sorted_by_cli_string(gconstpointer aparam, gconstpointer bparam)
-{
-    const stat_tap_table_ui *a = (const stat_tap_table_ui *)aparam;
-    const stat_tap_table_ui *b = (const stat_tap_table_ui *)bparam;
-
-    return g_ascii_strcasecmp(a->cli_string, b->cli_string);
-}
+static wmem_tree_t *registered_stat_tables = NULL;
 
 void register_stat_tap_table_ui(stat_tap_table_ui *ui)
 {
-    registered_stat_tables = g_slist_insert_sorted(registered_stat_tables, ui, insert_sorted_by_cli_string);
+    if (registered_stat_tables == NULL)
+        registered_stat_tables = wmem_tree_new(wmem_epan_scope());
+
+    wmem_tree_insert_string(registered_stat_tables, ui->cli_string, ui, 0);
 }
 
-void new_stat_tap_iterate_tables(GFunc func, gpointer user_data)
+stat_tap_table_ui *new_stat_tap_by_name(const char *name)
 {
-    g_slist_foreach(registered_stat_tables, func, user_data);
+    return (stat_tap_table_ui *) wmem_tree_lookup_string(registered_stat_tables, name, 0);
+}
+
+void new_stat_tap_iterate_tables(wmem_foreach_func func, gpointer user_data)
+{
+    wmem_tree_foreach(registered_stat_tables, func, user_data);
 }
 
 void new_stat_tap_get_filter(stat_tap_table_ui* new_stat, const char *opt_arg, const char **filter, char** err)

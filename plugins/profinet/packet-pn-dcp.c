@@ -182,7 +182,7 @@ static const value_string pn_dcp_BlockQualifier[] = {
     { 0x000B, "Reset engineering parameter" },
     { 0x000C, "Reserved" },
     { 0x000D, "Reserved" },
-    { 0x0009, "Reserved" },
+    { 0x000E, "Reserved" },
     { 0x0010, "Resets all stored data in the IOD or IOC to its factory values" },
     { 0x0011, "Resets all stored data in the IOD or IOC to its factory values" },
     { 0x0012, "Reset and restore data" },
@@ -494,8 +494,8 @@ dissect_PNDCP_Suboption_Device(tvbuff_t *tvb, int offset, packet_info *pinfo,
     char     *typeofstation;
     char     *nameofstation;
     char     *aliasname;
-    guint16   block_info;
-    guint16   block_qualifier;
+    guint16   block_info = 0;
+    guint16   block_qualifier = 0;
     gboolean  have_block_info      = FALSE;
     gboolean  have_block_qualifier = FALSE;
     guint8    device_instance_high;
@@ -741,8 +741,8 @@ dissect_PNDCP_Suboption_DHCP(tvbuff_t *tvb, int offset, packet_info *pinfo,
 {
     guint8   suboption;
     guint16  block_length;
-    guint16  block_info;
-    guint16  block_qualifier;
+    guint16  block_info = 0;
+    guint16  block_qualifier = 0;
     gboolean have_block_info      = FALSE;
     gboolean have_block_qualifier = FALSE;
 

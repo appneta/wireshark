@@ -39,7 +39,8 @@
 #include <epan/expert.h>
 #include <epan/eap.h>
 #include <wsutil/filesystem.h>
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 
 #include "wimaxasncp_dict.h"
 
@@ -86,7 +87,6 @@ static gboolean debug_enabled                  = FALSE;
 
 /* Default WiMAX ASN control protocol port */
 #define WIMAXASNCP_DEF_UDP_PORT     2231
-static guint global_wimaxasncp_udp_port = WIMAXASNCP_DEF_UDP_PORT;
 
 
 /* Initialize the subtree pointers */
@@ -1887,7 +1887,7 @@ static guint dissect_wimaxasncp_tlvs(
                 tvbuff_t *tlv_tvb;
 
                 /* N.B.  Not padding out tvb length */
-                tlv_tvb = tvb_new_subset(
+                tlv_tvb = tvb_new_subset_length_caplen(
                     tvb, offset,
                     MIN(length, tvb_captured_length_remaining(tvb, offset)),
                     length);
@@ -1907,7 +1907,7 @@ static guint dissect_wimaxasncp_tlvs(
 
             tvb_ensure_bytes_exist(tvb, offset, length + pad);
 
-            tlv_tvb = tvb_new_subset(
+            tlv_tvb = tvb_new_subset_length_caplen(
                 tvb, offset,
                 MIN(length, tvb_captured_length_remaining(tvb, offset)),
                 length);
@@ -2389,7 +2389,7 @@ dissect_wimaxasncp(
      * ------------------------------------------------------------------------
      */
 
-    subtree = tvb_new_subset(
+    subtree = tvb_new_subset_length_caplen(
         tvb, offset,
         MIN(length, tvb_captured_length_remaining(tvb, offset)),
         length - WIMAXASNCP_HEADER_LENGTH_END);
@@ -3320,7 +3320,7 @@ register_wimaxasncp_fields(const char* unused _U_)
 
             for (tlv = wimaxasncp_dict->tlvs; tlv; tlv = tlv->next)
             {
-                printf(
+                ws_debug_printf(
                     "%s\n"
                     "  type                   = %u\n"
                     "  description            = %s\n"
@@ -3395,20 +3395,12 @@ proto_register_wimaxasncp(void)
      */
 
         /* Register the protocol name and description */
-    proto_wimaxasncp = proto_register_protocol(
-            "WiMAX ASN Control Plane Protocol",
-            "WiMAX ASN CP",
-            "wimaxasncp");
-
+    proto_wimaxasncp = proto_register_protocol("WiMAX ASN Control Plane Protocol", "WiMAX ASN CP", "wimaxasncp");
 
         /* Register this dissector by name */
     wimaxasncp_handle = register_dissector("wimaxasncp", dissect_wimaxasncp, proto_wimaxasncp);
 
-        /* Register preferences module (See Section 2.6 for more on
-         * preferences) */
-    wimaxasncp_module = prefs_register_protocol(
-            proto_wimaxasncp,
-            proto_reg_handoff_wimaxasncp);
+    wimaxasncp_module = prefs_register_protocol(proto_wimaxasncp, NULL);
 
         /* Register preferences */
     prefs_register_bool_preference(
@@ -3425,13 +3417,6 @@ proto_register_wimaxasncp(void)
             "Enable debug output",
             "Print debug output to the console.",
             &debug_enabled);
-
-    prefs_register_uint_preference(
-        wimaxasncp_module,
-        "udp.wimax_port",
-        "UDP Port for WiMAX ASN Control Plane Protocol",
-        "Set UDP port for WiMAX ASN Control Plane Protocol",
-        10, &global_wimaxasncp_udp_port);
 
     prefs_register_enum_preference(
         wimaxasncp_module,
@@ -3457,27 +3442,10 @@ proto_register_wimaxasncp(void)
 void
 proto_reg_handoff_wimaxasncp(void)
 {
-    static gboolean           inited      = FALSE;
-    static int                currentPort = -1;
+    /* Find the EAP dissector */
+    eap_handle = find_dissector_add_dependency("eap", proto_wimaxasncp);
 
-    if (!inited)
-    {
-
-        /* Find the EAP dissector */
-        eap_handle = find_dissector_add_dependency("eap", proto_wimaxasncp);
-
-        inited = TRUE;
-    }
-
-    if (currentPort != -1)
-    {
-        /* Remove any previous registered port */
-        dissector_delete_uint("udp.port", currentPort, wimaxasncp_handle);
-    }
-
-    /* Add the new one from preferences */
-    currentPort = global_wimaxasncp_udp_port;
-    dissector_add_uint("udp.port", currentPort, wimaxasncp_handle);
+    dissector_add_uint_with_preference("udp.port", WIMAXASNCP_DEF_UDP_PORT, wimaxasncp_handle);
 }
 
 

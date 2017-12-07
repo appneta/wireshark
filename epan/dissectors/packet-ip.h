@@ -30,16 +30,17 @@ extern int proto_ip;
 
 typedef struct _ws_ip
 {
-    guint8  ip_v_hl; /* combines ip_v and ip_hl */
-    guint8  ip_tos;
-    guint32 ip_len;
-    guint16 ip_id;
-    guint16 ip_off;
-    guint8  ip_ttl;
-    guint8  ip_nxt;  /* IPv4: protocol; IPv6: next header */
-    guint16 ip_sum;
-    address ip_src;
-    address ip_dst;
+    guint8  ip_ver;     /* 4 or 6 */
+    guint8  ip_tos;     /* IPv4: type of service;   IPv6: traffic class */
+    guint32 ip_flw;     /* IPv4: (zero);            IPv6: flow label */
+    guint32 ip_len;     /* IPv4: total length;      IPv6: payload length */
+    guint16 ip_id;      /* IPv4: identification;    IPv6: (zero) */
+    guint16 ip_off;     /* IPv4: fragment offset;   IPv6: (zero) */
+    guint8  ip_ttl;     /* IPv4: time-to-live;      IPv6: hop limit */
+    guint8  ip_nxt;     /* IPv4: protocol;          IPv6: next header */
+    guint16 ip_sum;     /* IPv4: checksum;          IPv6: (zero) */
+    address ip_src;     /* source address */
+    address ip_dst;     /* destination address */
 } ws_ip;
 
 /* Differentiated Services Codepoint  */
@@ -50,9 +51,7 @@ typedef struct _ws_ip
 #define IPDSFIELD_ECN_MASK      0x03
 #define IPDSFIELD_ECN(dsfield)  ((dsfield) & IPDSFIELD_ECN_MASK)
 
-gboolean capture_ip(const guchar *, int, int, capture_packet_info_t *cpinfo, const union wtap_pseudo_header *pseudo_header);
-
-gboolean ip_try_dissect(gboolean heur_first, tvbuff_t *tvb,
+gboolean ip_try_dissect(gboolean heur_first, guint nxt, tvbuff_t *tvb,
                         packet_info *pinfo, proto_tree *tree, ws_ip *iph);
 
 /* Export the DSCP/ECN extended value-string table for other protocols */

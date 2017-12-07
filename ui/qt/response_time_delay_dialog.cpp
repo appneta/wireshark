@@ -48,11 +48,11 @@ rtd_init(const char *args, void*) {
 }
 }
 
-void register_response_time_delay_tables(gpointer data, gpointer)
+gboolean register_response_time_delay_tables(const void *, void *value, void*)
 {
-    register_rtd_t *rtd = (register_rtd_t*)data;
+    register_rtd_t *rtd = (register_rtd_t*)value;
     const char* short_name = proto_get_protocol_short_name(find_protocol_by_id(get_rtd_proto_id(rtd)));
-    const char *cfg_abbr = rtd_table_get_tap_string(rtd);
+    char *cfg_abbr = rtd_table_get_tap_string(rtd);
 
     cfg_str_to_rtd_[cfg_abbr] = rtd;
     TapParameterDialog::registerDialog(
@@ -61,6 +61,8 @@ void register_response_time_delay_tables(gpointer data, gpointer)
                 REGISTER_STAT_GROUP_RESPONSE_TIME,
                 rtd_init,
                 ResponseTimeDelayDialog::createRtdDialog);
+    g_free(cfg_abbr);
+    return FALSE;
 }
 
 enum {
@@ -72,7 +74,7 @@ enum {
     col_min_frame_,
     col_max_frame_,
     col_open_requests,
-    col_discarded_reponses_,
+    col_discarded_responses_,
     col_repeated_requests_,
     col_repeated_responses_
 };
@@ -101,7 +103,7 @@ public:
         setText(col_min_frame_, QString::number(timestat_->rtd->min_num));
         setText(col_max_frame_, QString::number(timestat_->rtd->max_num));
         setText(col_open_requests, QString::number(timestat_->open_req_num));
-        setText(col_discarded_reponses_, QString::number(timestat_->disc_rsp_num));
+        setText(col_discarded_responses_, QString::number(timestat_->disc_rsp_num));
         setText(col_repeated_requests_, QString::number(timestat_->req_dup_num));
         setText(col_repeated_responses_, QString::number(timestat_->rsp_dup_num));
 
@@ -131,7 +133,7 @@ public:
             return timestat_->rtd->max_num < other_row->timestat_->rtd->max_num;
         case col_open_requests:
             return timestat_->open_req_num < other_row->timestat_->open_req_num;
-        case col_discarded_reponses_:
+        case col_discarded_responses_:
             return timestat_->disc_rsp_num < other_row->timestat_->disc_rsp_num;
         case col_repeated_requests_:
             return timestat_->req_dup_num < other_row->timestat_->req_dup_num;

@@ -67,8 +67,7 @@
 #include <epan/decode_as.h>
 #include <epan/proto_data.h>
 
-#include <wsutil/md5.h>
-#include <wsutil/sha1.h>
+#include <wsutil/wsgcrypt.h>
 
 #include "packet-l2tp.h"
 
@@ -173,6 +172,8 @@ static int hf_l2tp_ericsson_tcg_sapi = -1;
 static int hf_l2tp_ericsson_tcg_ip = -1;
 static int hf_l2tp_ericsson_tcg_dscp = -1;
 static int hf_l2tp_ericsson_tcg_crc32_enable = -1;
+static int hf_l2tp_ericsson_tcg_bundling_tout = -1;
+static int hf_l2tp_ericsson_tcg_bundling_max_pkt = -1;
 static int hf_l2tp_ericsson_tc_num_maps = -1;
 static int hf_l2tp_ericsson_map_tei_low = -1;
 static int hf_l2tp_ericsson_map_tei_high = -1;
@@ -753,22 +754,30 @@ static const value_string cisco_avp_type_vals[] = {
 
 #define ERICSSON_MSG_TYPE               0
 #define ERICSSON_TRANSPORT_CONFIG       1
+#define ERICSSON_PACKET_LOSS            2
 #define ERICSSON_PROTO_VERSION          3
 #define ERICSSON_CONN_TYPE              4
 #define ERICSSON_CRC_ENABLED            5
 #define ERICSSON_STN_NAME               6
 #define ERICSSON_ABIS_LOWER_MODE        7
-#define ERICSSNN_TEI_TO_SC_MAP          8
+#define ERICSSON_TEI_TO_SC_MAP          8
+#define ERICSSON_CHAN_STATUS_LIST       9
+#define ERICSSON_EXT_PROTO_VERSION      10
+#define ERICSSON_CHAN_STATUS_LIST2      11
 
 static const value_string ericsson_avp_type_vals[] = {
     { ERICSSON_MSG_TYPE,              "Message Type" },
     { ERICSSON_TRANSPORT_CONFIG,      "Transport Configuration" },
+    { ERICSSON_PACKET_LOSS,           "Packet Loss" },
     { ERICSSON_PROTO_VERSION,         "Protocol Version" },
     { ERICSSON_CONN_TYPE,             "Connection Type" },
     { ERICSSON_STN_NAME,              "STN Name" },
     { ERICSSON_CRC_ENABLED,           "CRC32 Enabled" },
     { ERICSSON_ABIS_LOWER_MODE,       "Abis Lower Mode" },
-    { ERICSSNN_TEI_TO_SC_MAP,         "TEI to SC Map" },
+    { ERICSSON_TEI_TO_SC_MAP,         "TEI to SC Map" },
+    { ERICSSON_CHAN_STATUS_LIST,      "Channel Status List" },
+    { ERICSSON_EXT_PROTO_VERSION,     "Extended Protoocl Version" },
+    { ERICSSON_CHAN_STATUS_LIST2,     "Channel Status List 2" },
     { 0,                              NULL }
 };
 
@@ -950,6 +959,11 @@ static const value_string iwf_types_vals[] = {
     { 0,     NULL },
 };
 
+static const val64_string unique_indeterminable_or_no_link[] = {
+    { 0, "indeterminable or no physical p2p link" },
+    { 0, NULL },
+};
+
 static const true_false_string tfs_up_down = { "Up", "Down" };
 static const true_false_string tfs_new_existing = { "New", "Existing" };
 
@@ -964,8 +978,6 @@ static dissector_handle_t l2tp_ip_handle;
 
 #define L2TP_HMAC_MD5  0
 #define L2TP_HMAC_SHA1 1
-#define L2TP_HMAC_MD5_KEY_LEN 16
-#define L2TP_HMAC_MD5_DIGEST_LEN 16
 
 typedef struct l2tpv3_conversation {
     address               lcce1;
@@ -990,7 +1002,7 @@ typedef struct l2tpv3_tunnel {
     gint     lcce2_nonce_len;
 
     gchar   *shared_key_secret;
-    guint8   shared_key[L2TP_HMAC_MD5_KEY_LEN];
+    guint8   shared_key[HASH_MD5_LENGTH];
 
     GSList  *sessions;
 } l2tpv3_tunnel_t;
@@ -1026,7 +1038,9 @@ static void update_shared_key(l2tpv3_tunnel_t *tunnel)
     if (tunnel->shared_key_secret == NULL || strcmp(secret, tunnel->shared_key_secret) != 0) {
         /* For secret specification, see RFC 3931 pg 37 */
         guint8 data = 2;
-        md5_hmac(&data, 1, secret, strlen(secret), tunnel->shared_key);
+        if (ws_hmac_buffer(GCRY_MD_MD5, tunnel->shared_key, &data, 1, secret, strlen(secret))) {
+            return;
+        }
         tunnel->shared_key_secret = wmem_strdup(wmem_file_scope(), secret);
     }
 }
@@ -1040,35 +1054,41 @@ static void md5_hmac_digest(l2tpv3_tunnel_t *tunnel,
                             packet_info *pinfo,
                             guint8 digest[20])
 {
-    guint8 zero[L2TP_HMAC_MD5_DIGEST_LEN];
-    md5_hmac_state_t ms;
+    guint8 zero[HASH_MD5_LENGTH] = { 0 };
+    gcry_md_hd_t hmac_handle;
     int remainder;
     int offset = 0;
 
     if (tunnel->conv->pt == PT_NONE) /* IP encapsulated L2TPv3 */
         offset = 4;
 
-    md5_hmac_init(&ms, tunnel->shared_key, L2TP_HMAC_MD5_KEY_LEN);
+    if (gcry_md_open(&hmac_handle, GCRY_MD_MD5, GCRY_MD_FLAG_HMAC)) {
+        return;
+    }
+    if (gcry_md_setkey(hmac_handle, tunnel->shared_key, HASH_MD5_LENGTH)) {
+        gcry_md_close(hmac_handle);
+        return;
+    }
 
     if (msg_type != MESSAGE_TYPE_SCCRQ) {
         if (tunnel->lcce1_nonce != NULL && tunnel->lcce2_nonce != NULL) {
             if (addresses_equal(&tunnel->lcce1, &pinfo->src)) {
-                md5_hmac_append(&ms, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
-                md5_hmac_append(&ms, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
             } else {
-                md5_hmac_append(&ms, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
-                md5_hmac_append(&ms, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
             }
         }
     }
 
-    md5_hmac_append(&ms, tvb_get_ptr(tvb, offset, idx + 1 - offset), idx + 1 - offset);
+    gcry_md_write(hmac_handle, tvb_get_ptr(tvb, offset, idx + 1 - offset), idx + 1 - offset);
     /* Message digest is calculated with an empty message digest field */
-    memset(zero, 0, L2TP_HMAC_MD5_DIGEST_LEN);
-    md5_hmac_append(&ms, zero, avp_len - 1);
+    gcry_md_write(hmac_handle, zero, avp_len - 1);
     remainder = length - (idx + avp_len);
-    md5_hmac_append(&ms, tvb_get_ptr(tvb, idx + avp_len, remainder), remainder);
-    md5_hmac_finish(&ms, digest);
+    gcry_md_write(hmac_handle, tvb_get_ptr(tvb, idx + avp_len, remainder), remainder);
+    memcpy(digest, gcry_md_read(hmac_handle, 0), HASH_MD5_LENGTH);
+    gcry_md_close(hmac_handle);
 }
 
 static void sha1_hmac_digest(l2tpv3_tunnel_t *tunnel,
@@ -1080,35 +1100,41 @@ static void sha1_hmac_digest(l2tpv3_tunnel_t *tunnel,
                              packet_info *pinfo,
                              guint8 digest[20])
 {
-    guint8 zero[SHA1_DIGEST_LEN];
-    sha1_hmac_context ms;
+    guint8 zero[HASH_SHA1_LENGTH] = { 0 };
+    gcry_md_hd_t hmac_handle;
     int remainder;
     int offset = 0;
 
     if (tunnel->conv->pt == PT_NONE) /* IP encapsulated L2TPv3 */
         offset = 4;
 
-    sha1_hmac_starts(&ms, tunnel->shared_key, L2TP_HMAC_MD5_KEY_LEN);
+    if (gcry_md_open(&hmac_handle, GCRY_MD_SHA1, GCRY_MD_FLAG_HMAC)) {
+        return;
+    }
+    if (gcry_md_setkey(hmac_handle, tunnel->shared_key, HASH_MD5_LENGTH)) {
+        gcry_md_close(hmac_handle);
+        return;
+    }
 
     if (msg_type != MESSAGE_TYPE_SCCRQ) {
         if (tunnel->lcce1_nonce != NULL && tunnel->lcce2_nonce != NULL) {
             if (addresses_equal(&tunnel->lcce1, &pinfo->src)) {
-                sha1_hmac_update(&ms, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
-                sha1_hmac_update(&ms, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
             } else {
-                sha1_hmac_update(&ms, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
-                sha1_hmac_update(&ms, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce2_nonce, tunnel->lcce2_nonce_len);
+                gcry_md_write(hmac_handle, tunnel->lcce1_nonce, tunnel->lcce1_nonce_len);
             }
         }
     }
 
-    sha1_hmac_update(&ms, tvb_get_ptr(tvb, offset, idx + 1 - offset), idx + 1 - offset);
+    gcry_md_write(hmac_handle, tvb_get_ptr(tvb, offset, idx + 1 - offset), idx + 1 - offset);
     /* Message digest is calculated with an empty message digest field */
-    memset(zero, 0, SHA1_DIGEST_LEN);
-    sha1_hmac_update(&ms, zero, avp_len - 1);
+    gcry_md_write(hmac_handle, zero, avp_len - 1);
     remainder = length - (idx + avp_len);
-    sha1_hmac_update(&ms, tvb_get_ptr(tvb, idx + avp_len, remainder), remainder);
-    sha1_hmac_finish(&ms, digest);
+    gcry_md_write(hmac_handle, tvb_get_ptr(tvb, idx + avp_len, remainder), remainder);
+    memcpy(digest, gcry_md_read(hmac_handle, 0), HASH_SHA1_LENGTH);
+    gcry_md_close(hmac_handle);
 }
 
 static int check_control_digest(l2tpv3_tunnel_t *tunnel,
@@ -1119,7 +1145,7 @@ static int check_control_digest(l2tpv3_tunnel_t *tunnel,
                                 int msg_type,
                                 packet_info *pinfo)
 {
-    guint8 digest[SHA1_DIGEST_LEN];
+    guint8 digest[HASH_SHA1_LENGTH];
 
     if (!tunnel)
         return 1;
@@ -1128,12 +1154,12 @@ static int check_control_digest(l2tpv3_tunnel_t *tunnel,
 
     switch (tvb_get_guint8(tvb, idx)) {
         case L2TP_HMAC_MD5:
-            if ((avp_len - 1) != L2TP_HMAC_MD5_DIGEST_LEN)
+            if ((avp_len - 1) != HASH_MD5_LENGTH)
                 return -1;
             md5_hmac_digest(tunnel, tvb, length, idx, avp_len, msg_type, pinfo, digest);
             break;
         case L2TP_HMAC_SHA1:
-            if ((avp_len - 1) != SHA1_DIGEST_LEN)
+            if ((avp_len - 1) != HASH_SHA1_LENGTH)
                 return -1;
             sha1_hmac_digest(tunnel, tvb, length, idx, avp_len, msg_type, pinfo, digest);
             break;
@@ -1415,6 +1441,7 @@ static l2tpv3_session_t *store_l2_sublayer(l2tpv3_session_t *_session,
         case MESSAGE_TYPE_ICCN:
         case MESSAGE_TYPE_OCCN:
             session->lcce1.l2_specific = result;
+        /* FALL THROUGH */
         case MESSAGE_TYPE_ICRP:
         case MESSAGE_TYPE_OCRP:
             session->lcce2.l2_specific = result;
@@ -1728,31 +1755,47 @@ static int dissect_l2tp_broadband_avps(tvbuff_t *tvb, packet_info *pinfo _U_, pr
  */
 
 /* Dissect a single variable-length Ericsson Transport Configuration Group */
-static int dissect_l2tp_ericsson_transp_cfg(tvbuff_t *tvb, proto_tree *tree)
+static int dissect_l2tp_ericsson_transp_cfg(tvbuff_t *tvb, proto_tree *parent_tree)
 {
     int offset = 0;
-    guint32 num_sapis, i;
+    guint32 i, num_sapis;
+    proto_tree *tree;
 
-    proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_group_id, tvb, offset++, 1, ENC_NA);
-    proto_tree_add_item_ret_uint(tree, hf_l2tp_ericsson_tcg_num_sapis, tvb, offset++, 1, ENC_NA, &num_sapis);
-    for (i = 0; i < num_sapis; i++) {
-        proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_sapi, tvb, offset++, 1, ENC_NA);
+    while (tvb_reported_length_remaining(tvb, offset) >= 8) {
+        tree = proto_tree_add_subtree_format(parent_tree, tvb, 0, -1, ett_l2tp_ericsson_tcg,
+                                             NULL, "Transport Config Bundling Group");
+        proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_group_id, tvb, offset++, 1, ENC_NA);
+        proto_tree_add_item_ret_uint(tree, hf_l2tp_ericsson_tcg_num_sapis, tvb, offset++, 1, ENC_NA, &num_sapis);
+        for (i = 0; i < num_sapis; i++) {
+            proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_sapi, tvb, offset++, 1, ENC_NA);
+        }
+        proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_ip, tvb, offset, 4, ENC_NA);
+        offset += 4;
+        proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_dscp, tvb, offset++, 1, ENC_NA);
+        proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_crc32_enable, tvb, offset++, 1, ENC_NA);
+        proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_bundling_tout, tvb, offset++, 1, ENC_NA);
+        proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_bundling_max_pkt, tvb, offset, 2, ENC_BIG_ENDIAN);
+        offset += 2;
     }
-    proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_ip, tvb, offset, 4, ENC_NA);
-    offset += 4;
-    proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_dscp, tvb, offset++, 1, ENC_NA);
-    proto_tree_add_item(tree, hf_l2tp_ericsson_tcg_crc32_enable, tvb, offset++, 1, ENC_NA);
 
     return offset;
 }
 
 /* Dissect a single 3-byte Ericsson TEI-to-SC Map */
-static int dissect_l2tp_ericsson_tei_sc_map(tvbuff_t *tvb, proto_tree *tree)
+static int dissect_l2tp_ericsson_tei_sc_map(tvbuff_t *tvb, proto_tree *parent_tree)
 {
-    proto_tree_add_item(tree, hf_l2tp_ericsson_map_tei_low, tvb, 0, 1, ENC_NA);
-    proto_tree_add_item(tree, hf_l2tp_ericsson_map_tei_high, tvb, 1, 1, ENC_NA);
-    proto_tree_add_item(tree, hf_l2tp_ericsson_map_sc, tvb, 2, 1, ENC_NA);
-    return 3;
+    int i = 0, offset = 0;
+    proto_tree *tree;
+
+    while (tvb_reported_length_remaining(tvb, offset) >= 3) {
+        tree = proto_tree_add_subtree_format(parent_tree, tvb, offset, 3, ett_l2tp_ericsson_map,
+                                             NULL, "Transport Config Bundling Group %u", i);
+        proto_tree_add_item(tree, hf_l2tp_ericsson_map_tei_low, tvb, offset++, 1, ENC_NA);
+        proto_tree_add_item(tree, hf_l2tp_ericsson_map_tei_high, tvb, offset++, 1, ENC_NA);
+        proto_tree_add_item(tree, hf_l2tp_ericsson_map_sc, tvb, offset++, 1, ENC_NA);
+        i++;
+    }
+    return offset;
 }
 
 static int dissect_l2tp_ericsson_avps(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint32 ccid)
@@ -1763,8 +1806,7 @@ static int dissect_l2tp_ericsson_avps(tvbuff_t *tvb, packet_info *pinfo _U_, pro
     guint16     avp_len;
     guint16     ver_len_hidden;
     guint32     msg_type;
-    guint32     num_maps, i;
-    proto_tree *l2tp_avp_tree, *l2tp_avp_tree_sub;
+    proto_tree *l2tp_avp_tree;
     tvbuff_t   *tcg_tvb;
 
     ver_len_hidden  = tvb_get_ntohs(tvb, offset);
@@ -1826,19 +1868,12 @@ static int dissect_l2tp_ericsson_avps(tvbuff_t *tvb, packet_info *pinfo _U_, pro
         proto_tree_add_item(l2tp_avp_tree, hf_l2tp_ericsson_tc_num_groups, tvb, offset+2, 1, ENC_NA);
         /* FIXME: iterate over multiple groups */
         tcg_tvb = tvb_new_subset_length(tvb, offset+3, avp_len-3);
-        l2tp_avp_tree_sub = proto_tree_add_subtree_format(l2tp_avp_tree, tvb, 0, -1, ett_l2tp_ericsson_tcg,
-                                                          NULL, "Transport Config Bundling Group");
-        dissect_l2tp_ericsson_transp_cfg(tcg_tvb, l2tp_avp_tree_sub);
+        dissect_l2tp_ericsson_transp_cfg(tcg_tvb, l2tp_avp_tree);
         break;
-    case ERICSSNN_TEI_TO_SC_MAP:
-        proto_tree_add_item_ret_uint(l2tp_avp_tree, hf_l2tp_ericsson_tc_num_maps, tvb, offset++, 1, ENC_NA, &num_maps);
-        /* iterate over multiple groups */
-        for (i = 0; i < num_maps; i++) {
-                tcg_tvb = tvb_new_subset_length(tvb, offset, 3);
-                l2tp_avp_tree_sub = proto_tree_add_subtree_format(l2tp_avp_tree, tvb, 0, -1, ett_l2tp_ericsson_map,
-                                                          NULL, "Transport Config Bundling Group %u", i);
-                offset += dissect_l2tp_ericsson_tei_sc_map(tcg_tvb, l2tp_avp_tree_sub);
-        }
+    case ERICSSON_TEI_TO_SC_MAP:
+        proto_tree_add_item(l2tp_avp_tree, hf_l2tp_ericsson_tc_num_maps, tvb, offset++, 1, ENC_NA);
+        tcg_tvb = tvb_new_subset_length(tvb, offset, avp_len);
+        offset += dissect_l2tp_ericsson_tei_sc_map(tcg_tvb, l2tp_avp_tree);
         break;
 
     default:
@@ -1946,7 +1981,7 @@ static void process_control_avps(tvbuff_t *tvb,
                                  l2tpv3_tunnel_t *tunnel)
 {
     proto_tree *l2tp_lcp_avp_tree, *l2tp_avp_tree = NULL, *l2tp_avp_tree_sub, *l2tp_avp_csu_tree;
-    proto_item *tf, *te, *tc;
+    proto_item *te, *tc;
 
     int                msg_type  = 0;
     gboolean           isStopCcn = FALSE;
@@ -2442,31 +2477,17 @@ static void process_control_avps(tvbuff_t *tvb,
             store_cma_nonce(tunnel, tvb, idx, avp_len, msg_type);
             break;
         case TX_CONNECT_SPEED_V3:
-        {
-            guint64 speed;
             if (avp_len < 8)
                 break;
 
-            speed = tvb_get_ntoh64(tvb, idx);
-            tf = proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_tx_connect_speed_v3, tvb, idx, 8, ENC_BIG_ENDIAN);
-            if (speed == 0) {
-                proto_item_append_text(tf, " (indeterminable or no physical p2p link)");
-            }
+            proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_tx_connect_speed_v3, tvb, idx, 8, ENC_BIG_ENDIAN);
             break;
-        }
         case RX_CONNECT_SPEED_V3:
-        {
-            guint64 speed;
             if (avp_len < 8)
                 break;
 
-            speed = tvb_get_ntoh64(tvb, idx);
-            tf = proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_rx_connect_speed_v3, tvb, idx, 8, ENC_BIG_ENDIAN);
-            if (speed == 0) {
-                proto_item_append_text(tf, " (indeterminable or no physical p2p link)");
-            }
+            proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_rx_connect_speed_v3, tvb, idx, 8, ENC_BIG_ENDIAN);
             break;
-        }
         case CONNECT_SPEED_UPDATE:
         {
             tc = proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_csu, tvb, idx, avp_len, ENC_NA);
@@ -3576,6 +3597,14 @@ proto_register_l2tp(void)
           { "CRC32 Enabled", "l2tp.ericsson.crc32_en", FT_BOOLEAN, BASE_NONE, NULL, 0x0,
             NULL, HFILL }},
 
+        { &hf_l2tp_ericsson_tcg_bundling_tout,
+          { "TCG Bundling Timeout (ms)", "l2tp.ericsson.gcg.bundle_tout", FT_UINT8, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_l2tp_ericsson_tcg_bundling_max_pkt,
+          { "TCG Bundling Max Packet Size", "l2tp.ericsson.tcg.bundle_max_pkt", FT_UINT16, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }},
+
         { &hf_l2tp_ericsson_tc_num_maps,
           { "Number of TEI-SC Maps", "l2tp.ericsson.num_maps", FT_UINT8, BASE_DEC, NULL, 0x0,
             NULL, HFILL }},
@@ -3682,8 +3711,8 @@ proto_register_l2tp(void)
       { &hf_l2tp_avp_circuit_type, { "Circuit Type", "l2tp.avp.circuit_type", FT_BOOLEAN, 16, TFS(&tfs_new_existing), 0x0002, NULL, HFILL }},
       { &hf_l2tp_avp_preferred_language, { "Preferred Language", "l2tp.avp.preferred_language", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL }},
       { &hf_l2tp_avp_nonce, { "Nonce", "l2tp.avp.nonce", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-      { &hf_l2tp_avp_tx_connect_speed_v3, { "Tx Connect Speed v3", "l2tp.avp.tx_connect_speed_v3", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL }},
-      { &hf_l2tp_avp_rx_connect_speed_v3, { "Rx Connect Speed v3", "l2tp.avp.rx_connect_speed_v3", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+      { &hf_l2tp_avp_tx_connect_speed_v3, { "Tx Connect Speed v3", "l2tp.avp.tx_connect_speed_v3", FT_UINT64, BASE_HEX|BASE_VAL64_STRING|BASE_SPECIAL_VALS, VALS64(unique_indeterminable_or_no_link), 0x0, NULL, HFILL }},
+      { &hf_l2tp_avp_rx_connect_speed_v3, { "Rx Connect Speed v3", "l2tp.avp.rx_connect_speed_v3", FT_UINT64, BASE_HEX|BASE_VAL64_STRING|BASE_SPECIAL_VALS, VALS64(unique_indeterminable_or_no_link), 0x0, NULL, HFILL }},
       { &hf_l2tp_lapd_info, { "LAPD info", "l2tp.lapd_info", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
       { &hf_l2tp_session_id, { "Packet Type", "l2tp.session_id", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
       { &hf_l2tp_zero_length_body_message, { "Zero Length Body message", "l2tp.zero_length_body_message", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
@@ -3763,7 +3792,7 @@ proto_reg_handoff_l2tp(void)
     dissector_handle_t atm_oam_llc_handle;
 
     l2tp_udp_handle = create_dissector_handle(dissect_l2tp_udp, proto_l2tp);
-    dissector_add_uint("udp.port", UDP_PORT_L2TP, l2tp_udp_handle);
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_L2TP, l2tp_udp_handle);
 
     l2tp_ip_handle = create_dissector_handle(dissect_l2tp_ip, proto_l2tp);
     dissector_add_uint("ip.proto", IP_PROTO_L2TP, l2tp_ip_handle);

@@ -81,7 +81,7 @@ typedef struct _smb2_saved_info_t {
 typedef struct _smb2_tid_info_t {
 	guint32 tid;
 	guint32 connect_frame;
-	guint16 share_type;
+	guint8 share_type;
 	char *name;
 } smb2_tid_info_t;
 
@@ -182,7 +182,7 @@ typedef struct _smb2_info_t {
 	guint32 status;
 	guint32 tid;
 	guint64 sesid;
-	gint64  msg_id;
+	guint64  msg_id;
 	guint32 flags;
 	smb2_eo_file_info_t	*eo_file_info; /* eo_smb extra info */
 	smb2_conv_info_t	*conv;

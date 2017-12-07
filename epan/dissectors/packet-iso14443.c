@@ -171,8 +171,10 @@ static int ett_iso14443_hdr = -1;
 static int ett_iso14443_msg = -1;
 static int ett_iso14443_app_data = -1;
 static int ett_iso14443_prot_inf = -1;
+static int ett_iso14443_bit_rate = -1;
 static int ett_iso14443_prot_type = -1;
 static int ett_iso14443_ats_t0 = -1;
+static int ett_iso14443_ats_ta1 = -1;
 static int ett_iso14443_ats_tb1 = -1;
 static int ett_iso14443_ats_tc1 = -1;
 static int ett_iso14443_attr_p1 = -1;
@@ -206,6 +208,13 @@ static int hf_iso14443_num_afi_apps = -1;
 static int hf_iso14443_total_num_apps = -1;
 static int hf_iso14443_prot_inf = -1;
 static int hf_iso14443_bit_rate_cap = -1;
+static int hf_iso14443_same_bit_rate = -1;
+static int hf_iso14443_picc_pcd_847 = -1;
+static int hf_iso14443_picc_pcd_424 = -1;
+static int hf_iso14443_picc_pcd_212 = -1;
+static int hf_iso14443_pcd_picc_847 = -1;
+static int hf_iso14443_pcd_picc_424 = -1;
+static int hf_iso14443_pcd_picc_212 = -1;
 static int hf_iso14443_max_frame_size_code = -1;
 static int hf_iso14443_prot_type = -1;
 static int hf_iso14443_min_tr2 = -1;
@@ -237,6 +246,13 @@ static int hf_iso14443_fsc = -1;
 static int hf_iso14443_tc1 = -1;
 static int hf_iso14443_tb1 = -1;
 static int hf_iso14443_ta1 = -1;
+static int hf_iso14443_same_d = -1;
+static int hf_iso14443_ds8 = -1;
+static int hf_iso14443_ds4 = -1;
+static int hf_iso14443_ds2 = -1;
+static int hf_iso14443_dr8 = -1;
+static int hf_iso14443_dr4 = -1;
+static int hf_iso14443_dr2 = -1;
 static int hf_iso14443_hist_bytes = -1;
 static int hf_iso14443_attrib_start = -1;
 static int hf_iso14443_pupi = -1;
@@ -261,40 +277,33 @@ static int hf_iso14443_pwr_lvl_ind = -1;
 static int hf_iso14443_wtxm = -1;
 static int hf_iso14443_inf = -1;
 static int hf_iso14443_crc = -1;
+static int hf_iso14443_crc_status = -1;
+
+static const int *bit_rate_fields[] = {
+    &hf_iso14443_same_bit_rate,
+    &hf_iso14443_picc_pcd_847,
+    &hf_iso14443_picc_pcd_424,
+    &hf_iso14443_picc_pcd_212,
+    &hf_iso14443_pcd_picc_847,
+    &hf_iso14443_pcd_picc_424,
+    &hf_iso14443_pcd_picc_212,
+    NULL
+};
+
+static const int *ats_ta1_fields[] = {
+    &hf_iso14443_same_d,
+    &hf_iso14443_ds8,
+    &hf_iso14443_ds4,
+    &hf_iso14443_ds2,
+    &hf_iso14443_dr8,
+    &hf_iso14443_dr4,
+    &hf_iso14443_dr2,
+    NULL
+};
 
 static expert_field ei_iso14443_unknown_cmd = EI_INIT;
 static expert_field ei_iso14443_wrong_crc = EI_INIT;
 static expert_field ei_iso14443_uid_inval_size = EI_INIT;
-
-
-/* dissect and verify the CRC
-   the tvb includes the message followed by the CRC
-   bytes 0 to crc_offset-1 contain the message, the CRC starts at
-   crc_offset and is CRC_LEN bytes long */
-static int dissect_iso14443_crc(tvbuff_t *tvb, gint crc_offset,
-        packet_info *pinfo, proto_tree *tree, iso14443_type_t type)
-{
-    proto_item *crc_pi;
-    guint16 crc_recv, crc_calc;
-
-    crc_recv = tvb_get_letohs(tvb, crc_offset);
-    if (type == ISO14443_A)
-        crc_calc = crc16_iso14443a_tvb_offset(tvb, 0, crc_offset);
-    else if (type == ISO14443_B)
-        crc_calc = crc16_ccitt_tvb_offset(tvb, 0, crc_offset);
-    else
-        return -1;
-
-    crc_pi = proto_tree_add_item(tree, hf_iso14443_crc,
-            tvb, crc_offset, CRC_LEN, ENC_LITTLE_ENDIAN);
-    proto_item_append_text(crc_pi, crc_recv==crc_calc ?
-            " (correct)" : " (wrong)");
-    /* add an expert info to allow filtering on packets with wrong crc */
-    if (crc_recv != crc_calc)
-        expert_add_info(pinfo, crc_pi, &ei_iso14443_wrong_crc);
-
-    return CRC_LEN;
-}
 
 
 static int
@@ -406,8 +415,12 @@ static int dissect_iso14443_atqb(tvbuff_t *tvb, gint offset,
             tvb, offset, prot_inf_len, ENC_BIG_ENDIAN);
     prot_inf_tree = proto_item_add_subtree(
             prot_inf_it, ett_iso14443_prot_inf);
-    proto_tree_add_item(prot_inf_tree, hf_iso14443_bit_rate_cap,
-            tvb, offset, 1, ENC_BIG_ENDIAN);
+    /* bit rate info are applicable only if b4 is 0 */
+    if (!(tvb_get_guint8(tvb, offset) & 0x08)) {
+        proto_tree_add_bitmask_with_flags(prot_inf_tree, tvb, offset,
+                hf_iso14443_bit_rate_cap, ett_iso14443_bit_rate,
+                bit_rate_fields, ENC_BIG_ENDIAN, BMT_NO_APPEND);
+    }
     offset++;
     max_frame_size_code = (tvb_get_guint8(tvb, offset) & 0xF0) >> 4;
     proto_tree_add_uint_bits_format_value(prot_inf_tree,
@@ -466,8 +479,13 @@ static int dissect_iso14443_atqb(tvbuff_t *tvb, gint offset,
     if (prot_inf_len>3)
         offset++;
 
-    if (!crc_dropped)
-        offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_B);
+    if (!crc_dropped) {
+        proto_tree_add_checksum(tree, tvb, offset,
+                hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                 crc16_ccitt_tvb_offset(tvb, 0, offset),
+                ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+        offset += CRC_LEN;
+    }
 
     return offset;
 }
@@ -505,8 +523,13 @@ dissect_iso14443_cmd_type_wupb(tvbuff_t *tvb, packet_info *pinfo,
                 "%d", (guint8)pow(2, param&0x07));
         offset++;
 
-        if (!crc_dropped)
-            offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_B);
+        if (!crc_dropped) {
+            proto_tree_add_checksum(tree, tvb, offset,
+                    hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                    crc16_ccitt_tvb_offset(tvb, 0, offset),
+                    ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+            offset += CRC_LEN;
+        }
     }
     else if (pinfo->p2p_dir == P2P_DIR_RECV) {
         offset = dissect_iso14443_atqb(tvb, offset, pinfo, tree, crc_dropped);
@@ -530,8 +553,13 @@ dissect_iso14443_cmd_type_hlta(tvbuff_t *tvb, packet_info *pinfo,
             tvb, offset, 2, ENC_BIG_ENDIAN);
     offset += 2;
 
-    if (!crc_dropped)
-        offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_A);
+    if (!crc_dropped) {
+        proto_tree_add_checksum(tree, tvb, offset,
+                hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                crc16_iso14443a_tvb_offset(tvb, 0, offset),
+                ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+        offset += CRC_LEN;
+    }
 
     return offset;
 }
@@ -581,8 +609,13 @@ dissect_iso14443_cmd_type_uid(tvbuff_t *tvb, packet_info *pinfo,
             col_set_str(pinfo->cinfo, COL_INFO, "Select");
             proto_item_append_text(ti, ": Select");
             offset = dissect_iso14443_uid_part(tvb, offset, pinfo, tree);
-            if (!crc_dropped)
-                offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_A);
+            if (!crc_dropped) {
+                proto_tree_add_checksum(tree, tvb, offset,
+                        hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                        crc16_iso14443a_tvb_offset(tvb, 0, offset),
+                        ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+                offset += CRC_LEN;
+            }
         }
     }
     else if (pinfo->p2p_dir == P2P_DIR_RECV) {
@@ -594,8 +627,13 @@ dissect_iso14443_cmd_type_uid(tvbuff_t *tvb, packet_info *pinfo,
             proto_tree_add_item(tree, hf_iso14443_uid_complete,
                 tvb, offset, 1, ENC_BIG_ENDIAN);
             offset++;
-            if (!crc_dropped)
-                offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_A);
+            if (!crc_dropped) {
+                proto_tree_add_checksum(tree, tvb, offset,
+                        hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                        crc16_iso14443a_tvb_offset(tvb, 0, offset),
+                        ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+                offset += CRC_LEN;
+            }
         }
         else if (tvb_reported_length_remaining(tvb, offset) == 5) {
             col_set_str(pinfo->cinfo, COL_INFO, "UID");
@@ -653,8 +691,9 @@ static int dissect_iso14443_ats(tvbuff_t *tvb, gint offset,
         offset++;
     }
     if (t0 & HAVE_TA1) {
-        proto_tree_add_item(tree, hf_iso14443_ta1,
-                tvb, offset, 1, ENC_BIG_ENDIAN);
+        proto_tree_add_bitmask_with_flags(tree, tvb, offset,
+                hf_iso14443_ta1, ett_iso14443_ats_ta1,
+                ats_ta1_fields, ENC_BIG_ENDIAN, BMT_NO_APPEND);
         offset++;
     }
     if (t0 & HAVE_TB1) {
@@ -694,8 +733,13 @@ static int dissect_iso14443_ats(tvbuff_t *tvb, gint offset,
                 tvb, offset, hist_len, ENC_NA);
         offset += hist_len;
     }
-    if (!crc_dropped)
-        offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_A);
+    if (!crc_dropped) {
+        proto_tree_add_checksum(tree, tvb, offset,
+                hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                crc16_iso14443a_tvb_offset(tvb, 0, offset),
+                ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+        offset += CRC_LEN;
+    }
 
     return offset;
 }
@@ -730,8 +774,13 @@ dissect_iso14443_cmd_type_ats(tvbuff_t *tvb, packet_info *pinfo,
         proto_tree_add_uint_bits_format_value(tree, hf_iso14443_cid,
                 tvb, offset*8+4, 4, cid, "%d", cid);
         offset++;
-        if (!crc_dropped)
-            offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_A);
+        if (!crc_dropped) {
+            proto_tree_add_checksum(tree, tvb, offset,
+                    hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                    crc16_iso14443a_tvb_offset(tvb, 0, offset),
+                    ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+            offset += CRC_LEN;
+        }
     }
     else if (pinfo->p2p_dir == P2P_DIR_RECV) {
         offset = dissect_iso14443_ats(tvb, offset, pinfo, tree, crc_dropped);
@@ -806,8 +855,13 @@ static int dissect_iso14443_attrib(tvbuff_t *tvb, gint offset,
     if (hl_inf_len > 0) {
         offset += hl_inf_len;
     }
-    if (!crc_dropped)
-        offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_B);
+    if (!crc_dropped) {
+        proto_tree_add_checksum(tree, tvb, offset,
+                hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                crc16_ccitt_tvb_offset(tvb, 0, offset),
+                ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+        offset += CRC_LEN;
+    }
 
     return offset;
 }
@@ -851,8 +905,13 @@ dissect_iso14443_cmd_type_attrib(tvbuff_t *tvb, packet_info *pinfo,
             offset += hl_resp_len;
         }
 
-        if (!crc_dropped)
-            offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, ISO14443_B);
+        if (!crc_dropped) {
+            proto_tree_add_checksum(tree, tvb, offset,
+                    hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                    crc16_ccitt_tvb_offset(tvb, 0, offset),
+                    ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+            offset += CRC_LEN;
+        }
     }
 
     return offset;
@@ -891,7 +950,7 @@ dissect_iso14443_cmd_type_block(tvbuff_t *tvb, packet_info *pinfo,
 
     switch (block_type) {
         case I_BLOCK_TYPE:
-            col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL,
+            col_append_sep_str(pinfo->cinfo, COL_INFO, NULL,
                     (pcb & 0x10) ? "Chaining" : "No chaining");
             proto_tree_add_item(pcb_tree, hf_iso14443_i_blk_chaining,
                     tvb, offset, 1, ENC_BIG_ENDIAN);
@@ -907,8 +966,8 @@ dissect_iso14443_cmd_type_block(tvbuff_t *tvb, packet_info *pinfo,
             break;
 
         case R_BLOCK_TYPE:
-            col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL,
-                    "%s", (pcb & 0x10) ?
+            col_append_sep_str(pinfo->cinfo, COL_INFO, NULL,
+                    (pcb & 0x10) ?
                     tfs_nak_ack.true_string : tfs_nak_ack.false_string);
             proto_tree_add_item(pcb_tree, hf_iso14443_nak,
                     tvb, offset, 1, ENC_BIG_ENDIAN);
@@ -924,7 +983,7 @@ dissect_iso14443_cmd_type_block(tvbuff_t *tvb, packet_info *pinfo,
             s_cmd = (pcb & 0x30) >> 4;
             proto_tree_add_item(pcb_tree, hf_iso14443_s_blk_cmd,
                     tvb, offset, 1, ENC_BIG_ENDIAN);
-            col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "%s",
+            col_append_sep_str(pinfo->cinfo, COL_INFO, NULL,
                     val_to_str(s_cmd, iso14443_s_block_cmd,
                         "Unknown (0x%02x)"));
             proto_tree_add_item(pcb_tree, hf_iso14443_cid_following,
@@ -978,7 +1037,6 @@ dissect_iso14443_cmd_type_block(tvbuff_t *tvb, packet_info *pinfo,
         offset += inf_len;
     }
 
-
     if (!crc_dropped) {
         iso14443_type_t t;
         circuit_t *circuit;
@@ -987,7 +1045,14 @@ dissect_iso14443_cmd_type_block(tvbuff_t *tvb, packet_info *pinfo,
         if (circuit) {
             t = (iso14443_type_t)GPOINTER_TO_UINT(
                     (gpointer)circuit_get_proto_data(circuit, proto_iso14443));
-            offset += dissect_iso14443_crc(tvb, offset, pinfo, tree, t);
+
+            proto_tree_add_checksum(tree, tvb, offset,
+                    hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
+                    (t == ISO14443_A) ?
+                    crc16_iso14443a_tvb_offset(tvb, 0, offset) :
+                    crc16_ccitt_tvb_offset(tvb, 0, offset),
+                    ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
+            offset += CRC_LEN;
         }
     }
 
@@ -1351,6 +1416,34 @@ proto_register_iso14443(void)
             { "Bit rate capability", "iso14443.bit_rate_cap",
                 FT_UINT8, BASE_HEX, NULL, 0, NULL, HFILL }
         },
+        { &hf_iso14443_same_bit_rate,
+            { "Same bit rate in both directions", "iso14443.same_bit_rate",
+                FT_BOOLEAN, 8, TFS(&tfs_required_not_required), 0x80, NULL, HFILL }
+        },
+        { &hf_iso14443_picc_pcd_847,
+            { "PICC to PCD, 847kbit/s", "iso14443.picc_pcd_847", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x40, NULL, HFILL }
+        },
+        { &hf_iso14443_picc_pcd_424,
+            { "PICC to PCD, 424kbit/s", "iso14443.picc_pcd_424", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x20, NULL, HFILL }
+        },
+        { &hf_iso14443_picc_pcd_212,
+            { "PICC to PCD, 212kbit/s", "iso14443.picc_pcd_212", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x10, NULL, HFILL }
+        },
+        { &hf_iso14443_pcd_picc_847,
+            { "PCD to PICC, 847kbit/s", "iso14443.pcd_picc_847", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x04, NULL, HFILL }
+        },
+        { &hf_iso14443_pcd_picc_424,
+            { "PCD to PICC, 424kbit/s", "iso14443.pcd_picc_424", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x02, NULL, HFILL }
+        },
+        { &hf_iso14443_pcd_picc_212,
+            { "PCD to PICC, 212kbit/s", "iso14443.pcd_picc_212", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x01, NULL, HFILL }
+        },
         { &hf_iso14443_max_frame_size_code,
             { "Max frame size code", "iso14443.max_frame_size_code",
                 FT_UINT8, BASE_HEX, NULL, 0, NULL, HFILL }
@@ -1479,6 +1572,34 @@ proto_register_iso14443(void)
             { "Interface byte TA1", "iso14443.ta1",
                 FT_UINT8, BASE_HEX, NULL, 0, NULL, HFILL }
         },
+        { &hf_iso14443_same_d,
+            { "Same D for both directions", "iso14443.same_d", FT_BOOLEAN, 8,
+                TFS(&tfs_required_not_required), 0x80, NULL, HFILL }
+        },
+        { &hf_iso14443_ds8,
+            { "DS=8", "iso14443.ds8", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x40, NULL, HFILL }
+        },
+        { &hf_iso14443_ds4,
+            { "DS=4", "iso14443.ds4", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x20, NULL, HFILL }
+        },
+        { &hf_iso14443_ds2,
+            { "DS=2", "iso14443.ds2", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x10, NULL, HFILL }
+        },
+        { &hf_iso14443_dr8,
+            { "DR=8", "iso14443.dr8", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x04, NULL, HFILL }
+        },
+        { &hf_iso14443_dr4,
+            { "DR=4", "iso14443.dr4", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x02, NULL, HFILL }
+        },
+        { &hf_iso14443_dr2,
+            { "DR=2", "iso14443.dr2", FT_BOOLEAN, 8,
+                TFS(&tfs_supported_not_supported), 0x01, NULL, HFILL }
+        },
         { &hf_iso14443_hist_bytes,
             { "Historical bytes", "iso14443.hist_bytes",
                 FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }
@@ -1574,6 +1695,10 @@ proto_register_iso14443(void)
         { &hf_iso14443_crc,
             { "CRC", "iso14443.crc",
                 FT_UINT16, BASE_HEX, NULL, 0, NULL, HFILL }
+        },
+        { &hf_iso14443_crc_status,
+            { "CRC Status", "iso14443.crc.status",
+                FT_UINT8, BASE_NONE, VALS(proto_checksum_vals), 0, NULL, HFILL }
         }
    };
 
@@ -1583,8 +1708,10 @@ proto_register_iso14443(void)
         &ett_iso14443_msg,
         &ett_iso14443_app_data,
         &ett_iso14443_prot_inf,
+        &ett_iso14443_bit_rate,
         &ett_iso14443_prot_type,
         &ett_iso14443_ats_t0,
+        &ett_iso14443_ats_ta1,
         &ett_iso14443_ats_tb1,
         &ett_iso14443_ats_tc1,
         &ett_iso14443_attr_p1,

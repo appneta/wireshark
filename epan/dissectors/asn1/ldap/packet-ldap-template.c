@@ -216,16 +216,13 @@ static gchar    *attr_type = NULL;
 static gboolean is_binary_attr_type = FALSE;
 static gboolean ldap_found_in_frame = FALSE;
 
-#define TCP_PORT_LDAP                   389
+#define TCP_PORT_RANGE_LDAP             "389,3268" /* 3268 is Windows 2000 Global Catalog */
 #define TCP_PORT_LDAPS                  636
 #define UDP_PORT_CLDAP                  389
-#define TCP_PORT_GLOBALCAT_LDAP         3268 /* Windows 2000 Global Catalog */
 
 /* desegmentation of LDAP */
 static gboolean ldap_desegment = TRUE;
-static guint global_ldap_tcp_port = TCP_PORT_LDAP;
 static guint global_ldaps_tcp_port = TCP_PORT_LDAPS;
-static guint tcp_port = 0;
 static guint ssl_port = 0;
 
 static dissector_handle_t gssapi_handle;
@@ -764,7 +761,7 @@ static void ldap_do_protocolop(packet_info *pinfo)
 {
   const gchar* valstr;
 
-  if (do_protocolop)  {
+  if (do_protocolop) {
 
     valstr = val_to_str(ProtocolOp, ldap_ProtocolOp_choice_vals, "Unknown (%%u)");
 
@@ -1002,7 +999,7 @@ one_more_pdu:
      */
     length = length_remaining;
     if (length > msg_len) length = msg_len;
-    msg_tvb = tvb_new_subset(tvb, offset, length, msg_len);
+    msg_tvb = tvb_new_subset_length_caplen(tvb, offset, length, msg_len);
 
     /*
      * Now dissect the LDAP message.
@@ -1191,7 +1188,7 @@ static void
     */
     length = length_remaining;
     if (length > sasl_msg_len) length = sasl_msg_len;
-    sasl_tvb = tvb_new_subset(tvb, offset, length, sasl_msg_len);
+    sasl_tvb = tvb_new_subset_length_caplen(tvb, offset, length, sasl_msg_len);
 
     proto_tree_add_uint(ldap_tree, hf_ldap_sasl_buffer_length, sasl_tvb, 0, 4, sasl_len);
 
@@ -1217,7 +1214,7 @@ static void
         tmp_length = tvb_reported_length_remaining(sasl_tvb, 4);
         if ((guint)tmp_length > sasl_len)
           tmp_length = sasl_len;
-        gssapi_tvb = tvb_new_subset(sasl_tvb, 4, tmp_length, sasl_len);
+        gssapi_tvb = tvb_new_subset_length_caplen(sasl_tvb, 4, tmp_length, sasl_len);
 
         /* Attempt decryption of the GSSAPI wrapped data if possible */
         gssapi_encrypt.gssapi_data_encrypted = FALSE;
@@ -1311,9 +1308,10 @@ int dissect_mscldap_string(tvbuff_t *tvb, int offset, char *str, int max_len, gb
 {
   int compr_len;
   const guchar *name;
+  guint name_len;
 
   /* The name data MUST start at offset 0 of the tvb */
-  compr_len = expand_dns_name(tvb, offset, max_len, 0, &name);
+  compr_len = get_dns_name(tvb, offset, max_len, 0, &name, &name_len);
   g_strlcpy(str, name, max_len);
   return offset + compr_len;
 }
@@ -1488,7 +1486,7 @@ static int dissect_NetLogon_PDU(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
         proto_tree_add_string(tree, hf_mscldap_hostname, tvb, old_offset, offset-old_offset, str);
 
         /* DC IP Address */
-        proto_tree_add_ipv4(tree, hf_mscldap_netlogon_ipaddress, tvb, offset, 4, tvb_get_ntohl(tvb,offset));
+        proto_tree_add_item(tree, hf_mscldap_netlogon_ipaddress, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset += 4;
 
         /* Flags */
@@ -1572,7 +1570,7 @@ static int dissect_NetLogon_PDU(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
         /* add IP address and desect the sockaddr_in structure */
 
         old_offset = offset + 4;
-        item = proto_tree_add_ipv4(tree, hf_mscldap_netlogon_ipaddress, tvb, old_offset, 4, tvb_get_ipv4(tvb,old_offset));
+        item = proto_tree_add_item(tree, hf_mscldap_netlogon_ipaddress, tvb, old_offset, 4, ENC_BIG_ENDIAN);
 
         if (tree){
           proto_tree *subtree;
@@ -1588,7 +1586,7 @@ static int dissect_NetLogon_PDU(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
           offset +=2;
 
           /* get IP address */
-          proto_tree_add_ipv4(subtree, hf_mscldap_netlogon_ipaddress_ipv4, tvb, offset, 4, tvb_get_ipv4(tvb,offset));
+          proto_tree_add_item(subtree, hf_mscldap_netlogon_ipaddress_ipv4, tvb, offset, 4, ENC_BIG_ENDIAN);
           offset +=4;
 
           /* skip the 8 bytes of zeros in the sockaddr structure */
@@ -1665,9 +1663,9 @@ dissect_ldap_oid(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, void* 
   const char *oidname;
 
   /* tvb here contains an ascii string that is really an oid */
-/* XXX   we should convert the string oid into a real oid so we can use
- *       proto_tree_add_oid() instead.
- */
+  /* XXX   we should convert the string oid into a real oid so we can use
+   *       proto_tree_add_oid() instead.
+   */
 
   oid=tvb_get_string_enc(wmem_packet_scope(), tvb, 0, tvb_reported_length(tvb), ENC_UTF_8|ENC_NA);
   if(!oid){
@@ -2203,10 +2201,6 @@ void proto_register_ldap(void) {
     " To use this option, you must also enable \"Allow subdissectors to reassemble TCP streams\" in the TCP protocol settings.",
     &ldap_desegment);
 
-  prefs_register_uint_preference(ldap_module, "tcp.port", "LDAP TCP Port",
-                                 "Set the port for LDAP operations",
-                                 10, &global_ldap_tcp_port);
-
   prefs_register_uint_preference(ldap_module, "ssl.port", "LDAPS TCP Port",
                                  "Set the port for LDAP operations over SSL",
                                  10, &global_ldaps_tcp_port);
@@ -2225,6 +2219,7 @@ void proto_register_ldap(void) {
                            attribute_types_update_cb,
                            attribute_types_free_cb,
                            attribute_types_initialize_cb,
+                           NULL,
                            custom_attribute_types_uat_fields);
 
   prefs_register_uat_preference(ldap_module, "custom_ldap_attribute_types",
@@ -2252,10 +2247,8 @@ proto_reg_handoff_ldap(void)
 {
   dissector_handle_t cldap_handle;
 
-  dissector_add_uint("tcp.port", TCP_PORT_GLOBALCAT_LDAP, ldap_handle);
-
   cldap_handle = create_dissector_handle(dissect_mscldap, proto_cldap);
-  dissector_add_uint("udp.port", UDP_PORT_CLDAP, cldap_handle);
+  dissector_add_uint_with_preference("udp.port", UDP_PORT_CLDAP, cldap_handle);
 
   gssapi_handle = find_dissector_add_dependency("gssapi", proto_ldap);
   gssapi_wrap_handle = find_dissector_add_dependency("gssapi_verf", proto_ldap);
@@ -2266,6 +2259,8 @@ proto_reg_handoff_ldap(void)
   ssl_handle = find_dissector_add_dependency("ssl", proto_ldap);
 
   prefs_register_ldap();
+
+  oid_add_from_string("ISO assigned OIDs, USA",                                                     "1.2.840");
 
 /*  http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dsml/dsml/ldap_controls_and_session_support.asp */
   oid_add_from_string("LDAP_PAGED_RESULT_OID_STRING","1.2.840.113556.1.4.319");
@@ -2302,15 +2297,38 @@ proto_reg_handoff_ldap(void)
   oid_add_from_string("msDS-AdditionalDnsHostName","1.2.840.113556.1.4.1717");
   oid_add_from_string("None","1.3.6.1.4.1.1466.101.119.1");
   oid_add_from_string("LDAP_START_TLS_OID","1.3.6.1.4.1.1466.20037");
-  oid_add_from_string("LDAP_CONTROL_VLVREQUEST VLV","2.16.840.1.113730.3.4.9");
-  oid_add_from_string("LDAP_CONTROL_VLVRESPONSE VLV","2.16.840.1.113730.3.4.10");
-  oid_add_from_string("LDAP_SERVER_QUOTA_CONTROL_OID","1.2.840.113556.1.4.1852");
-  oid_add_from_string("LDAP_SERVER_RANGE_OPTION_OID","1.2.840.113556.1.4.802");
-  oid_add_from_string("LDAP_SERVER_SHUTDOWN_NOTIFY_OID","1.2.840.113556.1.4.1907");
-  oid_add_from_string("LDAP_SERVER_RANGE_RETRIEVAL_NOERR_OID","1.2.840.113556.1.4.1948");
 
+  oid_add_from_string("inetOrgPerson", "2.16.840.1.113730.3.2.2");
   /* RFC2798 */
-  oid_add_from_string("inetOrgPerson","2.16.840.1.113730.3.2.2");
+  oid_add_from_string("US company arc",                                                             "2.16.840.1");
+
+  /* http://www.alvestrand.no/objectid/2.16.840.1.113730.3.4.html */
+  oid_add_from_string("Manage DSA IT LDAPv3 control",                                               "2.16.840.1.113730.3.4.2");
+  oid_add_from_string("Persistent Search LDAPv3 control",                                           "2.16.840.1.113730.3.4.3");
+  oid_add_from_string("Netscape Password Expired LDAPv3 control",                                   "2.16.840.1.113730.3.4.4");
+  oid_add_from_string("Netscape Password Expiring LDAPv3 control",                                  "2.16.840.1.113730.3.4.5");
+  oid_add_from_string("Netscape NT Synchronization Client LDAPv3 control",                          "2.16.840.1.113730.3.4.6");
+  oid_add_from_string("Entry Change Notification LDAPv3 control",                                   "2.16.840.1.113730.3.4.7");
+  oid_add_from_string("Transaction ID Request Control",                                             "2.16.840.1.113730.3.4.8");
+  oid_add_from_string("VLV Request LDAPv3 control",                                                 "2.16.840.1.113730.3.4.9");
+  oid_add_from_string("VLV Response LDAPv3 control",                                                "2.16.840.1.113730.3.4.10");
+  oid_add_from_string("Transaction ID Response Control",                                            "2.16.840.1.113730.3.4.11");
+  oid_add_from_string("Proxied Authorization (version 1) control",                                  "2.16.840.1.113730.3.4.12");
+  oid_add_from_string("iPlanet Directory Server Replication Update Information Control",            "2.16.840.1.113730.3.4.13");
+  oid_add_from_string("iPlanet Directory Server search on specific backend control",                "2.16.840.1.113730.3.4.14");
+  oid_add_from_string("Authentication Response Control",                                            "2.16.840.1.113730.3.4.15");
+  oid_add_from_string("Authentication Request Control",                                             "2.16.840.1.113730.3.4.16");
+  oid_add_from_string("Real Attributes Only Request Control",                                       "2.16.840.1.113730.3.4.17");
+  oid_add_from_string("Proxied Authorization (version 2) Control",                                  "2.16.840.1.113730.3.4.18");
+  oid_add_from_string("Chaining loop detection",                                                    "2.16.840.1.113730.3.4.19");
+  oid_add_from_string("iPlanet Replication Modrdn Extra Mods Control",                              "2.16.840.1.113730.3.4.999");
+
+
+  oid_add_from_string("LDAP_SERVER_QUOTA_CONTROL_OID",         "1.2.840.113556.1.4.1852");
+  oid_add_from_string("LDAP_SERVER_RANGE_OPTION_OID",          "1.2.840.113556.1.4.802");
+  oid_add_from_string("LDAP_SERVER_SHUTDOWN_NOTIFY_OID",       "1.2.840.113556.1.4.1907");
+  oid_add_from_string("LDAP_SERVER_RANGE_RETRIEVAL_NOERR_OID", "1.2.840.113556.1.4.1948");
+
 
   dissector_add_string("ldap.name", "netlogon", create_dissector_handle(dissect_NetLogon_PDU, proto_cldap));
   dissector_add_string("ldap.name", "objectGUID", create_dissector_handle(dissect_ldap_guid, proto_ldap));
@@ -2321,25 +2339,12 @@ proto_reg_handoff_ldap(void)
 
 #include "packet-ldap-dis-tab.c"
 
-
+ dissector_add_uint_range_with_preference("tcp.port", TCP_PORT_RANGE_LDAP, ldap_handle);
 }
 
 static void
 prefs_register_ldap(void)
 {
-
-  if(tcp_port != global_ldap_tcp_port) {
-    if(tcp_port)
-      dissector_delete_uint("tcp.port", tcp_port, ldap_handle);
-
-    /* Set our port number for future use */
-    tcp_port = global_ldap_tcp_port;
-
-    if(tcp_port)
-      dissector_add_uint("tcp.port", tcp_port, ldap_handle);
-
-  }
-
   if(ssl_port != global_ldaps_tcp_port) {
     if(ssl_port)
       ssl_dissector_delete(ssl_port, ldap_handle);

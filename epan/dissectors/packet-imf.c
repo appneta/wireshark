@@ -30,6 +30,9 @@
 #include <epan/expert.h>
 #include <wsutil/str_util.h>
 
+#include <epan/tap.h>
+#include <epan/export_object.h>
+
 #include "packet-ber.h"
 #include "packet-http.h"
 #include "packet-imf.h"
@@ -38,6 +41,8 @@
 
 void proto_register_imf(void);
 void proto_reg_handoff_imf(void);
+
+static int imf_eo_tap = -1;
 
 #define PNAME  "Internet Message Format"
 #define PSNAME "IMF"
@@ -150,6 +155,44 @@ static dissector_handle_t imf_handle;
 
 static expert_field ei_imf_unknown_param = EI_INIT;
 
+
+static gboolean
+imf_eo_packet(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_, const void *data)
+{
+  export_object_list_t *object_list = (export_object_list_t *)tapdata;
+  const imf_eo_t *eo_info = (const imf_eo_t *)data;
+  export_object_entry_t *entry;
+
+  if(eo_info) { /* We have data waiting for us */
+    /* These values will be freed when the Export Object window
+     * is closed. */
+    entry = g_new(export_object_entry_t, 1);
+
+    gchar *start = g_strrstr_len(eo_info->sender_data, -1, "<");
+    gchar *stop = g_strrstr_len(eo_info->sender_data, -1,  ">");
+    /* Only include the string inside of the "<>" brackets. If there is nothing between
+    the two brackets use the sender_data string */
+    if(start && stop && stop > start && (stop - start) > 2){
+        entry->hostname = g_strdup_printf("%.*s", (int) (stop - start - 1), start + 1);
+    } else {
+        entry->hostname = g_strdup(eo_info->sender_data);
+    }
+
+    entry->pkt_num = pinfo->num;
+    entry->content_type = g_strdup("EML file");
+    entry->filename = g_strdup_printf("%s.eml", eo_info->subject_data);
+    entry->payload_len = eo_info->payload_len;
+    entry->payload_data = (guint8 *)g_memdup(eo_info->payload_data, eo_info->payload_len);
+
+    object_list->add_entry(object_list->gui_data, entry);
+
+    return TRUE; /* State changed - window should be redrawn */
+  } else {
+    return FALSE; /* State unchanged - no window updates needed */
+  }
+}
+
+
 struct imf_field {
   char         *name;           /* field name - in lower case for matching purposes */
   int          *hf_id;          /* wireshark field */
@@ -239,7 +282,7 @@ static struct imf_field imf_fields[] = {
   {NULL, NULL, NULL, FALSE},
 };
 
-static GHashTable *imf_field_table=NULL;
+static wmem_map_t *imf_field_table=NULL;
 
 #define FORMAT_UNSTRUCTURED  0
 #define FORMAT_MAILBOX       1
@@ -692,6 +735,14 @@ dissect_imf(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
   gboolean last_field = FALSE;
   tvbuff_t *next_tvb;
   struct imf_field *f_info;
+  imf_eo_t *eo_info = NULL;
+
+  if (have_tap_listener(imf_eo_tap)) {
+    eo_info = wmem_new(wmem_packet_scope(), imf_eo_t);
+    /* initialize the eo_info fields in case they are missing later */
+    eo_info->sender_data = "";
+    eo_info->subject_data = "";
+  }
 
   col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
   col_clear(pinfo->cinfo, COL_INFO);
@@ -722,7 +773,7 @@ dissect_imf(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
       ascii_strdown_inplace (key);
 
       /* look up the key in built-in fields */
-      f_info = (struct imf_field *)g_hash_table_lookup(imf_field_table, key);
+      f_info = (struct imf_field *)wmem_map_lookup(imf_field_table, key);
 
       if(f_info == NULL && custom_field_table) {
         /* look up the key in custom fields */
@@ -779,6 +830,15 @@ dissect_imf(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 
         col_append_fstr(pinfo->cinfo, COL_INFO, "%s: %s, ", f_info->name,
                         tvb_format_text(tvb, value_offset, end_offset - value_offset - 2));
+
+        /* if sender or subject, store for sending to the tap */
+        if (eo_info && have_tap_listener(imf_eo_tap)) {
+          if (*f_info->hf_id == hf_imf_from) {
+            eo_info->sender_data = tvb_get_string_enc(wmem_packet_scope(), tvb, value_offset, end_offset - value_offset - 2, ENC_ASCII|ENC_NA);
+          } else if(*f_info->hf_id == hf_imf_subject) {
+            eo_info->subject_data = tvb_get_string_enc(wmem_packet_scope(), tvb, value_offset, end_offset - value_offset - 2, ENC_ASCII|ENC_NA);
+          }
+        }
       }
 
       if(hf_id == hf_imf_content_type) {
@@ -849,13 +909,22 @@ dissect_imf(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
        */
       proto_tree_add_format_wsp_text(text_tree, tvb, start_offset, end_offset - start_offset);
       col_append_sep_str(pinfo->cinfo, COL_INFO, ", ",
-                         tvb_format_text_wsp(tvb, start_offset, end_offset - start_offset));
+                         tvb_format_text_wsp(wmem_packet_scope(), tvb, start_offset, end_offset - start_offset));
 
       /*
        * Step to the next line.
        */
       start_offset = end_offset;
     }
+  }
+
+  if (eo_info && have_tap_listener(imf_eo_tap)) {
+    /* Set payload info */
+    eo_info->payload_len = max_length;
+    eo_info->payload_data = (gchar *) tvb_memdup(wmem_packet_scope(), tvb, 0, max_length);
+
+    /* Send to tap */
+    tap_queue_packet(imf_eo_tap, pinfo, eo_info);
   }
   return tvb_captured_length(tvb);
 }
@@ -1243,6 +1312,7 @@ proto_register_imf(void)
                                header_fields_update_cb,
                                header_fields_free_cb,
                                header_fields_initialize_cb,
+                               NULL,
                                attributes_flds);
 
   module_t *imf_module;
@@ -1265,11 +1335,14 @@ proto_register_imf(void)
                                 "setup and used for filtering/data extraction etc.",
                                 headers_uat);
 
-  imf_field_table=g_hash_table_new(g_str_hash, g_str_equal); /* oid to syntax */
+  imf_field_table=wmem_map_new(wmem_epan_scope(), wmem_str_hash, g_str_equal); /* oid to syntax */
 
   /* register the fields for lookup */
   for(f = imf_fields; f->name; f++)
-    g_hash_table_insert(imf_field_table, (gpointer)f->name, (gpointer)f);
+    wmem_map_insert(imf_field_table, (gpointer)f->name, (gpointer)f);
+
+  /* Register for tapping */
+  imf_eo_tap = register_export_object(proto_imf, imf_eo_packet, NULL);
 
 }
 

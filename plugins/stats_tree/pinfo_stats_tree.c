@@ -60,7 +60,7 @@ static void *uat_plen_record_copy_cb(void *n, const void *o, size_t siz _U_) {
 	uat_plen_record_t *rn = (uat_plen_record_t *)n;
 
 	if (r->packet_range)
-		rn->packet_range = range_copy(r->packet_range);
+		rn->packet_range = range_copy(NULL, r->packet_range);
 
 	return n;
 }
@@ -82,7 +82,7 @@ static void uat_plen_record_free_cb(void*r) {
 	uat_plen_record_t *record = (uat_plen_record_t*)r;
 
 	if (record->packet_range)
-		g_free(record->packet_range);
+		wmem_free(NULL, record->packet_range);
 }
 
 static void uat_plen_record_post_update_cb(void) {
@@ -314,6 +314,7 @@ void register_pinfo_stat_trees(void) {
 			uat_plen_record_update_cb,  /* update callback */
 			uat_plen_record_free_cb,    /* free callback */
 			uat_plen_record_post_update_cb, /* post update callback */
+			NULL,                       /* reset callback */
 			plen_uat_flds);             /* UAT field definitions */
 
 	prefs_register_uat_preference(stat_module, "packet_lengths",

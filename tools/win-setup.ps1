@@ -31,8 +31,6 @@
 # To do:
 # - Make this the source of truth. Keep the list of libs here.
 # - Download everything unconditionally, at least initially.
-# - Download the Lua package for our compiler? It might make more
-#   sense to switch to Nuget instead.
 
 # Bugs:
 # - Unzipping from the shell seems to be slower than Cygwin's unzip or 7zip.
@@ -71,12 +69,20 @@ their compressed archives.
 A date stamp (current-tag.txt)
 
 .EXAMPLE
+<<<<<<< HEAD
 C:\PS> .\tools\win-setup.ps1 -Destination C:\wireshark-win64-libs-2.2 -Platform win64
+=======
+C:\PS> .\tools\win-setup.ps1 -Destination C:\wireshark-win64-libs-2.4 -Platform win64
+>>>>>>> upstream/master-2.4
 #>
 
 Param(
     [Parameter(Mandatory=$true, Position=0)]
+<<<<<<< HEAD
     [ValidateScript({$_ -like "*\wireshark-*-libs-2.2"})]
+=======
+    [ValidateScript({$_ -like "*\wireshark-*-libs-2.4"})]
+>>>>>>> upstream/master-2.4
     [String]
     $Destination,
 
@@ -101,44 +107,94 @@ Param(
 # trouble instead of trying to catch exceptions everywhere.
 $ErrorActionPreference = "Stop"
 
+<<<<<<< HEAD
 $Win64CurrentTag = "2016-12-12-2.2"
 $Win32CurrentTag = "2016-12-12-2.2"
+=======
+$Win64CurrentTag = "2017-08-26-2.4"
+$Win32CurrentTag = "2017-08-26-2.4"
+>>>>>>> upstream/master-2.4
 
 # Archive file / subdir.
 $Win64Archives = @{
     "AirPcap_Devpack_4_1_0_1622.zip" = "AirPcap_Devpack_4_1_0_1622";
+<<<<<<< HEAD
     "c-ares-1.12.0-win64ws.zip" = "";
     "GeoIP-1.6.6-win64ws.zip" = "GeoIP-1.6.6-win64ws";
     "gnutls-3.2.15-2.9-win64ws.zip" = "";
+=======
+    "c-ares-1.12.0-1-win64ws.zip" = "";
+    "GeoIP-1.6.10-win64ws.zip" = "";
+    "gnutls-3.4.11-1.35-win64ws.zip" = "";
+>>>>>>> upstream/master-2.4
     "gtk+-bundle_2.24.23-3.39-2_win64ws.zip" = "gtk2";
     "kfw-3-2-2-x64-ws.zip" = "";
+    "libgcrypt-1.7.6-win64ws.zip" = "";
     "libsmi-svn-40773-win64ws.zip" = "";
+<<<<<<< HEAD
     "libssh-0.7.3-win64ws.zip" = "";
+=======
+    "libssh-0.7.3-1-win64ws.zip" = "";
+    "libxml2-2.9.4-win64ws.zip" = "";
+    "lua-5.2.4_Win64_dllw4_lib.zip" = "lua5.2.4";
+    "lz4-1.7.5-win64ws.zip" = "";
+>>>>>>> upstream/master-2.4
     "nasm-2.09.08-win32.zip" = "";
+    "nghttp2-1.14.0-1-win64ws.zip" = "";
     "portaudio_v19_2.zip" = "";
+    "sbc-1.3-1-win64ws.zip" = "";
+    "snappy-1.1.3-1-win64ws.zip" = "";
+    "spandsp-0.0.6-1-win64ws.zip" = "";
     "upx303w.zip" = "";
+<<<<<<< HEAD
     "WinSparkle-0.5.3.zip" = "";
+=======
+    "WinSparkle-0.5.6.zip" = "";
+>>>>>>> upstream/master-2.4
     "WpdPack_4_1_2.zip" = "";
     "zlib-1.2.8-ws.zip" = "";
 }
 
 $Win32Archives = @{
     "AirPcap_Devpack_4_1_0_1622.zip" = "AirPcap_Devpack_4_1_0_1622";
+<<<<<<< HEAD
     "c-ares-1.12.0-win32ws.zip" = "";
     "GeoIP-1.6.6-win32ws.zip" = "GeoIP-1.6.6-win32ws";
     "gnutls-3.2.15-2.7-win32ws.zip" = "";
+=======
+    "c-ares-1.12.0-1-win32ws.zip" = "";
+    "GeoIP-1.6.10-win32ws.zip" = "";
+    "gnutls-3.4.11-1.36-win32ws.zip" = "";
+>>>>>>> upstream/master-2.4
     "gtk+-bundle_2.24.23-1.1-1_win32ws.zip" = "gtk2";
     "kfw-3-2-2-i386-ws-vc6.zip" = "";
+    "libgcrypt-1.7.6-win32ws.zip" = "";
     "libsmi-svn-40773-win32ws.zip" = "";
+<<<<<<< HEAD
     "libssh-0.7.3-win32ws.zip" = "";
+=======
+    "libssh-0.7.3-1-win32ws.zip" = "";
+    "libxml2-2.9.4-win32ws.zip" = "";
+    "lua-5.2.4_Win32_dllw4_lib.zip" = "lua5.2.4";
+    "lz4-1.7.5-win32ws.zip" = "";
+>>>>>>> upstream/master-2.4
     "nasm-2.09.08-win32.zip" = "";
+    "nghttp2-1.14.0-1-win32ws.zip" = "";
     "portaudio_v19_2.zip" = "";
+    "sbc-1.3-1-win32ws.zip" = "";
+    "snappy-1.1.3-1-win32ws.zip" = "";
+    "spandsp-0.0.6-1-win32ws.zip" = "";
     "upx303w.zip" = "";
+<<<<<<< HEAD
     "WinSparkle-0.5.3.zip" = "";
+=======
+    "WinSparkle-0.5.6.zip" = "";
+>>>>>>> upstream/master-2.4
     "WpdPack_4_1_2.zip" = "";
     "zlib-1.2.8-ws.zip" = "";
 }
 
+<<<<<<< HEAD
 # Lua
 
 if ( @("14", "12", "11", "10") -contains $VSVersion ) {
@@ -147,16 +203,26 @@ if ( @("14", "12", "11", "10") -contains $VSVersion ) {
 }
 
 
+=======
+>>>>>>> upstream/master-2.4
 # Plain file downloads
 
 $Win32Files = @(
     "WinPcap_4_1_3.exe";
+<<<<<<< HEAD
     "USBPcapSetup-1.1.0.0-g794bf26-5.exe";
+=======
+    "USBPcapSetup-1.2.0.3.exe";
+>>>>>>> upstream/master-2.4
 )
 
 $Win64Files = @(
     "WinPcap_4_1_3.exe";
+<<<<<<< HEAD
     "USBPcapSetup-1.1.0.0-g794bf26-5.exe";
+=======
+    "USBPcapSetup-1.2.0.3.exe";
+>>>>>>> upstream/master-2.4
 )
 
 $Archives = $Win64Archives;
@@ -174,24 +240,36 @@ $CleanupItems = @(
     "c-ares-1.1?.0-win??ws"
     "gnutls-3.1.22-*-win??ws"
     "gnutls-3.2.15-*-win??ws"
+    "gnutls-3.4.11-*-win??ws"
     "gtk2"
     "gtk3"
     "kfw-3-2-2-final"
     "kfw-3-2-2-i386-ws-vc6"
     "kfw-3-2-2-x64-ws"
-    "lua5.1.4"
-    "lua5.2.?"
+    "libgcrypt-1.7.6-win??ws"
     "libsmi-0.4.8"
     "libsmi-svn-40773-win??ws"
     "libssh-0.7.?-win??ws"
+<<<<<<< HEAD
+=======
+    "libxml2-*-win??ws"
+    "lua5.1.4"
+    "lua5.2.?"
+    "lz4-*-win??ws"
+>>>>>>> upstream/master-2.4
     "nasm-2.09.08"
+    "nghttp2-*-win??ws"
     "portaudio_v19"
     "portaudio_v19_2"
+    "sbc-1.3-win??ws"
+    "snappy-1.1.3-win??ws"
+    "spandsp-0.0.6-win??ws"
     "upx301w"
     "upx303w"
     "user-guide"
     "zlib-1.2.5"
     "zlib-1.2.8"
+    "zlib-1.2.8-ws"
     "AirPcap_Devpack_4_1_0_1622"
     "GeoIP-1.*-win??ws"
     "WinSparkle-0.3-44-g2c8d9d3-win??ws"
@@ -288,7 +366,7 @@ function DownloadArchive($fileName, $subDir) {
         Set-Variable -Name SevenZOut
     $bbStatus = $LASTEXITCODE
     Write-Progress -Activity "$activity" -Status "Done" -Completed
-    if ($bbStatus > 0) {
+    if ($bbStatus -gt 0) {
         Write-Output $SevenZOut
         exit 1
     }

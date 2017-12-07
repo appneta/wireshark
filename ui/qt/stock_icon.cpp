@@ -24,7 +24,7 @@
 // Stock icons. Based on gtk/stock_icons.h
 
 // Toolbar icon sizes:
-// OS X freestanding: 32x32, 32x32@2x, segmented (inside a button): <= 19x19
+// macOS freestanding: 32x32, 32x32@2x, segmented (inside a button): <= 19x19
 // Windows: 16x16, 24x24, 32x32
 // GNOME: 24x24 (default), 48x48
 
@@ -75,18 +75,14 @@ StockIcon::StockIcon(const QString icon_name) :
     // X11 only as per the QIcon documentation.
     if (hasThemeIcon(icon_name)) {
         QIcon theme_icon = fromTheme(icon_name);
-#if QT_VERSION >= QT_VERSION_CHECK(4, 8, 0)
         swap(theme_icon);
-#endif
         return;
     }
 
     // Is this is an icon we've manually mapped to a standard pixmap below?
     if (icon_name_to_standard_pixmap_.contains(icon_name)) {
         QIcon standard_icon = wsApp->style()->standardIcon(icon_name_to_standard_pixmap_[icon_name]);
-#if QT_VERSION >= QT_VERSION_CHECK(4, 8, 0)
         swap(standard_icon);
-#endif
         return;
     }
 

@@ -51,6 +51,13 @@ typedef struct _bluetooth_device_tapinfo_t {
     guint          *changes;
 } bluetooth_device_tapinfo_t;
 
+typedef struct _bluetooth_item_data_t {
+        guint32  interface_id;
+        guint32  adapter_id;
+        guint32  frame_number;
+        gint     changes;
+} bluetooth_item_data_t;
+
 namespace Ui {
 class BluetoothDeviceDialog;
 }
@@ -93,6 +100,8 @@ private slots:
     void setTitle(QString bdAddr, QString name);
     void on_tableWidget_itemActivated(QTableWidgetItem *item);
     void on_buttonBox_clicked(QAbstractButton *button);
+    void on_actionMark_Unmark_Cell_triggered();
+    void on_actionMark_Unmark_Row_triggered();
     void on_actionCopy_Cell_triggered();
     void on_actionCopy_Rows_triggered();
     void on_actionCopy_All_triggered();

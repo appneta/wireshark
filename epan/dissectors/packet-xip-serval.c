@@ -41,6 +41,7 @@ static gint proto_xip_serval		= -1;
 static gint hf_xip_serval_hl		= -1;
 static gint hf_xip_serval_proto		= -1;
 static gint hf_xip_serval_check		= -1;
+static gint hf_xip_serval_check_status = -1;
 
 /* XIP Serval general extension header. */
 static gint hf_xip_serval_ext_type	= -1;
@@ -119,9 +120,8 @@ display_xip_serval_control_ext(tvbuff_t *tvb, proto_tree *xip_serval_tree,
 	offset++;
 
 	/* Add XIP Serval extension length. */
-	ti = proto_tree_add_item(cext_tree, hf_xip_serval_ext_length, tvb,
+	proto_tree_add_item(cext_tree, hf_xip_serval_ext_length, tvb,
 		offset, 1, ENC_BIG_ENDIAN);
-	proto_item_append_text(ti, " bytes");
 	offset++;
 
 	/* Create XIP Serval Control Extension flags tree. */
@@ -197,7 +197,6 @@ display_xip_serval(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	/* Add XIP Serval header length. */
 	hl_ti = proto_tree_add_item(xip_serval_tree, hf_xip_serval_hl, tvb,
 		XSRVL_LEN, 1, ENC_BIG_ENDIAN);
-	proto_item_append_text(hl_ti, " bytes");
 	if (tvb_captured_length(tvb) < xsh_len)
 		expert_add_info_format(pinfo, hl_ti, &ei_xip_serval_bad_len,
 			"Header Length field (%d bytes) cannot be greater than actual number of bytes left in packet (%d bytes)",
@@ -216,7 +215,7 @@ display_xip_serval(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	/* Compute checksum. */
 	SET_CKSUM_VEC_TVB(cksum_vec, tvb, 0, xsh_len);
 
-	proto_tree_add_checksum(xip_serval_tree, tvb, XSRVL_CHK, hf_xip_serval_check, -1, &ei_xip_serval_bad_checksum, pinfo, in_cksum(&cksum_vec, 1),
+	proto_tree_add_checksum(xip_serval_tree, tvb, XSRVL_CHK, hf_xip_serval_check, hf_xip_serval_check_status, &ei_xip_serval_bad_checksum, pinfo, in_cksum(&cksum_vec, 1),
 							ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
 	offset = XSRVL_EXT;
 
@@ -247,13 +246,13 @@ display_xip_serval(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 		 * size of the TCP header of 32-bit words.
 		 */
 		guint8 tcp_len = hi_nibble(tvb_get_guint8(tvb, offset + 12))*4;
-		next_tvb = tvb_new_subset(tvb, offset, tcp_len, tcp_len);
+		next_tvb = tvb_new_subset_length_caplen(tvb, offset, tcp_len, tcp_len);
 		call_dissector(tcp_handle, next_tvb, pinfo, tree);
 		break;
 	}
 	case IP_PROTO_UDP:
 		/* The UDP header is always 8 bytes. */
-		next_tvb = tvb_new_subset(tvb, offset, 8, 8);
+		next_tvb = tvb_new_subset_length_caplen(tvb, offset, 8, 8);
 		call_dissector(udp_handle, next_tvb, pinfo, tree);
 		break;
 	default:
@@ -283,7 +282,7 @@ proto_register_xip_serval(void)
 
 		{ &hf_xip_serval_hl,
 		{ "Header Length", "xip_serval.hl", FT_UINT8,
-		   BASE_DEC, NULL, 0x0,	NULL, HFILL }},
+		   BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,	NULL, HFILL }},
 
 		{ &hf_xip_serval_proto,
 		{ "Protocol", "xip_serval.proto", FT_UINT8,
@@ -293,6 +292,10 @@ proto_register_xip_serval(void)
 		{ "Checksum", "xip_serval.check", FT_UINT16,
 		   BASE_HEX, NULL, 0x0,	NULL, HFILL }},
 
+		{ &hf_xip_serval_check_status,
+		{ "Checksum Status", "xip_serval.check.status", FT_UINT8,
+		   BASE_NONE, VALS(proto_checksum_vals), 0x0, NULL, HFILL }},
+
 		/* Serval Extension Header. */
 
 		{ &hf_xip_serval_ext_type,
@@ -301,7 +304,7 @@ proto_register_xip_serval(void)
 
 		{ &hf_xip_serval_ext_length,
 		{ "Extension Length", "xip_serval.ext_length", FT_UINT8,
-		   BASE_DEC, NULL, 0x0,	NULL, HFILL }},
+		   BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,	NULL, HFILL }},
 
 		/* Serval Control Extension Header. */
 

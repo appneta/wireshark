@@ -90,7 +90,6 @@ set(WIRESHARK_GTK_SRC
 	profile_dlg.c
 	progress_dlg.c
 	proto_dlg.c
-	proto_help.c
 	proto_hier_stats_dlg.c
 	proto_hier_tree_model.c
 	proto_tree_model.c
@@ -228,13 +227,11 @@ set(CLEAN_FILES
 	${WIRESHARK_TAP_SRC}
 )
 
-if (WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${CLEAN_FILES}
-		PROPERTIES
-		COMPILE_FLAGS "${WERROR_COMMON_FLAGS} ${NO_ERROR_DEPRECATED_DECLARATIONS_COMPILE_FLAGS}"
-	)
-endif()
+set_source_files_properties(
+	${CLEAN_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS} ${NO_ERROR_DEPRECATED_DECLARATIONS_COMPILE_FLAGS}"
+)
 
 if (ENABLE_GTK3)
 	add_definitions(
@@ -275,8 +272,8 @@ if(WIN32)
 	set(PORTAUDIO_OBJ $<TARGET_OBJECTS:portaudio>)
 endif()
 
-find_file(GLIB_COMPILE_RESOURCES
-	glib-compile-resources${CMAKE_EXECUTABLE_SUFFIX}
+find_program(GLIB_COMPILE_RESOURCES_EXECUTABLE
+	glib-compile-resources
 	HINTS
 		"${GLIB2_HINTS}/bin"
 )
@@ -286,7 +283,7 @@ pkg_check_modules(GRESOURCE QUIET gio-2.0>=2.32 gdk-pixbuf-2.0>=2.26)
 macro(WIRESHARK_GRESOURCES _outputfile _resourcefile)
 	add_custom_command(
 		OUTPUT ${_outputfile}
-		COMMAND ${GLIB_COMPILE_RESOURCES} --sourcedir=${CMAKE_SOURCE_DIR} --target=${_outputfile} --generate --manual-register ${CMAKE_CURRENT_SOURCE_DIR}/${_resourcefile}
+		COMMAND ${GLIB_COMPILE_RESOURCES_EXECUTABLE} --sourcedir=${CMAKE_SOURCE_DIR} --target=${_outputfile} --generate --manual-register ${CMAKE_CURRENT_SOURCE_DIR}/${_resourcefile}
 		DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_resourcefile}
 		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 	)
@@ -319,6 +316,7 @@ add_library(gtkui STATIC
 	${PIXBUF_SRC}
 )
 set_target_properties(gtkui PROPERTIES
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
 	FOLDER "UI")
 

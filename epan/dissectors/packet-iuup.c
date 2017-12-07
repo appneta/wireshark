@@ -155,7 +155,9 @@ static expert_field ei_iuup_time_align = EI_INIT;
 static expert_field ei_iuup_procedure_indicator = EI_INIT;
 static expert_field ei_iuup_pdu_type = EI_INIT;
 
-static GHashTable* circuits = NULL;
+static wmem_map_t* circuits = NULL;
+
+static dissector_handle_t iuup_handle;
 
 static gboolean dissect_fields = FALSE;
 static gboolean two_byte_pseudoheader = FALSE;
@@ -362,7 +364,7 @@ static void dissect_iuup_payload(tvbuff_t* tvb, packet_info* pinfo, proto_tree* 
     if ( ! dissect_fields ) {
         return;
     } else if ( ! circuit_id
-                || ! ( iuup_circuit  = (iuup_circuit_t *)g_hash_table_lookup(circuits,GUINT_TO_POINTER(circuit_id)) ) ) {
+                || ! ( iuup_circuit  = (iuup_circuit_t *)wmem_map_lookup(circuits,GUINT_TO_POINTER(circuit_id)) ) ) {
         expert_add_info(pinfo, pi, &ei_iuup_payload_undecoded);
         return;
     }
@@ -480,10 +482,10 @@ static void dissect_iuup_init(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tre
     iuup_circuit_t* iuup_circuit = NULL;
 
     if (circuit_id) {
-        iuup_circuit = (iuup_circuit_t *)g_hash_table_lookup(circuits,GUINT_TO_POINTER(circuit_id));
+        iuup_circuit = (iuup_circuit_t *)wmem_map_lookup(circuits,GUINT_TO_POINTER(circuit_id));
 
         if (iuup_circuit) {
-            g_hash_table_remove(circuits,GUINT_TO_POINTER(circuit_id));
+            wmem_map_remove(circuits,GUINT_TO_POINTER(circuit_id));
         }
 
         iuup_circuit = wmem_new0(wmem_file_scope(), iuup_circuit_t);
@@ -497,7 +499,7 @@ static void dissect_iuup_init(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tre
     iuup_circuit->last_rfci = NULL;
 
     if (circuit_id) {
-        g_hash_table_insert(circuits,GUINT_TO_POINTER(iuup_circuit->id),iuup_circuit);
+        wmem_map_insert(circuits,GUINT_TO_POINTER(iuup_circuit->id),iuup_circuit);
     }
 
     if (tree) {
@@ -832,22 +834,12 @@ static int find_iuup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
     return tvb_captured_length(tvb);
 }
 
-static void init_iuup(void) {
-    circuits = g_hash_table_new(g_direct_hash,g_direct_equal);
-}
-
-static void cleanup_iuup(void) {
-    g_hash_table_destroy(circuits);
-}
-
 
 void proto_reg_handoff_iuup(void) {
     static gboolean iuup_prefs_initialized = FALSE;
-    static dissector_handle_t iuup_handle;
     static guint saved_dynamic_payload_type = 0;
 
     if (!iuup_prefs_initialized) {
-        iuup_handle = find_dissector("iuup");
         dissector_add_string("rtp_dyn_payload_type","VND.3GPP.IUFP", iuup_handle);
         iuup_prefs_initialized = TRUE;
     } else {
@@ -994,11 +986,10 @@ void proto_register_iuup(void) {
     proto_register_subtree_array(ett, array_length(ett));
     expert_iuup = expert_register_protocol(proto_iuup);
     expert_register_field_array(expert_iuup, ei, array_length(ei));
-    register_dissector("iuup", dissect_iuup, proto_iuup);
+    iuup_handle = register_dissector("iuup", dissect_iuup, proto_iuup);
     register_dissector("find_iuup", find_iuup, proto_iuup);
 
-    register_init_routine(&init_iuup);
-    register_cleanup_routine(&cleanup_iuup);
+    circuits = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), g_direct_hash, g_direct_equal);
 
     iuup_module = prefs_register_protocol(proto_iuup, proto_reg_handoff_iuup);
 

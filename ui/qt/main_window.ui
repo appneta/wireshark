@@ -126,6 +126,9 @@
      <widget class="FilterExpressionFrame" name="filterExpressionFrame"/>
     </item>
     <item>
+     <widget class="WirelessTimeline" name="wirelessTimelineWidget"/>
+    </item>
+    <item>
      <widget class="QStackedWidget" name="mainStack">
       <property name="enabled">
        <bool>true</bool>
@@ -141,7 +144,7 @@
      <x>0</x>
      <y>0</y>
      <width>960</width>
-     <height>22</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -178,10 +181,6 @@
      <property name="title">
       <string>Export Objects</string>
      </property>
-     <addaction name="actionFileExportObjectsDICOM"/>
-     <addaction name="actionFileExportObjectsHTTP"/>
-     <addaction name="actionFileExportObjectsSMB"/>
-     <addaction name="actionFileExportObjectsTFTP"/>
     </widget>
     <addaction name="actionFileOpen"/>
     <addaction name="menuOpenRecentCaptureFile"/>
@@ -263,6 +262,8 @@
     <addaction name="actionGoLastPacket"/>
     <addaction name="actionGoNextConversationPacket"/>
     <addaction name="actionGoPreviousConversationPacket"/>
+    <addaction name="actionGoNextHistoryPacket"/>
+    <addaction name="actionGoPreviousHistoryPacket"/>
     <addaction name="separator"/>
     <addaction name="actionGoAutoScroll"/>
    </widget>
@@ -270,6 +271,11 @@
     <property name="title">
      <string>&amp;View</string>
     </property>
+    <widget class="QMenu" name="menuInterfaceToolbars">
+     <property name="title">
+      <string>Interface Toolbars</string>
+     </property>
+    </widget>
     <widget class="QMenu" name="menuZoom">
      <property name="title">
       <string>&amp;Zoom</string>
@@ -339,10 +345,19 @@
      <addaction name="actionViewInternalsDissectorTables"/>
      <addaction name="actionViewInternalsSupportedProtocols"/>
     </widget>
+    <widget class="QMenu" name="menuAdditionalToolbars">
+     <property name="title">
+      <string>Additional Toolbars</string>
+     </property>
+    </widget>
     <addaction name="actionViewMainToolbar"/>
     <addaction name="actionViewFilterToolbar"/>
     <addaction name="actionViewWirelessToolbar"/>
+    <addaction name="menuInterfaceToolbars"/>
+    <addaction name="menuAdditionalToolbars" />
     <addaction name="actionViewStatusBar"/>
+    <addaction name="separator"/>
+    <addaction name="actionViewFullScreen"/>
     <addaction name="separator"/>
     <addaction name="actionViewPacketList"/>
     <addaction name="actionViewPacketDetails"/>
@@ -361,6 +376,7 @@
     <addaction name="actionViewColoringRules"/>
     <addaction name="menuColorizeConversation"/>
     <addaction name="separator"/>
+    <addaction name="actionViewResetLayout"/>
     <addaction name="actionViewResizeColumns"/>
     <addaction name="separator"/>
     <addaction name="menuInternals"/>
@@ -582,6 +598,12 @@
      </property>
      <addaction name="actionTelephonyMTP3Placeholder"/>
     </widget>
+    <widget class="QMenu" name="menuOsmux">
+     <property name="title">
+      <string>Osmux</string>
+     </property>
+     <addaction name="actionTelephonyOsmuxPacketCounter"/>
+    </widget>
     <addaction name="actionTelephonyVoipCalls"/>
     <addaction name="menuANSI"/>
     <addaction name="menuGSM"/>
@@ -589,6 +611,7 @@
     <addaction name="actionTelephonyISUPMessages"/>
     <addaction name="menuLTE"/>
     <addaction name="menuMTP3"/>
+    <addaction name="menuOsmux"/>
     <addaction name="menuRTP"/>
     <addaction name="menuRTSP"/>
     <addaction name="menuTelephonySCTP"/>
@@ -986,6 +1009,28 @@
     <string notr="true">Ctrl+,</string>
    </property>
   </action>
+  <action name="actionGoNextHistoryPacket">
+   <property name="text">
+    <string>Next Packet In History</string>
+   </property>
+   <property name="toolTip">
+    <string>Go to the next packet in your selection history</string>
+   </property>
+   <property name="shortcut">
+    <string notr="true">Alt+Right</string>
+   </property>
+  </action>
+  <action name="actionGoPreviousHistoryPacket">
+   <property name="text">
+    <string>Previous Packet In History</string>
+   </property>
+   <property name="toolTip">
+    <string>Go to the previous packet in your selection history</string>
+   </property>
+   <property name="shortcut">
+    <string notr="true">Alt+Left</string>
+   </property>
+  </action>
   <action name="actionGoFirstPacket">
    <property name="text">
     <string>First Packet</string>
@@ -1242,21 +1287,6 @@
     <string>As JSON…</string>
    </property>
   </action>
-  <action name="actionFileExportObjectsHTTP">
-   <property name="text">
-    <string>&amp;HTTP…</string>
-   </property>
-  </action>
-  <action name="actionFileExportObjectsDICOM">
-   <property name="text">
-    <string>&amp;DICOM…</string>
-   </property>
-  </action>
-  <action name="actionFileExportObjectsSMB">
-   <property name="text">
-    <string>&amp;SMB…</string>
-   </property>
-  </action>
   <action name="actionEditCopyDescription">
    <property name="text">
     <string>Description</string>
@@ -1420,9 +1450,6 @@
    </property>
   </action>
   <action name="actionEditFindPacket">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
    <property name="text">
     <string>&amp;Find Packet…</string>
    </property>
@@ -1896,6 +1923,14 @@
     <string>ISUP message statistics</string>
    </property>
   </action>
+  <action name="actionTelephonyOsmuxPacketCounter">
+   <property name="text">
+    <string>Packet Counter</string>
+   </property>
+   <property name="toolTip">
+    <string>Osmux packet counts</string>
+   </property>
+  </action>
   <action name="actionTelephonyRTSPPacketCounter">
    <property name="text">
     <string>Packet Counter</string>
@@ -2068,11 +2103,6 @@
     <string>Show or hide the display filter toolbar</string>
    </property>
   </action>
-  <action name="actionFileExportObjectsTFTP">
-   <property name="text">
-    <string>&amp;TFTP</string>
-   </property>
-  </action>
   <action name="actionStatisticsConversations">
    <property name="text">
     <string>Conversations</string>
@@ -2131,6 +2161,17 @@
    </property>
    <property name="shortcut">
     <string notr="true">Ctrl+0</string>
+   </property>
+  </action>
+  <action name="actionViewResetLayout">
+   <property name="text">
+    <string>Reset Layout</string>
+   </property>
+   <property name="toolTip">
+    <string>Reset appearance layout to default size</string>
+   </property>
+   <property name="shortcut">
+    <string notr="true">Ctrl+Shift+W</string>
    </property>
   </action>
   <action name="actionViewResizeColumns">
@@ -2925,6 +2966,22 @@
     <string>Create firewall ACL rules</string>
    </property>
   </action>
+  <action name="actionContextCopyBytesEscapedString">
+   <property name="text">
+    <string>…as Escaped String</string>
+   </property>
+   <property name="toolTip">
+    <string>Copy packet bytes as a Escaped string</string>
+   </property>
+  </action>
+  <action name="actionViewFullScreen">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;Full Screen</string>
+   </property>
+  </action>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <customwidgets>
@@ -2972,6 +3029,12 @@
    <class>FilterExpressionFrame</class>
    <extends>QFrame</extends>
    <header>filter_expression_frame.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>WirelessTimeline</class>
+   <extends>QWidget</extends>
+   <header>wireless_timeline.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

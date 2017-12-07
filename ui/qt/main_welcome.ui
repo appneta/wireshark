@@ -29,12 +29,18 @@
    </item>
    <item>
     <widget class="QWidget" name="childContainer" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <item>
        <widget class="QWidget" name="bannerLayout" native="true">
         <property name="minimumSize">
          <size>
-          <width>650</width>
+          <width>550</width>
           <height>0</height>
          </size>
         </property>
@@ -112,7 +118,16 @@
           <number>0</number>
          </property>
          <item>
-          <widget class="QLabel" name="recentLabel">
+          <widget class="ClickableLabel" name="recentLabel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Open a file on your file system&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
             <string>&lt;h2&gt;Open&lt;/h2&gt;</string>
            </property>
@@ -141,7 +156,13 @@
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="captureLabel">
+       <widget class="ClickableLabel" name="captureLabel">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="toolTip">
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Capture live packets from your network.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
@@ -152,7 +173,7 @@
       </item>
       <item>
        <widget class="QWidget" name="captureFilterLayout" native="true">
-        <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0">
+        <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0">
          <property name="leftMargin">
           <number>0</number>
          </property>
@@ -182,13 +203,20 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QPushButton" name="btnInterfaceType">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>
       <item>
-       <widget class="InterfaceTree" name="interfaceTree">
+       <widget class="InterfaceFrame" name="interfaceFrame">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Expanding">
+         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
           <horstretch>0</horstretch>
           <verstretch>1</verstretch>
          </sizepolicy>
@@ -199,29 +227,22 @@
         <property name="accessibleDescription">
          <string>List of available capture interfaces</string>
         </property>
-        <property name="horizontalScrollBarPolicy">
-         <enum>Qt::ScrollBarAlwaysOff</enum>
+        <property name="frameShape">
+         <enum>QFrame::StyledPanel</enum>
         </property>
-        <property name="uniformRowHeights">
-         <bool>true</bool>
+        <property name="frameShadow">
+         <enum>QFrame::Raised</enum>
         </property>
-        <attribute name="headerVisible">
-         <bool>false</bool>
-        </attribute>
-        <column>
-         <property name="text">
-          <string notr="true">1</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string notr="true">2</string>
-         </property>
-        </column>
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="helpLabel">
+       <widget class="ClickableLabel" name="helpLabel">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="text">
          <string>&lt;h2&gt;Learn&lt;/h2&gt;</string>
         </property>
@@ -300,9 +321,10 @@ a:hover {
  </widget>
  <customwidgets>
   <customwidget>
-   <class>InterfaceTree</class>
-   <extends>QTreeWidget</extends>
-   <header>interface_tree.h</header>
+   <class>InterfaceFrame</class>
+   <extends>QFrame</extends>
+   <header>interface_frame.h</header>
+   <container>1</container>
   </customwidget>
   <customwidget>
    <class>CaptureFilterCombo</class>
@@ -314,6 +336,11 @@ a:hover {
    <extends>QFrame</extends>
    <header>accordion_frame.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ClickableLabel</class>
+   <extends>QLabel</extends>
+   <header>clickable_label.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

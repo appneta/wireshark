@@ -22,14 +22,19 @@
 #include "bluetooth_device_dialog.h"
 #include <ui_bluetooth_device_dialog.h>
 
+#include "color_utils.h"
+
 #include "epan/epan.h"
 #include "epan/addr_resolv.h"
 #include "epan/to_str.h"
 #include "epan/epan_dissect.h"
+#include "epan/prefs.h"
 #include "epan/dissectors/packet-bthci_cmd.h"
 #include "epan/dissectors/packet-bthci_evt.h"
 
 #include "ui/simple_dialog.h"
+
+#include <ui/qt/variant_pointer.h>
 
 #include <QClipboard>
 #include <QContextMenuEvent>
@@ -62,15 +67,6 @@ static const int row_number_inquiry_mode = 18;
 static const int row_number_page_timeout = 19;
 static const int row_number_simple_pairing_mode = 20;
 static const int row_number_voice_setting = 21;
-
-typedef struct _item_data_t {
-        guint32  interface_id;
-        guint32  adapter_id;
-        guint32  frame_number;
-        gint     changes;
-} item_data_t;
-
-Q_DECLARE_METATYPE(item_data_t *)
 
 static gboolean
 bluetooth_device_tap_packet(void *tapinfo_ptr, packet_info *pinfo, epan_dissect_t *edt, const void* data)
@@ -133,6 +129,10 @@ BluetoothDeviceDialog::BluetoothDeviceDialog(QWidget &parent, CaptureFile &cf, Q
     ui->tableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
 #endif
 
+    ui->tableWidget->setStyleSheet("QTableView::item:hover{background-color:lightyellow; color:black;}");
+
+    context_menu_.addActions(QList<QAction *>() << ui->actionMark_Unmark_Cell);
+    context_menu_.addActions(QList<QAction *>() << ui->actionMark_Unmark_Row);
     context_menu_.addActions(QList<QAction *>() << ui->actionCopy_Cell);
     context_menu_.addActions(QList<QAction *>() << ui->actionCopy_Rows);
     context_menu_.addActions(QList<QAction *>() << ui->actionCopy_All);
@@ -214,10 +214,57 @@ void BluetoothDeviceDialog::changeEvent(QEvent *event)
 }
 
 
-void BluetoothDeviceDialog::keyPressEvent(QKeyEvent *)
+void BluetoothDeviceDialog::keyPressEvent(QKeyEvent *event)
 {
-/* NOTE: Do nothing, but in real it "takes focus" from button_box so allow user
- * to use Enter button to jump to frame from table widget */
+/* NOTE: Do nothing*, but in real it "takes focus" from button_box so allow user
+ * to use Enter button to jump to frame from tree widget */
+/* * - reimplement shortcuts from contex menu */
+
+   if (event->modifiers() & Qt::ControlModifier && event->key()== Qt::Key_M)
+        on_actionMark_Unmark_Row_triggered();
+}
+
+void BluetoothDeviceDialog::on_actionMark_Unmark_Cell_triggered()
+{
+    QBrush fg;
+    QBrush bg;
+
+    if (ui->tableWidget->currentItem()->background() == QBrush(ColorUtils::fromColorT(&prefs.gui_marked_bg))) {
+        fg = QBrush();
+        bg = QBrush();
+    } else {
+        fg = QBrush(ColorUtils::fromColorT(&prefs.gui_marked_fg));
+        bg = QBrush(ColorUtils::fromColorT(&prefs.gui_marked_bg));
+    }
+
+    ui->tableWidget->currentItem()->setForeground(fg);
+    ui->tableWidget->currentItem()->setBackground(bg);
+}
+
+
+void BluetoothDeviceDialog::on_actionMark_Unmark_Row_triggered()
+{
+    QBrush fg;
+    QBrush bg;
+    bool   is_marked = TRUE;
+
+    for (int i = 0; i < ui->tableWidget->columnCount(); i += 1) {
+        if (ui->tableWidget->item((ui->tableWidget->currentItem())->row(), i)->background() != QBrush(ColorUtils::fromColorT(&prefs.gui_marked_bg)))
+            is_marked = FALSE;
+    }
+
+    if (is_marked) {
+        fg = QBrush();
+        bg = QBrush();
+    } else {
+        fg = QBrush(ColorUtils::fromColorT(&prefs.gui_marked_fg));
+        bg = QBrush(ColorUtils::fromColorT(&prefs.gui_marked_bg));
+    }
+
+    for (int i = 0; i < ui->tableWidget->columnCount(); i += 1) {
+        ui->tableWidget->item((ui->tableWidget->currentItem())->row(), i)->setForeground(fg);
+        ui->tableWidget->item((ui->tableWidget->currentItem())->row(), i)->setBackground(bg);
+    }
 }
 
 
@@ -297,7 +344,7 @@ void BluetoothDeviceDialog::tapReset(void *tapinfo_ptr)
 void BluetoothDeviceDialog::updateChanges(QTableWidget *tableWidget, QString value, const int row, guint *changes, packet_info *pinfo)
 {
     QTableWidgetItem *item = tableWidget->item(row, column_number_value);
-    item_data_t *item_data = item->data(Qt::UserRole).value<item_data_t *>();
+    bluetooth_item_data_t *item_data = VariantPointer<bluetooth_item_data_t>::asPtr(item->data(Qt::UserRole));
 
     if (item->text() == value)
         return;
@@ -318,12 +365,12 @@ void BluetoothDeviceDialog::saveItemData(QTableWidgetItem *item,
     if (item->data(Qt::UserRole).isValid())
         return;
 
-    item_data_t *item_data = wmem_new(wmem_file_scope(), item_data_t);
+    bluetooth_item_data_t *item_data = wmem_new(wmem_file_scope(), bluetooth_item_data_t);
     item_data->interface_id = tap_device->interface_id;
     item_data->adapter_id = tap_device->adapter_id;
     item_data->changes = -1;
     item_data->frame_number = pinfo->fd->num;
-    item->setData(Qt::UserRole, QVariant::fromValue<item_data_t *>(item_data));
+    item->setData(Qt::UserRole, VariantPointer<bluetooth_item_data_t>::asQVariant(item_data));
 
 }
 
@@ -400,13 +447,12 @@ gboolean BluetoothDeviceDialog::tapPacket(void *tapinfo_ptr, packet_info *pinfo,
         break;
     case BLUETOOTH_DEVICE_RESET:
         for (int i_row = 0; i_row < dialog->ui->tableWidget->rowCount(); i_row += 1) {
-            QTableWidgetItem  *item;
-            item_data_t       *item_data;
+            bluetooth_item_data_t       *item_data;
 
             item = dialog->ui->tableWidget->item(i_row, column_number_value);
             saveItemData(item, tap_device, pinfo);
 
-            item_data = item->data(Qt::UserRole).value<item_data_t *>();
+            item_data = VariantPointer<bluetooth_item_data_t>::asPtr(item->data(Qt::UserRole));
 
             if (item_data->changes > -1) {
                 item_data->changes += 1;
@@ -607,7 +653,7 @@ void BluetoothDeviceDialog::on_tableWidget_itemActivated(QTableWidgetItem *item)
     if (!item->data(Qt::UserRole).isValid())
         return;
 
-    item_data_t *item_data = item->data(Qt::UserRole).value<item_data_t *>();
+    bluetooth_item_data_t *item_data = VariantPointer<bluetooth_item_data_t>::asPtr(item->data(Qt::UserRole));
 
     emit goToPacket(item_data->frame_number);
 

@@ -374,7 +374,7 @@ dissect_avps(tvbuff_t *tvb, packet_info *pinfo, proto_tree *avp_tree)
                                         avp_group_tree = proto_tree_add_subtree(single_avp_tree,
                                                                                 tvb, offset, avp_data_length,
                                                                                 ett_pana_avp, NULL, "Grouped AVP");
-                                        group_tvb = tvb_new_subset(tvb, offset,
+                                        group_tvb = tvb_new_subset_length_caplen(tvb, offset,
                                                                    MIN(avp_data_length, tvb_reported_length(tvb)-offset),
                                                                    avp_data_length);
                                         dissect_avps(group_tvb, pinfo, avp_group_tree);
@@ -888,7 +888,7 @@ proto_reg_handoff_pana(void)
         heur_dissector_add("udp", dissect_pana, "PANA over UDP", "pana_udp", proto_pana, HEURISTIC_ENABLE);
 
         pana_handle = create_dissector_handle(dissect_pana, proto_pana);
-        dissector_add_for_decode_as("udp.port", pana_handle);
+        dissector_add_for_decode_as_with_preference("udp.port", pana_handle);
 
         eap_handle = find_dissector_add_dependency("eap", proto_pana);
 

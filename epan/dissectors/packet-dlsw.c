@@ -394,7 +394,7 @@ dissect_dlsw_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
   switch (mtype)
   {
     case CAP_EXCHANGE:
-      dissect_dlsw_capex(tvb_new_subset(tvb, hlen, mlen, -1), pinfo, dlsw_data_tree, ti2);
+      dissect_dlsw_capex(tvb_new_subset_length_caplen(tvb, hlen, mlen, -1), pinfo, dlsw_data_tree, ti2);
       break;
     case IFCM:
     case INFOFRAME:
@@ -686,10 +686,10 @@ proto_reg_handoff_dlsw(void)
   dissector_handle_t dlsw_udp_handle, dlsw_tcp_handle;
 
   dlsw_udp_handle = create_dissector_handle(dissect_dlsw_udp, proto_dlsw);
-  dissector_add_uint("udp.port", UDP_PORT_DLSW, dlsw_udp_handle);
+  dissector_add_uint_with_preference("udp.port", UDP_PORT_DLSW, dlsw_udp_handle);
 
   dlsw_tcp_handle = create_dissector_handle(dissect_dlsw_tcp, proto_dlsw);
-  dissector_add_uint("tcp.port", TCP_PORT_DLSW, dlsw_tcp_handle);
+  dissector_add_uint_with_preference("tcp.port", TCP_PORT_DLSW, dlsw_tcp_handle);
 }
 
 /*

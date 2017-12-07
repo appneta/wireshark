@@ -56,11 +56,13 @@ enum {
 	WS_NLM_F_MULTI = 2,      /* Multipart message, terminated by NETLINK_MSG_DONE */
 	WS_NLM_F_ACK = 4,        /* Reply with ack, with zero or error code */
 	WS_NLM_F_ECHO = 8,       /* Echo this request */
+	WS_NLM_F_DUMP_INTR = 16, /* Dump was inconsistent due to sequence change */
+	WS_NLM_F_DUMP_FILTERED = 32, /* Dump was filtered as requested */
 
 	/* Modifiers to Get request */
 	WS_NLM_F_ROOT = 0x100,   /* specify tree root */
 	WS_NLM_F_MATCH = 0x200,  /* return all matching */
-	WS_NLM_F_ATOMIC = 0x400, /* = (NETLINK_MSG_F_ROOT | NETLINK_MSG_F_MATCH) */
+	WS_NLM_F_ATOMIC = 0x400, /* return an atomic snapshot of the table */
 
 	/* Modifiers to NEW request */
 	WS_NLM_F_REPLACE = 0x100,  /* Override existing */
@@ -80,22 +82,19 @@ enum {
 	WS_NLMSG_MIN_TYPE     = 0x10    /** type < WS_NLMSG_MIN_TYPE are reserved */
 };
 
-enum {
-	NETLINK_RTM_BASE = 16,
-
-	NETLINK_RTM_NEWLINK = 16,
-	NETLINK_RTM_DELLINK,
-	NETLINK_RTM_GETLINK,
-	NETLINK_RTM_SETLINK,
-
-	NETLINK_RTM_NEWADDR = 20,
-	NETLINK_RTM_DELADDR,
-	NETLINK_RTM_GETADDR,
-
-	NETLINK_RTM_NEWROUTE = 24,
-	NETLINK_RTM_DELROUTE,
-	NETLINK_RTM_GETROUTE
+/* from <linux/netfilter.h>. Looks like AF_xxx, except for NFPROTO_ARP */
+enum ws_nfproto {
+	WS_NFPROTO_UNSPEC =  0,
+	WS_NFPROTO_INET   =  1,
+	WS_NFPROTO_IPV4   =  2,
+	WS_NFPROTO_ARP    =  3,
+	WS_NFPROTO_NETDEV =  5,
+	WS_NFPROTO_BRIDGE =  7,
+	WS_NFPROTO_IPV6   = 10,
+	WS_NFPROTO_DECNET = 12,
 };
+extern const value_string nfproto_family_vals[];
+extern const value_string netfilter_hooks_vals[];
 
 #define PACKET_NETLINK_MAGIC 0x4A5ACCCE
 
@@ -106,8 +105,43 @@ struct packet_netlink_data {
 	guint16 type;
 };
 
+/**
+ * Dissects the Netlink message header (struct nlmsghdr). The "hfi_type" field
+ * is added for the "nlmsg_type" field and returned into pi_type.
+ */
+int dissect_netlink_header(tvbuff_t *tvb, proto_tree *tree, int offset, int encoding, header_field_info *hfi_type, proto_item **pi_type);
+
 typedef int netlink_attributes_cb_t(tvbuff_t *, void *data, proto_tree *, int nla_type, int offset, int len);
 
-int dissect_netlink_attributes(tvbuff_t *tvb, header_field_info *hfi_type, int ett, void *data, proto_tree *tree, int offset, netlink_attributes_cb_t cb);
+int dissect_netlink_attributes(tvbuff_t *tvb, header_field_info *hfi_type, int ett, void *data, struct packet_netlink_data *nl_data,  proto_tree *tree, int offset, int length, netlink_attributes_cb_t cb);
+
+/*
+ * Similar to dissect_netlink_attributes, but used to parse nested attributes
+ * that model an array of attributes. The first level (tree ett_array) contains
+ * array elements and its type field is the array index. The next level (tree
+ * ett_attrib) contains attributes (where hfi_type applies).
+ */
+int dissect_netlink_attributes_array(tvbuff_t *tvb, header_field_info *hfi_type, int ett_array, int ett_attrib, void *data, struct packet_netlink_data *nl_data, proto_tree *tree, int offset, int length, netlink_attributes_cb_t cb);
+
+#define NLA_F_NESTED            0x8000
+#define NLA_F_NET_BYTEORDER     0x4000
+#define NLA_TYPE_MASK           0x3fff
+
+
+/*
+ * Format of the data that is passed to "genl.family" dissectors.
+ */
+typedef struct {
+	struct packet_netlink_data *data;
+	int             encoding; /* copy of data->encoding */
+
+	/* For internal use by genl. */
+	proto_tree     *genl_tree;
+
+	/* fields from genlmsghdr */
+	guint8 	        cmd; /* Command number */
+} genl_info_t;
+
+int dissect_genl_header(tvbuff_t *tvb, genl_info_t *genl_info, header_field_info *hfi_cmd);
 
 #endif /* __PACKET_NETLINK_H__ */

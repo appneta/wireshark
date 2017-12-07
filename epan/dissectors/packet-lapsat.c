@@ -244,19 +244,6 @@ static const fragment_items lapsat_frag_items = {
 	"fragments"
 };
 
-static void
-lapsat_defragment_init(void)
-{
-	reassembly_table_init(&lapsat_reassembly_table,
-	    &addresses_reassembly_table_functions);
-}
-
-static void
-lapsat_defragment_cleanup(void)
-{
-	reassembly_table_destroy(&lapsat_reassembly_table);
-}
-
 
 /*
  * Main dissection functions
@@ -503,8 +490,6 @@ dissect_lapsat(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dissec
 	if (!plen)
 		return 3;	/* No point in doing more if there is no payload */
 
-	DISSECTOR_ASSERT((plen + hlen) <= tvb_captured_length(tvb));
-
 	if ((plen + hlen) == tvb_captured_length(tvb)) {
 		/* Need to integrate the last nibble */
 		guint8 *data = (guint8 *)tvb_memdup(pinfo->pool, tvb, hlen, plen);
@@ -512,7 +497,7 @@ dissect_lapsat(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dissec
 		payload = tvb_new_child_real_data(tvb, data, plen, plen);
 	} else {
 		/* Last nibble doesn't need merging */
-		payload = tvb_new_subset(tvb, hlen, plen, plen);
+		payload = tvb_new_subset_length_caplen(tvb, hlen, plen, plen);
 	}
 
 	add_new_data_source(pinfo, payload, "LAPSat Payload");
@@ -764,8 +749,8 @@ proto_register_lapsat(void)
 
 	lapsat_sapi_dissector_table = register_dissector_table("lapsat.sapi", "LAPSat SAPI", proto_lapsat, FT_UINT8, BASE_DEC);
 
-	register_init_routine (lapsat_defragment_init);
-	register_cleanup_routine (lapsat_defragment_cleanup);
+	reassembly_table_register(&lapsat_reassembly_table,
+	    &addresses_reassembly_table_functions);
 }
 
 

@@ -120,13 +120,20 @@ WS_DLL_PUBLIC gboolean has_global_profiles(void);
 
 /*
  * Get the directory used to store configuration profile directories.
+ * Caller must free the returned string
  */
-WS_DLL_PUBLIC const char *get_profiles_dir(void);
+WS_DLL_PUBLIC char *get_profiles_dir(void);
+
+/*
+ * Create the directory used to store configuration profile directories.
+ */
+WS_DLL_PUBLIC int create_profiles_dir(char **pf_dir_path_return);
 
 /*
  * Get the directory used to store global configuration profile directories.
+ * Caller must free the returned string
  */
-WS_DLL_PUBLIC const char *get_global_profiles_dir(void);
+WS_DLL_PUBLIC char *get_global_profiles_dir(void);
 
 
 /*
@@ -291,6 +298,23 @@ WS_DLL_PUBLIC gboolean files_identical(const char *fname1, const char *fname2);
  */
 WS_DLL_PUBLIC gboolean copy_file_binary_mode(const char *from_filename,
     const char *to_filename);
+
+
+/*
+ * Given a filename return a filesystem URL. Relative paths are prefixed with
+ * the datafile directory path.
+ *
+ * @param filename A file name or path. Relative paths will be prefixed with
+ * the data file directory path.
+ * @return A filesystem URL for the file or NULL on failure. A non-NULL return
+ * value must be freed with g_free().
+ */
+WS_DLL_PUBLIC gchar* data_file_url(const gchar *filename);
+
+/*
+ * Free the internal structtures
+ */
+WS_DLL_PUBLIC void free_progdirs(void);
 
 #ifdef __cplusplus
 }

@@ -173,6 +173,9 @@ static gint ett_icmp_mpls_stack_object = -1;
 
 static expert_field ei_icmp_resp_not_found = EI_INIT;
 static expert_field ei_icmp_checksum = EI_INIT;
+static expert_field ei_icmp_ext_checksum = EI_INIT;
+
+static dissector_handle_t icmp_handle;
 
 
 /* ICMP definitions */
@@ -352,8 +355,21 @@ static const value_string interface_role_str[] = {
 #define MPLS_EXTENDED_PAYLOAD_C_TYPE             1
 
 /* Return true if the address is in the 224.0.0.0/4 network block */
-#define is_a_multicast_addr(addr) \
-  ((g_ntohl(addr) & 0xf0000000) == 0xe0000000)
+#define is_a_multicast_addr(a) \
+	((g_ntohl(a) & 0xf0000000) == 0xe0000000)
+
+/* Return true if the address is the 255.255.255.255 broadcast address */
+#define is_a_broadcast_addr(a) \
+	(g_ntohl(a) == 0xffffffff)
+
+#define ADDR_IS_MULTICAST(addr) \
+	(((addr)->len == 4) && is_a_multicast_addr(*(const guint32 *)((addr)->data)))
+
+#define ADDR_IS_BROADCAST(addr) \
+	(((addr)->len == 4) && is_a_broadcast_addr(*(const guint32 *)((addr)->data)))
+
+#define ADDR_IS_NOT_UNICAST(addr) \
+	(ADDR_IS_MULTICAST(addr) || ADDR_IS_BROADCAST(addr))
 
 static conversation_t *_find_or_create_conversation(packet_info * pinfo)
 {
@@ -756,12 +772,12 @@ dissect_interface_information_object(tvbuff_t * tvb, gint offset,
 }				/*end dissect_interface_information_object */
 
 static void
-dissect_extensions(tvbuff_t * tvb, gint offset, proto_tree * tree)
+dissect_extensions(tvbuff_t * tvb, packet_info *pinfo, gint offset, proto_tree * tree)
 {
 	guint8 version;
 	guint8 class_num;
 	guint8 c_type;
-	guint16 obj_length, obj_trunc_length;
+	guint16 obj_length, obj_trunc_length, checksum;
 	proto_item *ti, *tf_object;
 	proto_tree *ext_tree, *ext_object_tree;
 	gint obj_end_offset;
@@ -769,10 +785,6 @@ dissect_extensions(tvbuff_t * tvb, gint offset, proto_tree * tree)
 	gboolean unknown_object;
 	guint8 int_info_obj_count;
 
-	if (!tree)
-		return;
-
-	ext_tree = NULL;
 	int_info_obj_count = 0;
 
 	reported_length = tvb_reported_length_remaining(tvb, offset);
@@ -798,8 +810,15 @@ dissect_extensions(tvbuff_t * tvb, gint offset, proto_tree * tree)
 				   tvb, offset, 2, ENC_BIG_ENDIAN);
 
 	/* Checksum */
-	proto_tree_add_checksum(ext_tree, tvb, offset + 2, hf_icmp_ext_checksum, hf_icmp_ext_checksum_status, NULL, NULL, ip_checksum_tvb(tvb, 0, reported_length),
-								ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
+	checksum = tvb_get_ntohs(tvb, offset + 2);
+	if (checksum == 0) {
+		proto_tree_add_checksum(ext_tree, tvb, offset + 2, hf_icmp_ext_checksum, hf_icmp_ext_checksum_status, &ei_icmp_ext_checksum,
+							pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NOT_PRESENT);
+
+	} else {
+	proto_tree_add_checksum(ext_tree, tvb, offset + 2, hf_icmp_ext_checksum, hf_icmp_ext_checksum_status, &ei_icmp_ext_checksum,
+							pinfo, ip_checksum_tvb(tvb, offset, reported_length), ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
+	}
 
 	if (version != 1 && version != 2) {
 		/* Unsupported version */
@@ -879,11 +898,13 @@ dissect_extensions(tvbuff_t * tvb, gint offset, proto_tree * tree)
 			break;
 		}		/* end switch class_num */
 
-		/* Skip the object header */
-		offset += 4;
-
 		/* The switches couldn't decode the object */
 		if (unknown_object == TRUE) {
+			proto_tree_add_item(ext_object_tree, hf_icmp_ext_c_type, tvb, offset + 3, 1, ENC_BIG_ENDIAN);
+
+			/* Skip the object header */
+			offset += 4;
+
 			proto_item_set_text(tf_object,
 					    "Unknown object (%d/%d)",
 					    class_num, c_type);
@@ -958,10 +979,9 @@ static icmp_transaction_t *transaction_start(packet_info * pinfo,
 					   icmp_key);
 	}
 	if (icmp_trans == NULL) {
-		if (pinfo->dst.len == 4 && is_a_multicast_addr(*(const guint32 *)(pinfo->dst.data))) {
-			/* XXX We should support multicast echo requests, but we don't currently */
-			/* Note the multicast destination and skip transaction tracking */
-			col_append_str(pinfo->cinfo, COL_INFO, " (multicast)");
+		if (ADDR_IS_NOT_UNICAST(&pinfo->dst)) {
+			/* Note the non-unicast destination and skip transaction tracking */
+			col_append_str(pinfo->cinfo, COL_INFO, ADDR_IS_BROADCAST(&pinfo->dst) ? " (broadcast)" : " (multicast)");
 		} else if (PINFO_FD_VISITED(pinfo)) {
 			/* No response found - add field and expert info */
 			it = proto_tree_add_item(tree, hf_icmp_no_resp, NULL, 0, 0,
@@ -1298,10 +1318,15 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 		proto_tree_add_item(icmp_tree, hf_icmp_seq_num_le, tvb, 6,
 				    2, ENC_LITTLE_ENDIAN);
 		col_append_fstr(pinfo->cinfo, COL_INFO,
-				" id=0x%04x, seq=%u/%u, ttl=%u",
+				" id=0x%04x, seq=%u/%u",
 				tvb_get_ntohs(tvb, 4), tvb_get_ntohs(tvb,
 								     6),
-				tvb_get_letohs(tvb, 6), (iph != NULL) ? iph->ip_ttl : 0);
+				tvb_get_letohs(tvb, 6));
+		if (iph != NULL) {
+			col_append_fstr(pinfo->cinfo, COL_INFO,
+					", ttl=%u",
+					iph->ip_ttl);
+		}
 		break;
 
 	case ICMP_UNREACH:
@@ -1407,7 +1432,7 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 		} else {
 			/* There is a collision between RFC 1812 and draft-ietf-mpls-icmp-02.
 			   We don't know how to decode the 128th and following bytes of the ICMP payload.
-			   According to draft-ietf-mpls-icmp-02, these bytes should be decoded as MPLS extensios
+			   According to draft-ietf-mpls-icmp-02, these bytes should be decoded as MPLS extensions
 			   whereas RFC 1812 tells us to decode them as a portion of the original packet.
 			   Let the user decide.
 
@@ -1431,7 +1456,7 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 		if ((tvb_reported_length(tvb) > 8 + 128)
 		    && (tvb_get_ntohs(tvb, 8 + 2) <= 128
 			|| favor_icmp_mpls_ext)) {
-			dissect_extensions(tvb, 8 + 128, icmp_tree);
+			dissect_extensions(tvb, pinfo, 8 + 128, icmp_tree);
 		}
 		break;
 	case ICMP_ECHOREPLY:
@@ -1641,7 +1666,7 @@ void proto_register_icmp(void)
 		  NULL, HFILL}},
 
 		{&hf_icmp_addr_entry_size,
-		 {"Number of addresses", "icmp.addr_entry_size", FT_UINT8, BASE_DEC, NULL,
+		 {"Address entry size", "icmp.addr_entry_size", FT_UINT8, BASE_DEC, NULL,
 		  0x0,
 		  NULL, HFILL}},
 
@@ -1980,7 +2005,8 @@ void proto_register_icmp(void)
 
 	static ei_register_info ei[] = {
 		{ &ei_icmp_resp_not_found, { "icmp.resp_not_found", PI_SEQUENCE, PI_WARN, "Response not found", EXPFILL }},
-		{ &ei_icmp_checksum, { "icmp.checksum_bad.expert", PI_CHECKSUM, PI_WARN, "Bad checksum", EXPFILL }},
+		{ &ei_icmp_checksum, { "icmp.checksum_bad", PI_CHECKSUM, PI_WARN, "Bad checksum", EXPFILL }},
+		{ &ei_icmp_ext_checksum, { "icmp.ext.checksum_bad", PI_CHECKSUM, PI_WARN, "Bad checksum", EXPFILL }},
 	};
 
 	module_t *icmp_module;
@@ -2001,23 +2027,22 @@ void proto_register_icmp(void)
 				       "Whether the 128th and following bytes of the ICMP payload should be decoded as MPLS extensions or as a portion of the original packet",
 				       &favor_icmp_mpls_ext);
 
-	register_dissector("icmp", dissect_icmp, proto_icmp);
+	icmp_handle = register_dissector("icmp", dissect_icmp, proto_icmp);
 	icmp_tap = register_tap("icmp");
 }
 
 void proto_reg_handoff_icmp(void)
 {
-	dissector_handle_t icmp_handle;
+	capture_dissector_handle_t icmp_cap_handle;
 
 	/*
 	 * Get handle for the IP dissector.
 	 */
 	ip_handle = find_dissector_add_dependency("ip", proto_icmp);
-	icmp_handle = find_dissector("icmp");
 
 	dissector_add_uint("ip.proto", IP_PROTO_ICMP, icmp_handle);
-	register_capture_dissector("ip.proto", IP_PROTO_ICMP, capture_icmp, proto_icmp);
-	register_capture_dissector("ipv6.nxt", IP_PROTO_ICMP, capture_icmp, proto_icmp);
+	icmp_cap_handle = create_capture_dissector_handle(capture_icmp, proto_icmp);
+	capture_dissector_add_uint("ip.proto", IP_PROTO_ICMP, icmp_cap_handle);
 }
 
 /*

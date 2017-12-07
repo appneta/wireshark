@@ -161,7 +161,7 @@ dissect_wsmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
                         hf_wsmp_WAVEid, tvb, offset, 1, ENC_BIG_ENDIAN);
     offset++;
 
-    wsmlength = tvb_get_letohs( tvb, offset);
+    wsmlength = tvb_get_ntohs( tvb, offset);
     proto_tree_add_item(wsmp_tree,
                         hf_wsmp_wsmlength, tvb, offset, 2, ENC_BIG_ENDIAN);
     offset += 2;
@@ -185,7 +185,7 @@ dissect_wsmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
     wsmdata_tree = proto_tree_add_subtree(wsmp_tree, tvb, offset, wsmlength,
                                         ett_wsmdata, NULL, "Wave Short Message");
 
-    wsmdata_tvb  = tvb_new_subset(tvb, offset, -1, wsmlength);
+    wsmdata_tvb  = tvb_new_subset_length_caplen(tvb, offset, -1, wsmlength);
 
     /* TODO: Branch on the application context and display accordingly
      * Default: call the data dissector

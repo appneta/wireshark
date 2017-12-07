@@ -48,6 +48,7 @@
 #include <epan/conversation.h>
 #include <epan/conversation_table.h>
 #include <epan/dissector_filters.h>
+#include <epan/exported_pdu.h>
 #include <epan/decode_as.h>
 
 void proto_register_udp(void);
@@ -58,6 +59,7 @@ static dissector_handle_t udplite_handle;
 
 static int udp_tap = -1;
 static int udp_follow_tap = -1;
+static int exported_pdu_tap = -1;
 
 static header_field_info *hfi_udp = NULL;
 static header_field_info *hfi_udplite = NULL;
@@ -184,31 +186,37 @@ typedef struct
 static void
 udp_src_prompt(packet_info *pinfo, gchar *result)
 {
-    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "source (%u%s)", pinfo->srcport, UTF8_RIGHTWARDS_ARROW);
+    guint32 port = GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, hfi_udp_srcport.id, pinfo->curr_layer_num));
+
+    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "source (%u%s)", port, UTF8_RIGHTWARDS_ARROW);
 }
 
 static gpointer
 udp_src_value(packet_info *pinfo)
 {
-    return GUINT_TO_POINTER(pinfo->srcport);
+    return p_get_proto_data(pinfo->pool, pinfo, hfi_udp_srcport.id, pinfo->curr_layer_num);
 }
 
 static void
 udp_dst_prompt(packet_info *pinfo, gchar *result)
 {
-    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "destination (%s%u)", UTF8_RIGHTWARDS_ARROW, pinfo->destport);
+    guint32 port = GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, hfi_udp_dstport.id, pinfo->curr_layer_num));
+
+    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "destination (%s%u)", UTF8_RIGHTWARDS_ARROW, port);
 }
 
 static gpointer
 udp_dst_value(packet_info *pinfo)
 {
-    return GUINT_TO_POINTER(pinfo->destport);
+    return p_get_proto_data(pinfo->pool, pinfo, hfi_udp_dstport.id, pinfo->curr_layer_num);
 }
 
 static void
 udp_both_prompt(packet_info *pinfo, gchar *result)
 {
-    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Both (%u%s%u)", pinfo->srcport, UTF8_LEFT_RIGHT_ARROW, pinfo->destport);
+    guint32 srcport = GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, hfi_udp_srcport.id, pinfo->curr_layer_num)),
+            dstport = GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, hfi_udp_dstport.id, pinfo->curr_layer_num));
+    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Both (%u%s%u)", srcport, UTF8_LEFT_RIGHT_ARROW, dstport);
 }
 
 /* Conversation and process code originally copied from packet-tcp.c */
@@ -343,11 +351,26 @@ static const char* udp_host_get_filter_type(hostlist_talker_t* host, conv_filter
         return CONV_FILTER_INVALID;
     }
 
-    if (filter == CONV_FT_SRC_ADDRESS || filter == CONV_FT_DST_ADDRESS || filter == CONV_FT_ANY_ADDRESS) {
+
+    if (filter == CONV_FT_SRC_ADDRESS) {
         if (host->myaddress.type == AT_IPv4)
             return "ip.src";
         if (host->myaddress.type == AT_IPv6)
             return "ipv6.src";
+    }
+
+    if (filter == CONV_FT_DST_ADDRESS) {
+        if (host->myaddress.type == AT_IPv4)
+            return "ip.dst";
+        if (host->myaddress.type == AT_IPv6)
+            return "ipv6.dst";
+    }
+
+    if (filter == CONV_FT_ANY_ADDRESS) {
+        if (host->myaddress.type == AT_IPv4)
+            return "ip.addr";
+        if (host->myaddress.type == AT_IPv6)
+            return "ipv6.addr";
     }
 
     return CONV_FILTER_INVALID;
@@ -490,6 +513,80 @@ guint32 get_udp_stream_count(void)
     return udp_stream_count;
 }
 
+static void
+handle_export_pdu_dissection_table(packet_info *pinfo, tvbuff_t *tvb, guint32 port)
+{
+  if (have_tap_listener(exported_pdu_tap)) {
+    exp_pdu_data_item_t exp_pdu_data_table_value = {exp_pdu_data_dissector_table_num_value_size, exp_pdu_data_dissector_table_num_value_populate_data, NULL};
+
+  const exp_pdu_data_item_t *udp_exp_pdu_items[] = {
+    &exp_pdu_data_src_ip,
+    &exp_pdu_data_dst_ip,
+    &exp_pdu_data_port_type,
+    &exp_pdu_data_src_port,
+    &exp_pdu_data_dst_port,
+    &exp_pdu_data_orig_frame_num,
+    &exp_pdu_data_table_value,
+    NULL
+  };
+
+    exp_pdu_data_t *exp_pdu_data;
+
+    exp_pdu_data_table_value.data = GUINT_TO_POINTER(port);
+
+    exp_pdu_data = export_pdu_create_tags(pinfo, "udp.port", EXP_PDU_TAG_DISSECTOR_TABLE_NAME, udp_exp_pdu_items);
+    exp_pdu_data->tvb_captured_length = tvb_captured_length(tvb);
+    exp_pdu_data->tvb_reported_length = tvb_reported_length(tvb);
+    exp_pdu_data->pdu_tvb = tvb;
+
+    tap_queue_packet(exported_pdu_tap, pinfo, exp_pdu_data);
+  }
+}
+
+static void
+handle_export_pdu_heuristic(packet_info *pinfo, tvbuff_t *tvb, heur_dtbl_entry_t *hdtbl_entry)
+{
+  exp_pdu_data_t *exp_pdu_data = NULL;
+
+  if (have_tap_listener(exported_pdu_tap)) {
+    if ((!hdtbl_entry->enabled) ||
+        (hdtbl_entry->protocol != NULL && !proto_is_protocol_enabled(hdtbl_entry->protocol))) {
+      exp_pdu_data = export_pdu_create_common_tags(pinfo, "data", EXP_PDU_TAG_PROTO_NAME);
+    } else if (hdtbl_entry->protocol != NULL) {
+      exp_pdu_data = export_pdu_create_common_tags(pinfo, hdtbl_entry->short_name, EXP_PDU_TAG_HEUR_PROTO_NAME);
+    }
+
+    if (exp_pdu_data != NULL) {
+      exp_pdu_data->tvb_captured_length = tvb_captured_length(tvb);
+      exp_pdu_data->tvb_reported_length = tvb_reported_length(tvb);
+      exp_pdu_data->pdu_tvb = tvb;
+
+      tap_queue_packet(exported_pdu_tap, pinfo, exp_pdu_data);
+    }
+  }
+}
+
+static void
+handle_export_pdu_conversation(packet_info *pinfo, tvbuff_t *tvb, int uh_dport, int uh_sport)
+{
+  if (have_tap_listener(exported_pdu_tap)) {
+    conversation_t *conversation = find_conversation(pinfo->num, &pinfo->dst, &pinfo->src, PT_UDP, uh_dport, uh_sport, 0);
+    if (conversation != NULL)
+    {
+      dissector_handle_t handle = (dissector_handle_t)wmem_tree_lookup32_le(conversation->dissector_tree, pinfo->num);
+      if (handle != NULL)
+      {
+        exp_pdu_data_t *exp_pdu_data = export_pdu_create_common_tags(pinfo, dissector_handle_get_dissector_name(handle), EXP_PDU_TAG_PROTO_NAME);
+        exp_pdu_data->tvb_captured_length = tvb_captured_length(tvb);
+        exp_pdu_data->tvb_reported_length = tvb_reported_length(tvb);
+        exp_pdu_data->pdu_tvb = tvb;
+
+        tap_queue_packet(exported_pdu_tap, pinfo, exp_pdu_data);
+      }
+    }
+  }
+}
+
 void
 decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
                  proto_tree *tree, int uh_sport, int uh_dport, int uh_ulen)
@@ -501,6 +598,7 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
   /* Save curr_layer_num as it might be changed by subdissector */
   guint8 curr_layer_num = pinfo->curr_layer_num;
   heur_dtbl_entry_t *hdtbl_entry;
+  exp_pdu_data_t *exp_pdu_data;
 
   len = tvb_captured_length_remaining(tvb, offset);
   reported_len = tvb_reported_length_remaining(tvb, offset);
@@ -516,7 +614,7 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
       len = reported_len;
   }
 
-  next_tvb = tvb_new_subset(tvb, offset, len, reported_len);
+  next_tvb = tvb_new_subset_length_caplen(tvb, offset, len, reported_len);
 
   /* If the user has a "Follow UDP Stream" window loading, pass a pointer
    * to the payload tvb through the tap system. */
@@ -527,15 +625,16 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
     udp_p_info = (udp_p_info_t*)p_get_proto_data(wmem_file_scope(), pinfo, hfi_udp->id, pinfo->curr_layer_num);
     if (udp_p_info) {
       call_heur_dissector_direct(udp_p_info->heur_dtbl_entry, next_tvb, pinfo, tree, NULL);
+      handle_export_pdu_heuristic(pinfo, next_tvb, udp_p_info->heur_dtbl_entry);
       return;
     }
   }
 
   /* determine if this packet is part of a conversation and call dissector */
 /* for the conversation if available */
-
   if (try_conversation_dissector(&pinfo->dst, &pinfo->src, PT_UDP,
                                  uh_dport, uh_sport, next_tvb, pinfo, tree, NULL)) {
+    handle_export_pdu_conversation(pinfo, next_tvb, uh_dport, uh_sport);
     return;
   }
 
@@ -547,6 +646,8 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
         udp_p_info->heur_dtbl_entry = hdtbl_entry;
         p_add_proto_data(wmem_file_scope(), pinfo, hfi_udp->id, curr_layer_num, udp_p_info);
       }
+
+      handle_export_pdu_heuristic(pinfo, next_tvb, udp_p_info->heur_dtbl_entry);
       return;
     }
   }
@@ -575,11 +676,15 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
     high_port = uh_dport;
   }
   if ((low_port != 0) &&
-      dissector_try_uint(udp_dissector_table, low_port, next_tvb, pinfo, tree))
+      dissector_try_uint(udp_dissector_table, low_port, next_tvb, pinfo, tree)) {
+    handle_export_pdu_dissection_table(pinfo, next_tvb, low_port);
     return;
+  }
   if ((high_port != 0) &&
-      dissector_try_uint(udp_dissector_table, high_port, next_tvb, pinfo, tree))
+      dissector_try_uint(udp_dissector_table, high_port, next_tvb, pinfo, tree)) {
+    handle_export_pdu_dissection_table(pinfo, next_tvb, high_port);
     return;
+  }
 
   if (!try_heuristic_first) {
     /* Do lookup with the heuristic subdissector table */
@@ -589,11 +694,22 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
         udp_p_info->heur_dtbl_entry = hdtbl_entry;
         p_add_proto_data(wmem_file_scope(), pinfo, hfi_udp->id, curr_layer_num, udp_p_info);
       }
+
+      handle_export_pdu_heuristic(pinfo, next_tvb, udp_p_info->heur_dtbl_entry);
       return;
     }
   }
 
   call_data_dissector(next_tvb, pinfo, tree);
+
+  if (have_tap_listener(exported_pdu_tap)) {
+    exp_pdu_data = export_pdu_create_common_tags(pinfo, "data", EXP_PDU_TAG_PROTO_NAME);
+    exp_pdu_data->tvb_captured_length = tvb_captured_length(next_tvb);
+    exp_pdu_data->tvb_reported_length = tvb_reported_length(next_tvb);
+    exp_pdu_data->pdu_tvb = next_tvb;
+
+    tap_queue_packet(exported_pdu_tap, pinfo, exp_pdu_data);
+  }
 }
 
 int
@@ -689,7 +805,7 @@ udp_dissect_pdus(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
      length = captured_length_remaining;
      if (length > plen)
        length = plen;
-     next_tvb = tvb_new_subset(tvb, offset, length, plen);
+     next_tvb = tvb_new_subset_length_caplen(tvb, offset, length, plen);
 
      /*
       * Dissect the PDU.
@@ -813,6 +929,9 @@ dissect(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 ip_proto)
   src_port_item = proto_tree_add_item(udp_tree, &hfi_udp_srcport, tvb, offset, 2, ENC_BIG_ENDIAN);
   dst_port_item = proto_tree_add_item(udp_tree, &hfi_udp_dstport, tvb, offset + 2, 2, ENC_BIG_ENDIAN);
 
+  p_add_proto_data(pinfo->pool, pinfo, hfi_udp_srcport.id, pinfo->curr_layer_num, GUINT_TO_POINTER(udph->uh_sport));
+  p_add_proto_data(pinfo->pool, pinfo, hfi_udp_dstport.id, pinfo->curr_layer_num, GUINT_TO_POINTER(udph->uh_dport));
+
   hidden_item = proto_tree_add_item(udp_tree, &hfi_udp_port, tvb, offset, 2, ENC_BIG_ENDIAN);
   PROTO_ITEM_SET_HIDDEN(hidden_item);
   hidden_item = proto_tree_add_item(udp_tree, &hfi_udp_port, tvb, offset + 2, 2, ENC_BIG_ENDIAN);
@@ -885,7 +1004,8 @@ dissect(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 ip_proto)
   if (udph->uh_sum == 0) {
     /* No checksum supplied in the packet. */
     if (((ip_proto == IP_PROTO_UDP) && (pinfo->src.type == AT_IPv4)) || pinfo->flags.in_error_pkt) {
-      proto_tree_add_checksum(udp_tree, tvb, offset + 6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, NULL, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NOT_PRESENT);
+      proto_tree_add_checksum(udp_tree, tvb, offset + 6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, &ei_udp_checksum_bad,
+                              pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NOT_PRESENT);
     } else {
       item = proto_tree_add_uint_format_value(udp_tree, hfi_udp_checksum.id, tvb, offset + 6, 2, 0, "0 (Illegal)");
       checksum_tree = proto_item_add_subtree(item, ett_udp_checksum);
@@ -938,12 +1058,12 @@ dissect(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 ip_proto)
       SET_CKSUM_VEC_TVB(cksum_vec[3], tvb, offset, udph->uh_sum_cov);
       computed_cksum = in_cksum(&cksum_vec[0], 4);
 
-      item = proto_tree_add_checksum(udp_tree, tvb, offset+6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, &ei_udp_checksum_bad, pinfo, computed_cksum,
-                                      ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
+      item = proto_tree_add_checksum(udp_tree, tvb, offset+6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, &ei_udp_checksum_bad,
+                                      pinfo, computed_cksum, ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
       checksum_tree = proto_item_add_subtree(item, ett_udp_checksum);
 
       if (computed_cksum != 0) {
-         proto_item_append_text(item, "(maybe caused by \"UDP checksum offload\"?)");
+         proto_item_append_text(item, " (maybe caused by \"UDP checksum offload\"?)");
          col_append_str(pinfo->cinfo, COL_INFO, " [UDP CHECKSUM INCORRECT]");
          calc_item = proto_tree_add_uint(checksum_tree, &hfi_udp_checksum_calculated,
                                    tvb, offset + 6, 2, in_cksum_shouldbe(udph->uh_sum, computed_cksum));
@@ -954,10 +1074,10 @@ dissect(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 ip_proto)
       PROTO_ITEM_SET_GENERATED(calc_item);
 
     } else {
-      proto_tree_add_checksum(udp_tree, tvb, offset + 6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, NULL, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
+      proto_tree_add_checksum(udp_tree, tvb, offset + 6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, &ei_udp_checksum_bad, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
     }
   } else {
-    proto_tree_add_checksum(udp_tree, tvb, offset + 6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, NULL, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
+    proto_tree_add_checksum(udp_tree, tvb, offset + 6, hfi_udp_checksum.id, hfi_udp_checksum_status.id, &ei_udp_checksum_bad, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
   }
 
   /* Skip over header */
@@ -986,24 +1106,16 @@ dissect(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 ip_proto)
     process_tree = proto_tree_add_subtree(udp_tree, tvb, offset, 0, ett_udp_process_info, &ti, "Process Information");
     PROTO_ITEM_SET_GENERATED(ti);
     if (udpd->fwd && udpd->fwd->command) {
-      proto_tree_add_uint_format_value(process_tree, hfi_udp_proc_dst_uid.id, tvb, 0, 0,
-              udpd->fwd->process_uid, "%u", udpd->fwd->process_uid);
-      proto_tree_add_uint_format_value(process_tree, hfi_udp_proc_dst_pid.id, tvb, 0, 0,
-              udpd->fwd->process_pid, "%u", udpd->fwd->process_pid);
-      proto_tree_add_string_format_value(process_tree, hfi_udp_proc_dst_uname.id, tvb, 0, 0,
-              udpd->fwd->username, "%s", udpd->fwd->username);
-      proto_tree_add_string_format_value(process_tree, hfi_udp_proc_dst_cmd.id, tvb, 0, 0,
-              udpd->fwd->command, "%s", udpd->fwd->command);
+      proto_tree_add_uint(process_tree, &hfi_udp_proc_dst_uid, tvb, 0, 0, udpd->fwd->process_uid);
+      proto_tree_add_uint(process_tree, &hfi_udp_proc_dst_pid, tvb, 0, 0, udpd->fwd->process_pid);
+      proto_tree_add_string(process_tree, &hfi_udp_proc_dst_uname, tvb, 0, 0, udpd->fwd->username);
+      proto_tree_add_string(process_tree, &hfi_udp_proc_dst_cmd, tvb, 0, 0, udpd->fwd->command);
     }
     if (udpd->rev->command) {
-      proto_tree_add_uint_format_value(process_tree, hfi_udp_proc_src_uid.id, tvb, 0, 0,
-              udpd->rev->process_uid, "%u", udpd->rev->process_uid);
-      proto_tree_add_uint_format_value(process_tree, hfi_udp_proc_src_pid.id, tvb, 0, 0,
-              udpd->rev->process_pid, "%u", udpd->rev->process_pid);
-      proto_tree_add_string_format_value(process_tree, hfi_udp_proc_src_uname.id, tvb, 0, 0,
-              udpd->rev->username, "%s", udpd->rev->username);
-      proto_tree_add_string_format_value(process_tree, hfi_udp_proc_src_cmd.id, tvb, 0, 0,
-              udpd->rev->command, "%s", udpd->rev->command);
+      proto_tree_add_uint(process_tree, &hfi_udp_proc_src_uid, tvb, 0, 0, udpd->rev->process_uid);
+      proto_tree_add_uint(process_tree, &hfi_udp_proc_src_pid, tvb, 0, 0, udpd->rev->process_pid);
+      proto_tree_add_string(process_tree, &hfi_udp_proc_src_uname, tvb, 0, 0, udpd->rev->username);
+      proto_tree_add_string(process_tree, &hfi_udp_proc_src_cmd, tvb, 0, 0, udpd->rev->command);
     }
   }
 
@@ -1171,16 +1283,19 @@ proto_register_udp(void)
 void
 proto_reg_handoff_udp(void)
 {
+  capture_dissector_handle_t udp_cap_handle;
+
   dissector_add_uint("ip.proto", IP_PROTO_UDP, udp_handle);
   dissector_add_uint("ip.proto", IP_PROTO_UDPLITE, udplite_handle);
 
-  register_capture_dissector("ip.proto", IP_PROTO_UDP, capture_udp, hfi_udp->id);
-  register_capture_dissector("ip.proto", IP_PROTO_UDPLITE, capture_udp, hfi_udplite->id);
-  register_capture_dissector("ipv6.nxt", IP_PROTO_UDP, capture_udp, hfi_udp->id);
-  register_capture_dissector("ipv6.nxt", IP_PROTO_UDPLITE, capture_udp, hfi_udplite->id);
+  udp_cap_handle = create_capture_dissector_handle(capture_udp, hfi_udp->id);
+  capture_dissector_add_uint("ip.proto", IP_PROTO_UDP, udp_cap_handle);
+  udp_cap_handle = create_capture_dissector_handle(capture_udp, hfi_udplite->id);
+  capture_dissector_add_uint("ip.proto", IP_PROTO_UDPLITE, udp_cap_handle);
 
   udp_tap = register_tap("udp");
   udp_follow_tap = register_tap("udp_follow");
+  exported_pdu_tap = find_tap_id(EXPORT_PDU_TAP_NAME_LAYER_4);
 }
 
 /*

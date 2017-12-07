@@ -51,6 +51,8 @@
 
 #include "ui/gtk/old-gtk-compat.h"
 
+#include <wsutil/strtoi.h>
+
 #ifndef HAVE_LRINT
 #define lrint   rint
 #endif
@@ -321,7 +323,7 @@ static int rint(double );     /* compiler template for Windows */
 static struct irect zoomrect;
 
 
-/* XXX - what about OS X? */
+/* XXX - what about macOS? */
 static char helptext[] =
     "Here's what you can do:\n"
     "\n"
@@ -2188,7 +2190,7 @@ static gboolean key_press_event(GtkWidget *widget _U_, GdkEventKey *event, gpoin
             do_zoom_out_keyboard(g,
                                  FALSE,
                                  event->state & GDK_CONTROL_MASK);
-
+            break;
         /* Direction keys */
         case GDK_Left:
             do_key_motion_left(g, step);
@@ -2705,10 +2707,11 @@ static void rlc_lte_make_elmtlist(struct gtk_rlc_graph *g)
 static int rint(double x)
 {
     char *buf;
-    int i,dec,sig;
+    int i = 0;
+    int dec,sig;
 
     buf = _fcvt(x, 0, &dec, &sig);
-    i = atoi(buf);
+    ws_strtoi32(buf, NULL, &i);
     if (sig == 1) {
         i = i * -1;
     }

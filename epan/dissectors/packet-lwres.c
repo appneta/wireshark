@@ -26,8 +26,8 @@
 
 
 #include <epan/packet.h>
-#include <epan/prefs.h>
 #include <epan/to_str.h>
+#include <epan/strutil.h>
 
 #include "packet-dns.h"
 
@@ -180,10 +180,7 @@ static int ett_ns_rec_item = -1;
 
 
 
-#define LWRES_UDP_PORT 921
-
-static guint global_lwres_port = LWRES_UDP_PORT;
-
+#define LWRES_UDP_PORT 921 /* Not IANA registered */
 
 /* Define the lwres proto */
 static int proto_lwres = -1;
@@ -477,7 +474,9 @@ static void dissect_a_records(tvbuff_t* tvb, proto_tree* tree,guint32 nrec,int o
 static void dissect_srv_records(tvbuff_t* tvb, proto_tree* tree,guint32 nrec,int offset)
 {
     guint32 i, curr;
-    guint16 /*len, namelen,*/ priority, weight, port, dlen;
+    guint16 /*len, namelen,*/ priority, weight, port;
+    guint dlen;
+    guint used_bytes;
     const guchar *dname;
 
     proto_item* srv_rec_tree, *rec_tree;
@@ -497,7 +496,7 @@ static void dissect_srv_records(tvbuff_t* tvb, proto_tree* tree,guint32 nrec,int
         port     = tvb_get_ntohs(tvb, curr + 6);
         /*namelen = len - 8;*/
 
-        dlen = get_dns_name(tvb, curr + 8, 0, curr + 8, &dname);
+        used_bytes = get_dns_name(tvb, curr + 8, 0, curr + 8, &dname, &dlen);
 
         rec_tree = proto_tree_add_subtree_format(srv_rec_tree, tvb, curr, 6,
                     ett_srv_rec_item, NULL,
@@ -530,10 +529,10 @@ static void dissect_srv_records(tvbuff_t* tvb, proto_tree* tree,guint32 nrec,int
                             hf_srv_dname,
                             tvb,
                             curr + 8,
-                            dlen,
-                            dname);
+                            used_bytes,
+                            format_text(wmem_packet_scope(), dname, dlen));
 
-        curr+=(int)((sizeof(short)*4) + dlen);
+        curr+=(int)((sizeof(short)*4) + used_bytes);
 
     }
 
@@ -543,7 +542,9 @@ static void dissect_mx_records(tvbuff_t* tvb, proto_tree* tree, guint32 nrec, in
 {
 
     guint i, curr;
-    guint /*len, namelen,*/ priority, dlen;
+    guint priority;
+    guint dlen;
+    guint used_bytes;
     const guchar *dname;
 
     proto_tree* mx_rec_tree, *rec_tree;
@@ -558,10 +559,10 @@ static void dissect_mx_records(tvbuff_t* tvb, proto_tree* tree, guint32 nrec, in
     for(i=0; i < nrec; i++)
     {
         /*len =       tvb_get_ntohs(tvb, curr);*/
-        priority =  tvb_get_ntohs(tvb, curr + 2);
+        priority = tvb_get_ntohs(tvb, curr + 2);
         /*namelen  =  len - 4;*/
 
-        dlen  = get_dns_name(tvb, curr + 4, 0, curr + 4, &dname);
+        used_bytes  = get_dns_name(tvb, curr + 4, 0, curr + 4, &dname, &dlen);
 
         rec_tree = proto_tree_add_subtree_format(mx_rec_tree, tvb, curr,6,ett_mx_rec_item,NULL,
                         "MX record: pri=%d,dname=%s", priority,dname);
@@ -578,10 +579,10 @@ static void dissect_mx_records(tvbuff_t* tvb, proto_tree* tree, guint32 nrec, in
                             hf_srv_dname,
                             tvb,
                             curr + 4,
-                            dlen,
-                            dname);
+                            used_bytes,
+                            format_text(wmem_packet_scope(), dname, dlen));
 
-        curr+=(int)((sizeof(short)*2) + dlen);
+        curr+=(int)((sizeof(short)*2) + used_bytes);
 
 
     }
@@ -591,8 +592,9 @@ static void dissect_mx_records(tvbuff_t* tvb, proto_tree* tree, guint32 nrec, in
 static void dissect_ns_records(tvbuff_t* tvb, proto_tree* tree, guint32 nrec, int offset)
 {
     guint i, curr;
-    guint /*len, namelen,*/ dlen;
+    guint dlen;
     const guchar *dname;
+    guint used_bytes;
 
     proto_tree* ns_rec_tree, *rec_tree;
 
@@ -608,7 +610,7 @@ static void dissect_ns_records(tvbuff_t* tvb, proto_tree* tree, guint32 nrec, in
         /*len = tvb_get_ntohs(tvb, curr);*/
         /*namelen = len - 2;*/
 
-        dlen = get_dns_name(tvb, curr + 2, 0, curr + 2, &dname);
+        used_bytes = get_dns_name(tvb, curr + 2, 0, curr + 2, &dname, &dlen);
 
         rec_tree = proto_tree_add_subtree_format(ns_rec_tree, tvb, curr,4, ett_ns_rec_item, NULL, "NS record: dname=%s",dname);
 
@@ -616,9 +618,9 @@ static void dissect_ns_records(tvbuff_t* tvb, proto_tree* tree, guint32 nrec, in
                             hf_ns_dname,
                             tvb,
                             curr + 2,
-                            dlen,
-                            dname);
-        curr+=(int)(sizeof(short) + dlen);
+                            used_bytes,
+                            format_text(wmem_packet_scope(), dname, dlen));
+        curr+=(int)(sizeof(short) + used_bytes);
 
     }
 
@@ -1129,44 +1131,20 @@ proto_register_lwres(void)
         &ett_noop,
     };
 
-
-    module_t *lwres_module;
-
-    proto_lwres = proto_register_protocol("Light Weight DNS RESolver (BIND9)",
-                                          "LWRES", "lwres");
+    proto_lwres = proto_register_protocol("Light Weight DNS RESolver (BIND9)", "LWRES", "lwres");
 
     proto_register_field_array(proto_lwres, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
-
-    lwres_module = prefs_register_protocol(proto_lwres, proto_reg_handoff_lwres);
-
-    prefs_register_uint_preference(lwres_module, "udp.lwres_port",
-                                   "lwres listener UDP Port",
-                                   "Set the UDP port for lwres daemon"
-                                   "(if other than the default of 921)",
-                                   10, &global_lwres_port);
-
 }
 
 /* The registration hand-off routine */
 void
 proto_reg_handoff_lwres(void)
 {
-    static gboolean lwres_prefs_initialized = FALSE;
-    static dissector_handle_t lwres_handle;
-    static guint lwres_port;
+    dissector_handle_t lwres_handle;
 
-    if(!lwres_prefs_initialized) {
-        lwres_handle = create_dissector_handle(dissect_lwres, proto_lwres);
-        lwres_prefs_initialized = TRUE;
-    }
-    else {
-        dissector_delete_uint("udp.port", lwres_port, lwres_handle);
-    }
-
-    dissector_add_uint("udp.port", global_lwres_port, lwres_handle);
-    lwres_port = global_lwres_port;
-
+    lwres_handle = create_dissector_handle(dissect_lwres, proto_lwres);
+    dissector_add_uint_with_preference("udp.port", LWRES_UDP_PORT, lwres_handle);
 }
 
 /*

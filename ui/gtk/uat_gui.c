@@ -44,7 +44,7 @@
 # include <gdk/gdkkeysyms-compat.h>
 #endif
 
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 
 #include <epan/dfilter/dfilter-macro.h>
 #include <epan/proto.h>
@@ -167,44 +167,6 @@ static void limit_buttons(uat_t *uat) {
 	gtk_widget_set_sensitive (uat->rep->bt_clear, FALSE);
 }
 
-static char *fld_tostr(void *rec, uat_field_t *f) {
-	guint	    len;
-	char       *ptr;
-	char       *out;
-
-	f->cb.tostr(rec, &ptr, &len, f->cbdata.tostr, f->fld_data);
-
-	switch(f->mode) {
-	    case PT_TXTMOD_NONE:
-		case PT_TXTMOD_STRING:
-		case PT_TXTMOD_ENUM:
-		case PT_TXTMOD_FILENAME:
-		case PT_TXTMOD_DIRECTORYNAME:
-			out = g_strndup(ptr, len);
-			break;
-		case PT_TXTMOD_HEXBYTES: {
-			GString *s = g_string_sized_new( len*2 + 1 );
-			guint i;
-
-			for (i=0; i<len;i++) g_string_append_printf(s, "%.2X", ((const guint8*)ptr)[i]);
-
-			out = g_strdup(s->str);
-
-			g_string_free(s, TRUE);
-			break;
-		}
-		default:
-			g_assert_not_reached();
-			out = NULL;
-			break;
-	}
-
-	g_free(ptr);
-	return out;
-}
-
-
-
 static void append_row(uat_t *uat, guint idx) {
 	void	    *rec = UAT_INDEX_PTR(uat, idx);
 	uat_field_t *f	 = uat->fields;
@@ -216,7 +178,7 @@ static void append_row(uat_t *uat, guint idx) {
 
 	gtk_list_store_insert_before(uat->rep->list_store, &iter, NULL);
 	for ( colnum = 0; colnum < uat->ncols; colnum++ ) {
-		tmp_str = fld_tostr(rec, &(f[colnum]));
+		tmp_str = uat_fld_tostr(rec, &(f[colnum]));
 		gtk_list_store_set(uat->rep->list_store, &iter, colnum, tmp_str, -1);
 		g_free(tmp_str);
 	}
@@ -238,7 +200,7 @@ static void reset_row(uat_t *uat, guint idx) {
 	}
 
 	for ( colnum = 0; colnum < uat->ncols; colnum++ ) {
-		tmp_str = fld_tostr(rec, &(f[colnum]));
+		tmp_str = uat_fld_tostr(rec, &(f[colnum]));
 		gtk_list_store_set(uat->rep->list_store, &iter, colnum, tmp_str, -1);
 		g_free(tmp_str);
 	}
@@ -470,6 +432,10 @@ static void uat_edit_dialog(uat_t *uat, gint row, gboolean copy) {
 	  if (uat->copy_cb) {
 	    uat->copy_cb (dd->rec, UAT_INDEX_PTR(uat, row), uat->record_size);
 	  }
+	  else {
+	    /* According to documentation of uat_copy_cb_t memcpy should be used if uat->copy_cb is NULL */
+	    memcpy(dd->rec, UAT_INDEX_PTR(uat, row), uat->record_size);
+	  }
 	  dd->is_new = TRUE;
 	} else if (row >= 0) {
 	  dd->rec = UAT_INDEX_PTR(uat, row);
@@ -507,7 +473,7 @@ static void uat_edit_dialog(uat_t *uat, gint row, gboolean copy) {
 
 	for ( colnum = 0; colnum < uat->ncols; colnum++ ) {
 		GtkWidget *entry, *label, *event_box;
-		char *text = fld_tostr(dd->rec, &(f[colnum]));
+		char *text = uat_fld_tostr(dd->rec, &(f[colnum]));
 		char *label_text;
 		gchar *fc_filename;
 
@@ -677,7 +643,7 @@ static void uat_del_dlg(uat_t *uat, int idx) {
 
 	for ( colnum = 0; colnum < uat->ncols; colnum++ ) {
 		GtkWidget *label;
-		char *text = fld_tostr(rec, &(f[colnum]));
+		char *text = uat_fld_tostr(rec, &(f[colnum]));
 
 		tmp_str = g_strdup_printf("%s:", f[colnum].title);
 		label = gtk_label_new(tmp_str);
@@ -952,7 +918,7 @@ static gboolean unsaved_dialog(GtkWindow *w _U_, GdkEvent *e _U_, gpointer u) {
 	gtk_container_set_border_width(GTK_CONTAINER(vbox), 6);
 	gtk_container_add(GTK_CONTAINER(win), vbox);
 
-	message  = g_strdup_printf("Changes to '%s' are not being saved!\n"
+	message  = g_strdup_printf("Changes to '%s' are not being saved.\n"
 		"Do you want to save '%s'?", uat->name, uat->name);
 
 	label = gtk_label_new(message);

@@ -28,6 +28,8 @@
 #include <QTabBar>
 #include <QTreeWidgetItem>
 
+#include <ui/qt/variant_pointer.h>
+
 // To do:
 // - We might want to add a callback to free_data_sources in so that we
 //   don't have to blindly call clear().
@@ -52,7 +54,8 @@ void ByteViewTab::addTab(const char *name, tvbuff_t *tvb, proto_tree *tree, QTre
     byte_view_text->setMonospaceFont(mono_font_);
     connect(this, SIGNAL(monospaceFontChanged(QFont)), byte_view_text, SLOT(setMonospaceFont(QFont)));
     connect(byte_view_text, SIGNAL(byteFieldHovered(const QString&)), this, SIGNAL(byteFieldHovered(const QString&)));
-    QTabWidget::addTab(byte_view_text, name);
+    int idx = QTabWidget::addTab(byte_view_text, name);
+    QTabWidget::setTabToolTip(idx, name);
 }
 
 void ByteViewTab::clear()
@@ -176,6 +179,31 @@ void ByteViewTab::copyBinary(const guint8 *data_p, int data_len)
     }
 }
 
+void ByteViewTab::copyEscapedString(const guint8 *data_p, int data_len)
+{
+    QString clipboard_text;
+
+    // Beginning quote
+    clipboard_text += QString("\"");
+
+    for (int i = 0; i < data_len; i++) {
+        // Terminate this line if it has reached 16 bytes,
+        // unless it is also the very last byte in the data,
+        // as the termination after this for loop will take
+        // care of that.
+        if (i % 16 == 0 && i != 0 && i != data_len - 1) {
+            clipboard_text += QString("\" \\\n\"");
+        }
+        clipboard_text += QString("\\x%1").arg(data_p[i], 2, 16, QChar('0'));
+    }
+    // End quote
+    clipboard_text += QString("\"\n");
+
+    if (!clipboard_text.isEmpty()) {
+        qApp->clipboard()->setText(clipboard_text);
+    }
+}
+
 void ByteViewTab::copyData(ByteViewTab::copyDataType copy_type, field_info *fi)
 {
     int i = 0;
@@ -219,6 +247,9 @@ void ByteViewTab::copyData(ByteViewTab::copyDataType copy_type, field_info *fi)
     case copyDataBinary:
         copyBinary(data_p, data_len);
         break;
+    case copyDataEscapedString:
+        copyEscapedString(data_p, data_len);
+        break;
     default:
         break;
     }
@@ -245,7 +276,7 @@ void ByteViewTab::protoTreeItemChanged(QTreeWidgetItem *current) {
     if (current && cap_file_) {
         field_info *fi;
 
-        fi = current->data(0, Qt::UserRole).value<field_info *>();
+        fi = VariantPointer<field_info>::asPtr(current->data(0, Qt::UserRole));
 
         int i = 0;
         ByteViewText *byte_view_text = qobject_cast<ByteViewText*>(widget(i));
@@ -263,7 +294,7 @@ void ByteViewTab::protoTreeItemChanged(QTreeWidgetItem *current) {
                     parent = parent->parent();
                 }
                 if (parent) {
-                    parent_fi = parent->data(0, Qt::UserRole).value<field_info *>();
+                    parent_fi = VariantPointer<field_info>::asPtr(parent->data(0, Qt::UserRole));
                 }
                 if (parent_fi && parent_fi->ds_tvb == fi->ds_tvb) {
                     p_start = parent_fi->start;

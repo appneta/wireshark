@@ -75,7 +75,7 @@ static gint ett_message_flags           = -1;
 static gint ett_association             = -1;
 
 
-#define COMPONENTSTATUSPROTOCOL_PORT    2960
+#define COMPONENTSTATUSPROTOCOL_PORT    2960   /* Not IANA registered */
 #define COMPONENTSTATUSPROTOCOL_VERSION 0x0200
 
 
@@ -174,7 +174,7 @@ dissect_componentstatusprotocol_componentstatusreport_message(tvbuff_t *message_
   while(tvb_reported_length_remaining(message_tvb, offset) >= COMPONENTASSOCIATION_LENGTH) {
      association_tree = proto_tree_add_subtree_format(message_tree, message_tvb, offset, COMPONENTASSOCIATION_LENGTH,
          ett_association, NULL, "Association #%d", i++);
-     association_tvb  = tvb_new_subset(message_tvb, offset,
+     association_tvb  = tvb_new_subset_length_caplen(message_tvb, offset,
                                        MIN(COMPONENTASSOCIATION_LENGTH, tvb_reported_length_remaining(message_tvb, offset)),
                                        COMPONENTASSOCIATION_LENGTH);
 
@@ -292,7 +292,7 @@ proto_reg_handoff_componentstatusprotocol(void)
   dissector_handle_t componentstatusprotocol_handle;
 
   componentstatusprotocol_handle = create_dissector_handle(dissect_componentstatusprotocol, proto_componentstatusprotocol);
-  dissector_add_uint("udp.port", COMPONENTSTATUSPROTOCOL_PORT, componentstatusprotocol_handle);
+  dissector_add_uint_with_preference("udp.port", COMPONENTSTATUSPROTOCOL_PORT, componentstatusprotocol_handle);
 }
 
 /*

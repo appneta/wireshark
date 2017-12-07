@@ -80,6 +80,8 @@ static gint ett_ipx = -1;
 static dissector_table_t ipx_type_dissector_table;
 static dissector_table_t ipx_socket_dissector_table;
 static dissector_table_t spx_socket_dissector_table;
+static dissector_handle_t ipx_handle;
+static dissector_handle_t ipxsap_handle;
 
 static int proto_spx = -1;
 static int hf_spx_connection_control = -1;
@@ -273,7 +275,7 @@ static const value_string ipxmsg_sigchar_vals[] = {
 	{ 0, NULL }
 };
 
-gboolean
+static gboolean
 capture_ipx(const guchar *pd _U_, int offset _U_, int len _U_, capture_packet_info_t *cpinfo, const union wtap_pseudo_header *pseudo_header _U_)
 {
 	capture_dissector_increment_count(cpinfo, proto_ipx);
@@ -346,8 +348,7 @@ dissect_ipx(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 	PROTO_ITEM_SET_HIDDEN(hidden_item);
 
 	proto_tree_add_checksum(ipx_tree, tvb, 0, hf_ipx_checksum, -1, NULL, pinfo, 0, ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
-	proto_tree_add_uint_format_value(ipx_tree, hf_ipx_len, tvb, 2, 2, ipxh->ipx_length,
-		"%d bytes", ipxh->ipx_length);
+	proto_tree_add_uint(ipx_tree, hf_ipx_len, tvb, 2, 2, ipxh->ipx_length);
 	ipx_hops = tvb_get_guint8(tvb, 4);
 	proto_tree_add_uint_format(ipx_tree, hf_ipx_hops, tvb, 4, 1, ipx_hops,
 		"Transport Control: %d hops", ipx_hops);
@@ -469,7 +470,7 @@ typedef struct {
 	guint32             num;
 } spx_rexmit_info;
 
-static GHashTable *spx_hash = NULL;
+static wmem_map_t *spx_hash = NULL;
 
 /* Hash Functions */
 static gint
@@ -493,30 +494,6 @@ spx_hash_func(gconstpointer v)
 	return GPOINTER_TO_UINT(spx_key->conversation) + spx_key->spx_src;
 }
 
-/* Initializes the hash table each time a new
- * file is loaded or re-loaded in wireshark */
-static void
-spx_init_protocol(void)
-{
-	/* no need for register_cleanup_routine that destroys spx_hash,
-	 * spx_postseq_cleanup should clear this. */
-	spx_hash = g_hash_table_new(spx_hash_func, spx_equal);
-}
-
-/* After the sequential run, we don't need the spx hash table, or
- * the keys and values, anymore; the lookups have already been done
- * and the relevant info saved as SPX private data with the frame
- * if the frame was a retransmission. */
-static void
-spx_postseq_cleanup(void)
-{
-	if (spx_hash) {
-		/* Destroy the hash, but don't clean up request_condition data. */
-		g_hash_table_destroy(spx_hash);
-		spx_hash = NULL;
-	}
-}
-
 static spx_hash_value*
 spx_hash_insert(conversation_t *conversation, guint32 spx_src, guint16 spx_seq)
 {
@@ -531,7 +508,7 @@ spx_hash_insert(conversation_t *conversation, guint32 spx_src, guint16 spx_seq)
 
 	value = wmem_new0(wmem_file_scope(), spx_hash_value);
 
-	g_hash_table_insert(spx_hash, key, value);
+	wmem_map_insert(spx_hash, key, value);
 
 	return value;
 }
@@ -546,7 +523,7 @@ spx_hash_lookup(conversation_t *conversation, guint32 spx_src, guint32 spx_seq)
 	key.spx_src = spx_src;
 	key.spx_seq = spx_seq;
 
-	return (spx_hash_value *)g_hash_table_lookup(spx_hash, &key);
+	return (spx_hash_value *)wmem_map_lookup(spx_hash, &key);
 }
 
 /* ================================================================= */
@@ -1314,7 +1291,7 @@ proto_register_ipx(void)
 		  "Source or Destination IPX Address  \"network.node\"", HFILL }},
 
 		{ &hf_ipx_len,
-		{ "Length",		"ipx.len", FT_UINT16, BASE_DEC, NULL, 0x0,
+		{ "Length",		"ipx.len", FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,
 			NULL, HFILL }},
 
 		{ &hf_ipx_hops,
@@ -1520,7 +1497,7 @@ proto_register_ipx(void)
 
 		{ &hf_msg_sigchar,
 		{ "Signature Char",			"ipxmsg.sigchar",
-		  FT_UINT8,	BASE_DEC,	VALS(ipxmsg_sigchar_vals),	0x0,
+		  FT_CHAR,	BASE_HEX,	VALS(ipxmsg_sigchar_vals),	0x0,
 		  NULL, HFILL }}
 	};
 
@@ -1546,7 +1523,7 @@ proto_register_ipx(void)
 	    "IPX", "ipx");
 	proto_register_field_array(proto_ipx, hf_ipx, array_length(hf_ipx));
 
-	register_dissector("ipx", dissect_ipx, proto_ipx);
+	ipx_handle = register_dissector("ipx", dissect_ipx, proto_ipx);
 
 	proto_spx = proto_register_protocol("Sequenced Packet eXchange",
 	    "SPX", "spx");
@@ -1566,7 +1543,7 @@ proto_register_ipx(void)
 
 	proto_sap = proto_register_protocol("Service Advertisement Protocol",
 	    "IPX SAP", "ipxsap");
-	register_dissector("ipxsap", dissect_ipxsap, proto_sap);
+	ipxsap_handle = register_dissector("ipxsap", dissect_ipxsap, proto_sap);
 
 	proto_register_field_array(proto_sap, hf_sap, array_length(hf_sap));
 
@@ -1579,22 +1556,23 @@ proto_register_ipx(void)
 	spx_socket_dissector_table = register_dissector_table("spx.socket",
 	    "SPX socket", proto_spx, FT_UINT16, BASE_HEX);
 
-	register_init_routine(&spx_init_protocol);
-	register_postseq_cleanup_routine(&spx_postseq_cleanup);
+	spx_hash = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), spx_hash_func, spx_equal);
 	ipx_tap=register_tap("ipx");
 
 	register_conversation_table(proto_ipx, TRUE, ipx_conversation_packet, ipx_hostlist_packet);
+
+	register_capture_dissector("ipx", capture_ipx, proto_ipx);
 }
 
 void
 proto_reg_handoff_ipx(void)
 {
-	dissector_handle_t ipx_handle, spx_handle;
-	dissector_handle_t ipxsap_handle, ipxrip_handle;
+	dissector_handle_t spx_handle;
+	dissector_handle_t ipxrip_handle;
 	dissector_handle_t serialization_handle, ipxmsg_handle;
+	capture_dissector_handle_t ipx_cap_handle;
 
-	ipx_handle = find_dissector("ipx");
-	dissector_add_uint("udp.port", UDP_PORT_IPX, ipx_handle);
+	dissector_add_uint_with_preference("udp.port", UDP_PORT_IPX, ipx_handle);
 	dissector_add_uint("ethertype", ETHERTYPE_IPX, ipx_handle);
 	dissector_add_uint("chdlc.protocol", ETHERTYPE_IPX, ipx_handle);
 	dissector_add_uint("ppp.protocol", PPP_IPX, ipx_handle);
@@ -1609,7 +1587,6 @@ proto_reg_handoff_ipx(void)
 	spx_handle = create_dissector_handle(dissect_spx, proto_spx);
 	dissector_add_uint("ipx.packet_type", IPX_PACKET_TYPE_SPX, spx_handle);
 
-	ipxsap_handle = find_dissector("ipxsap");
 	dissector_add_uint("ipx.socket", IPX_SOCKET_SAP, ipxsap_handle);
 
 	ipxrip_handle = create_dissector_handle(dissect_ipxrip, proto_ipxrip);
@@ -1624,11 +1601,12 @@ proto_reg_handoff_ipx(void)
 	dissector_add_uint("ipx.socket", IPX_SOCKET_IPX_MESSAGE, ipxmsg_handle);
 	dissector_add_uint("ipx.socket", IPX_SOCKET_IPX_MESSAGE1, ipxmsg_handle);
 
-	register_capture_dissector("ethertype", ETHERTYPE_IPX, capture_ipx, proto_ipx);
-	register_capture_dissector("ppp_hdlc", PPP_IPX, capture_ipx, proto_ipx);
-	register_capture_dissector("sll.ltype", LINUX_SLL_P_802_3, capture_ipx, proto_ipx);
-	register_capture_dissector("llc.dsap", SAP_NETWARE1, capture_ipx, proto_ipx);
-	register_capture_dissector("llc.dsap", SAP_NETWARE2, capture_ipx, proto_ipx);
+	ipx_cap_handle = find_capture_dissector("ipx");
+	capture_dissector_add_uint("ethertype", ETHERTYPE_IPX, ipx_cap_handle);
+	capture_dissector_add_uint("ppp_hdlc", PPP_IPX, ipx_cap_handle);
+	capture_dissector_add_uint("sll.ltype", LINUX_SLL_P_802_3, ipx_cap_handle);
+	capture_dissector_add_uint("llc.dsap", SAP_NETWARE1, ipx_cap_handle);
+	capture_dissector_add_uint("llc.dsap", SAP_NETWARE2, ipx_cap_handle);
 }
 
 /*

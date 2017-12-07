@@ -269,6 +269,8 @@ extern "C" {
 #define WTAP_ENCAP_GFP_F                        179
 #define WTAP_ENCAP_IP_OVER_IB_PCAP              180
 #define WTAP_ENCAP_JUNIPER_VN                   181
+#define WTAP_ENCAP_USB_DARWIN                   182
+#define WTAP_ENCAP_NORDIC_BLE                   183
 /* After adding new item here, please also add new item to encap_table_base array */
 
 #define WTAP_NUM_ENCAP_TYPES                    wtap_get_num_encap_types()
@@ -374,11 +376,20 @@ extern "C" {
 /* if you add to the above, update wtap_tsprec_string() */
 
 /*
- * Maximum packet size we'll support.
- * 262144 is the largest snapshot length that libpcap supports, so we
- * use that.
+ * We support one maximum packet size for most link-layer header types
+ * and another for D-Bus, because the maximum packet size for D-Bus
+ * is 128MB, as per
+ *
+ *    https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
+ *
+ * and that's a lot bigger than the 256KB that we use elsewhere.
+ *
+ * We don't want to write out files that specify a maximum packet size of
+ * 128MB if we don't have to, as software reading those files might
+ * allocate a buffer much larger than necessary, wasting memory.
  */
-#define WTAP_MAX_PACKET_SIZE    262144
+#define WTAP_MAX_PACKET_SIZE_STANDARD    262144
+#define WTAP_MAX_PACKET_SIZE_DBUS        (128*1024*1024)
 
 /*
  * "Pseudo-headers" are used to supply to the clients of wiretap
@@ -759,20 +770,22 @@ struct ieee_802_11ad {
     guint8   mcs;            /* MCS index */
 };
 
+union ieee_802_11_phy_info {
+    struct ieee_802_11_fhss info_11_fhss;
+    struct ieee_802_11b info_11b;
+    struct ieee_802_11a info_11a;
+    struct ieee_802_11g info_11g;
+    struct ieee_802_11n info_11n;
+    struct ieee_802_11ac info_11ac;
+    struct ieee_802_11ad info_11ad;
+};
+
 struct ieee_802_11_phdr {
     gint     fcs_len;        /* Number of bytes of FCS - -1 means "unknown" */
     gboolean decrypted;      /* TRUE if frame is decrypted even if "protected" bit is set */
     gboolean datapad;        /* TRUE if frame has padding between 802.11 header and payload */
     guint    phy;            /* PHY type */
-    union {
-        struct ieee_802_11_fhss info_11_fhss;
-        struct ieee_802_11b info_11b;
-        struct ieee_802_11a info_11a;
-        struct ieee_802_11g info_11g;
-        struct ieee_802_11n info_11n;
-        struct ieee_802_11ac info_11ac;
-        struct ieee_802_11ad info_11ad;
-    } phy_info;
+    union ieee_802_11_phy_info phy_info;
 
     /* Which of this information is present? */
     guint    has_channel:1;
@@ -944,7 +957,7 @@ struct erf_ehdr {
  * (Multichannel or Ethernet)
  */
 
-#define MAX_ERF_EHDR 8
+#define MAX_ERF_EHDR 16
 
 struct wtap_erf_eth_hdr {
     guint8 offset;
@@ -1218,6 +1231,8 @@ struct wtap_pkthdr {
     guint32   interface_id;     /* identifier of the interface. */
                                 /* options */
     gchar     *opt_comment;     /* NULL if not available */
+    gboolean  has_comment_changed; /* TRUE if the comment has been changed. Currently only valid while dumping. */
+
     guint64   drop_count;       /* number of packets lost (by the interface and the
                                    operating system) between this packet and the preceding one. */
     guint32   pack_flags;       /* XXX - 0 for now (any value for "we don't have it"?) */
@@ -1283,7 +1298,6 @@ typedef struct wtapng_if_descr_mandatory_s {
     guint64                time_units_per_second;
     int                    tsprecision;           /**< WTAP_TSPREC_ value for this interface */
 
-    guint16                link_type;
     guint32                snap_len;
 
     guint8                 num_stat_entries;
@@ -1359,22 +1373,28 @@ typedef struct wtap_wslua_file_info {
 } wtap_wslua_file_info_t;
 
 /*
- * For registering extensions used for capture file formats.
+ * For registering extensions used for file formats.
  *
  * These items are used in dialogs for opening files, so that
  * the user can ask to see all capture files (as identified
  * by file extension) or particular types of capture files.
  *
- * Each file type has a description and a list of extensions the file
- * might have.  Some file types aren't real file types, they're
- * just generic types, such as "text file" or "XML file", that can
- * be used for, among other things, captures we can read, or for
- * extensions such as ".cap" that were unimaginatively chosen by
- * several different sniffers for their file formats.
+ * Each file type has a description, a flag indicating whether it's
+ * a capture file or just some file whose contents we can dissect,
+ * and a list of extensions the file might have.
+ *
+ * Some file types aren't real file types, they're just generic types,
+ * such as "text file" or "XML file", that can be used for, among other
+ * things, captures we can read, or for extensions such as ".cap" that
+ * were unimaginatively chosen by several different sniffers for their
+ * file formats.
  */
 struct file_extension_info {
     /* the file type name */
     const char *name;
+
+    /* TRUE if this is a capture file type */
+    gboolean is_capture_file;
 
     /* a semicolon-separated list of file extensions used for this type */
     const char *extensions;
@@ -1441,6 +1461,8 @@ typedef enum {
 } wtap_open_type;
 
 WS_DLL_PUBLIC void init_open_routines(void);
+
+void cleanup_open_routines(void);
 
 struct open_info {
     const char *name;
@@ -1711,9 +1733,11 @@ void wtap_fdclose(wtap *wth);
 WS_DLL_PUBLIC
 gboolean wtap_fdreopen(wtap *wth, const char *filename, int *err);
 
-/*** close the current file ***/
+/** Close only the sequential side, freeing up memory it uses. */
 WS_DLL_PUBLIC
 void wtap_sequential_close(wtap *wth);
+
+/** Closes any open file handles and frees the memory associated with wth. */
 WS_DLL_PUBLIC
 void wtap_close(wtap *wth);
 
@@ -1873,7 +1897,14 @@ struct addrinfo;
 WS_DLL_PUBLIC
 gboolean wtap_dump_set_addrinfo_list(wtap_dumper *wdh, addrinfo_lists_t *addrinfo_lists);
 WS_DLL_PUBLIC
-gboolean wtap_dump_close(wtap_dumper *, int *);
+gboolean wtap_dump_get_needs_reload(wtap_dumper *wdh);
+
+/**
+ * Closes open file handles and frees memory associated with wdh. Note that
+ * shb_hdr, idb_inf and nrb_hdr are not freed by this routine.
+ */
+WS_DLL_PUBLIC
+gboolean wtap_dump_close(wtap_dumper *wdh, int *err);
 
 /**
  * Return TRUE if we can write a file out with the given GArray of file
@@ -1901,7 +1932,7 @@ int wtap_short_string_to_file_type_subtype(const char *short_name);
 
 /*** various file extension functions ***/
 WS_DLL_PUBLIC
-GSList *wtap_get_all_file_extensions_list(void);
+GSList *wtap_get_all_capture_file_extensions_list(void);
 WS_DLL_PUBLIC
 const char *wtap_default_file_extension(int filetype);
 WS_DLL_PUBLIC
@@ -1938,8 +1969,6 @@ GSList *wtap_get_file_extension_type_extensions(guint extension_type);
 
 /*** dynamically register new file types and encapsulations ***/
 WS_DLL_PUBLIC
-void wtap_register_plugin_types(void);
-WS_DLL_PUBLIC
 void register_all_wiretap_modules(void);
 WS_DLL_PUBLIC
 void wtap_register_file_type_extension(const struct file_extension_info *ei);
@@ -1961,6 +1990,9 @@ void wtap_deregister_file_type_subtype(const int file_type_subtype);
 WS_DLL_PUBLIC
 int wtap_register_encap_type(const char* name, const char* short_name);
 
+/*** Cleanup the interal library structures */
+WS_DLL_PUBLIC
+void wtap_cleanup(void);
 
 /**
  * Wiretap error codes.

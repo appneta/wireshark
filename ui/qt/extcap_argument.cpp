@@ -25,6 +25,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QLineEdit>
+#include <QDateTimeEdit>
 #include <QIntValidator>
 #include <QDoubleValidator>
 #include <QCheckBox>
@@ -53,6 +54,66 @@
 #include <extcap_parser.h>
 #include <extcap_argument_file.h>
 #include <extcap_argument_multiselect.h>
+
+ExtArgTimestamp::ExtArgTimestamp(extcap_arg * argument) :
+    ExtcapArgument(argument) {}
+
+QWidget * ExtArgTimestamp::createEditor(QWidget * parent)
+{
+    QDateTimeEdit * tsBox;
+    QString text = defaultValue();
+
+    if ( _argument->pref_valptr && *_argument->pref_valptr)
+    {
+        QString storeValue(*_argument->pref_valptr);
+
+        if ( storeValue.length() > 0 && storeValue.compare(text) != 0 )
+            text = storeValue.trimmed();
+    }
+
+    ts = QDateTime::fromTime_t(text.toInt());
+    tsBox = new QDateTimeEdit(ts, parent);
+    tsBox->setDisplayFormat(QLocale::system().dateTimeFormat());
+    tsBox->setCalendarPopup(true);
+
+    if ( _argument->tooltip != NULL )
+        tsBox->setToolTip(QString().fromUtf8(_argument->tooltip));
+
+    connect(tsBox, SIGNAL(dateTimeChanged(QDateTime)), SLOT(onDateTimeChanged(QDateTime)));
+
+    return tsBox;
+}
+
+void ExtArgTimestamp::onDateTimeChanged(QDateTime t)
+{
+    ts = t;
+    emit valueChanged();
+}
+
+QString ExtArgTimestamp::defaultValue()
+{
+    return QString::number(QDateTime::currentDateTime().toTime_t());
+}
+
+bool ExtArgTimestamp::isValid()
+{
+    bool valid = true;
+
+    if ( value().length() == 0 && isRequired() )
+        valid = false;
+
+    return valid;
+}
+
+QString ExtArgTimestamp::value()
+{
+    return QString::number(ts.toTime_t());
+}
+
+QString ExtArgTimestamp::prefValue()
+{
+    return value();
+}
 
 ExtArgSelector::ExtArgSelector(extcap_arg * argument) :
         ExtcapArgument(argument), boxSelection(0) {}
@@ -302,7 +363,6 @@ ExtArgText::ExtArgText(extcap_arg * argument) :
 
 QWidget * ExtArgText::createEditor(QWidget * parent)
 {
-    QString storeValue;
     QString text = defaultValue();
 
     if ( _argument->pref_valptr && *_argument->pref_valptr)
@@ -317,6 +377,9 @@ QWidget * ExtArgText::createEditor(QWidget * parent)
 
     if ( _argument->tooltip != NULL )
         textBox->setToolTip(QString().fromUtf8(_argument->tooltip));
+
+    if ( _argument->placeholder != NULL )
+        textBox->setPlaceholderText(QString().fromUtf8(_argument->placeholder));
 
     if (_argument->arg_type == EXTCAP_ARG_PASSWORD)
         textBox->setEchoMode(QLineEdit::Password);
@@ -366,7 +429,6 @@ ExtArgNumber::ExtArgNumber(extcap_arg * argument) :
 
 QWidget * ExtArgNumber::createEditor(QWidget * parent)
 {
-    QString storeValue;
     QString text = defaultValue();
 
     if ( _argument->pref_valptr && *_argument->pref_valptr)
@@ -600,11 +662,17 @@ QString ExtcapArgument::prefValue()
 
 void ExtcapArgument::resetValue()
 {
+<<<<<<< HEAD
     // XXX consider using the preferences API which can store the default value
     // and put that here instead of an empty value.
     if (_argument->pref_valptr) {
         g_free(*_argument->pref_valptr);
         *_argument->pref_valptr = NULL;
+=======
+    if (_argument->pref_valptr) {
+        g_free(*_argument->pref_valptr);
+        *_argument->pref_valptr = g_strdup("");
+>>>>>>> upstream/master-2.4
     }
 }
 
@@ -638,7 +706,11 @@ QString ExtcapArgument::prefKey(const QString & device_name)
 
     pref = extcap_pref_for_argument(device_name.toStdString().c_str(), _argument);
     if ( pref != NULL )
+<<<<<<< HEAD
         return QString(pref->name);
+=======
+        return QString(prefs_get_name(pref));
+>>>>>>> upstream/master-2.4
 
     return QString();
 }
@@ -689,6 +761,8 @@ ExtcapArgument * ExtcapArgument::create(extcap_arg * argument)
         result = new ExtcapArgumentFileSelection(argument);
     else if ( argument->arg_type == EXTCAP_ARG_MULTICHECK )
         result = new ExtArgMultiSelect(argument);
+    else if ( argument->arg_type == EXTCAP_ARG_TIMESTAMP )
+        result = new ExtArgTimestamp(argument);
     else
     {
         /* For everything else, we just print the label */

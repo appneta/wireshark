@@ -40,6 +40,11 @@
 #include <locale.h>
 #include <limits.h>
 
+#ifndef _WIN32
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
+
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
 #endif
@@ -60,7 +65,7 @@
 #include <wsutil/file_util.h>
 #include <wsutil/plugins.h>
 #include <wsutil/privileges.h>
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 
 #include "globals.h"
 #include <epan/packet.h>
@@ -76,6 +81,8 @@
 #include "ui/capture_ui_utils.h"
 #endif
 #include "ui/util.h"
+#include "ui/dissect_opts.h"
+#include "ui/failure_message.h"
 #include "register.h"
 #include "conditions.h"
 #include "capture_stop_conditions.h"
@@ -116,6 +123,12 @@
 static const gchar decode_as_arg_template[] = "<layer_type>==<selector>,<decode_as_protocol>";
 #endif
 
+#define INVALID_OPTION 1
+#define INIT_ERROR 2
+#define INVALID_DFILTER 2
+#define OPEN_ERROR 2
+#define FORMAT_ERROR 2
+
 static guint32 cum_bytes;
 static const frame_data *ref;
 static frame_data ref_frame;
@@ -144,9 +157,9 @@ static gboolean process_packet(capture_file *cf, epan_dissect_t *edt, gint64 off
                                struct wtap_pkthdr *whdr, const guchar *pd);
 static void show_print_file_io_error(int err);
 
+static void failure_warning_message(const char *msg_format, va_list ap);
 static void open_failure_message(const char *filename, int err,
                                  gboolean for_writing);
-static void failure_message(const char *msg_format, va_list ap);
 static void read_failure_message(const char *filename, int err);
 static void write_failure_message(const char *filename, int err);
 static void rawshark_cmdarg_err(const char *fmt, va_list ap);
@@ -191,6 +204,9 @@ print_usage(FILE *output)
     fprintf(output, "  -d <encap:linktype>|<proto:protoname>\n");
     fprintf(output, "                           packet encapsulation or protocol\n");
     fprintf(output, "  -F <field>               field to display\n");
+#ifndef _WIN32
+    fprintf(output, "  -m                       virtual memory limit, in bytes \n");
+#endif
     fprintf(output, "  -n                       disable all name resolution (def: all enabled)\n");
     fprintf(output, "  -N <name resolve flags>  enable specific name resolution(s): \"mnNtd\"\n");
     fprintf(output, "  -p                       use the system's packet header format\n");
@@ -354,6 +370,7 @@ set_link_type(const char *lt_arg) {
     long val;
     dissector_handle_t dhandle;
     GString *pref_str;
+    char *errmsg = NULL;
 
     if (!spec_ptr)
         return FALSE;
@@ -394,8 +411,9 @@ set_link_type(const char *lt_arg) {
             g_string_append_printf(pref_str,
                                    "\"User 0 (DLT=147)\",\"%s\",\"0\",\"\",\"0\",\"\"",
                                    spec_ptr);
-            if (prefs_set_pref(pref_str->str) != PREFS_SET_OK) {
+            if (prefs_set_pref(pref_str->str, &errmsg) != PREFS_SET_OK) {
                 g_string_free(pref_str, TRUE);
+                g_free(errmsg);
                 return FALSE;
             }
             g_string_free(pref_str, TRUE);
@@ -412,18 +430,14 @@ main(int argc, char *argv[])
     GString             *runtime_info_str;
     char                *init_progfile_dir_error;
     int                  opt, i;
-    gboolean             arg_error = FALSE;
 
 #ifdef _WIN32
+    int                  result;
     WSADATA              wsaData;
+#else
+    struct rlimit limit;
 #endif  /* _WIN32 */
 
-    char                *gpf_path, *pf_path;
-    char                *gdp_path, *dp_path;
-    int                  gpf_open_errno, gpf_read_errno;
-    int                  pf_open_errno, pf_read_errno;
-    int                  gdp_open_errno, gdp_read_errno;
-    int                  dp_open_errno, dp_read_errno;
     gchar               *pipe_name = NULL;
     gchar               *rfilters[64];
     e_prefs             *prefs_p;
@@ -432,13 +446,14 @@ main(int argc, char *argv[])
     GPtrArray           *disp_fields = g_ptr_array_new();
     guint                fc;
     gboolean             skip_pcap_header = FALSE;
+    int                  ret = EXIT_SUCCESS;
     static const struct option long_options[] = {
       {"help", no_argument, NULL, 'h'},
       {"version", no_argument, NULL, 'v'},
       {0, 0, 0, 0 }
     };
 
-#define OPTSTRING_INIT "d:F:hlnN:o:pr:R:sS:t:v"
+#define OPTSTRING_INIT "d:F:hlm:nN:o:pr:R:sS:t:v"
 
     static const char    optstring[] = OPTSTRING_INIT;
 
@@ -508,8 +523,9 @@ main(int argc, char *argv[])
                       (GLogLevelFlags)log_flags,
                       log_func_ignore, NULL /* user_data */);
 
-    init_report_err(failure_message, open_failure_message, read_failure_message,
-                    write_failure_message);
+    init_report_message(failure_warning_message, failure_warning_message,
+                        open_failure_message, read_failure_message,
+                        write_failure_message);
 
     timestamp_set_type(TS_RELATIVE);
     timestamp_set_precision(TS_PREC_AUTO);
@@ -522,63 +538,13 @@ main(int argc, char *argv[])
        dissectors, and we must do it before we read the preferences, in
        case any dissectors register preferences. */
     if (!epan_init(register_all_protocols, register_all_protocol_handoffs,
-                   NULL, NULL))
-        return 2;
-
-    prefs_p = read_prefs(&gpf_open_errno, &gpf_read_errno, &gpf_path,
-                         &pf_open_errno, &pf_read_errno, &pf_path);
-    if (gpf_path != NULL) {
-        if (gpf_open_errno != 0) {
-            cmdarg_err("Can't open global preferences file \"%s\": %s.",
-                       pf_path, g_strerror(gpf_open_errno));
-        }
-        if (gpf_read_errno != 0) {
-            cmdarg_err("I/O error reading global preferences file \"%s\": %s.",
-                       pf_path, g_strerror(gpf_read_errno));
-        }
-    }
-    if (pf_path != NULL) {
-        if (pf_open_errno != 0) {
-            cmdarg_err("Can't open your preferences file \"%s\": %s.", pf_path,
-                       g_strerror(pf_open_errno));
-        }
-        if (pf_read_errno != 0) {
-            cmdarg_err("I/O error reading your preferences file \"%s\": %s.",
-                       pf_path, g_strerror(pf_read_errno));
-        }
-        g_free(pf_path);
-        pf_path = NULL;
+                   NULL, NULL)) {
+        ret = INIT_ERROR;
+        goto clean_exit;
     }
 
-    /* Read the disabled protocols file. */
-    read_disabled_protos_list(&gdp_path, &gdp_open_errno, &gdp_read_errno,
-                              &dp_path, &dp_open_errno, &dp_read_errno);
-    read_disabled_heur_dissector_list(&gdp_path, &gdp_open_errno, &gdp_read_errno,
-                              &dp_path, &dp_open_errno, &dp_read_errno);
-    if (gdp_path != NULL) {
-        if (gdp_open_errno != 0) {
-            cmdarg_err("Could not open global disabled protocols file\n\"%s\": %s.",
-                       gdp_path, g_strerror(gdp_open_errno));
-        }
-        if (gdp_read_errno != 0) {
-            cmdarg_err("I/O error reading global disabled protocols file\n\"%s\": %s.",
-                       gdp_path, g_strerror(gdp_read_errno));
-        }
-        g_free(gdp_path);
-    }
-    if (dp_path != NULL) {
-        if (dp_open_errno != 0) {
-            cmdarg_err(
-                "Could not open your disabled protocols file\n\"%s\": %s.", dp_path,
-                g_strerror(dp_open_errno));
-        }
-        if (dp_read_errno != 0) {
-            cmdarg_err(
-                "I/O error reading your disabled protocols file\n\"%s\": %s.", dp_path,
-                g_strerror(dp_read_errno));
-        }
-        g_free(dp_path);
-    }
+    /* Load libwireshark settings from the current profile. */
+    prefs_p = epan_load_settings();
 
 #ifdef _WIN32
     ws_init_dll_search_path();
@@ -601,7 +567,8 @@ main(int argc, char *argv[])
             case 'd':        /* Payload type */
                 if (!set_link_type(optarg)) {
                     cmdarg_err("Invalid link type or protocol \"%s\"", optarg);
-                    exit(1);
+                    ret = INVALID_OPTION;
+                    goto clean_exit;
                 }
                 break;
             case 'F':        /* Read field to display */
@@ -613,7 +580,7 @@ main(int argc, char *argv[])
                        "See https://www.wireshark.org for more information.\n",
                        get_ws_vcs_version_info());
                 print_usage(stdout);
-                exit(0);
+                goto clean_exit;
                 break;
             case 'l':        /* "Line-buffer" standard output */
                 /* This isn't line-buffering, strictly speaking, it's just
@@ -630,6 +597,18 @@ main(int argc, char *argv[])
                    and the output buffer is only flushed when it fills up). */
                 line_buffered = TRUE;
                 break;
+#ifndef _WIN32
+            case 'm':
+                limit.rlim_cur = get_positive_int(optarg, "memory limit");
+                limit.rlim_max = get_positive_int(optarg, "memory limit");
+
+                if(setrlimit(RLIMIT_AS, &limit) != 0) {
+                    cmdarg_err("setrlimit() returned error");
+                    ret = INVALID_OPTION;
+                    goto clean_exit;
+                }
+                break;
+#endif
             case 'n':        /* No name resolution */
                 disable_name_resolution();
                 break;
@@ -638,27 +617,36 @@ main(int argc, char *argv[])
                 if (badopt != '\0') {
                     cmdarg_err("-N specifies unknown resolving option '%c'; valid options are 'd', m', 'n', 'N', and 't'",
                                badopt);
-                    exit(1);
+                    ret = INVALID_OPTION;
+                    goto clean_exit;
                 }
                 break;
             case 'o':        /* Override preference from command line */
-                switch (prefs_set_pref(optarg)) {
+            {
+                char *errmsg = NULL;
+
+                switch (prefs_set_pref(optarg, &errmsg)) {
 
                     case PREFS_SET_OK:
                         break;
 
                     case PREFS_SET_SYNTAX_ERR:
-                        cmdarg_err("Invalid -o flag \"%s\"", optarg);
-                        exit(1);
+                        cmdarg_err("Invalid -o flag \"%s\"%s%s", optarg,
+                                errmsg ? ": " : "", errmsg ? errmsg : "");
+                        g_free(errmsg);
+                        ret = INVALID_OPTION;
+                        goto clean_exit;
                         break;
 
                     case PREFS_SET_NO_SUCH_PREF:
                     case PREFS_SET_OBSOLETE:
                         cmdarg_err("-o flag \"%s\" specifies unknown preference", optarg);
-                        exit(1);
+                        ret = INVALID_OPTION;
+                        goto clean_exit;
                         break;
                 }
                 break;
+            }
             case 'p':        /* Expect pcap_pkthdr packet headers, which may have 64-bit timestamps */
                 want_pcap_pkthdr = TRUE;
                 break;
@@ -671,7 +659,8 @@ main(int argc, char *argv[])
                 }
                 else {
                     cmdarg_err("Too many display filters");
-                    exit(1);
+                    ret = INVALID_OPTION;
+                    goto clean_exit;
                 }
                 break;
             case 's':        /* Skip PCAP header */
@@ -680,7 +669,8 @@ main(int argc, char *argv[])
             case 'S':        /* Print string representations */
                 if (!parse_field_string_format(optarg)) {
                     cmdarg_err("Invalid field string format");
-                    exit(1);
+                    ret = INVALID_OPTION;
+                    goto clean_exit;
                 }
                 break;
             case 't':        /* Time stamp type */
@@ -717,7 +707,8 @@ main(int argc, char *argv[])
 "\"u\" for absolute UTC, \"ud\" for absolute UTC with YYYY-MM-DD date,");
                     cmdarg_err_cont(
 "or \"udoy\" for absolute UTC with YYYY/DOY date.");
-                    exit(1);
+                    ret = INVALID_OPTION;
+                    goto clean_exit;
                 }
                 break;
             case 'v':        /* Show version and exit */
@@ -725,14 +716,15 @@ main(int argc, char *argv[])
                 show_version("Rawshark (Wireshark)", comp_info_str, runtime_info_str);
                 g_string_free(comp_info_str, TRUE);
                 g_string_free(runtime_info_str, TRUE);
-                exit(0);
+                goto clean_exit;
                 break;
             }
             default:
             case '?':        /* Bad flag - print usage message */
                 print_usage(stderr);
-            exit(1);
-            break;
+                ret = INVALID_OPTION;
+                goto clean_exit;
+                break;
         }
     }
 
@@ -760,7 +752,8 @@ main(int argc, char *argv[])
             if (n_rfilters != 0) {
                 cmdarg_err("Read filters were specified both with \"-R\" "
                            "and with additional command-line arguments");
-                exit(1);
+                ret = INVALID_OPTION;
+                goto clean_exit;
             }
             rfilters[n_rfilters] = get_args_as_string(argc, argv, optind);
         }
@@ -769,18 +762,18 @@ main(int argc, char *argv[])
     /* Make sure we got a dissector handle for our payload. */
     if (encap == WTAP_ENCAP_UNKNOWN) {
         cmdarg_err("No valid payload dissector specified.");
-        exit(1);
+        ret = INVALID_OPTION;
+        goto clean_exit;
     }
-
-    if (arg_error) {
-        print_usage(stderr);
-        exit(1);
-    }
-
 
 #ifdef _WIN32
     /* Start windows sockets */
-    WSAStartup( MAKEWORD( 1, 1 ), &wsaData );
+    result = WSAStartup( MAKEWORD( 1, 1 ), &wsaData );
+    if (result != 0)
+    {
+        ret = INIT_ERROR;
+        goto clean_exit;
+    }
 #endif /* _WIN32 */
 
     /* At this point MATE will have registered its field array so we can
@@ -788,11 +781,11 @@ main(int argc, char *argv[])
        of the filter.  We can now process all the "-z" arguments. */
     start_requested_stats();
 
-    /* disabled protocols as per configuration file */
-    if (gdp_path == NULL && dp_path == NULL) {
-        set_disabled_protos_list();
-        set_disabled_heur_dissector_list();
-    }
+    /*
+     * Enabled and disabled protocols and heuristic dissectors as per
+     * command-line options.
+     */
+    setup_enabled_and_disabled_protocols();
 
     /* Build the column format array */
     build_column_format_array(&cfile.cinfo, prefs_p->num_cols, TRUE);
@@ -804,12 +797,17 @@ main(int argc, char *argv[])
             if (!dfilter_compile(rfilters[i], &rfcodes[n_rfcodes], &err_msg)) {
                 cmdarg_err("%s", err_msg);
                 g_free(err_msg);
+<<<<<<< HEAD
                 epan_free(cfile.epan);
                 epan_cleanup();
 #ifdef HAVE_EXTCAP
                 extcap_cleanup();
 #endif
                 exit(2);
+=======
+                ret = INVALID_DFILTER;
+                goto clean_exit;
+>>>>>>> upstream/master-2.4
             }
             n_rfcodes++;
         }
@@ -828,49 +826,67 @@ main(int argc, char *argv[])
         relinquish_special_privs_perm();
 
         if (raw_cf_open(&cfile, pipe_name) != CF_OK) {
+<<<<<<< HEAD
             epan_free(cfile.epan);
             epan_cleanup();
 #ifdef HAVE_EXTCAP
             extcap_cleanup();
 #endif
             exit(2);
+=======
+            ret = OPEN_ERROR;
+            goto clean_exit;
+>>>>>>> upstream/master-2.4
         }
 
         /* Do we need to PCAP header and magic? */
         if (skip_pcap_header) {
-            size_t bytes_left = sizeof(struct pcap_hdr) + sizeof(guint32);
+            unsigned int bytes_left = (unsigned int) sizeof(struct pcap_hdr) + sizeof(guint32);
             gchar buf[sizeof(struct pcap_hdr) + sizeof(guint32)];
             while (bytes_left != 0) {
-                ssize_t bytes = ws_read(fd, buf, (int)bytes_left);
+                ssize_t bytes = ws_read(fd, buf, bytes_left);
                 if (bytes <= 0) {
                     cmdarg_err("Not enough bytes for pcap header.");
-                    exit(2);
+                    ret =  FORMAT_ERROR;
+                    goto clean_exit;
                 }
-                bytes_left -= bytes;
+                bytes_left -= (unsigned int)bytes;
             }
         }
 
         /* Process the packets in the file */
         if (!load_cap_file(&cfile)) {
+<<<<<<< HEAD
             epan_free(cfile.epan);
             epan_cleanup();
 #ifdef HAVE_EXTCAP
             extcap_cleanup();
 #endif
             exit(2);
+=======
+            ret = OPEN_ERROR;
+            goto clean_exit;
+>>>>>>> upstream/master-2.4
         }
     } else {
         /* If you want to capture live packets, use TShark. */
         cmdarg_err("Input file or pipe name not specified.");
-        exit(2);
+        ret = OPEN_ERROR;
+        goto clean_exit;
     }
 
+clean_exit:
     epan_free(cfile.epan);
     epan_cleanup();
 #ifdef HAVE_EXTCAP
     extcap_cleanup();
 #endif
+<<<<<<< HEAD
     return 0;
+=======
+    wtap_cleanup();
+    return ret;
+>>>>>>> upstream/master-2.4
 }
 
 /**
@@ -889,17 +905,36 @@ raw_pipe_read(struct wtap_pkthdr *phdr, guchar * pd, int *err, gchar **err_info,
     struct pcap_pkthdr mem_hdr;
     struct pcaprec_hdr disk_hdr;
     ssize_t bytes_read = 0;
-    size_t bytes_needed = sizeof(disk_hdr);
+    unsigned int bytes_needed = (unsigned int) sizeof(disk_hdr);
     guchar *ptr = (guchar*) &disk_hdr;
+
+    *err = 0;
 
     if (want_pcap_pkthdr) {
         bytes_needed = sizeof(mem_hdr);
         ptr = (guchar*) &mem_hdr;
     }
 
+    /*
+     * Newer versions of the VC runtime do parameter validation. If stdin
+     * has been closed, calls to _read, _get_osfhandle, et al will trigger
+     * the invalid parameter handler and crash.
+     * We could alternatively use ReadFile or set an invalid parameter
+     * handler.
+     * We could also tell callers not to close stdin prematurely.
+     */
+#ifdef _WIN32
+    DWORD ghi_flags;
+    if (fd == 0 && GetHandleInformation(GetStdHandle(STD_INPUT_HANDLE), &ghi_flags) == 0) {
+        *err = 0;
+        *err_info = NULL;
+        return FALSE;
+    }
+#endif
+
     /* Copied from capture_loop.c */
     while (bytes_needed > 0) {
-        bytes_read = ws_read(fd, ptr, (int)bytes_needed);
+        bytes_read = ws_read(fd, ptr, bytes_needed);
         if (bytes_read == 0) {
             *err = 0;
             *err_info = NULL;
@@ -909,7 +944,7 @@ raw_pipe_read(struct wtap_pkthdr *phdr, guchar * pd, int *err, gchar **err_info,
             *err_info = NULL;
             return FALSE;
         }
-        bytes_needed -= bytes_read;
+        bytes_needed -= (unsigned int)bytes_read;
         *data_offset += bytes_read;
         ptr += bytes_read;
     }
@@ -936,7 +971,7 @@ raw_pipe_read(struct wtap_pkthdr *phdr, guchar * pd, int *err, gchar **err_info,
     printf("caplen: %d (%04x)\n", phdr->caplen, phdr->caplen);
     printf("len: %d (%04x)\n", phdr->len, phdr->len);
 #endif
-    if (bytes_needed > WTAP_MAX_PACKET_SIZE) {
+    if (bytes_needed > WTAP_MAX_PACKET_SIZE_STANDARD) {
         *err = WTAP_ERR_BAD_FILE;
         *err_info = g_strdup_printf("Bad packet length: %lu\n",
                    (unsigned long) bytes_needed);
@@ -945,7 +980,7 @@ raw_pipe_read(struct wtap_pkthdr *phdr, guchar * pd, int *err, gchar **err_info,
 
     ptr = pd;
     while (bytes_needed > 0) {
-        bytes_read = ws_read(fd, ptr, (int)bytes_needed);
+        bytes_read = ws_read(fd, ptr, bytes_needed);
         if (bytes_read == 0) {
             *err = WTAP_ERR_SHORT_READ;
             *err_info = NULL;
@@ -955,7 +990,7 @@ raw_pipe_read(struct wtap_pkthdr *phdr, guchar * pd, int *err, gchar **err_info,
             *err_info = NULL;
             return FALSE;
         }
-        bytes_needed -= bytes_read;
+        bytes_needed -= (unsigned int)bytes_read;
         *data_offset += bytes_read;
         ptr += bytes_read;
     }
@@ -966,10 +1001,10 @@ static gboolean
 load_cap_file(capture_file *cf)
 {
     int          err;
-    gchar       *err_info;
+    gchar       *err_info = NULL;
     gint64       data_offset = 0;
 
-    guchar pd[WTAP_MAX_PACKET_SIZE];
+    guchar      *pd;
     struct wtap_pkthdr phdr;
     epan_dissect_t edt;
 
@@ -977,6 +1012,7 @@ load_cap_file(capture_file *cf)
 
     epan_dissect_init(&edt, cf->epan, TRUE, FALSE);
 
+    pd = (guchar*)g_malloc(WTAP_MAX_PACKET_SIZE_STANDARD);
     while (raw_pipe_read(&phdr, pd, &err, &err_info, &data_offset)) {
         process_packet(cf, &edt, data_offset, &phdr, pd);
     }
@@ -984,42 +1020,10 @@ load_cap_file(capture_file *cf)
     epan_dissect_cleanup(&edt);
 
     wtap_phdr_cleanup(&phdr);
-
+    g_free(pd);
     if (err != 0) {
         /* Print a message noting that the read failed somewhere along the line. */
-        switch (err) {
-
-            case WTAP_ERR_UNSUPPORTED:
-                cmdarg_err("The file \"%s\" contains record data that Rawshark doesn't support.\n(%s)",
-                           cf->filename,
-                           err_info != NULL ? err_info : "no information supplied");
-                g_free(err_info);
-                break;
-
-            case WTAP_ERR_SHORT_READ:
-                cmdarg_err("The file \"%s\" appears to have been cut short in the middle of a packet.",
-                           cf->filename);
-                break;
-
-            case WTAP_ERR_BAD_FILE:
-                cmdarg_err("The file \"%s\" appears to be damaged or corrupt.\n(%s)",
-                           cf->filename,
-                           err_info != NULL ? err_info : "no information supplied");
-                g_free(err_info);
-                break;
-
-            case WTAP_ERR_DECOMPRESS:
-                cmdarg_err("The compressed file \"%s\" appears to be damaged or corrupt.\n(%s)",
-                           cf->filename,
-                           err_info != NULL ? err_info : "no information supplied");
-                g_free(err_info);
-                break;
-
-            default:
-                cmdarg_err("An error occurred while reading the file \"%s\": %s.",
-                           cf->filename, wtap_strerror(err));
-                break;
-        }
+        cfile_read_failure_message("Rawshark", cf->filename, err, err_info);
         return FALSE;
     }
 
@@ -1062,7 +1066,7 @@ process_packet(capture_file *cf, epan_dissect_t *edt, gint64 offset,
        filter. */
     if (n_rfilters > 0) {
         for(i = 0; i < n_rfcodes; i++) {
-            epan_dissect_prime_dfilter(edt, rfcodes[i]);
+            epan_dissect_prime_with_dfilter(edt, rfcodes[i]);
         }
     }
 
@@ -1482,6 +1486,18 @@ show_print_file_io_error(int err)
 }
 
 /*
+ * General errors and warnings are reported with an console message
+ * in Rawshark.
+ */
+static void
+failure_warning_message(const char *msg_format, va_list ap)
+{
+    fprintf(stderr, "rawshark: ");
+    vfprintf(stderr, msg_format, ap);
+    fprintf(stderr, "\n");
+}
+
+/*
  * Open/create errors are reported with an console message in Rawshark.
  */
 static void
@@ -1515,6 +1531,7 @@ raw_epan_new(capture_file *cf)
     epan->data = cf;
     epan->get_frame_ts = raw_get_frame_ts;
     epan->get_interface_name = cap_file_get_interface_name;
+    epan->get_interface_description = cap_file_get_interface_description;
     epan->get_user_comment = NULL;
 
     return epan;
@@ -1551,26 +1568,13 @@ raw_cf_open(capture_file *cf, const char *fname)
     cf->count     = 0;
     cf->drops_known = FALSE;
     cf->drops     = 0;
-    cf->has_snap = FALSE;
-    cf->snap = WTAP_MAX_PACKET_SIZE;
+    cf->snap      = 0;
     nstime_set_zero(&cf->elapsed_time);
     ref = NULL;
     prev_dis = NULL;
     prev_cap = NULL;
 
     return CF_OK;
-}
-
-
-/*
- * General errors are reported with an console message in Rawshark.
- */
-static void
-failure_message(const char *msg_format, va_list ap)
-{
-    fprintf(stderr, "rawshark: ");
-    vfprintf(stderr, msg_format, ap);
-    fprintf(stderr, "\n");
 }
 
 /*

@@ -72,7 +72,6 @@ dissect_gdb_token(void *tvbparse_data, const void *wanted_data, tvbparse_elem_t 
 {
     proto_tree *tree;
     guint       token;
-    guint8      ack;
 
     if (!tok)   /* XXX - is this check necessary? */
         return;
@@ -83,11 +82,8 @@ dissect_gdb_token(void *tvbparse_data, const void *wanted_data, tvbparse_elem_t 
     /* XXX - check that tok->len is what we expect? */
     switch (token) {
         case GDB_TOK_ACK:
-            ack = tvb_get_guint8(tok->tvb, tok->offset);
-            proto_tree_add_uint_format(tree, hf_gdb_ack,
-                    tok->tvb, tok->offset, tok->len, ack,
-                    "Acknowledgement: %s (%c)",
-                    val_to_str_const(ack, gdb_ack, "unknown"), ack);
+            proto_tree_add_item(tree, hf_gdb_ack,
+                    tok->tvb, tok->offset, tok->len, ENC_ASCII|ENC_NA);
             break;
         case GDB_TOK_START:
             proto_tree_add_item(tree, hf_gdb_start,
@@ -199,7 +195,7 @@ proto_register_gdb(void)
 {
     static hf_register_info hf[] = {
         { &hf_gdb_ack,
-          { "Acknowledge", "gdb.ack", FT_UINT8, BASE_HEX,
+          { "Acknowledge", "gdb.ack", FT_CHAR, BASE_HEX,
               VALS(gdb_ack), 0, NULL, HFILL } },
         { &hf_gdb_start,
           { "Start character", "gdb.start", FT_STRING, BASE_NONE,
@@ -220,8 +216,7 @@ proto_register_gdb(void)
     };
 
 
-    proto_gdb = proto_register_protocol(
-            "GDB Remote Serial Protocol", "GDB remote", "gdb");
+    proto_gdb = proto_register_protocol("GDB Remote Serial Protocol", "GDB remote", "gdb");
 
     proto_register_field_array(proto_gdb, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
@@ -233,15 +228,11 @@ proto_register_gdb(void)
 void
 proto_reg_handoff_gdb(void)
 {
-    static gboolean            initialized = FALSE;
-    static dissector_handle_t  gdb_handle;
+    dissector_handle_t  gdb_handle;
 
-    if (!initialized) {
-        gdb_handle = create_dissector_handle(dissect_gdb_tcp, proto_gdb);
-        initialized = TRUE;
-    }
+    gdb_handle = create_dissector_handle(dissect_gdb_tcp, proto_gdb);
 
-    dissector_add_for_decode_as("tcp.port", gdb_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", gdb_handle);
 }
 
 /*

@@ -37,7 +37,6 @@ void proto_reg_handoff_capwap(void);
 #define UDP_PORT_CAPWAP_CONTROL 5246
 #define UDP_PORT_CAPWAP_DATA 5247
 
-static guint global_capwap_control_udp_port = UDP_PORT_CAPWAP_CONTROL;
 static guint global_capwap_data_udp_port = UDP_PORT_CAPWAP_DATA;
 static gboolean global_capwap_draft_8_cisco = FALSE;
 static gboolean global_capwap_reassemble = TRUE;
@@ -548,7 +547,7 @@ static int hf_capwap_cisco_ap_static_ip_reserved = -1;
 static int hf_capwap_cisco_ap_uptime_current = -1;
 static int hf_capwap_cisco_ap_uptime_last = -1;
 static int hf_capwap_cisco_ap_group_name = -1;
-static int hf_capwap_cisco_spam_ap_led_state = -1;
+static int hf_capwap_cisco_ap_led_state = -1;
 static int hf_capwap_cisco_ap_timesync = -1;
 static int hf_capwap_cisco_ap_timesync_type = -1;
 static int hf_capwap_cisco_board_data_options_ant_type = -1;
@@ -1254,17 +1253,6 @@ static const value_string ieee80211_mac_profile_vals[] = {
     { 0,     NULL     }
 };
 
-static void capwap_reassemble_init(void)
-{
-    reassembly_table_init(&capwap_reassembly_table,
-                          &addresses_reassembly_table_functions);
-}
-
-static void capwap_reassemble_cleanup(void)
-{
-    reassembly_table_destroy(&capwap_reassembly_table);
-}
-
 static void
 dissect_capwap_data_message_bindings_ieee80211(tvbuff_t *tvb, proto_tree *data_message_binding_tree, guint offset, packet_info *pinfo)
 {
@@ -1944,12 +1932,11 @@ dissect_capwap_message_element_vendor_fortinet_type(tvbuff_t *tvb, proto_tree *s
 #define VSP_CISCO_AP_UPTIME                 108
 
 #define VSP_CISCO_AP_GROUP_NAME             123
-#define VSP_CISCO_SPAM_AP_LED_STATE         125
-#define VSP_CISCO_AP_MODEL                  127
-#define VSP_CISCO_AP_RESET_BUTTON_STATE     128
 
 #define VSP_CISCO_AP_LED_STATE_CONFIG       125
 #define VSP_CISCO_AP_REGULATORY_DOMAIN      126
+#define VSP_CISCO_AP_MODEL                  127
+#define VSP_CISCO_AP_RESET_BUTTON_STATE     128
 
 #define VSP_CISCO_LWAPP_CHANNEL_POWER       134
 #define VSP_CISCO_AP_PRE_STD_SWITCH_CONFIG  137
@@ -2015,7 +2002,6 @@ static const value_string cisco_element_id_vals[] = {
     { VSP_CISCO_AP_UPTIME, "AP Uptime" },
 
     { VSP_CISCO_AP_GROUP_NAME, "AP Group Name" },
-    { VSP_CISCO_SPAM_AP_LED_STATE, "SPAM AP Led State" },
     { VSP_CISCO_AP_MODEL, "AP Model" },
     { VSP_CISCO_AP_RESET_BUTTON_STATE, "AP reset button state" },
 
@@ -2122,8 +2108,8 @@ dissect_capwap_message_element_vendor_cisco_type(tvbuff_t *tvb, proto_tree *sub_
             proto_tree_add_item(sub_msg_element_type_tree, hf_capwap_cisco_ap_group_name, tvb, offset, optlen, ENC_ASCII|ENC_NA);
             offset += optlen;
         break;
-        case VSP_CISCO_SPAM_AP_LED_STATE: /* SPAM AP Led State (125) */
-            proto_tree_add_item(sub_msg_element_type_tree, hf_capwap_cisco_spam_ap_led_state, tvb, offset, 2, ENC_NA);
+        case VSP_CISCO_AP_LED_STATE_CONFIG: /* AP Led State (125) */
+            proto_tree_add_item(sub_msg_element_type_tree, hf_capwap_cisco_ap_led_state, tvb, offset, 2, ENC_NA);
             offset += 2;
         break;
         case VSP_CISCO_AP_TIMESYNC: /* AP Timesync (151) */
@@ -2272,7 +2258,7 @@ hf_capwap_msg_element_type_ac_descriptor_dtls_policy, ett_capwap_ac_descriptor_d
                            "AC Timestamp length %u wrong, must be = 4", optlen);
         break;
         }
-        proto_tree_add_item(sub_msg_element_type_tree, hf_capwap_msg_element_type_ac_timestamp, tvb, offset + 4, 4, ENC_TIME_NTP|ENC_BIG_ENDIAN);
+        proto_tree_add_item(sub_msg_element_type_tree, hf_capwap_msg_element_type_ac_timestamp, tvb, offset + 4, 4, ENC_TIME_SECS_NTP|ENC_BIG_ENDIAN);
         break;
 
     case TYPE_ADD_STATION:{ /* Add Station (8) */
@@ -2722,7 +2708,7 @@ hf_capwap_msg_element_type_ieee80211_ie_flags, ett_capwap_ieee80211_ie_flags, ie
         offset += 1;
 
         while (offset < offset_end) {
-            offset += add_tagged_field(pinfo, sub_msg_element_type_tree, tvb, offset, 0, NULL, 0);
+            offset += add_tagged_field(pinfo, sub_msg_element_type_tree, tvb, offset, 0, NULL, 0, NULL);
         }
 
         break;
@@ -3393,6 +3379,12 @@ dissect_capwap_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* d
     }
     pinfo->fragmented = save_fragmented;
     return tvb_captured_length(tvb);
+}
+
+static void
+apply_capwap_prefs(void)
+{
+  global_capwap_data_udp_port = prefs_get_uint_value("capwap.data", "udp.port");
 }
 
 void
@@ -5614,8 +5606,8 @@ proto_register_capwap_control(void)
               FT_STRING, BASE_NONE, NULL, 0x0,
               NULL, HFILL }
         },
-        { &hf_capwap_cisco_spam_ap_led_state,
-            { "Led State", "capwap.control.cisco.spam_ap_led_state",
+        { &hf_capwap_cisco_ap_led_state,
+            { "Led State", "capwap.control.cisco.ap_led_state",
               FT_UINT16, BASE_DEC, NULL, 0x0,
               NULL, HFILL }
         },
@@ -5761,18 +5753,12 @@ proto_register_capwap_control(void)
     expert_capwap = expert_register_protocol(proto_capwap_control);
     expert_register_field_array(expert_capwap, ei, array_length(ei));
 
-    register_init_routine(&capwap_reassemble_init);
-    register_cleanup_routine(&capwap_reassemble_cleanup);
+    reassembly_table_register(&capwap_reassembly_table,
+                          &addresses_reassembly_table_functions);
 
-    capwap_module = prefs_register_protocol(proto_capwap_control, proto_reg_handoff_capwap);
-
-    prefs_register_uint_preference(capwap_module, "udp.port.control", "CAPWAP Control UDP Port",
-        "Set the port for CAPWAP Control messages (if other than the default of 5246)",
-        10, &global_capwap_control_udp_port);
-
-    prefs_register_uint_preference(capwap_module, "udp.port.data", "CAPWAP Data UDP Port",
-        "Set the port for CAPWAP Data messages (if other than the default of 5247)",
-        10, &global_capwap_data_udp_port);
+    capwap_module = prefs_register_protocol(proto_capwap_control, NULL);
+    /* Need to create a placeholder for "port" preferences so there is a callback */
+    prefs_register_protocol(proto_capwap_data, apply_capwap_prefs);
 
     prefs_register_bool_preference(capwap_module, "draft_8_cisco", "Cisco Wireless Controller Support",
         "Enable support of Cisco Wireless Controller (based on old 8 draft revision).",
@@ -5791,29 +5777,18 @@ proto_register_capwap_control(void)
 void
 proto_reg_handoff_capwap(void)
 {
-    static gboolean inited = FALSE;
-    static dissector_handle_t capwap_control_handle, capwap_data_handle;
-    static guint capwap_control_udp_port, capwap_data_udp_port;
+    dissector_handle_t capwap_control_handle, capwap_data_handle;
 
-    if (!inited) {
-        capwap_control_handle = create_dissector_handle(dissect_capwap_control, proto_capwap_control);
-        capwap_data_handle    = create_dissector_handle(dissect_capwap_data, proto_capwap_data);
-        dtls_handle           = find_dissector_add_dependency("dtls", proto_capwap_control);
-        find_dissector_add_dependency("dtls", proto_capwap_data);
-        ieee8023_handle       = find_dissector_add_dependency("eth_withoutfcs", proto_capwap_data);
-        ieee80211_handle      = find_dissector_add_dependency("wlan_withoutfcs", proto_capwap_data);
-        ieee80211_bsfc_handle = find_dissector_add_dependency("wlan_bsfc", proto_capwap_data);
+    capwap_control_handle = create_dissector_handle(dissect_capwap_control, proto_capwap_control);
+    capwap_data_handle    = create_dissector_handle(dissect_capwap_data, proto_capwap_data);
+    dtls_handle           = find_dissector_add_dependency("dtls", proto_capwap_control);
+    find_dissector_add_dependency("dtls", proto_capwap_data);
+    ieee8023_handle       = find_dissector_add_dependency("eth_withoutfcs", proto_capwap_data);
+    ieee80211_handle      = find_dissector_add_dependency("wlan_withoutfcs", proto_capwap_data);
+    ieee80211_bsfc_handle = find_dissector_add_dependency("wlan_bsfc", proto_capwap_data);
 
-        inited = TRUE;
-    } else {
-        dissector_delete_uint("udp.port", capwap_control_udp_port, capwap_control_handle);
-        dissector_delete_uint("udp.port", capwap_data_udp_port, capwap_data_handle);
-    }
-    dissector_add_uint("udp.port", global_capwap_control_udp_port, capwap_control_handle);
-    dissector_add_uint("udp.port", global_capwap_data_udp_port, capwap_data_handle);
-
-    capwap_control_udp_port = global_capwap_control_udp_port;
-    capwap_data_udp_port    = global_capwap_data_udp_port;
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_CAPWAP_CONTROL, capwap_control_handle);
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_CAPWAP_DATA, capwap_data_handle);
 }
 /*
  * Editor modelines

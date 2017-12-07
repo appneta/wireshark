@@ -29,7 +29,7 @@
 
 #include "packet-tcp.h"
 
-#define TCP_PORT_CAST 4224
+#define TCP_PORT_CAST 4224 /* Not IANA registered */
 
 void proto_register_cast(void);
 void proto_reg_handoff_cast(void);
@@ -123,8 +123,7 @@ static const value_string  message_id[] = {
 };
 
 static const value_string  audioCodecTypes[] = {
-  {1  , "G711"},
-  {1  , "G729"},
+  {1  , "G711/G729"},
   {2  , "GSM"},
   {3  , "G723"},
   {4  , "G722"},
@@ -1709,7 +1708,7 @@ proto_reg_handoff_cast(void)
   dissector_handle_t cast_handle;
 
   cast_handle = create_dissector_handle(dissect_cast, proto_cast);
-  dissector_add_uint("tcp.port", TCP_PORT_CAST, cast_handle);
+  dissector_add_uint_with_preference("tcp.port", TCP_PORT_CAST, cast_handle);
 }
 
 /*

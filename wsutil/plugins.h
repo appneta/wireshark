@@ -34,13 +34,18 @@ extern "C" {
 
 typedef gboolean (*plugin_callback)(GModule *handle);
 
-WS_DLL_PUBLIC void scan_plugins(void);
+typedef enum {
+    REPORT_LOAD_FAILURE,
+    DONT_REPORT_LOAD_FAILURE
+} plugin_load_failure_mode;
+WS_DLL_PUBLIC void scan_plugins(plugin_load_failure_mode mode);
 WS_DLL_PUBLIC void add_plugin_type(const char *type, plugin_callback callback);
 typedef void (*plugin_description_callback)(const char *, const char *,
                                             const char *, const char *,
                                             void *);
 WS_DLL_PUBLIC void plugins_get_descriptions(plugin_description_callback callback, void *user_data);
 WS_DLL_PUBLIC void plugins_dump_all(void);
+WS_DLL_PUBLIC void plugins_cleanup(void);
 
 #ifdef __cplusplus
 }

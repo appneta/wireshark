@@ -23,6 +23,7 @@
 #define __SERVICE_RESPONSE_TIME_DIALOG_H__
 
 #include "tap_parameter_dialog.h"
+#include <epan/srt_table.h>
 
 struct register_srt;
 struct _srt_stat_table;
@@ -35,7 +36,11 @@ class ServiceResponseTimeDialog : public TapParameterDialog
 
 public:
     ServiceResponseTimeDialog(QWidget &parent, CaptureFile &cf, struct register_srt *srt, const QString filter, int help_topic = 0);
+    ~ServiceResponseTimeDialog();
     static TapParameterDialog *createSrtDialog(QWidget &parent, const QString cfg_str, const QString filter, CaptureFile &cf);
+
+public slots:
+    void endRetapPackets();
 
 protected:
     struct register_srt *srt_;
@@ -61,16 +66,19 @@ private:
     virtual QList<QVariant> treeItemData(QTreeWidgetItem *ti) const;
     virtual const QString filterExpression();
 
+    srt_data_t srt_data_;
+
 private slots:
     void statsTreeWidgetItemChanged();
 };
 
 /** Register function to register dissectors that support SRT.
  *
- * @param data register_srt_t* representing dissetor SRT table
- * @param user_data is unused
+ * @param key is unused
+ * @param value register_srt_t* representing dissetor SRT table
+ * @param userdata is unused
  */
-void register_service_response_tables(gpointer data, gpointer user_data);
+gboolean register_service_response_tables(const void *key, void *value, void *userdata);
 
 #endif // __SERVICE_RESPONSE_TIME_DIALOG_H__
 

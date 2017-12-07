@@ -520,10 +520,9 @@ dissect_mpa_req_rep(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 			return FALSE;
 		}
 
-		proto_tree_add_uint_format_value(mpa_header_tree,
+		proto_tree_add_uint(mpa_header_tree,
 				hf_mpa_pd_length, tvb, offset,
-				MPA_REQ_REP_PDLENGTH_LEN, pd_length, "%u bytes",
-				pd_length);
+				MPA_REQ_REP_PDLENGTH_LEN, pd_length);
 		offset += MPA_REQ_REP_PDLENGTH_LEN;
 
 		if (pd_length) {
@@ -609,7 +608,6 @@ dissect_fpdu_markers(tvbuff_t *tvb, proto_tree *tree, mpa_state_t *state,
 {
 	proto_tree *mpa_marker_tree;
 	proto_item *mpa_marker_item;
-	guint16 fpduptr;
 	guint32 offset, i;
 
 	mpa_marker_item = proto_tree_add_item(tree, hf_mpa_marker, tvb,
@@ -621,11 +619,9 @@ dissect_fpdu_markers(tvbuff_t *tvb, proto_tree *tree, mpa_state_t *state,
 	for (i=0; i<number_of_markers(state, tcpinfo, endpoint); i++) {
 		proto_tree_add_item(mpa_marker_tree, hf_mpa_marker_res, tvb,
 				offset, MPA_MARKER_RSVD_LEN, ENC_BIG_ENDIAN);
-		fpduptr = (guint16) tvb_get_ntohs(tvb, offset+MPA_MARKER_RSVD_LEN);
-		proto_tree_add_uint_format_value(mpa_marker_tree,
+		proto_tree_add_item(mpa_marker_tree,
 				hf_mpa_marker_fpduptr, tvb,
-				offset+MPA_MARKER_RSVD_LEN,	MPA_MARKER_FPDUPTR_LEN,
-				fpduptr, "%u bytes", fpduptr);
+				offset+MPA_MARKER_RSVD_LEN,	MPA_MARKER_FPDUPTR_LEN, ENC_BIG_ENDIAN);
 		offset += MPA_MARKER_INTERVAL;
 	}
 }
@@ -695,14 +691,10 @@ dissect_mpa_fpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 	/* get ULPDU length of this FPDU */
 	ulpdu_length = (guint16) tvb_get_ntohs(tvb, offset);
 
-	mpa_packetlist(pinfo, MPA_FPDU);
-
 	if (state->minfo[endpoint].valid) {
 		num_of_m = number_of_markers(state, tcpinfo, endpoint);
 	}
 
-
-	if (tree) {
 
 		/*
 		 * Stop FPDU dissection if the read ULPDU_LENGTH field does NOT contain
@@ -717,11 +709,10 @@ dissect_mpa_fpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 		pad_length = fpdu_pad_length(ulpdu_length);
 		exp_ulpdu_length = expected_ulpdu_length(state, tcpinfo, endpoint);
 		if (!exp_ulpdu_length || exp_ulpdu_length != (ulpdu_length + pad_length)) {
-			proto_tree_add_expert_format(tree, pinfo, &ei_mpa_bad_length, tvb, offset,
-				MPA_ULPDU_LENGTH_LEN,
-				"[ULPDU length [%u] field does not contain the expected length[%u]]",
-				exp_ulpdu_length, ulpdu_length + pad_length);
+			return 0;
 		}
+
+		mpa_packetlist(pinfo, MPA_FPDU);
 
 		mpa_item = proto_tree_add_item(tree, proto_iwarp_mpa, tvb, 0,
 				-1, ENC_NA);
@@ -733,10 +724,9 @@ dissect_mpa_fpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 				ett_mpa);
 
 		/* ULPDU Length header field */
-		proto_tree_add_uint_format_value(mpa_header_tree,
+		proto_tree_add_uint(mpa_header_tree,
 				hf_mpa_ulpdu_length, tvb, offset,
-				MPA_ULPDU_LENGTH_LEN, ulpdu_length, "%u bytes",
-				ulpdu_length);
+				MPA_ULPDU_LENGTH_LEN, ulpdu_length);
 
 		/* Markers are present in this FPDU */
 		if (state->minfo[endpoint].valid && num_of_m > 0) {
@@ -770,7 +760,6 @@ dissect_mpa_fpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 			dissect_fpdu_crc(tvb, mpa_header_tree, state, offset,
 					ulpdu_length+pad_length+MPA_ULPDU_LENGTH_LEN);
 		}
-	}
 	return ulpdu_length;
 }
 
@@ -909,7 +898,7 @@ void proto_register_mpa(void)
 					NULL, HFILL } },
 			{ &hf_mpa_pd_length, {
 					"Private data length", "iwarp_mpa.pdlength",
-					FT_UINT16, BASE_DEC, NULL, 0x0,
+					FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,
 					NULL, HFILL } },
 			{ &hf_mpa_private_data, {
 					"Private data", "iwarp_mpa.privatedata",
@@ -917,7 +906,7 @@ void proto_register_mpa(void)
 					NULL, HFILL } },
 			{ &hf_mpa_ulpdu_length, {
 					"ULPDU length", "iwarp_mpa.ulpdulength",
-					FT_UINT16, BASE_DEC, NULL, 0x0,
+					FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,
 					NULL, HFILL } },
 			{ &hf_mpa_pad, {
 					"Padding", "iwarp_mpa.pad",
@@ -937,7 +926,7 @@ void proto_register_mpa(void)
 					"Marker: Reserved", HFILL } },
 			{ &hf_mpa_marker_fpduptr, {
 					"FPDU back pointer", "iwarp_mpa.marker_fpduptr",
-					FT_UINT16, BASE_DEC, NULL, 0x0,
+					FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,
 					"Marker: FPDU Pointer", HFILL } }
 	};
 

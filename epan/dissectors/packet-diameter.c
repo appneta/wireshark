@@ -55,7 +55,7 @@
 #include <epan/show_exception.h>
 #include <epan/to_str.h>
 #include <wsutil/filesystem.h>
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 #include "packet-tcp.h"
 #include "packet-diameter.h"
 #include "packet-e212.h"
@@ -292,6 +292,7 @@ static expert_field ei_diameter_code = EI_INIT;
 static expert_field ei_diameter_avp_code = EI_INIT;
 static expert_field ei_diameter_avp_vendor_id = EI_INIT;
 static expert_field ei_diameter_invalid_ipv6_prefix_len = EI_INIT;
+static expert_field ei_diameter_invalid_avp_len = EI_INIT;
 
 /* Tap for Diameter */
 static int diameter_tap = -1;
@@ -301,9 +302,7 @@ static int diameter_tap = -1;
 static dissector_handle_t diameter_udp_handle;
 static dissector_handle_t diameter_tcp_handle;
 static dissector_handle_t diameter_sctp_handle;
-static range_t *global_diameter_tcp_port_range;
 static range_t *global_diameter_sctp_port_range;
-static range_t *global_diameter_udp_port_range;
 /* This is used for TCP and SCTP */
 #define DEFAULT_DIAMETER_PORT_RANGE "3868"
 
@@ -314,6 +313,7 @@ static gboolean gbl_diameter_desegment = TRUE;
 static dissector_table_t diameter_dissector_table;
 static dissector_table_t diameter_3gpp_avp_dissector_table;
 static dissector_table_t diameter_ericsson_avp_dissector_table;
+static dissector_table_t diameter_verizon_avp_dissector_table;
 static dissector_table_t diameter_expr_result_vnd_table;
 
 static const char *avpflags_str[] = {
@@ -612,6 +612,9 @@ call_avp_subdissector(guint32 vendorid, guint32 code, tvbuff_t *subtvb, packet_i
 		case VENDOR_ERICSSON:
 			dissector_try_uint_new(diameter_ericsson_avp_dissector_table, code, subtvb, pinfo, avp_tree, FALSE, diam_sub_dis_inf);
 			break;
+		case VENDOR_VERIZON:
+			dissector_try_uint_new(diameter_verizon_avp_dissector_table, code, subtvb, pinfo, avp_tree, FALSE, diam_sub_dis_inf);
+			break;
 		case VENDOR_THE3GPP:
 			dissector_try_uint_new(diameter_3gpp_avp_dissector_table, code, subtvb, pinfo, avp_tree, FALSE, diam_sub_dis_inf);
 			break;
@@ -694,6 +697,14 @@ dissect_diameter_avp(diam_ctx_t *c, tvbuff_t *tvb, int offset, diam_sub_dis_t *d
 			}
 		}
 #endif
+	}
+	/* Check if the length is sane */
+	if (len > (guint32)tvb_reported_length_remaining(tvb, offset)) {
+		proto_tree_add_expert_format(c->tree, c->pinfo, &ei_diameter_invalid_avp_len, tvb, offset + 4, 4,
+			"Wrong AVP(%u) length %u",
+			code,
+			len);
+		return tvb_reported_length(tvb);
 	}
 
 	/* Add root of tree for this AVP */
@@ -905,7 +916,7 @@ time_avp(diam_ctx_t *c, diam_avp_t *a, tvbuff_t *tvb, diam_sub_dis_t *diam_sub_d
 
 	if (c->tree) {
 		label = (char *)wmem_alloc(wmem_packet_scope(), ITEM_LABEL_LENGTH+1);
-		pi = proto_tree_add_item(c->tree, (a->hf_value), tvb, 0, 4, ENC_TIME_NTP|ENC_BIG_ENDIAN);
+		pi = proto_tree_add_item(c->tree, (a->hf_value), tvb, 0, 4, ENC_TIME_SECS_NTP|ENC_BIG_ENDIAN);
 		proto_item_fill_label(PITEM_FINFO(pi), label);
 		label = strstr(label,": ")+2;
 	}
@@ -1871,8 +1882,9 @@ dictionary_load(void)
 	diam_vnd_t *vnd;
 	GArray *vnd_shrt_arr = g_array_new(TRUE,TRUE,sizeof(value_string));
 
-	build_dict.hf = wmem_array_new(wmem_epan_scope(),sizeof(hf_register_info));
-	build_dict.ett = g_ptr_array_new();
+	/* Pre allocate the arrays big enough to hold the hf:s and etts:s*/
+	build_dict.hf = wmem_array_sized_new(wmem_epan_scope(), sizeof(hf_register_info), 4096);
+	build_dict.ett = g_ptr_array_sized_new(4096);
 	build_dict.types = g_hash_table_new(strcase_hash,strcase_equal);
 	build_dict.avps = g_hash_table_new(strcase_hash,strcase_equal);
 
@@ -2268,7 +2280,8 @@ real_register_diameter_fields(void)
 		{ &ei_diameter_application_id, { "diameter.applicationId.unknown", PI_UNDECODED, PI_WARN, "Unknown Application Id, if you know what this is you can add it to dictionary.xml", EXPFILL }},
 		{ &ei_diameter_version, { "diameter.version.unknown", PI_UNDECODED, PI_WARN, "Unknown Diameter Version (decoding as RFC 3588)", EXPFILL }},
 		{ &ei_diameter_code, { "diameter.cmd.code.unknown", PI_UNDECODED, PI_WARN, "Unknown command, if you know what this is you can add it to dictionary.xml", EXPFILL }},
-		{ &ei_diameter_invalid_ipv6_prefix_len, { "diameter.invalid_ipv6_prefix_len", PI_MALFORMED, PI_ERROR, "Invalid IPv6 Prefix length", EXPFILL }}
+		{ &ei_diameter_invalid_ipv6_prefix_len, { "diameter.invalid_ipv6_prefix_len", PI_MALFORMED, PI_ERROR, "Invalid IPv6 Prefix length", EXPFILL }},
+		{ &ei_diameter_invalid_avp_len,{ "diameter.invalid_avp_len", PI_MALFORMED, PI_ERROR, "Invalid AVP length", EXPFILL }}
 	};
 
 	wmem_array_append(build_dict.hf, hf_base, array_length(hf_base));
@@ -2310,31 +2323,24 @@ proto_register_diameter(void)
 	proto_diameter = proto_register_protocol ("Diameter Protocol", "DIAMETER", "diameter");
 
 	/* Allow dissector to find be found by name. */
-	register_dissector("diameter", dissect_diameter, proto_diameter);
+	diameter_sctp_handle = register_dissector("diameter", dissect_diameter, proto_diameter);
 
 	/* Delay registration of Diameter fields */
 	proto_register_prefix("diameter", register_diameter_fields);
 
 	/* Register dissector table(s) to do sub dissection of AVPs (OctetStrings) */
-	diameter_dissector_table = register_dissector_table("diameter.base", "DIAMETER_BASE_AVPS", proto_diameter, FT_UINT32, BASE_DEC);
-	diameter_3gpp_avp_dissector_table = register_dissector_table("diameter.3gpp", "DIAMETER_3GPP_AVPS", proto_diameter, FT_UINT32, BASE_DEC);
-	diameter_ericsson_avp_dissector_table = register_dissector_table("diameter.ericsson", "DIAMETER_ERICSSON_AVPS", proto_diameter, FT_UINT32, BASE_DEC);
+	diameter_dissector_table = register_dissector_table("diameter.base", "Diameter Base AVP", proto_diameter, FT_UINT32, BASE_DEC);
+	diameter_3gpp_avp_dissector_table = register_dissector_table("diameter.3gpp", "Diameter 3GPP AVP", proto_diameter, FT_UINT32, BASE_DEC);
+	diameter_ericsson_avp_dissector_table = register_dissector_table("diameter.ericsson", "Diameter Ericsson AVP", proto_diameter, FT_UINT32, BASE_DEC);
+	diameter_verizon_avp_dissector_table = register_dissector_table("diameter.verizon", "DIAMETER_VERIZON_AVPS", proto_diameter, FT_UINT32, BASE_DEC);
 
-	diameter_expr_result_vnd_table = register_dissector_table("diameter.vnd_exp_res", "DIAMETER Experimental-Result-Code", proto_diameter, FT_UINT32, BASE_DEC);
+	diameter_expr_result_vnd_table = register_dissector_table("diameter.vnd_exp_res", "Diameter Experimental-Result-Code", proto_diameter, FT_UINT32, BASE_DEC);
 
 	/* Set default TCP ports */
-	range_convert_str(&global_diameter_tcp_port_range, DEFAULT_DIAMETER_PORT_RANGE, MAX_UDP_PORT);
-	range_convert_str(&global_diameter_sctp_port_range, DEFAULT_DIAMETER_PORT_RANGE, MAX_SCTP_PORT);
-	range_convert_str(&global_diameter_udp_port_range, "", MAX_UDP_PORT);
+	range_convert_str(wmem_epan_scope(), &global_diameter_sctp_port_range, DEFAULT_DIAMETER_PORT_RANGE, MAX_SCTP_PORT);
 
 	/* Register configuration options for ports */
-	diameter_module = prefs_register_protocol(proto_diameter,
-						  proto_reg_handoff_diameter);
-
-	prefs_register_range_preference(diameter_module, "tcp.ports", "Diameter TCP ports",
-					"TCP ports to be decoded as Diameter (default: "
-					DEFAULT_DIAMETER_PORT_RANGE ")",
-					&global_diameter_tcp_port_range, MAX_UDP_PORT);
+	diameter_module = prefs_register_protocol(proto_diameter, proto_reg_handoff_diameter);
 
 	prefs_register_range_preference(diameter_module, "sctp.ports",
 					"Diameter SCTP Ports",
@@ -2344,21 +2350,15 @@ proto_register_diameter(void)
 
 	/* Desegmentation */
 	prefs_register_bool_preference(diameter_module, "desegment",
-				       "Reassemble Diameter messages\nspanning multiple TCP segments",
+				       "Reassemble Diameter messages spanning multiple TCP segments",
 				       "Whether the Diameter dissector should reassemble messages spanning multiple TCP segments."
 				       " To use this option, you must also enable \"Allow subdissectors to reassemble TCP streams\" in the TCP protocol settings.",
 				       &gbl_diameter_desegment);
-
-	prefs_register_range_preference(diameter_module, "udp.ports", "Diameter UDP ports",
-					"UDP ports to be decoded as Diameter (default: 0 as Diameter over UDP is nonstandard)",
-					&global_diameter_udp_port_range, MAX_UDP_PORT);
-
 
 	/*  Register some preferences we no longer support, so we can report
 	 *  them as obsolete rather than just illegal.
 	 */
 	prefs_register_obsolete_preference(diameter_module, "version");
-	prefs_register_obsolete_preference(diameter_module, "tcp.port");
 	prefs_register_obsolete_preference(diameter_module, "sctp.port");
 	prefs_register_obsolete_preference(diameter_module, "command_in_header");
 	prefs_register_obsolete_preference(diameter_module, "dictionary.name");
@@ -2377,12 +2377,9 @@ void
 proto_reg_handoff_diameter(void)
 {
 	static gboolean Initialized=FALSE;
-	static range_t *diameter_tcp_port_range;
 	static range_t *diameter_sctp_port_range;
-	static range_t *diameter_udp_port_range;
 
 	if (!Initialized) {
-		diameter_sctp_handle = find_dissector("diameter");
 		diameter_tcp_handle = create_dissector_handle(dissect_diameter_tcp,
 							      proto_diameter);
 		diameter_udp_handle = create_dissector_handle(dissect_diameter, proto_diameter);
@@ -2422,23 +2419,18 @@ proto_reg_handoff_diameter(void)
 		/* Register dissector for Experimental result code, with 3GPP2's vendor Id */
 		dissector_add_uint("diameter.vnd_exp_res", VENDOR_THE3GPP2, create_dissector_handle(dissect_diameter_3gpp2_exp_res, proto_diameter));
 
+		dissector_add_uint_range_with_preference("tcp.port", DEFAULT_DIAMETER_PORT_RANGE, diameter_tcp_handle);
+		dissector_add_uint_range_with_preference("udp.port", "", diameter_udp_handle);
+
 		Initialized=TRUE;
 	} else {
-		dissector_delete_uint_range("tcp.port", diameter_tcp_port_range, diameter_tcp_handle);
 		dissector_delete_uint_range("sctp.port", diameter_sctp_port_range, diameter_sctp_handle);
-		dissector_delete_uint_range("udp.port", diameter_udp_port_range, diameter_udp_handle);
-		g_free(diameter_tcp_port_range);
-		g_free(diameter_sctp_port_range);
-		g_free(diameter_udp_port_range);
+		wmem_free(wmem_epan_scope(), diameter_sctp_port_range);
 	}
 
 	/* set port for future deletes */
-	diameter_tcp_port_range = range_copy(global_diameter_tcp_port_range);
-	diameter_sctp_port_range = range_copy(global_diameter_sctp_port_range);
-	diameter_udp_port_range = range_copy(global_diameter_udp_port_range);
-	dissector_add_uint_range("tcp.port",  diameter_tcp_port_range,  diameter_tcp_handle);
+	diameter_sctp_port_range = range_copy(wmem_epan_scope(), global_diameter_sctp_port_range);
 	dissector_add_uint_range("sctp.port", diameter_sctp_port_range, diameter_sctp_handle);
-	dissector_add_uint_range("udp.port", diameter_udp_port_range, diameter_udp_handle);
 
 	exported_pdu_tap = find_tap_id(EXPORT_PDU_TAP_NAME_LAYER_7);
 

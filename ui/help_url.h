@@ -42,6 +42,7 @@ typedef enum {
     ONLINEPAGE_USERGUIDE,
     ONLINEPAGE_FAQ,
     ONLINEPAGE_DOWNLOAD,
+    ONLINEPAGE_DOCS,
     ONLINEPAGE_SAMPLE_FILES,
     ONLINEPAGE_CAPTURE_SETUP,
     ONLINEPAGE_NETWORK_MEDIA,
@@ -122,16 +123,6 @@ typedef enum {
     HELP_IAX2_ANALYSIS_DIALOG,
     HELP_TELEPHONY_RTP_PLAYER_DIALOG
 } topic_action_e;
-
-/** Given a filename return a filesystem URL. Relative paths are prefixed with
- * the datafile directory path.
- *
- * @param filename A file name or path. Relative paths will be prefixed with
- * the data file directory path.
- * @return A filesystem URL for the file or NULL on failure. A non-NULL return
- * value must be freed with g_free().
- */
-gchar *data_file_url(const gchar *filename);
 
 /** Given a topic action return its online (www.wireshark.org) URL or NULL.
  *

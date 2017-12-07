@@ -24,6 +24,7 @@
 
 #ifdef DUMP_DFILTER_MACRO
 #include <stdio.h>
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 #endif
 #include <string.h>
 
@@ -53,13 +54,6 @@ void dump_dfilter_macro_t(const dfilter_macro_t *m, const char *function, const 
 #define DUMP_MACRO(m)
 #endif
 
-static gboolean free_value(gpointer k _U_, gpointer v, gpointer u _U_) {
-	fvt_cache_entry_t* e = (fvt_cache_entry_t*)v;
-	wmem_free(NULL, e->repr);
-	g_free(e);
-	return TRUE;
-}
-
 static gboolean fvt_cache_cb(proto_node * node, gpointer data _U_) {
 	field_info* finfo = PNODE_FINFO(node);
 	fvt_cache_entry_t* e;
@@ -85,8 +79,15 @@ static gboolean fvt_cache_cb(proto_node * node, gpointer data _U_) {
 	return FALSE;
 }
 
+static void dfilter_free_fvt_entry(gpointer v)
+{
+	fvt_cache_entry_t* e = (fvt_cache_entry_t*)v;
+	wmem_free(NULL, e->repr);
+	g_free(e);
+}
+
 void dfilter_macro_build_ftv_cache(void* tree_root) {
-	g_hash_table_foreach_remove(fvt_cache,free_value,NULL);
+	g_hash_table_remove_all(fvt_cache);
 	proto_tree_traverse_post_order((proto_tree *)tree_root, fvt_cache_cb, NULL);
 }
 
@@ -583,9 +584,10 @@ void dfilter_macro_init(void) {
 				    macro_update,
 				    macro_free,
 				    NULL, /* Note: This is set in macros_init () */
+				    NULL,
 				    uat_fields);
 
-	fvt_cache = g_hash_table_new(g_str_hash,g_str_equal);
+	fvt_cache = g_hash_table_new_full(g_str_hash,g_str_equal, NULL, dfilter_free_fvt_entry);
 }
 
 void dfilter_macro_get_uat(uat_t **dfmu_ptr_ptr) {
@@ -620,71 +622,76 @@ void dfilter_macro_get_uat(uat_t **dfmu_ptr_ptr) {
 
 void dump_dfilter_macro_t(const dfilter_macro_t *m, const char *function, const char *file, int line)
 {
-	printf("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+	ws_debug_printf("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
 
 	if(m == NULL) {
-		printf("  dfilter_macro_t * == NULL! (via: %s(): %s:%d)\n", function, file, line);
-		printf("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+		ws_debug_printf("  dfilter_macro_t * == NULL! (via: %s(): %s:%d)\n", function, file, line);
+		ws_debug_printf("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
 	}
 
-	printf("DUMP of dfilter_macro_t: %p (via: %s(): %s:%d)\n", m, function, file, line);
+	ws_debug_printf("DUMP of dfilter_macro_t: %p (via: %s(): %s:%d)\n", m, function, file, line);
 
-	printf("  &dfilter_macro->name     == %p\n", &m->name);
+	ws_debug_printf("  &dfilter_macro->name     == %p\n", &m->name);
 	if(m->name == NULL) {
-		printf("                ->name     == NULL\n");
+		ws_debug_printf("                ->name     == NULL\n");
 	} else {
-		printf("                ->name     == %p\n", m->name);
-		printf("                ->name     == <%s>\n", m->name);
+		ws_debug_printf("                ->name     == %p\n", m->name);
+		ws_debug_printf("                ->name     == <%s>\n", m->name);
 	}
 
-	printf("  &dfilter_macro->text     == %p\n", &m->text);
+	ws_debug_printf("  &dfilter_macro->text     == %p\n", &m->text);
 	if(m->text == NULL) {
-		printf("                ->text     == NULL\n");
+		ws_debug_printf("                ->text     == NULL\n");
 	} else {
-		printf("                ->text     == %p\n", m->text);
-		printf("                ->text     == <%s>\n", m->text);
+		ws_debug_printf("                ->text     == %p\n", m->text);
+		ws_debug_printf("                ->text     == <%s>\n", m->text);
 	}
 
-	printf("  &dfilter_macro->usable   == %p\n", &m->usable);
-	printf("                ->usable   == %u\n", m->usable);
+	ws_debug_printf("  &dfilter_macro->usable   == %p\n", &m->usable);
+	ws_debug_printf("                ->usable   == %u\n", m->usable);
 
-	printf("  &dfilter_macro->parts    == %p\n", &m->parts);
+	ws_debug_printf("  &dfilter_macro->parts    == %p\n", &m->parts);
 
 	if(m->parts == NULL) {
-		printf("                ->parts    == NULL\n");
+		ws_debug_printf("                ->parts    == NULL\n");
 	} else {
 		int i = 0;
 
 		while (m->parts[i]) {
-			printf("                ->parts[%d] == %p\n", i, m->parts[i]);
-			printf("                ->parts[%d] == <%s>\n", i, m->parts[i]);
+			ws_debug_printf("                ->parts[%d] == %p\n", i, m->parts[i]);
+			ws_debug_printf("                ->parts[%d] == <%s>\n", i, m->parts[i]);
 			i++;
 		}
-		printf("                ->parts[%d] == NULL\n", i);
+		ws_debug_printf("                ->parts[%d] == NULL\n", i);
 	}
 
-	printf("  &dfilter_macro->args_pos == %p\n", &m->args_pos);
+	ws_debug_printf("  &dfilter_macro->args_pos == %p\n", &m->args_pos);
 	if(m->args_pos == NULL) {
-		printf("                ->args_pos == NULL\n");
+		ws_debug_printf("                ->args_pos == NULL\n");
 	} else {
-		printf("                ->args_pos == %p\n", m->args_pos);
-		/*printf("                ->args_pos == <%?>\n", m->args_pos);*/
+		ws_debug_printf("                ->args_pos == %p\n", m->args_pos);
+		/*ws_debug_printf("                ->args_pos == <%?>\n", m->args_pos);*/
 	}
 
-	printf("  &dfilter_macro->argc     == %p\n", &m->argc);
-	printf("                ->argc     == %d\n", m->argc);
+	ws_debug_printf("  &dfilter_macro->argc     == %p\n", &m->argc);
+	ws_debug_printf("                ->argc     == %d\n", m->argc);
 
-	printf("  &dfilter_macro->priv     == %p\n", &m->priv);
+	ws_debug_printf("  &dfilter_macro->priv     == %p\n", &m->priv);
 	if(m->priv == NULL) {
-		printf("                ->priv     == NULL\n");
+		ws_debug_printf("                ->priv     == NULL\n");
 	} else {
-		printf("                ->priv     == %p\n", m->priv);
-		printf("                ->priv     == <%s>\n", (char *)m->priv);
+		ws_debug_printf("                ->priv     == %p\n", m->priv);
+		ws_debug_printf("                ->priv     == <%s>\n", (char *)m->priv);
 	}
 
-	printf("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+	ws_debug_printf("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
 }
 #endif
+
+void dfilter_macro_cleanup(void)
+{
+	g_hash_table_destroy(fvt_cache);
+}
 
 /*
  * Editor modelines  -  http://www.wireshark.org/tools/modelines.html

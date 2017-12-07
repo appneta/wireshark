@@ -406,15 +406,15 @@
 #define AL_OBJ_CTRC_16T    0x1606   /* 22 06 16-Bit Counter Change Event with Time */
 #define AL_OBJ_DCTRC_32T   0x1607   /* 22 07 32-Bit Delta Counter Change Event with Time */
 #define AL_OBJ_DCTRC_16T   0x1608   /* 22 08 16-Bit Delta Counter Change Event with Time */
-#define AL_OBJ_FCTRC_ALL   0x1700   /* 21 00 Frozen Binary Counter Change Event Default Variation */
-#define AL_OBJ_FCTRC_32    0x1701   /* 21 01 32-Bit Frozen Counter Change Event */
-#define AL_OBJ_FCTRC_16    0x1702   /* 21 02 16-Bit Frozen Counter Change Event */
-#define AL_OBJ_FDCTRC_32   0x1703   /* 21 03 32-Bit Frozen Delta Counter Change Event */
-#define AL_OBJ_FDCTRC_16   0x1704   /* 21 04 16-Bit Frozen Delta Counter Change Event */
-#define AL_OBJ_FCTRC_32T   0x1705   /* 21 05 32-Bit Frozen Counter Change Event w/ Time of Freeze */
-#define AL_OBJ_FCTRC_16T   0x1706   /* 21 06 16-Bit Frozen Counter Change Event w/ Time of Freeze */
-#define AL_OBJ_FDCTRC_32T  0x1707   /* 21 07 32-Bit Frozen Delta Counter Change Event w/ Time of Freeze */
-#define AL_OBJ_FDCTRC_16T  0x1708   /* 21 08 16-Bit Frozen Delta Counter Change Event w/ Time of Freeze */
+#define AL_OBJ_FCTRC_ALL   0x1700   /* 23 00 Frozen Binary Counter Change Event Default Variation */
+#define AL_OBJ_FCTRC_32    0x1701   /* 23 01 32-Bit Frozen Counter Change Event */
+#define AL_OBJ_FCTRC_16    0x1702   /* 23 02 16-Bit Frozen Counter Change Event */
+#define AL_OBJ_FDCTRC_32   0x1703   /* 23 03 32-Bit Frozen Delta Counter Change Event */
+#define AL_OBJ_FDCTRC_16   0x1704   /* 23 04 16-Bit Frozen Delta Counter Change Event */
+#define AL_OBJ_FCTRC_32T   0x1705   /* 23 05 32-Bit Frozen Counter Change Event w/ Time of Freeze */
+#define AL_OBJ_FCTRC_16T   0x1706   /* 23 06 16-Bit Frozen Counter Change Event w/ Time of Freeze */
+#define AL_OBJ_FDCTRC_32T  0x1707   /* 23 07 32-Bit Frozen Delta Counter Change Event w/ Time of Freeze */
+#define AL_OBJ_FDCTRC_16T  0x1708   /* 23 08 16-Bit Frozen Delta Counter Change Event w/ Time of Freeze */
 
 /* Counter Quality Flags */
 #define AL_OBJ_CTR_FLAG0   0x0001   /* Point Online (0=Offline; 1=Online) */
@@ -563,7 +563,7 @@
 /***************************************************************************/
 /* Octet String Objects */
 #define AL_OBJ_OCT         0x6E00   /* 110 xx Octet string */
-#define AL_OBJ_OCT_EVT     0x6F00   /* 110 xx Octet string event */
+#define AL_OBJ_OCT_EVT     0x6F00   /* 111 xx Octet string event */
 
 /***************************************************************************/
 /* Virtual Terminal Objects */
@@ -592,12 +592,18 @@ static int hf_dnp3_ctl_dfc = -1;
 static int hf_dnp3_dst = -1;
 static int hf_dnp3_src = -1;
 static int hf_dnp3_addr = -1;
-static int hf_dnp_hdr_CRC = -1;
-static int hf_dnp_hdr_CRC_bad = -1;
+static int hf_dnp3_data_hdr_crc = -1;
+static int hf_dnp3_data_hdr_crc_status = -1;
 static int hf_dnp3_tr_ctl = -1;
 static int hf_dnp3_tr_fin = -1;
 static int hf_dnp3_tr_fir = -1;
 static int hf_dnp3_tr_seq = -1;
+static int hf_dnp3_data_chunk = -1;
+static int hf_dnp3_data_chunk_len = -1;
+static int hf_dnp3_data_chunk_crc = -1;
+static int hf_dnp3_data_chunk_crc_status = -1;
+
+/* Added for Application Layer Decoding */
 static int hf_dnp3_al_ctl = -1;
 static int hf_dnp3_al_fir = -1;
 static int hf_dnp3_al_fin = -1;
@@ -605,7 +611,6 @@ static int hf_dnp3_al_con = -1;
 static int hf_dnp3_al_uns = -1;
 static int hf_dnp3_al_seq = -1;
 static int hf_dnp3_al_func = -1;
-/* Added for Application Layer Decoding */
 static int hf_dnp3_al_iin = -1;
 static int hf_dnp3_al_iin_bmsg = -1;
 static int hf_dnp3_al_iin_cls1d = -1;
@@ -743,7 +748,6 @@ static int hf_dnp3_al_file_string_length = -1;
 static int hf_dnp3_al_file_name = -1;
 static int hf_dnp3_al_octet_string = -1;
 static int hf_dnp3_unknown_data_chunk = -1;
-static int hf_dnp3_application_chunk = -1;
 
 /***************************************************************************/
 /* Value String Look-Ups */
@@ -1270,7 +1274,8 @@ static gint ett_dnp3 = -1;
 static gint ett_dnp3_dl = -1;
 static gint ett_dnp3_dl_ctl = -1;
 static gint ett_dnp3_tr_ctl = -1;
-static gint ett_dnp3_al_data = -1;
+static gint ett_dnp3_dl_data = -1;
+static gint ett_dnp3_dl_chunk = -1;
 static gint ett_dnp3_al = -1;
 static gint ett_dnp3_al_ctl = -1;
 static gint ett_dnp3_al_obj_point_tcc = -1;
@@ -1288,56 +1293,20 @@ static gint ett_dnp3_al_obj_point_perms = -1;
 static expert_field ei_dnp_num_items_neg = EI_INIT;
 static expert_field ei_dnp_invalid_length = EI_INIT;
 static expert_field ei_dnp_iin_abnormal = EI_INIT;
+static expert_field ei_dnp3_data_hdr_crc_incorrect = EI_INIT;
+static expert_field ei_dnp3_data_chunk_crc_incorrect = EI_INIT;
 /* Generated from convert_proto_tree_add_text.pl */
-static expert_field ei_dnp3_crc_failed = EI_INIT;
 #if 0
 static expert_field ei_dnp3_buffering_user_data_until_final_frame_is_received = EI_INIT;
 #endif
 
 /* Tables for reassembly of fragments. */
 static reassembly_table al_reassembly_table;
-static GHashTable *dl_conversation_table = NULL;
-
-/* Data-Link-Layer Conversation Key Structure */
-typedef struct _dl_conversation_key
-{
-  guint32 conversation; /* TCP / UDP conversation index */
-  guint16 src;          /* DNP3.0 Source Address */
-  guint16 dst;          /* DNP3.0 Destination Address */
-} dl_conversation_key_t;
-
-/* Data-Link-Layer conversation key equality function */
-static gboolean
-dl_conversation_equal(gconstpointer v, gconstpointer w)
-{
-  const dl_conversation_key_t* v1 = (const dl_conversation_key_t*)v;
-  const dl_conversation_key_t* v2 = (const dl_conversation_key_t*)w;
-
-  if ((v1->conversation == v2->conversation) &&
-      (v1->src == v2->src) &&
-      (v1->dst == v2->dst))
-  {
-    return TRUE;
-  }
-
-  return FALSE;
-}
-
-/* Data-Link-Layer conversation key hash function */
-static guint
-dl_conversation_hash(gconstpointer v)
-{
-  const dl_conversation_key_t *key = (const dl_conversation_key_t*)v;
-  guint val;
-
-  val = key->conversation + (key->src << 16) + key->dst;
-
-  return val;
-}
 
 /* ************************************************************************* */
 /*                   Header values for reassembly                            */
 /* ************************************************************************* */
+static int   hf_al_frag_data   = -1;
 static int   hf_dnp3_fragment  = -1;
 static int   hf_dnp3_fragments = -1;
 static int   hf_dnp3_fragment_overlap = -1;
@@ -1369,18 +1338,6 @@ static const fragment_items dnp3_frag_items = {
   "DNP 3.0 fragments"
 };
 
-/* Conversation stuff, used for tracking application message fragments */
-/* the number of entries in the memory chunk array */
-#define dnp3_conv_init_count 50
-
-/* Conversation structure */
-typedef struct {
-  guint conv_seq_number;
-} dnp3_conv_t;
-
-/* The conversation sequence number */
-static guint seq_number = 0;
-
 /* desegmentation of DNP3 over TCP */
 static gboolean dnp3_desegment = TRUE;
 
@@ -1408,71 +1365,39 @@ calculateCRCtvb(tvbuff_t *tvb, guint offset, guint len) {
 }
 
 /*****************************************************************/
-/*  Adds text to item, with trailing "," if required             */
-/*****************************************************************/
-static gboolean
-add_item_text(proto_item *item, const gchar *text, gboolean comma_needed)
-{
-  if (comma_needed) {
-    proto_item_append_text(item, ", ");
-  }
-  proto_item_append_text(item, "%s", text);
-  return TRUE;
-}
-
-/*****************************************************************/
 /*  Application Layer Process Internal Indications (IIN)         */
 /*****************************************************************/
 static void
 dnp3_al_process_iin(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tree *al_tree)
 {
-
   guint16     al_iin;
   proto_item *tiin;
-  proto_tree *iin_tree;
-  gboolean    comma_needed = FALSE;
+  static const int* indications[] = {
+      &hf_dnp3_al_iin_rst,
+      &hf_dnp3_al_iin_dt,
+      &hf_dnp3_al_iin_dol,
+      &hf_dnp3_al_iin_tsr,
+      &hf_dnp3_al_iin_cls3d,
+      &hf_dnp3_al_iin_cls2d,
+      &hf_dnp3_al_iin_cls1d,
+      &hf_dnp3_al_iin_bmsg,
+      &hf_dnp3_al_iin_cc,
+      &hf_dnp3_al_iin_oae,
+      &hf_dnp3_al_iin_ebo,
+      &hf_dnp3_al_iin_pioor,
+      &hf_dnp3_al_iin_obju,
+      &hf_dnp3_al_iin_fcni,
+      NULL
+  };
 
+  tiin = proto_tree_add_bitmask(al_tree, tvb, offset, hf_dnp3_al_iin, ett_dnp3_al_iin, indications, ENC_BIG_ENDIAN);
   al_iin = tvb_get_ntohs(tvb, offset);
-
-  tiin = proto_tree_add_uint_format(al_tree, hf_dnp3_al_iin, tvb, offset, 2, al_iin,
-        "Internal Indications: ");
-  if (al_iin & AL_IIN_RST)    comma_needed = add_item_text(tiin, "Device Restart",                     comma_needed);
-  if (al_iin & AL_IIN_DOL)    comma_needed = add_item_text(tiin, "Outputs in Local",                   comma_needed);
-  if (al_iin & AL_IIN_DT)     comma_needed = add_item_text(tiin, "Device Trouble",                     comma_needed);
-  if (al_iin & AL_IIN_TSR)    comma_needed = add_item_text(tiin, "Time Sync Required",                 comma_needed);
-  if (al_iin & AL_IIN_CLS3D)  comma_needed = add_item_text(tiin, "Class 3 Data Available",             comma_needed);
-  if (al_iin & AL_IIN_CLS2D)  comma_needed = add_item_text(tiin, "Class 2 Data Available",             comma_needed);
-  if (al_iin & AL_IIN_CLS1D)  comma_needed = add_item_text(tiin, "Class 1 Data Available",             comma_needed);
-  if (al_iin & AL_IIN_BMSG)   comma_needed = add_item_text(tiin, "Broadcast Message Rx'd",             comma_needed);
-  if (al_iin & AL_IIN_CC)     comma_needed = add_item_text(tiin, "Device Configuration Corrupt",       comma_needed);
-  if (al_iin & AL_IIN_OAE)    comma_needed = add_item_text(tiin, "Operation Already Executing",        comma_needed);
-  if (al_iin & AL_IIN_EBO)    comma_needed = add_item_text(tiin, "Event Buffer Overflow",              comma_needed);
-  if (al_iin & AL_IIN_PIOOR)  comma_needed = add_item_text(tiin, "Parameters Invalid or Out of Range", comma_needed);
-  if (al_iin & AL_IIN_OBJU)   comma_needed = add_item_text(tiin, "Requested Objects Unknown",          comma_needed);
-  if (al_iin & AL_IIN_FCNI)   /*comma_needed = */add_item_text(tiin, "Function code not implemented",  comma_needed);
-  proto_item_append_text(tiin, " (0x%04x)", al_iin);
 
   /* If IIN indicates an abnormal condition, add expert info */
   if ((al_iin & AL_IIN_DT) || (al_iin & AL_IIN_CC) || (al_iin & AL_IIN_OAE) || (al_iin & AL_IIN_EBO) ||
       (al_iin & AL_IIN_PIOOR) || (al_iin & AL_IIN_OBJU) || (al_iin & AL_IIN_FCNI)) {
       expert_add_info(pinfo, tiin, &ei_dnp_iin_abnormal);
   }
-
-  iin_tree = proto_item_add_subtree(tiin, ett_dnp3_al_iin);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_rst,   tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_dt,    tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_dol,   tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_tsr,   tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_cls3d, tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_cls2d, tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_cls1d, tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_bmsg,  tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_cc,    tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_oae,   tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_ebo,   tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_pioor, tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_obju,  tvb, offset, 2, ENC_BIG_ENDIAN);
-  proto_tree_add_item(iin_tree, hf_dnp3_al_iin_fcni,  tvb, offset, 2, ENC_BIG_ENDIAN);
 }
 
 /**************************************************************/
@@ -1945,6 +1870,7 @@ dnp3_al_process_object(tvbuff_t *tvb, packet_info *pinfo, int offset,
             offset += 2 + da_len;
             break;
           }
+
           /* Bit-based Data objects here */
           case AL_OBJ_BI_1BIT:    /* Single-Bit Binary Input (Obj:01, Var:01) */
           case AL_OBJ_BO:         /* Binary Output (Obj:10, Var:01) */
@@ -1952,9 +1878,8 @@ dnp3_al_process_object(tvbuff_t *tvb, packet_info *pinfo, int offset,
           case AL_OBJ_IIN:        /* Internal Indications - IIN (Obj: 80, Var:01) */
 
             /* Extract the bit from the packed byte */
-            al_bi_val = tvb_get_guint8(tvb, offset);
-            al_bit = (al_bi_val & (1 << bitindex)) > 0;
-
+            al_bi_val = tvb_get_guint8(tvb, data_pos);
+            al_bit = (al_bi_val & 1) > 0;
             if (al_obj == AL_OBJ_IIN) {
               /* For an IIN bit, work out the IIN constant value for the bit position to get the name of the bit */
               guint16 iin_bit = 0;
@@ -1967,10 +1892,20 @@ dnp3_al_process_object(tvbuff_t *tvb, packet_info *pinfo, int offset,
               proto_item_append_text(point_item, " (%s), Value: %u",
                                      val_to_str_const(iin_bit, dnp3_al_iin_vals, "Invalid IIN bit"), al_bit);
             }
-            else {
+            else
+            {
+              if (al_objq_prefix != AL_OBJQL_PREFIX_NI) {
+                /* Each item has an index prefix, in this case bump
+                   the bitindex to force the correct offset adjustment */
+                bitindex = 7;
+              }
+              else {
+                /* Regular packed bits, get the value at the appropriate bit index */
+                al_bit = (al_bi_val & (1 << bitindex)) > 0;
+              }
               proto_item_append_text(point_item, ", Value: %u", al_bit);
             }
-            proto_tree_add_boolean(point_tree, hf_dnp3_al_bit, tvb, offset, 1, al_bit);
+            proto_tree_add_boolean(point_tree, hf_dnp3_al_bit, tvb, data_pos, 1, al_bit);
             proto_item_set_len(point_item, prefixbytes + 1);
 
             /* Increment the bit index for next cycle */
@@ -2649,8 +2584,7 @@ dnp3_al_process_object(tvbuff_t *tvb, packet_info *pinfo, int offset,
 
           case AL_OBJ_TDELAYF: /* Time Delay - Fine (Obj:52, Var:02) */
 
-            al_val_uint16 = tvb_get_letohs(tvb, data_pos);
-            proto_tree_add_uint_format_value(object_tree, hf_dnp3_al_time_delay, tvb, data_pos, 2, al_val_uint16, "%u ms", al_val_uint16);
+            proto_tree_add_item(object_tree, hf_dnp3_al_time_delay, tvb, data_pos, 2, ENC_LITTLE_ENDIAN);
             data_pos += 2;
             proto_item_set_len(point_item, data_pos - offset);
 
@@ -2892,7 +2826,7 @@ dissect_dnp3_al(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 
   /* Clear out lower layer info */
   col_clear(pinfo->cinfo, COL_INFO);
-  col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "%s", func_code_str);
+  col_append_sep_str(pinfo->cinfo, COL_INFO, NULL, func_code_str);
   col_set_fence(pinfo->cinfo, COL_INFO);
 
   /* format up the text representation */
@@ -2949,7 +2883,7 @@ dissect_dnp3_al(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
           default:
             /* For reads for specific object types, bit-mask out the first byte and add the generic obj description to the column info */
             obj_type_str = val_to_str_ext((obj_type & 0xFF00), &dnp3_al_read_obj_vals_ext, "Unknown Object Type");
-            col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "%s", obj_type_str);
+            col_append_sep_str(pinfo->cinfo, COL_INFO, NULL, obj_type_str);
             break;
         }
 
@@ -2957,7 +2891,7 @@ dissect_dnp3_al(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 
       /* Update the col info if there were class reads */
       if (al_class != 0) {
-        col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "Class ");
+        col_append_sep_str(pinfo->cinfo, COL_INFO, NULL, "Class ");
         for (i = 0; i < 4; i++) {
           if (al_class & (1 << i)) {
             col_append_fstr(pinfo->cinfo, COL_INFO, "%u", i);
@@ -2978,7 +2912,7 @@ dissect_dnp3_al(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 
         /* For writes for specific object types, bit-mask out the first byte and add the generic obj description to the column info */
         obj_type_str = val_to_str_ext((obj_type & 0xFF00), &dnp3_al_write_obj_vals_ext, "Unknown Object Type");
-        col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "%s", obj_type_str);
+        col_append_sep_str(pinfo->cinfo, COL_INFO, NULL, obj_type_str);
 
       }
 
@@ -3124,7 +3058,7 @@ dissect_dnp3_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
   gboolean     dl_prm;
   guint8       dl_len, dl_ctl, dl_func;
   const gchar *func_code_str;
-  guint16      dl_dst, dl_src, dl_crc, calc_dl_crc;
+  guint16      dl_dst, dl_src, calc_dl_crc;
 
   /* Make entries in Protocol column and Info column on summary display */
   col_set_str(pinfo->cinfo, COL_PROTOCOL, "DNP 3.0");
@@ -3228,20 +3162,10 @@ dissect_dnp3_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
   offset += 2;
 
   /* and header CRC */
-  dl_crc = tvb_get_letohs(tvb, offset);
   calc_dl_crc = calculateCRCtvb(tvb, 0, DNP_HDR_LEN - 2);
-  if (dl_crc == calc_dl_crc)
-    proto_tree_add_uint_format_value(dl_tree, hf_dnp_hdr_CRC, tvb, offset, 2,
-                               dl_crc, "0x%04x [correct]", dl_crc);
-  else
-  {
-    hidden_item = proto_tree_add_boolean(dl_tree, hf_dnp_hdr_CRC_bad, tvb,
-                                         offset, 2, TRUE);
-    PROTO_ITEM_SET_HIDDEN(hidden_item);
-    proto_tree_add_uint_format_value(dl_tree, hf_dnp_hdr_CRC, tvb, offset, 2,
-                               dl_crc, "0x%04x [incorrect, should be 0x%04x]",
-                               dl_crc, calc_dl_crc);
-  }
+  proto_tree_add_checksum(dl_tree, tvb, offset, hf_dnp3_data_hdr_crc,
+                          hf_dnp3_data_hdr_crc_status, &ei_dnp3_data_hdr_crc_incorrect,
+                          pinfo, calc_dl_crc, ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
   offset += 2;
 
   /* If the DataLink function is 'Request Link Status' or 'Status of Link',
@@ -3250,21 +3174,23 @@ dissect_dnp3_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
   if ((dl_func != DL_FUNC_LINK_STAT) && (dl_func != DL_FUNC_STAT_LINK) &&
       (dl_func != DL_FUNC_RESET_LINK) && (dl_func != DL_FUNC_ACK))
   {
-    proto_tree *al_tree;
+    proto_tree *data_tree;
+    proto_item *data_ti;
     guint8      tr_ctl, tr_seq;
     gboolean    tr_fir, tr_fin;
-    guint8     *tmp, *tmp_ptr;
+    guint8     *al_buffer, *al_buffer_ptr;
     guint8      data_len;
-    int         data_offset;
+    int         data_start = offset;
+    int         tl_offset;
     gboolean    crc_OK = FALSE;
     tvbuff_t   *next_tvb;
     guint       i;
-  static const int * transport_flags[] = {
-    &hf_dnp3_tr_fin,
-    &hf_dnp3_tr_fir,
-    &hf_dnp3_tr_seq,
-    NULL
-  };
+    static const int * transport_flags[] = {
+      &hf_dnp3_tr_fin,
+      &hf_dnp3_tr_fir,
+      &hf_dnp3_tr_seq,
+      NULL
+    };
 
     /* get the transport layer byte */
     tr_ctl = tvb_get_guint8(tvb, offset);
@@ -3279,158 +3205,121 @@ dissect_dnp3_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
     if (tr_fin) proto_item_append_text(tc, "FIN, ");
     proto_item_append_text(tc, "Sequence %u)", tr_seq);
 
-    /* Allocate AL chunk tree */
-    al_tree = proto_tree_add_subtree(dnp3_tree, tvb, offset + 1, -1, ett_dnp3_al_data, NULL, "Application data chunks");
+    /* Add data chunk tree */
+    data_tree = proto_tree_add_subtree(dnp3_tree, tvb, offset, -1, ett_dnp3_dl_data, &data_ti, "Data Chunks");
 
     /* extract the application layer data, validating the CRCs */
 
     /* XXX - check for dl_len <= 5 */
     data_len = dl_len - 5;
-    tmp = (guint8 *)wmem_alloc(pinfo->pool, data_len);
-    tmp_ptr = tmp;
+    al_buffer = (guint8 *)wmem_alloc(pinfo->pool, data_len);
+    al_buffer_ptr = al_buffer;
     i = 0;
-    data_offset = 1;  /* skip the transport layer byte when assembling chunks */
+    tl_offset = 1;  /* skip the initial transport layer byte when assembling chunks for the application layer tvb */
     while (data_len > 0)
     {
       guint8        chk_size;
       const guint8 *chk_ptr;
+      proto_tree   *chk_tree;
+      proto_item   *chk_len_ti;
       guint16       calc_crc, act_crc;
 
       chk_size = MIN(data_len, AL_MAX_CHUNK_SIZE);
       chk_ptr  = tvb_get_ptr(tvb, offset, chk_size);
-      memcpy(tmp_ptr, chk_ptr + data_offset, chk_size - data_offset);
-      calc_crc = calculateCRC(chk_ptr, chk_size);
+      memcpy(al_buffer_ptr, chk_ptr + tl_offset, chk_size - tl_offset);
+      al_buffer_ptr += chk_size - tl_offset;
+
+      chk_tree = proto_tree_add_subtree_format(data_tree, tvb, offset, chk_size + 2, ett_dnp3_dl_chunk, NULL, "Data Chunk: %u", i);
+      proto_tree_add_item(chk_tree, hf_dnp3_data_chunk, tvb, offset, chk_size, ENC_NA);
+      chk_len_ti = proto_tree_add_uint(chk_tree, hf_dnp3_data_chunk_len, tvb, offset, 0, chk_size);
+      PROTO_ITEM_SET_GENERATED(chk_len_ti);
+
       offset  += chk_size;
-      tmp_ptr += chk_size - data_offset;
+
+      calc_crc = calculateCRC(chk_ptr, chk_size);
+      proto_tree_add_checksum(chk_tree, tvb, offset, hf_dnp3_data_chunk_crc,
+                              hf_dnp3_data_chunk_crc_status, &ei_dnp3_data_chunk_crc_incorrect,
+                              pinfo, calc_crc, ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
       act_crc  = tvb_get_letohs(tvb, offset);
       offset  += 2;
       crc_OK   = calc_crc == act_crc;
-      if (crc_OK)
+      if (!crc_OK)
       {
-        proto_tree_add_bytes_format(al_tree, hf_dnp3_application_chunk, tvb, offset - (chk_size + 2), chk_size + 2,
-                            NULL, "Application Chunk %u Len: %u CRC 0x%04x",
-                            i, chk_size, act_crc);
-        data_len -= chk_size;
-      }
-      else
-      {
-        proto_tree_add_bytes_format(al_tree, hf_dnp3_application_chunk, tvb, offset - (chk_size + 2), chk_size + 2,
-                            NULL, "Application Chunk %u Len: %u Bad CRC got 0x%04x expected 0x%04x",
-                            i, chk_size, act_crc, calc_crc);
+        /* Don't trust the rest of the data, get out of here */
         break;
       }
+      data_len -= chk_size;
       i++;
-      data_offset = 0;  /* copy all of the rest of the chunks */
+      tl_offset = 0;  /* copy all the data in the rest of the chunks */
     }
+    proto_item_set_len(data_ti, offset - data_start);
 
-    /* if all crc OK, set up new tvb */
+    /* if crc OK, set up new tvb */
     if (crc_OK)
     {
       tvbuff_t *al_tvb;
       gboolean  save_fragmented;
 
-      al_tvb = tvb_new_child_real_data(tvb, tmp, (guint) (tmp_ptr-tmp), (gint) (tmp_ptr-tmp));
+      al_tvb = tvb_new_child_real_data(tvb, al_buffer, (guint) (al_buffer_ptr-al_buffer), (gint) (al_buffer_ptr-al_buffer));
 
       /* Check for fragmented packet */
       save_fragmented = pinfo->fragmented;
-      if (! (tr_fir && tr_fin))
+
+      /* Reassemble AL fragments */
+      static guint al_max_fragments = 60;
+      static guint al_fragment_aging = 64; /* sequence numbers only 6 bit */
+      fragment_head *frag_al = NULL;
+      pinfo->fragmented = TRUE;
+      if (!pinfo->fd->flags.visited)
       {
-        guint                  conv_seq_number;
-        fragment_head         *frag_msg;
-        conversation_t        *conversation;
-        dnp3_conv_t           *conv_data_ptr;
-        dl_conversation_key_t  dl_conversation_key;
-
-        /* A fragmented packet */
-        pinfo->fragmented = TRUE;
-
-        /* Look up the conversation to get the fragment reassembly id */
-        conversation = find_or_create_conversation(pinfo);
-
-        /*
-         * The TCP/UDP conversation is not sufficient to identify a conversation
-         * on a multi-drop DNP network.  Lookup conversation data based on TCP/UDP
-         * conversation and the DNP src and dst addresses
-         */
-
-        dl_conversation_key.conversation = conversation->conv_index;
-        dl_conversation_key.src = dl_src;
-        dl_conversation_key.dst = dl_dst;
-
-        conv_data_ptr = (dnp3_conv_t*)g_hash_table_lookup(dl_conversation_table, &dl_conversation_key);
-
-        if (!pinfo->fd->flags.visited && conv_data_ptr == NULL)
-        {
-          dl_conversation_key_t* new_dl_conversation_key = NULL;
-          new_dl_conversation_key  = wmem_new(wmem_file_scope(), dl_conversation_key_t);
-          *new_dl_conversation_key = dl_conversation_key;
-
-          conv_data_ptr = wmem_new(wmem_file_scope(), dnp3_conv_t);
-
-          /*** Increment static global fragment reassembly id ***/
-          conv_data_ptr->conv_seq_number = seq_number++;
-
-          g_hash_table_insert(dl_conversation_table, new_dl_conversation_key, conv_data_ptr);
-        }
-
-        conv_seq_number = conv_data_ptr->conv_seq_number;
-
-        /*
-        * Add the frame to
-        * whatever reassembly is in progress, if any, and see
-        * if it's done.
-        */
-
-        frag_msg = fragment_add_seq_next(&al_reassembly_table,
-            al_tvb, 0, pinfo, conv_seq_number, NULL,
+        frag_al = fragment_add_seq_single_aging(&al_reassembly_table,
+            al_tvb, 0, pinfo, tr_seq, NULL,
             tvb_reported_length(al_tvb), /* As this is a constructed tvb, all of it is ok */
-            !tr_fin);
-
-        next_tvb = process_reassembled_data(al_tvb, 0, pinfo,
-            "Reassembled DNP 3.0 Application Layer message", frag_msg, &dnp3_frag_items,
-            NULL, dnp3_tree);
-
-        if (next_tvb)  /* Reassembled */
-        {
-          /* We have the complete payload, zap the info column as the AL info takes precedence */
-          col_clear(pinfo->cinfo, COL_INFO);
-        }
-        else
-        {
-          /* We don't have the complete reassembled payload. */
-          col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "TL fragment %u ", tr_seq);
-        }
-
+            tr_fir, tr_fin,
+            al_max_fragments, al_fragment_aging);
       }
       else
       {
-        /* No reassembly required */
-        next_tvb = al_tvb;
-        add_new_data_source(pinfo, next_tvb, "DNP 3.0 Application Layer message");
-        col_clear(pinfo->cinfo, COL_INFO);
+        frag_al = fragment_get_reassembled_id(&al_reassembly_table, pinfo, tr_seq);
       }
+      next_tvb = process_reassembled_data(al_tvb, 0, pinfo,
+          "Reassembled DNP 3.0 Application Layer message", frag_al, &dnp3_frag_items,
+          NULL, dnp3_tree);
+
+      if (frag_al)
+      {
+        if (pinfo->num == frag_al->reassembled_in)
+        {
+          /* As a complete AL message will have cleared the info column,
+             make sure source and dest are always in the info column */
+          //col_append_fstr(pinfo->cinfo, COL_INFO, "from %u to %u", dl_src, dl_dst);
+          //col_set_fence(pinfo->cinfo, COL_INFO);
+          dissect_dnp3_al(next_tvb, pinfo, dnp3_tree);
+        }
+        else
+        {
+          /* Lock any column info set by the DL and TL */
+          col_set_fence(pinfo->cinfo, COL_INFO);
+          col_append_fstr(pinfo->cinfo, COL_INFO,
+              " (Application Layer fragment %u, reassembled in packet %u)",
+              tr_seq, frag_al->reassembled_in);
+          proto_tree_add_item(dnp3_tree, hf_al_frag_data, al_tvb, 0, -1, ENC_NA);
+        }
+      }
+      else
+      {
+        col_append_fstr(pinfo->cinfo, COL_INFO,
+            " (Application Layer Unreassembled fragment %u)",
+            tr_seq);
+        proto_tree_add_item(dnp3_tree, hf_al_frag_data, al_tvb, 0, -1, ENC_NA);
+      }
+
       pinfo->fragmented = save_fragmented;
     }
     else
     {
       /* CRC error - throw away the data. */
       next_tvb = NULL;
-      proto_tree_add_expert_format(dnp3_tree, pinfo, &ei_dnp3_crc_failed, tvb, 11, -1, "CRC failed, %u chunks", i);
-    }
-
-    /* Dissect any completed Application Layer message */
-    if (next_tvb && tr_fin)
-    {
-      /* As a complete AL message will have cleared the info column,
-         make sure source and dest are always in the info column */
-      col_append_fstr(pinfo->cinfo, COL_INFO, "from %u to %u", dl_src, dl_dst);
-      col_set_fence(pinfo->cinfo, COL_INFO);
-      dissect_dnp3_al(next_tvb, pinfo, dnp3_tree);
-    }
-    else
-    {
-      /* Lock any column info set by the DL and TL */
-      col_set_fence(pinfo->cinfo, COL_INFO);
     }
   }
 
@@ -3550,21 +3439,6 @@ dissect_dnp3_udp_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void 
 
 }
 
-static void
-dnp3_init(void)
-{
-  dl_conversation_table = g_hash_table_new(dl_conversation_hash, dl_conversation_equal);
-  reassembly_table_init(&al_reassembly_table,
-                        &addresses_reassembly_table_functions);
-}
-
-static void
-dnp3_cleanup(void)
-{
-  reassembly_table_destroy(&al_reassembly_table);
-  g_hash_table_destroy(dl_conversation_table);
-}
-
 /* Register the protocol with Wireshark */
 
 void
@@ -3669,15 +3543,15 @@ proto_register_dnp3(void)
         "Source or Destination Address", HFILL }
     },
 
-    { &hf_dnp_hdr_CRC,
-      { "CRC", "dnp3.hdr.CRC",
+    { &hf_dnp3_data_hdr_crc,
+      { "Data Link Header checksum", "dnp3.hdr.CRC",
         FT_UINT16, BASE_HEX, NULL, 0x0,
         NULL, HFILL }
     },
 
-    { &hf_dnp_hdr_CRC_bad,
-      { "Bad CRC", "dnp3.hdr.CRC_bad",
-        FT_BOOLEAN, BASE_NONE, NULL, 0x0,
+    { &hf_dnp3_data_hdr_crc_status,
+        { "Data Link Header Checksum Status", "dnp.hdr.CRC.status",
+        FT_UINT8, BASE_NONE, VALS(proto_checksum_vals), 0x0,
         NULL, HFILL }
     },
 
@@ -3703,6 +3577,30 @@ proto_register_dnp3(void)
       { "Sequence", "dnp3.tr.seq",
         FT_UINT8, BASE_DEC, NULL, DNP3_TR_SEQ,
         "Frame Sequence Number", HFILL }
+    },
+
+    { &hf_dnp3_data_chunk,
+      { "Data Chunk", "dnp.data_chunk",
+        FT_BYTES, BASE_NONE, NULL, 0x0,
+        NULL, HFILL }
+    },
+
+    { &hf_dnp3_data_chunk_len,
+      { "Data Chunk length", "dnp.data_chunk_len",
+        FT_UINT16, BASE_DEC, NULL, 0x0,
+        NULL, HFILL }
+    },
+
+    { &hf_dnp3_data_chunk_crc,
+      { "Data Chunk checksum", "dnp.data_chunk.CRC",
+        FT_UINT16, BASE_HEX, NULL, 0x0,
+        NULL, HFILL }
+    },
+
+    { &hf_dnp3_data_chunk_crc_status,
+        { "Data Chunk Checksum Status", "dnp.data_chunk.CRC.status",
+        FT_UINT8, BASE_NONE, VALS(proto_checksum_vals), 0x0,
+        NULL, HFILL }
     },
 
     { &hf_dnp3_al_ctl,
@@ -3748,8 +3646,8 @@ proto_register_dnp3(void)
     },
 
     { &hf_dnp3_al_iin,
-      { "Application Layer IIN bits", "dnp3.al.iin",
-        FT_UINT16, BASE_DEC, NULL, 0x0,
+      { "Internal Indications", "dnp3.al.iin",
+        FT_UINT16, BASE_HEX, NULL, 0x0,
         "Application Layer IIN", HFILL }
     },
 
@@ -4451,6 +4349,11 @@ proto_register_dnp3(void)
           NULL, HFILL }
     },
 
+    { &hf_al_frag_data,
+      {"DNP3.0 AL Fragment Data", "dnp3.al.frag_data",
+          FT_BYTES, BASE_NONE, NULL, 0x00,
+          "DNP 3.0 Application Layer Fragment Data", HFILL }},
+
     { &hf_dnp3_fragment,
       { "DNP 3.0 AL Fragment", "dnp3.al.fragment",
           FT_FRAMENUM, BASE_NONE, NULL, 0x0,
@@ -4516,13 +4419,12 @@ proto_register_dnp3(void)
     { &hf_dnp3_al_count, { "Count", "dnp3.al.count", FT_UINT8, BASE_DEC, NULL, 0x0, NULL, HFILL }},
     { &hf_dnp3_al_on_time, { "On Time", "dnp3.al.on_time", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
     { &hf_dnp3_al_off_time, { "Off Time", "dnp3.al.off_time", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
-    { &hf_dnp3_al_time_delay, { "Time Delay", "dnp3.al.time_delay", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+    { &hf_dnp3_al_time_delay, { "Time Delay", "dnp3.al.time_delay", FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_milliseconds, 0x0, NULL, HFILL }},
     { &hf_dnp3_al_file_string_offset, { "File String Offset", "dnp3.al.file_string_offset", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL }},
     { &hf_dnp3_al_file_string_length, { "File String Length", "dnp3.al.file_string_length", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL }},
     { &hf_dnp3_al_file_name, { "File Name", "dnp3.al.file_name", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL }},
     { &hf_dnp3_al_octet_string, { "Octet String", "dnp3.al.octet_string", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL }},
     { &hf_dnp3_unknown_data_chunk, { "Unknown Data Chunk", "dnp3.al.unknown_data_chunk", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-    { &hf_dnp3_application_chunk, { "Application Chunk", "dnp.application_chunk", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL }},
 
   };
 
@@ -4532,7 +4434,8 @@ proto_register_dnp3(void)
     &ett_dnp3_dl,
     &ett_dnp3_dl_ctl,
     &ett_dnp3_tr_ctl,
-    &ett_dnp3_al_data,
+    &ett_dnp3_dl_data,
+    &ett_dnp3_dl_chunk,
     &ett_dnp3_al,
     &ett_dnp3_al_ctl,
     &ett_dnp3_al_obj_point_tcc,
@@ -4551,22 +4454,22 @@ proto_register_dnp3(void)
      { &ei_dnp_num_items_neg, { "dnp3.num_items_neg", PI_MALFORMED, PI_ERROR, "Negative number of items", EXPFILL }},
      { &ei_dnp_invalid_length, { "dnp3.invalid_length", PI_MALFORMED, PI_ERROR, "Invalid length", EXPFILL }},
      { &ei_dnp_iin_abnormal, { "dnp3.iin_abnormal", PI_PROTOCOL, PI_WARN, "IIN Abnormality", EXPFILL }},
+     { &ei_dnp3_data_hdr_crc_incorrect, { "dnp3.hdr.CRC.incorrect", PI_CHECKSUM, PI_WARN, "Data Link Header Checksum incorrect", EXPFILL }},
+     { &ei_dnp3_data_chunk_crc_incorrect, { "dnp3.data_chunk.CRC.incorrect", PI_CHECKSUM, PI_WARN, "Data Chunk Checksum incorrect", EXPFILL }},
       /* Generated from convert_proto_tree_add_text.pl */
 #if 0
       { &ei_dnp3_buffering_user_data_until_final_frame_is_received, { "dnp3.buffering_user_data_until_final_frame_is_received", PI_PROTOCOL, PI_WARN, "Buffering User Data Until Final Frame is Received..", EXPFILL }},
 #endif
-      { &ei_dnp3_crc_failed, { "dnp.crc_failed", PI_PROTOCOL, PI_WARN, "CRC failed", EXPFILL }},
-  };
+    };
+
   module_t *dnp3_module;
   expert_module_t* expert_dnp3;
 
-/* Register protocol init routine */
-  register_init_routine(&dnp3_init);
-  register_cleanup_routine(&dnp3_cleanup);
+  reassembly_table_register(&al_reassembly_table,
+                        &addresses_reassembly_table_functions);
 
 /* Register the protocol name and description */
-  proto_dnp3 = proto_register_protocol("Distributed Network Protocol 3.0",
-                   "DNP 3.0", "dnp3");
+  proto_dnp3 = proto_register_protocol("Distributed Network Protocol 3.0", "DNP 3.0", "dnp3");
 
 /* Register the dissector so it may be used as a User DLT payload protocol */
   register_dissector("dnp3.udp", dissect_dnp3_udp, proto_dnp3);
@@ -4586,7 +4489,6 @@ proto_register_dnp3(void)
     &dnp3_desegment);
 }
 
-
 void
 proto_reg_handoff_dnp3(void)
 {
@@ -4599,8 +4501,8 @@ proto_reg_handoff_dnp3(void)
 
   dnp3_tcp_handle = create_dissector_handle(dissect_dnp3_tcp, proto_dnp3);
   dnp3_udp_handle = create_dissector_handle(dissect_dnp3_udp, proto_dnp3);
-  dissector_add_uint("tcp.port", TCP_PORT_DNP, dnp3_tcp_handle);
-  dissector_add_uint("udp.port", UDP_PORT_DNP, dnp3_udp_handle);
+  dissector_add_uint_with_preference("tcp.port", TCP_PORT_DNP, dnp3_tcp_handle);
+  dissector_add_uint_with_preference("udp.port", UDP_PORT_DNP, dnp3_udp_handle);
   dissector_add_for_decode_as("rtacser.data", dnp3_udp_handle);
 }
 

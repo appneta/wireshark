@@ -39,24 +39,8 @@ ftype_register_none(void)
 		NULL,				/* val_to_string_repr */
 		NULL,				/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ NULL },			/* union set_value */
+		{ NULL },			/* union get_value */
 
 		NULL,				/* cmp_eq */
 		NULL,				/* cmp_ne */

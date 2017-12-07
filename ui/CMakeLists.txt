@@ -19,7 +19,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-
 set(COMMON_UI_SRC
 	alert_box.c
 	capture.c
@@ -27,19 +26,20 @@ set(COMMON_UI_SRC
 	commandline.c
 	console.c
 	decode_as_utils.c
-	export_object.c
-	export_object_dicom.c
-	export_object_http.c
-	export_object_smb.c
-	export_object_tftp.c
+	dissect_opts.c
+	export_object_ui.c
 	export_pdu_ui_utils.c
 	help_url.c
+	failure_message.c
+	filter_files.c
 	firewall_rules.c
+	iface_toolbar.c
 	iface_lists.c
 	io_graph_item.c
 	language.c
 	mcast_stream.c
 	packet_list_utils.c
+	packet_range.c
 	persfilepath_opt.c
 	preference_utils.c
 	profile.c
@@ -80,13 +80,11 @@ set(CLEAN_FILES
 	${COMMON_UI_SRC}
 )
 
-if (WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${CLEAN_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${CLEAN_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 
 add_library(ui STATIC
@@ -94,8 +92,14 @@ add_library(ui STATIC
 	${GENERATED_FILES}
 )
 
+set_target_properties(ui PROPERTIES COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}")
 set_target_properties(ui PROPERTIES LINK_FLAGS "${WS_LINK_FLAGS}")
 set_target_properties(ui PROPERTIES FOLDER "UI")
+
+if (HTML_HELP_COMPILER)
+	add_definitions(-DHHC_DIR)
+	target_link_libraries(ui Htmlhelp.lib)
+endif()
 
 CHECKAPI(
 	NAME

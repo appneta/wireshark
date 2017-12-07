@@ -488,7 +488,7 @@ static int ett_gvcp_payload_ack_subtree = -1;
 static int ett_gvcp_bootstrap_fields = -1;
 
 static dissector_handle_t gvcp_handle;
-
+static dissector_handle_t gvsp_handle;
 
 /*Device Mode*/
 static const value_string devicemodenames_class[] = {
@@ -1419,7 +1419,7 @@ static void dissect_readreg_cmd(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, p
 	}
 	else
 	{
-		col_append_fstr(pinfo->cinfo, COL_INFO, "%s", address_string);
+		col_append_str(pinfo->cinfo, COL_INFO, address_string);
 	}
 
 	if (!pinfo->fd->flags.visited)
@@ -1458,10 +1458,9 @@ static void dissect_readreg_cmd(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, p
 			{
 				/* Insert data as generic register */
 				item = proto_tree_add_item(gvcp_telegram_tree, hf_gvcp_custom_register_addr, tvb, offset, 4, ENC_BIG_ENDIAN);
-				proto_item_append_text(item, " ");
 
 				/* Use generic register name */
-				proto_item_append_text(item, "[Unknown Register]");
+				proto_item_append_text(item, " [Unknown Register]");
 			}
 		}
 		offset +=4;
@@ -1503,13 +1502,8 @@ static void dissect_writereg_cmd(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, 
 		(addr == GVCP_SC_DESTINATION_PORT(2)) ||
 		(addr == GVCP_SC_DESTINATION_PORT(3)))
 	{
-		dissector_handle_t gvsp_handle;
-		gvsp_handle = find_dissector("gvsp");
-		if (gvsp_handle != NULL)
-		{
-			/* For now we simply (always) add ports. Maybe we should remove when the dissector gets unloaded? */
-			dissector_add_uint("udp.port", value, gvsp_handle);
-		}
+		/* For now we simply (always) add ports. Maybe we should remove when the dissector gets unloaded? */
+		dissector_add_uint("udp.port", value, gvsp_handle);
 	}
 
 	/* Automatically learn messaging channel port. Dissect as GVCP. */
@@ -1596,8 +1590,7 @@ static void dissect_readmem_cmd(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, p
 		else
 		{
 			item = proto_tree_add_item(gvcp_telegram_tree, hf_gvcp_custom_memory_addr, tvb, offset, 4, ENC_BIG_ENDIAN);
-			proto_item_append_text(item, " ");
-			proto_item_append_text(item, "[Unknown Register]");
+			proto_item_append_text(item, " [Unknown Register]");
 		}
 		proto_tree_add_item(gvcp_telegram_tree, hf_gvcp_readmemcmd_count, tvb, (offset + 6), 2, ENC_BIG_ENDIAN);
 	}
@@ -1958,7 +1951,7 @@ static void dissect_readreg_ack(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, p
 			}
 			else
 			{
-				col_append_fstr(pinfo->cinfo, COL_INFO, "%s", address_string);
+				col_append_str(pinfo->cinfo, COL_INFO, address_string);
 			}
 		}
 	}
@@ -2060,7 +2053,7 @@ static void dissect_readmem_ack(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, p
 	address_string = get_register_name_from_address(addr, &is_custom_register);
 
 	/* Fill in Wireshark GUI Info column */
-	col_append_fstr(pinfo->cinfo, COL_INFO, "%s", address_string);
+	col_append_str(pinfo->cinfo, COL_INFO, address_string);
 
 	if (gvcp_telegram_tree != NULL)
 	{
@@ -2097,7 +2090,7 @@ static void dissect_writemem_ack(proto_tree *gvcp_telegram_tree, tvbuff_t *tvb, 
 		{
 			const gchar *address_string = NULL;
 			address_string = get_register_name_from_address((*((guint32*)wmem_array_index(gvcp_trans->addr_list, 0))), NULL);
-			col_append_fstr(pinfo->cinfo, COL_INFO, "%s", address_string);
+			col_append_str(pinfo->cinfo, COL_INFO, address_string);
 		}
 	}
 
@@ -3822,6 +3815,7 @@ void proto_register_gvcp(void)
 void proto_reg_handoff_gvcp(void)
 {
 	dissector_add_uint("udp.port", global_gvcp_port, gvcp_handle);
+	gvsp_handle = find_dissector("gvsp");
 }
 
 /*

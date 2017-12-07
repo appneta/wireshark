@@ -33,6 +33,7 @@
 
 void proto_register_openflow_v4(void);
 void proto_reg_handoff_openflow_v4(void);
+static int dissect_openflow_message_v4(tvbuff_t *, packet_info *, proto_tree *, int);
 
 static dissector_handle_t eth_withoutfcs_handle;
 
@@ -63,6 +64,7 @@ static int hf_openflow_v4_oxm_mask = -1;
 static int hf_openflow_v4_oxm_mask_etheraddr = -1;
 static int hf_openflow_v4_oxm_mask_ipv4addr = -1;
 static int hf_openflow_v4_oxm_mask_ipv6addr = -1;
+static int hf_openflow_v4_oxm_mask_vlan = -1;
 static int hf_openflow_v4_match_type = -1;
 static int hf_openflow_v4_match_length = -1;
 static int hf_openflow_v4_match_pad = -1;
@@ -70,9 +72,7 @@ static int hf_openflow_v4_action_type = -1;
 static int hf_openflow_v4_action_length = -1;
 static int hf_openflow_v4_action_experimenter_experimenter = -1;
 static int hf_openflow_v4_action_output_port = -1;
-static int hf_openflow_v4_action_output_port_reserved = -1;
 static int hf_openflow_v4_action_output_max_len = -1;
-static int hf_openflow_v4_action_output_max_len_reserved = -1;
 static int hf_openflow_v4_action_output_pad = -1;
 static int hf_openflow_v4_action_copy_ttl_out_pad = -1;
 static int hf_openflow_v4_action_copy_ttl_in_pad = -1;
@@ -88,7 +88,6 @@ static int hf_openflow_v4_action_pop_mpls_ethertype = -1;
 static int hf_openflow_v4_action_pop_mpls_pad = -1;
 static int hf_openflow_v4_action_set_queue_queue_id = -1;
 static int hf_openflow_v4_action_group_group_id = -1;
-static int hf_openflow_v4_action_group_group_id_reserved = -1;
 static int hf_openflow_v4_action_set_nw_ttl_ttl = -1;
 static int hf_openflow_v4_action_set_nw_ttl_pad = -1;
 static int hf_openflow_v4_action_dec_nw_ttl_pad = -1;
@@ -106,9 +105,7 @@ static int hf_openflow_v4_instruction_write_metadata_value = -1;
 static int hf_openflow_v4_instruction_write_metadata_mask = -1;
 static int hf_openflow_v4_instruction_actions_pad = -1;
 static int hf_openflow_v4_instruction_meter_meter_id = -1;
-static int hf_openflow_v4_instruction_meter_meter_id_reserved = -1;
 static int hf_openflow_v4_port_port_no = -1;
-static int hf_openflow_v4_port_port_no_reserved = -1;
 static int hf_openflow_v4_port_pad = -1;
 static int hf_openflow_v4_port_hw_addr = -1;
 static int hf_openflow_v4_port_pad2 = -1;
@@ -243,9 +240,7 @@ static int hf_openflow_v4_switch_features_reserved = -1;
 static int hf_openflow_v4_switch_config_flags = -1;
 static int hf_openflow_v4_switch_config_flags_fragments = -1;
 static int hf_openflow_v4_switch_config_miss_send_len = -1;
-static int hf_openflow_v4_switch_config_miss_send_len_reserved = -1;
 static int hf_openflow_v4_packet_in_buffer_id = -1;
-static int hf_openflow_v4_packet_in_buffer_id_reserved = -1;
 static int hf_openflow_v4_packet_in_total_len = -1;
 static int hf_openflow_v4_packet_in_reason = -1;
 static int hf_openflow_v4_packet_in_table_id = -1;
@@ -264,25 +259,19 @@ static int hf_openflow_v4_flow_removed_byte_count = -1;
 static int hf_openflow_v4_port_status_reason = -1;
 static int hf_openflow_v4_port_status_pad = -1;
 static int hf_openflow_v4_packet_out_buffer_id = -1;
-static int hf_openflow_v4_packet_out_buffer_id_reserved = -1;
 static int hf_openflow_v4_packet_out_in_port = -1;
-static int hf_openflow_v4_packet_out_in_port_reserved = -1;
 static int hf_openflow_v4_packet_out_acts_len = -1;
 static int hf_openflow_v4_packet_out_pad = -1;
 static int hf_openflow_v4_flowmod_cookie = -1;
 static int hf_openflow_v4_flowmod_cookie_mask = -1;
 static int hf_openflow_v4_flowmod_table_id = -1;
-static int hf_openflow_v4_flowmod_table_id_reserved = -1;
 static int hf_openflow_v4_flowmod_command = -1;
 static int hf_openflow_v4_flowmod_idle_timeout = -1;
 static int hf_openflow_v4_flowmod_hard_timeout = -1;
 static int hf_openflow_v4_flowmod_priority = -1;
 static int hf_openflow_v4_flowmod_buffer_id = -1;
-static int hf_openflow_v4_flowmod_buffer_id_reserved = -1;
 static int hf_openflow_v4_flowmod_out_port = -1;
-static int hf_openflow_v4_flowmod_out_port_reserved = -1;
 static int hf_openflow_v4_flowmod_out_group = -1;
-static int hf_openflow_v4_flowmod_out_group_reserved = -1;
 static int hf_openflow_v4_flowmod_flags = -1;
 static int hf_openflow_v4_flowmod_flags_send_flow_rem = -1;
 static int hf_openflow_v4_flowmod_flags_check_overlap = -1;
@@ -293,17 +282,13 @@ static int hf_openflow_v4_flowmod_pad = -1;
 static int hf_openflow_v4_bucket_length = -1;
 static int hf_openflow_v4_bucket_weight = -1;
 static int hf_openflow_v4_bucket_watch_port = -1;
-static int hf_openflow_v4_bucket_watch_port_reserved = -1;
 static int hf_openflow_v4_bucket_watch_group = -1;
-static int hf_openflow_v4_bucket_watch_group_reserved = -1;
 static int hf_openflow_v4_bucket_pad = -1;
 static int hf_openflow_v4_groupmod_command = -1;
 static int hf_openflow_v4_groupmod_type = -1;
 static int hf_openflow_v4_groupmod_pad = -1;
 static int hf_openflow_v4_groupmod_group_id = -1;
-static int hf_openflow_v4_groupmod_group_id_reserved = -1;
 static int hf_openflow_v4_portmod_port_no = -1;
-static int hf_openflow_v4_portmod_port_no_reserved = -1;
 static int hf_openflow_v4_portmod_pad = -1;
 static int hf_openflow_v4_portmod_hw_addr = -1;
 static int hf_openflow_v4_portmod_pad2 = -1;
@@ -336,26 +321,19 @@ static int hf_openflow_v4_portmod_advertise_pause = -1;
 static int hf_openflow_v4_portmod_advertise_pause_asym = -1;
 static int hf_openflow_v4_portmod_pad3 = -1;
 static int hf_openflow_v4_tablemod_table_id = -1;
-static int hf_openflow_v4_tablemod_table_id_reserved = -1;
 static int hf_openflow_v4_tablemod_pad = -1;
 static int hf_openflow_v4_tablemod_config = -1;
 static int hf_openflow_v4_flow_stats_request_table_id = -1;
-static int hf_openflow_v4_flow_stats_request_table_id_reserved = -1;
 static int hf_openflow_v4_flow_stats_request_pad = -1;
 static int hf_openflow_v4_flow_stats_request_out_port = -1;
-static int hf_openflow_v4_flow_stats_request_out_port_reserved = -1;
 static int hf_openflow_v4_flow_stats_request_out_group = -1;
-static int hf_openflow_v4_flow_stats_request_out_group_reserved = -1;
 static int hf_openflow_v4_flow_stats_request_pad2 = -1;
 static int hf_openflow_v4_flow_stats_request_cookie = -1;
 static int hf_openflow_v4_flow_stats_request_cookie_mask = -1;
 static int hf_openflow_v4_aggregate_stats_request_table_id = -1;
-static int hf_openflow_v4_aggregate_stats_request_table_id_reserved = -1;
 static int hf_openflow_v4_aggregate_stats_request_pad = -1;
 static int hf_openflow_v4_aggregate_stats_request_out_port = -1;
-static int hf_openflow_v4_aggregate_stats_request_out_port_reserved = -1;
 static int hf_openflow_v4_aggregate_stats_request_out_group = -1;
-static int hf_openflow_v4_aggregate_stats_request_out_group_reserved = -1;
 static int hf_openflow_v4_aggregate_stats_request_pad2 = -1;
 static int hf_openflow_v4_aggregate_stats_request_cookie = -1;
 static int hf_openflow_v4_aggregate_stats_request_cookie_mask = -1;
@@ -374,20 +352,14 @@ static int hf_openflow_v4_table_features_metadata_write = -1;
 static int hf_openflow_v4_table_features_config = -1;
 static int hf_openflow_v4_table_features_max_entries = -1;
 static int hf_openflow_v4_port_stats_request_port_no = -1;
-static int hf_openflow_v4_port_stats_request_port_no_reserved = -1;
 static int hf_openflow_v4_port_stats_request_pad = -1;
 static int hf_openflow_v4_queue_stats_request_port_no = -1;
-static int hf_openflow_v4_queue_stats_request_port_no_reserved = -1;
 static int hf_openflow_v4_queue_stats_request_queue_id = -1;
-static int hf_openflow_v4_queue_stats_request_queue_id_reserved = -1;
 static int hf_openflow_v4_group_stats_request_group_id = -1;
-static int hf_openflow_v4_group_stats_request_group_id_reserved = -1;
 static int hf_openflow_v4_group_stats_request_pad = -1;
 static int hf_openflow_v4_meter_stats_request_meter_id = -1;
-static int hf_openflow_v4_meter_stats_request_meter_id_reserved = -1;
 static int hf_openflow_v4_meter_stats_request_pad = -1;
 static int hf_openflow_v4_meter_config_request_meter_id = -1;
-static int hf_openflow_v4_meter_config_request_meter_id_reserved = -1;
 static int hf_openflow_v4_meter_config_request_pad = -1;
 static int hf_openflow_v4_multipart_request_type = -1;
 static int hf_openflow_v4_multipart_request_flags = -1;
@@ -423,13 +395,11 @@ static int hf_openflow_v4_aggregate_stats_byte_count = -1;
 static int hf_openflow_v4_aggregate_stats_flow_count = -1;
 static int hf_openflow_v4_aggregate_stats_pad = -1;
 static int hf_openflow_v4_table_stats_table_id = -1;
-static int hf_openflow_v4_table_stats_table_id_reserved = -1;
 static int hf_openflow_v4_table_stats_pad = -1;
 static int hf_openflow_v4_table_stats_active_count = -1;
 static int hf_openflow_v4_table_stats_lookup_count = -1;
 static int hf_openflow_v4_table_stats_match_count = -1;
 static int hf_openflow_v4_port_stats_port_no = -1;
-static int hf_openflow_v4_port_stats_port_no_reserved = -1;
 static int hf_openflow_v4_port_stats_pad = -1;
 static int hf_openflow_v4_port_stats_rx_packets = -1;
 static int hf_openflow_v4_port_stats_tx_packets = -1;
@@ -446,9 +416,7 @@ static int hf_openflow_v4_port_stats_collisions = -1;
 static int hf_openflow_v4_port_stats_duration_sec = -1;
 static int hf_openflow_v4_port_stats_duration_nsec = -1;
 static int hf_openflow_v4_queue_stats_port_no = -1;
-static int hf_openflow_v4_queue_stats_port_no_reserved = -1;
 static int hf_openflow_v4_queue_stats_queue_id = -1;
-static int hf_openflow_v4_queue_stats_queue_id_reserved = -1;
 static int hf_openflow_v4_queue_stats_tx_bytes = -1;
 static int hf_openflow_v4_queue_stats_tx_packets = -1;
 static int hf_openflow_v4_queue_stats_tx_errors = -1;
@@ -459,7 +427,6 @@ static int hf_openflow_v4_bucket_counter_byte_count = -1;
 static int hf_openflow_v4_group_stats_length = -1;
 static int hf_openflow_v4_group_stats_pad = -1;
 static int hf_openflow_v4_group_stats_group_id = -1;
-static int hf_openflow_v4_group_stats_group_id_reserved = -1;
 static int hf_openflow_v4_group_stats_ref_count = -1;
 static int hf_openflow_v4_group_stats_pad2 = -1;
 static int hf_openflow_v4_group_stats_packet_count = -1;
@@ -468,7 +435,6 @@ static int hf_openflow_v4_group_desc_length = -1;
 static int hf_openflow_v4_group_desc_type = -1;
 static int hf_openflow_v4_group_desc_pad = -1;
 static int hf_openflow_v4_group_desc_group_id = -1;
-static int hf_openflow_v4_group_desc_group_id_reserved = -1;
 static int hf_openflow_v4_group_features_types = -1;
 static int hf_openflow_v4_group_features_types_all = -1;
 static int hf_openflow_v4_group_features_types_select = -1;
@@ -554,7 +520,6 @@ static int hf_openflow_v4_group_features_actions_ff_pop_pbb = -1;
 static int hf_openflow_v4_meter_band_stats_packet_band_count = -1;
 static int hf_openflow_v4_meter_band_stats_byte_band_count = -1;
 static int hf_openflow_v4_meter_stats_meter_id = -1;
-static int hf_openflow_v4_meter_stats_meter_id_reserved = -1;
 static int hf_openflow_v4_meter_stats_len = -1;
 static int hf_openflow_v4_meter_stats_pad = -1;
 static int hf_openflow_v4_meter_stats_flow_count = -1;
@@ -569,7 +534,6 @@ static int hf_openflow_v4_meter_config_flags_pktps = -1;
 static int hf_openflow_v4_meter_config_flags_burst = -1;
 static int hf_openflow_v4_meter_config_flags_stats = -1;
 static int hf_openflow_v4_meter_config_meter_id = -1;
-static int hf_openflow_v4_meter_config_meter_id_reserved = -1;
 static int hf_openflow_v4_meter_features_max_meter = -1;
 static int hf_openflow_v4_meter_features_band_types = -1;
 static int hf_openflow_v4_meter_features_band_types_drop = -1;
@@ -589,27 +553,21 @@ static int hf_openflow_v4_multipart_reply_pad = -1;
 static int hf_openflow_v4_multipart_reply_experimenter_experimenter = -1;
 static int hf_openflow_v4_multipart_reply_experimenter_exp_type = -1;
 static int hf_openflow_v4_queue_get_config_request_port = -1;
-static int hf_openflow_v4_queue_get_config_request_port_reserved = -1;
 static int hf_openflow_v4_queue_get_config_request_pad = -1;
 static int hf_openflow_v4_queue_prop_property = -1;
 static int hf_openflow_v4_queue_prop_len = -1;
 static int hf_openflow_v4_queue_prop_pad = -1;
 static int hf_openflow_v4_queue_prop_min_rate_rate = -1;
-static int hf_openflow_v4_queue_prop_min_rate_rate_reserved = -1;
 static int hf_openflow_v4_queue_prop_min_rate_pad = -1;
 static int hf_openflow_v4_queue_prop_max_rate_rate = -1;
-static int hf_openflow_v4_queue_prop_max_rate_rate_reserved = -1;
 static int hf_openflow_v4_queue_prop_max_rate_pad = -1;
 static int hf_openflow_v4_queue_prop_experimenter_experimenter = -1;
 static int hf_openflow_v4_queue_prop_experimenter_pad = -1;
 static int hf_openflow_v4_packet_queue_queue_id = -1;
-static int hf_openflow_v4_packet_queue_queue_id_reserved = -1;
 static int hf_openflow_v4_packet_queue_port = -1;
-static int hf_openflow_v4_packet_queue_port_reserved = -1;
 static int hf_openflow_v4_packet_queue_len = -1;
 static int hf_openflow_v4_packet_queue_pad = -1;
 static int hf_openflow_v4_queue_get_config_reply_port = -1;
-static int hf_openflow_v4_queue_get_config_reply_port_reserved = -1;
 static int hf_openflow_v4_queue_get_config_reply_pad = -1;
 static int hf_openflow_v4_role_request_role = -1;
 static int hf_openflow_v4_role_request_pad = -1;
@@ -650,7 +608,6 @@ static int hf_openflow_v4_metermod_flags_pktps = -1;
 static int hf_openflow_v4_metermod_flags_burst = -1;
 static int hf_openflow_v4_metermod_flags_stats = -1;
 static int hf_openflow_v4_metermod_meter_id = -1;
-static int hf_openflow_v4_metermod_meter_id_reserved = -1;
 
 static gint ett_openflow_v4 = -1;
 static gint ett_openflow_v4_flowmod_flags = -1;
@@ -1048,6 +1005,10 @@ dissect_openflow_oxm_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree,
             proto_tree_add_item(oxm_tree, hf_openflow_v4_oxm_value_vlan_present, tvb, offset, 2, ENC_BIG_ENDIAN);
             proto_tree_add_item(oxm_tree, hf_openflow_v4_oxm_value_vlan_vid, tvb, offset, 2, ENC_BIG_ENDIAN);
             offset+=2;
+            if (oxm_hm) {
+                proto_tree_add_item(oxm_tree, hf_openflow_v4_oxm_mask_vlan, tvb, offset, 2, ENC_NA);
+                offset+=2;
+            }
             break;
 
         case OFPXMT_OFB_IP_PROTO:
@@ -1555,6 +1516,7 @@ static void
 dissect_openflow_error_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length)
 {
     proto_tree *data_tree;
+    proto_item *data_ti;
     guint16 error_type;
 
     /* uint16_t type; */
@@ -1632,14 +1594,30 @@ dissect_openflow_error_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tre
     case OFPET_SWITCH_CONFIG_FAILED:
     case OFPET_ROLE_REQUEST_FAILED:
     case OFPET_METER_MOD_FAILED:
-    case OFPET_TABLE_FEATURES_FAILED:
+    case OFPET_TABLE_FEATURES_FAILED: {
         /* uint8_t data[0]; contains at least the first 64 bytes of the failed request. */
-        data_tree = proto_tree_add_subtree(tree, tvb, offset, length - offset, ett_openflow_v4_error_data, NULL, "Data");
+        gboolean save_in_error_pkt;
 
-        offset = dissect_openflow_header_v4(tvb, pinfo, data_tree, offset, length);
+        data_ti = proto_tree_add_item(tree, hf_openflow_v4_error_data_body, tvb, offset, length - 20, ENC_NA);
+        data_tree = proto_item_add_subtree(data_ti, ett_openflow_v4_error_data);
 
-        proto_tree_add_item(data_tree, hf_openflow_v4_error_data_body, tvb, offset, length - 20, ENC_NA);
+        /* Save error pkt */
+        save_in_error_pkt = pinfo->flags.in_error_pkt;
+        pinfo->flags.in_error_pkt = TRUE;
+
+        /* Disable update/change of column info */
+        col_set_writable(pinfo->cinfo, -1, FALSE);
+
+        dissect_openflow_message_v4(tvb, pinfo, data_tree, offset);
+
+        /* Restore the "we're inside an error packet" flag. */
+        pinfo->flags.in_error_pkt = save_in_error_pkt;
+
+        /* Restore the capability of update/change column info */
+        col_set_writable(pinfo->cinfo, -1, TRUE);
+
         /*offset += length - 12;*/
+        }
         break;
 
     case OFPET_EXPERIMENTER:
@@ -1769,11 +1747,7 @@ dissect_openflow_switch_config_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_t
     offset+=2;
 
     /* uint16_t miss_send_len; */
-    if (tvb_get_ntohs(tvb, offset) <= OFPCML_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_switch_config_miss_send_len, tvb, offset, 2, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_switch_config_miss_send_len_reserved, tvb, offset, 2, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_switch_config_miss_send_len, tvb, offset, 2, ENC_BIG_ENDIAN);
     /*offset+=2;*/
 }
 
@@ -1797,11 +1771,7 @@ dissect_openflow_packet_in_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree 
     address save_dl_src, save_dl_dst, save_net_src, save_net_dst, save_src, save_dst;
 
     /* uint32_t buffer_id; */
-    if (tvb_get_ntohl(tvb, offset) != OFP_NO_BUFFER) {
-        proto_tree_add_item(tree, hf_openflow_v4_packet_in_buffer_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_packet_in_buffer_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_packet_in_buffer_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint16_t total_len; */
@@ -2002,19 +1972,11 @@ dissect_openflow_action_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tr
     switch (act_type) {
     case OFPAT_OUTPUT:
         /* uint32_t port; */
-        if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-            proto_tree_add_item(act_tree, hf_openflow_v4_action_output_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-        } else {
-            proto_tree_add_item(act_tree, hf_openflow_v4_action_output_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-        }
+        proto_tree_add_item(act_tree, hf_openflow_v4_action_output_port, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
 
         /* uint16_t max_len; */
-        if (tvb_get_ntohs(tvb, offset) <= OFPCML_MAX) {
-            proto_tree_add_item(act_tree, hf_openflow_v4_action_output_max_len, tvb, offset, 2, ENC_BIG_ENDIAN);
-        } else {
-            proto_tree_add_item(act_tree, hf_openflow_v4_action_output_max_len_reserved, tvb, offset, 2, ENC_BIG_ENDIAN);
-        }
+        proto_tree_add_item(act_tree, hf_openflow_v4_action_output_max_len, tvb, offset, 2, ENC_BIG_ENDIAN);
         offset+=2;
 
         /* uint8_t pad[6]; */
@@ -2095,11 +2057,7 @@ dissect_openflow_action_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tr
 
     case OFPAT_GROUP:
         /* uint32_t group_id; */
-        if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-            proto_tree_add_item(act_tree, hf_openflow_v4_action_group_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-        } else {
-            proto_tree_add_item(act_tree, hf_openflow_v4_action_group_group_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-        }
+        proto_tree_add_item(act_tree, hf_openflow_v4_action_group_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
         break;
 
@@ -2202,11 +2160,7 @@ dissect_openflow_port_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree
     port_tree = proto_tree_add_subtree(tree, tvb, offset, 64, ett_openflow_v4_port, NULL, "Port");
 
     /* uint32_t port_no; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(port_tree, hf_openflow_v4_port_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(port_tree, hf_openflow_v4_port_port_no_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(port_tree, hf_openflow_v4_port_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -2383,19 +2337,11 @@ dissect_openflow_packet_out_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
     address save_dl_src, save_dl_dst, save_net_src, save_net_dst, save_src, save_dst;
 
     /* uint32_t buffer_id; */
-    if (tvb_get_ntohl(tvb, offset) != OFP_NO_BUFFER) {
-        proto_tree_add_item(tree, hf_openflow_v4_packet_out_buffer_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_packet_out_buffer_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_packet_out_buffer_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t in_port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_packet_out_in_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_packet_out_in_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_packet_out_in_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint16_t actions_len; */
@@ -2548,11 +2494,7 @@ dissect_openflow_instruction_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
 
     case OFPIT_METER:
         /* uint32_t meter_id; */
-        if (tvb_get_ntohl(tvb, offset) <= OFPM_MAX) {
-            proto_tree_add_item(inst_tree, hf_openflow_v4_instruction_meter_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-        } else {
-            proto_tree_add_item(inst_tree, hf_openflow_v4_instruction_meter_meter_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-        }
+        proto_tree_add_item(inst_tree, hf_openflow_v4_instruction_meter_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
         break;
 
@@ -2603,11 +2545,7 @@ dissect_openflow_flowmod_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *t
     offset+=8;
 
     /* uint8_t table_id; */
-    if (tvb_get_guint8(tvb, offset) <= OFPTT_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_table_id_reserved, tvb, offset, 1, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_flowmod_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
     offset+=1;
 
     /* uint8_t command; */
@@ -2627,27 +2565,15 @@ dissect_openflow_flowmod_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *t
     offset+=2;
 
     /* uint32_t buffer_id; */
-    if (tvb_get_ntohl(tvb, offset) != OFP_NO_BUFFER) {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_buffer_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_buffer_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_flowmod_buffer_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t out_port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_out_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_out_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_flowmod_out_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t out_group; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_out_group, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_flowmod_out_group_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_flowmod_out_group, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint16_t flags; */
@@ -2699,19 +2625,11 @@ dissect_openflow_bucket_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tr
     offset+=2;
 
     /* uint32_t watch_port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(bucket_tree, hf_openflow_v4_bucket_watch_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(bucket_tree, hf_openflow_v4_bucket_watch_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(bucket_tree, hf_openflow_v4_bucket_watch_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t watch_group; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(bucket_tree, hf_openflow_v4_bucket_watch_group, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(bucket_tree, hf_openflow_v4_bucket_watch_group_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(bucket_tree, hf_openflow_v4_bucket_watch_group, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -2763,11 +2681,7 @@ dissect_openflow_groupmod_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *
     offset+=1;
 
     /* uint32_t group_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_groupmod_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_groupmod_group_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_groupmod_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* struct ofp_bucket buckets[0]; */
@@ -2784,11 +2698,7 @@ dissect_openflow_portmod_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *t
     proto_tree *conf_tree, *mask_tree, *adv_tree;
 
     /* uint32_t port_no; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_portmod_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_portmod_port_no_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_portmod_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -2855,11 +2765,7 @@ static void
 dissect_openflow_tablemod_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     /* uint8_t table_id; */
-    if (tvb_get_guint8(tvb, offset) <= OFPTT_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_tablemod_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_tablemod_table_id_reserved, tvb, offset, 1, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_tablemod_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
     offset+=1;
 
     /* uint8_t pad[3]; */
@@ -2877,11 +2783,7 @@ dissect_openflow_flow_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, pr
 {
 
     /* uint8_t table_id; */
-    if (tvb_get_guint8(tvb, offset) <= OFPTT_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_table_id_reserved, tvb, offset, 1, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
     offset+=1;
 
     /* uint8_t pad[3]; */
@@ -2889,19 +2791,11 @@ dissect_openflow_flow_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, pr
     offset+=3;
 
     /* uint32_t out_port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_out_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_out_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_out_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t out_group; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_out_group, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_out_group_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_flow_stats_request_out_group, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad2[4]; */
@@ -2924,11 +2818,7 @@ static void
 dissect_openflow_aggregate_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length)
 {
     /* uint8_t table_id; */
-    if (tvb_get_guint8(tvb, offset) <= OFPTT_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_table_id_reserved, tvb, offset, 1, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
     offset+=1;
 
     /* uint8_t pad[3]; */
@@ -2936,19 +2826,11 @@ dissect_openflow_aggregate_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U
     offset+=3;
 
     /* uint32_t out_port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_out_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_out_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_out_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t out_group; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_out_group, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_out_group_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_aggregate_stats_request_out_group, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad2[4]; */
@@ -3176,11 +3058,7 @@ static void
 dissect_openflow_port_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     /* uint32_t port_no; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_port_stats_request_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_port_stats_request_port_no_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_port_stats_request_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -3198,19 +3076,11 @@ static void
 dissect_openflow_queue_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     /* uint32_t port_no; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_stats_request_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_stats_request_port_no_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_queue_stats_request_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t queue_id; */
-    if (tvb_get_ntohl(tvb, offset) != OFPQ_ALL) {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_stats_request_queue_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_stats_request_queue_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_queue_stats_request_queue_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     /*offset+=4;*/
 }
 
@@ -3219,11 +3089,7 @@ static void
 dissect_openflow_group_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     /* uint32_t group_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_group_stats_request_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_group_stats_request_group_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_group_stats_request_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -3236,11 +3102,7 @@ static void
 dissect_openflow_meter_stats_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     /* uint32_t meter_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPM_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_meter_stats_request_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_meter_stats_request_meter_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_meter_stats_request_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -3253,11 +3115,7 @@ static void
 dissect_openflow_meter_config_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     /* uint32_t meter_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPM_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_meter_config_request_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_meter_config_request_meter_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_meter_config_request_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -3536,11 +3394,7 @@ dissect_openflow_table_stats_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
     stats_tree = proto_tree_add_subtree(tree, tvb, offset, 24, ett_openflow_v4_table_stats, NULL, "Table stats");
 
     /* uint8_t table_id; */
-    if (tvb_get_guint8(tvb, offset) <= OFPTT_MAX) {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_table_stats_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_table_stats_table_id_reserved, tvb, offset, 1, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(stats_tree, hf_openflow_v4_table_stats_table_id, tvb, offset, 1, ENC_BIG_ENDIAN);
     offset+=1;
 
     /* uint8_t pad[3]; */
@@ -3571,11 +3425,7 @@ dissect_openflow_port_stats_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
     stats_tree = proto_tree_add_subtree(tree, tvb, offset, 112, ett_openflow_v4_port_stats, NULL, "Port stats");
 
     /* uint8_t port_no; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_port_stats_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_port_stats_port_no_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(stats_tree, hf_openflow_v4_port_stats_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -3650,19 +3500,11 @@ dissect_openflow_queue_stats_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
     stats_tree = proto_tree_add_subtree(tree, tvb, offset, 40, ett_openflow_v4_queue_stats, NULL, "Queue stats");
 
     /* uint32_t port_no; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_queue_stats_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_queue_stats_port_no_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(stats_tree, hf_openflow_v4_queue_stats_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t queue_id; */
-    if (tvb_get_ntohl(tvb, offset) != OFPQ_ALL) {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_queue_stats_queue_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_queue_stats_queue_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(stats_tree, hf_openflow_v4_queue_stats_queue_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint64_t tx_bytes; */
@@ -3730,11 +3572,7 @@ dissect_openflow_group_stats_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
     offset+=2;
 
     /* uint32_t group_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_group_stats_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_group_stats_group_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(stats_tree, hf_openflow_v4_group_stats_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t ref_count; */
@@ -3796,11 +3634,7 @@ dissect_openflow_group_desc_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
     offset+=1;
 
     /* uint32_t group_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPG_MAX) {
-        proto_tree_add_item(desc_tree, hf_openflow_v4_group_desc_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(desc_tree, hf_openflow_v4_group_desc_group_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(desc_tree, hf_openflow_v4_group_desc_group_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* struct ofp_bucket buckets[0]; */
@@ -3969,11 +3803,7 @@ dissect_openflow_meter_stats_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
     stats_tree = proto_tree_add_subtree(tree, tvb, offset, -1, ett_openflow_v4_meter_stats, &ti, "Meter stats");
 
     /* uint32_t meter_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPM_MAX) {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_meter_stats_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(stats_tree, hf_openflow_v4_meter_stats_meter_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(stats_tree, hf_openflow_v4_meter_stats_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint16_t len; */
@@ -4044,11 +3874,7 @@ dissect_openflow_meter_config_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
     offset+=2;
 
     /* uint32_t meter_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPM_MAX) {
-        proto_tree_add_item(conf_tree, hf_openflow_v4_meter_config_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(conf_tree, hf_openflow_v4_meter_config_meter_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(conf_tree, hf_openflow_v4_meter_config_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* struct ofp_meter_band_header bands[0]; */
@@ -4224,11 +4050,7 @@ static void
 dissect_openflow_queue_get_config_request_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     /* uint32_t port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_get_config_request_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_get_config_request_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_queue_get_config_request_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -4288,11 +4110,8 @@ dissect_openflow_queue_prop_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
     switch (prop_type) {
     case OFPQT_MIN_RATE:
         /* uint16_t rate; */
-        if (tvb_get_ntohs(tvb, offset) <= OFPQ_MIN_RATE_MAX) {
-            proto_tree_add_item(prop_tree, hf_openflow_v4_queue_prop_min_rate_rate, tvb, offset, 2, ENC_BIG_ENDIAN);
-        } else {
-            proto_tree_add_item(prop_tree, hf_openflow_v4_queue_prop_min_rate_rate_reserved, tvb, offset, 2, ENC_BIG_ENDIAN);
-        }
+        proto_tree_add_item(prop_tree, hf_openflow_v4_queue_prop_min_rate_rate, tvb, offset, 2, ENC_BIG_ENDIAN);
+
         offset+=2;
 
         /* uint8_t pad[6]; */
@@ -4302,11 +4121,7 @@ dissect_openflow_queue_prop_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
 
     case OFPQT_MAX_RATE:
         /* uint16_t rate; */
-        if (tvb_get_ntohs(tvb, offset) <= OFPQ_MAX_RATE_MAX) {
-            proto_tree_add_item(prop_tree, hf_openflow_v4_queue_prop_max_rate_rate, tvb, offset, 2, ENC_BIG_ENDIAN);
-        } else {
-            proto_tree_add_item(prop_tree, hf_openflow_v4_queue_prop_max_rate_rate_reserved, tvb, offset, 2, ENC_BIG_ENDIAN);
-        }
+        proto_tree_add_item(prop_tree, hf_openflow_v4_queue_prop_max_rate_rate, tvb, offset, 2, ENC_BIG_ENDIAN);
         offset+=2;
 
         /* uint8_t pad[6]; */
@@ -4359,19 +4174,11 @@ dissect_openflow_packet_queue_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
     queue_tree = proto_tree_add_subtree(tree, tvb, offset, -1, ett_openflow_v4_packet_queue, &ti, "Queue");
 
     /* uint32_t queue_id; */
-    if (tvb_get_ntohl(tvb, offset) != OFPQ_ALL) {
-        proto_tree_add_item(queue_tree, hf_openflow_v4_packet_queue_queue_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(queue_tree, hf_openflow_v4_packet_queue_queue_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(queue_tree, hf_openflow_v4_packet_queue_queue_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint32_t port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(queue_tree, hf_openflow_v4_packet_queue_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(queue_tree, hf_openflow_v4_packet_queue_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(queue_tree, hf_openflow_v4_packet_queue_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint16_t len; */
@@ -4397,11 +4204,7 @@ static void
 dissect_openflow_queue_get_config_reply_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length)
 {
     /* uint32_t port; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPP_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_get_config_reply_port, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_queue_get_config_reply_port_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_queue_get_config_reply_port, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint8_t pad[4]; */
@@ -4547,11 +4350,7 @@ dissect_openflow_metermod_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *
     offset+=2;
 
     /* uint32_t meter_id; */
-    if (tvb_get_ntohl(tvb, offset) <= OFPM_MAX) {
-        proto_tree_add_item(tree, hf_openflow_v4_metermod_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
-    } else {
-        proto_tree_add_item(tree, hf_openflow_v4_metermod_meter_id_reserved, tvb, offset, 4, ENC_BIG_ENDIAN);
-    }
+    proto_tree_add_item(tree, hf_openflow_v4_metermod_meter_id, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* struct ofp_meter_band_header bands[0]; */
@@ -4561,25 +4360,17 @@ dissect_openflow_metermod_v4(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *
 }
 
 
-
 static int
-dissect_openflow_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
+dissect_openflow_message_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *openflow_tree, int offset)
 {
-    proto_item *ti;
-    proto_tree *openflow_tree;
-    guint offset = 0;
+
     guint8 type;
     guint16 length;
+    gint32 msg_end;
 
-    type   = tvb_get_guint8(tvb, 1);
-    length = tvb_get_ntohs(tvb, 2);
-
-    col_append_fstr(pinfo->cinfo, COL_INFO, "Type: %s",
-                  val_to_str_ext_const(type, &openflow_v4_type_values_ext, "Unknown message type"));
-
-    /* Create display subtree for the protocol */
-    ti = proto_tree_add_item(tree, proto_openflow_v4, tvb, 0, -1, ENC_NA);
-    openflow_tree = proto_item_add_subtree(ti, ett_openflow_v4);
+    type = tvb_get_guint8(tvb, offset + 1);
+    length = tvb_get_ntohs(tvb, offset + 2);
+    msg_end = offset + length;
 
     offset = dissect_openflow_header_v4(tvb, pinfo, openflow_tree, offset, length);
 
@@ -4587,7 +4378,6 @@ dissect_openflow_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *d
     case OFPT_HELLO:
         dissect_openflow_hello_v4(tvb, pinfo, openflow_tree, offset, length);
         break;
-
     case OFPT_ERROR:
         dissect_openflow_error_v4(tvb, pinfo, openflow_tree, offset, length);
         break;
@@ -4675,6 +4465,28 @@ dissect_openflow_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *d
         }
         break;
     }
+
+    return msg_end;
+}
+
+static int
+dissect_openflow_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
+{
+    proto_item *ti;
+    proto_tree *openflow_tree;
+    guint offset = 0;
+    guint8 type;
+
+    type   = tvb_get_guint8(tvb, 1);
+
+    col_append_fstr(pinfo->cinfo, COL_INFO, "Type: %s",
+                  val_to_str_ext_const(type, &openflow_v4_type_values_ext, "Unknown message type"));
+
+    /* Create display subtree for the protocol */
+    ti = proto_tree_add_item(tree, proto_openflow_v4, tvb, 0, -1, ENC_NA);
+    openflow_tree = proto_item_add_subtree(ti, ett_openflow_v4);
+
+    dissect_openflow_message_v4(tvb, pinfo, openflow_tree, offset);
 
     return tvb_reported_length(tvb);
 }
@@ -4817,6 +4629,11 @@ proto_register_openflow_v4(void)
                FT_IPv6, BASE_NONE, NULL, 0x0,
                NULL, HFILL }
         },
+        { &hf_openflow_v4_oxm_mask_vlan,
+            { "Mask", "openflow_v4.oxm.vlan_mask",
+               FT_UINT16, BASE_HEX, NULL, 0x0,
+               NULL, HFILL }
+        },
         { &hf_openflow_v4_match_type,
             { "Type", "openflow_v4.match.type",
                FT_UINT16, BASE_DEC, VALS(openflow_v4_match_type_values), 0x0,
@@ -4849,22 +4666,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_action_output_port,
             { "Port", "openflow_v4.action.output.port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_action_output_port_reserved,
-            { "Port", "openflow_v4.action.output.port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_action_output_max_len,
             { "Max length", "openflow_v4.action.output.max_len",
-               FT_UINT16, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_action_output_max_len_reserved,
-            { "Max length", "openflow_v4.action.output.max_len",
-               FT_UINT16, BASE_HEX, VALS(openflow_v4_controller_max_len_reserved_values), 0x0,
+               FT_UINT16, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_controller_max_len_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_action_output_pad,
@@ -4939,12 +4746,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_action_group_group_id,
             { "Group ID", "openflow_v4.action.group.group_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_action_group_group_id_reserved,
-            { "Group ID", "openflow_v4.action.group.group_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_action_set_nw_ttl_ttl,
@@ -5029,22 +4831,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_instruction_meter_meter_id,
             { "Meter ID", "openflow_v4.instruction.meter.meter_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_instruction_meter_meter_id_reserved,
-            { "Meter ID", "openflow_v4.instruction.meter.meter_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_meter_id_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_meter_id_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_port_port_no,
             { "Port no", "openflow_v4.port.port_no",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_port_port_no_reserved,
-            { "Port no", "openflow_v4.port.port_no",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_port_pad,
@@ -5714,24 +5506,14 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_switch_config_miss_send_len,
             { "Miss send length", "openflow_v4.switch_config.miss_send_len",
-               FT_UINT16, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_switch_config_miss_send_len_reserved,
-            { "Miss send length", "openflow_v4.switch_config.miss_send_len",
-               FT_UINT16, BASE_HEX, VALS(openflow_v4_controller_max_len_reserved_values), 0x0,
+               FT_UINT16, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_controller_max_len_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_packet_in_buffer_id,
             { "Buffer ID", "openflow_v4.packet_in.buffer_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_buffer_reserved_values), 0x0,
                NULL, HFILL }
             },
-        { &hf_openflow_v4_packet_in_buffer_id_reserved,
-            { "Buffer ID", "openflow_v4.packet_in.buffer_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_buffer_reserved_values), 0x0,
-               NULL, HFILL }
-        },
         { &hf_openflow_v4_packet_in_total_len,
             { "Total length", "openflow_v4.packet_in.total_len",
                FT_UINT16, BASE_DEC, NULL, 0x0,
@@ -5819,22 +5601,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_packet_out_buffer_id,
             { "Buffer ID", "openflow_v4.packet_out.buffer_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_buffer_reserved_values), 0x0,
                NULL, HFILL }
             },
-        { &hf_openflow_v4_packet_out_buffer_id_reserved,
-            { "Buffer ID", "openflow_v4.packet_out.buffer_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_buffer_reserved_values), 0x0,
-               NULL, HFILL }
-        },
         { &hf_openflow_v4_packet_out_in_port,
             { "In port", "openflow_v4.packet_out.in_port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_packet_out_in_port_reserved,
-            { "In port", "openflow_v4.packet_out.in_port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_packet_out_acts_len,
@@ -5859,12 +5631,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_flowmod_table_id,
             { "Table ID", "openflow_v4.flowmod.table_id",
-               FT_UINT8, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_flowmod_table_id_reserved,
-            { "Table ID", "openflow_v4.flowmod.table_id",
-               FT_UINT8, BASE_DEC, VALS(openflow_v4_table_reserved_values), 0x0,
+               FT_UINT8, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_table_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_flowmod_command,
@@ -5889,32 +5656,17 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_flowmod_buffer_id,
             { "Buffer ID", "openflow_v4.flowmod.buffer_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_flowmod_buffer_id_reserved,
-            { "Buffer ID", "openflow_v4.flowmod.buffer_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_buffer_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_buffer_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_flowmod_out_port,
             { "Out port", "openflow_v4.flowmod.out_port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_flowmod_out_port_reserved,
-            { "Out port", "openflow_v4.flowmod.out_port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_flowmod_out_group,
             { "Out group", "openflow_v4.flowmod.out_group",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_flowmod_out_group_reserved,
-            { "Out group", "openflow_v4.flowmod.out_group",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_flowmod_flags,
@@ -5964,22 +5716,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_bucket_watch_port,
             { "Watch port", "openflow_v4.bucket.watch_port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_bucket_watch_port_reserved,
-            { "Watch port", "openflow_v4.bucket.watch_port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_bucket_watch_group,
             { "Watch group", "openflow_v4.bucket.watch_group",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_bucket_watch_group_reserved,
-            { "Watch group", "openflow_v4.bucket.watch_group",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_bucket_pad,
@@ -6004,22 +5746,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_groupmod_group_id,
             { "Group ID", "openflow_v4.groupmod.group_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_groupmod_group_id_reserved,
-            { "Group ID", "openflow_v4.groupmod.group_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_portmod_port_no,
             { "Port no", "openflow_v4.portmod.port_no",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_portmod_port_no_reserved,
-            { "Port no", "openflow_v4.portmod.port_no",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_portmod_pad,
@@ -6179,12 +5911,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_tablemod_table_id,
             { "Table ID", "openflow_v4.tablemod.table_id",
-               FT_UINT8, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_tablemod_table_id_reserved,
-            { "Table ID", "openflow_v4.tablemod.table_id",
-               FT_UINT8, BASE_DEC, VALS(openflow_v4_table_reserved_values), 0x0,
+               FT_UINT8, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_table_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_tablemod_pad,
@@ -6199,12 +5926,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_flow_stats_request_table_id,
             { "Table ID", "openflow_v4.flow_stats_request.table_id",
-               FT_UINT8, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_flow_stats_request_table_id_reserved,
-            { "Table ID", "openflow_v4.flow_stats_request.table_id",
-               FT_UINT8, BASE_DEC, VALS(openflow_v4_table_reserved_values), 0x0,
+               FT_UINT8, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_table_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_flow_stats_request_pad,
@@ -6214,22 +5936,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_flow_stats_request_out_port,
             { "Out port", "openflow_v4.flow_stats_request.out_port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_flow_stats_request_out_port_reserved,
-            { "Out port", "openflow_v4.flow_stats_request.out_port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_flow_stats_request_out_group,
             { "Out group", "openflow_v4.flow_stats_request.out_group",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_flow_stats_request_out_group_reserved,
-            { "Out group", "openflow_v4.flow_stats_request.out_group",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_flow_stats_request_pad2,
@@ -6249,12 +5961,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_aggregate_stats_request_table_id,
             { "Table ID", "openflow_v4.aggregate_stats_request.table_id",
-               FT_UINT8, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_aggregate_stats_request_table_id_reserved,
-            { "Table ID", "openflow_v4.aggregate_stats_request.table_id",
-               FT_UINT8, BASE_DEC, VALS(openflow_v4_table_reserved_values), 0x0,
+               FT_UINT8, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_table_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_aggregate_stats_request_pad,
@@ -6264,22 +5971,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_aggregate_stats_request_out_port,
             { "Out port", "openflow_v4.aggregate_stats_request.out_port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_aggregate_stats_request_out_port_reserved,
-            { "Out port", "openflow_v4.aggregate_stats_request.out_port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_aggregate_stats_request_out_group,
             { "Out group", "openflow_v4.aggregate_stats_request.out_group",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_aggregate_stats_request_out_group_reserved,
-            { "Out group", "openflow_v4.aggregate_stats_request.out_group",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_aggregate_stats_request_pad2,
@@ -6369,12 +6066,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_port_stats_request_port_no,
             { "Port number", "openflow_v4.port_stats_request.port_no",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_port_stats_request_port_no_reserved,
-            { "Port number", "openflow_v4.port_stats_request.port_no",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_port_stats_request_pad,
@@ -6384,32 +6076,17 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_queue_stats_request_port_no,
             { "Port number", "openflow_v4.queue_stats_request.port_no",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_stats_request_port_no_reserved,
-            { "Port number", "openflow_v4.queue_stats_request.port_no",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_queue_stats_request_queue_id,
             { "Queue ID", "openflow_v4.queue_stats_request.queue_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_stats_request_queue_id_reserved,
-            { "Queue ID", "openflow_v4.queue_stats_request.queue_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_queue_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_queue_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_group_stats_request_group_id,
             { "Group ID", "openflow_v4.group_stats_request.group_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_group_stats_request_group_id_reserved,
-            { "Group ID", "openflow_v4.group_stats_request.group_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_group_stats_request_pad,
@@ -6419,12 +6096,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_meter_stats_request_meter_id,
             { "Meter ID", "openflow_v4.meter_stats_request.meter_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_meter_stats_request_meter_id_reserved,
-            { "Meter ID", "openflow_v4.meter_stats_request.meter_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_meter_id_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_meter_id_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_meter_stats_request_pad,
@@ -6434,16 +6106,11 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_meter_config_request_meter_id,
             { "Meter ID", "openflow_v4.meter_config_request.meter_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_meter_config_request_meter_id_reserved,
-            { "Meter ID", "openflow_v4.meter_config_request.meter_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_meter_id_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_meter_id_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_meter_config_request_pad,
-            { "Pad", "openflow_v4.aggregate_config_request.pad",
+            { "Pad", "openflow_v4.meter_config_request.pad",
                FT_BYTES, BASE_NONE, NULL, 0x0,
                NULL, HFILL }
         },
@@ -6614,12 +6281,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_table_stats_table_id,
             { "Table ID", "openflow_v4.table_stats.table_id",
-               FT_UINT8, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_table_stats_table_id_reserved,
-            { "Table ID", "openflow_v4.table_stats.table_id",
-               FT_UINT8, BASE_DEC, VALS(openflow_v4_table_reserved_values), 0x0,
+               FT_UINT8, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_table_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_table_stats_pad,
@@ -6644,12 +6306,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_port_stats_port_no,
             { "Port number", "openflow_v4.port_stats.port_no",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_port_stats_port_no_reserved,
-            { "Port number", "openflow_v4.port_stats.port_no",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_port_stats_pad,
@@ -6729,22 +6386,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_queue_stats_port_no,
             { "Port number", "openflow_v4.queue_stats.port_no",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_stats_port_no_reserved,
-            { "Port number", "openflow_v4.queue_stats.port_no",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_queue_stats_queue_id,
             { "Queue ID", "openflow_v4.queue_stats.queue_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_stats_queue_id_reserved,
-            { "Queue ID", "openflow_v4.queue_stats.queue_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_queue_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_queue_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_queue_stats_tx_bytes,
@@ -6794,12 +6441,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_group_stats_group_id,
             { "Group ID", "openflow_v4.group_stats.group_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_group_stats_group_id_reserved,
-            { "Group ID", "openflow_v4.group_stats.group_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_group_stats_ref_count,
@@ -6839,12 +6481,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_group_desc_group_id,
             { "Group ID", "openflow_v4.group_desc.group_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_group_desc_group_id_reserved,
-            { "Group ID", "openflow_v4.group_desc.group_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_group_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_group_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_group_features_types,
@@ -7269,12 +6906,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_meter_stats_meter_id,
             { "Meter ID", "openflow_v4.meter_stats.meter_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_meter_stats_meter_id_reserved,
-            { "Meter ID", "openflow_v4.meter_stats.meter_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_meter_id_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_meter_id_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_meter_stats_len,
@@ -7313,7 +6945,7 @@ proto_register_openflow_v4(void)
                NULL, HFILL }
         },
         { &hf_openflow_v4_meter_config_len,
-            { "Length", "openflow_v4.meter_stats.len",
+            { "Length", "openflow_v4.meter_config.len",
                FT_UINT16, BASE_DEC, NULL, 0x0,
                NULL, HFILL }
         },
@@ -7344,12 +6976,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_meter_config_meter_id,
             { "Meter ID", "openflow_v4.meter_config.meter_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_meter_config_meter_id_reserved,
-            { "Meter ID", "openflow_v4.meter_config.meter_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_meter_id_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_meter_id_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_meter_features_max_meter,
@@ -7444,12 +7071,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_queue_get_config_request_port,
             { "Port", "openflow_v4.queue_get_config_request.port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_get_config_request_port_reserved,
-            { "Port", "openflow_v4.queue_get_config_request.port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_queue_get_config_request_pad,
@@ -7474,12 +7096,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_queue_prop_min_rate_rate,
             { "Rate", "openflow_v4.queue_prop.min_rate.rate",
-               FT_UINT16, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_prop_min_rate_rate_reserved,
-            { "Rate", "openflow_v4.queue_prop.min_rate.rate",
-               FT_UINT16, BASE_HEX, VALS(openflow_v4_queue_prop_min_rate_reserved_values), 0x0,
+               FT_UINT16, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_queue_prop_min_rate_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_queue_prop_min_rate_pad,
@@ -7489,12 +7106,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_queue_prop_max_rate_rate,
             { "Rate", "openflow_v4.queue_prop.max_rate.rate",
-               FT_UINT16, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_prop_max_rate_rate_reserved,
-            { "Rate", "openflow_v4.queue_prop.max_rate.rate",
-               FT_UINT16, BASE_HEX, VALS(openflow_v4_queue_prop_max_rate_reserved_values), 0x0,
+               FT_UINT16, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_queue_prop_max_rate_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_queue_prop_max_rate_pad,
@@ -7514,22 +7126,12 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_packet_queue_queue_id,
             { "Queue ID", "openflow_v4.packet_queue.queue_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_packet_queue_queue_id_reserved,
-            { "Queue ID", "openflow_v4.packet_queue.queue_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_queue_id_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_queue_id_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_packet_queue_port,
             { "Port", "openflow_v4.packet_queue.port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_packet_queue_port_reserved,
-            { "Port", "openflow_v4.packet_queue.port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_packet_queue_len,
@@ -7544,12 +7146,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_queue_get_config_reply_port,
             { "Port", "openflow_v4.queue_get_config_reply.port",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_queue_get_config_reply_port_reserved,
-            { "Port", "openflow_v4.queue_get_config_reply.port",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_port_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_port_reserved_values), 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v4_queue_get_config_reply_pad,
@@ -7749,12 +7346,7 @@ proto_register_openflow_v4(void)
         },
         { &hf_openflow_v4_metermod_meter_id,
             { "Meter ID", "openflow_v4.metermod.meter_id",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v4_metermod_meter_id_reserved,
-            { "Meter ID", "openflow_v4.metermod.meter_id",
-               FT_UINT32, BASE_HEX, VALS(openflow_v4_meter_id_reserved_values), 0x0,
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v4_meter_id_reserved_values), 0x0,
                NULL, HFILL }
         }
     };

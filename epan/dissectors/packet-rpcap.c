@@ -382,11 +382,11 @@ dissect_rpcap_error (tvbuff_t *tvb, packet_info *pinfo,
     return;
 
   col_append_fstr (pinfo->cinfo, COL_INFO, ": %s",
-                   tvb_format_text_wsp (tvb, offset, len));
+                   tvb_format_text_wsp (wmem_packet_scope(), tvb, offset, len));
 
   ti = proto_tree_add_item (parent_tree, hf_error, tvb, offset, len, ENC_ASCII|ENC_NA);
   expert_add_info_format(pinfo, ti, &ei_error,
-                         "Error: %s", tvb_format_text_wsp (tvb, offset, len));
+                         "Error: %s", tvb_format_text_wsp (wmem_packet_scope(), tvb, offset, len));
 }
 
 
@@ -874,7 +874,7 @@ dissect_rpcap_packet (tvbuff_t *tvb, packet_info *pinfo, proto_tree *top_tree,
     return;
   }
 
-  new_tvb = tvb_new_subset (tvb, offset, caplen, len);
+  new_tvb = tvb_new_subset_length_caplen (tvb, offset, caplen, len);
   if (decode_content && linktype != -1) {
     TRY {
       call_dissector_with_data(pcap_pktdata_handle, new_tvb, pinfo, top_tree, &linktype);
@@ -927,7 +927,7 @@ dissect_rpcap (tvbuff_t *tvb, packet_info *pinfo, proto_tree *top_tree, void* da
   proto_tree_add_item (tree, hf_type, tvb, offset, 1, ENC_BIG_ENDIAN);
   offset++;
 
-  col_append_fstr (pinfo->cinfo, COL_INFO, "%s",
+  col_append_str (pinfo->cinfo, COL_INFO,
                      val_to_str (msg_type, message_type, "Unknown: %d"));
 
   proto_item_append_text (ti, ", %s", val_to_str (msg_type, message_type, "Unknown: %d"));

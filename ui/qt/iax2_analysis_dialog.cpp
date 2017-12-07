@@ -333,7 +333,7 @@ Iax2AnalysisDialog::Iax2AnalysisDialog(QWidget &parent, CaptureFile &cf) :
     epan_dissect_t edt;
 
     epan_dissect_init(&edt, cap_file_.capFile()->epan, TRUE, FALSE);
-    epan_dissect_prime_dfilter(&edt, sfcode);
+    epan_dissect_prime_with_dfilter(&edt, sfcode);
     epan_dissect_run(&edt, cap_file_.capFile()->cd_t, &cap_file_.capFile()->phdr,
                      frame_tvbuff_new_buffer(fdata, &cap_file_.capFile()->buf), fdata, NULL);
 
@@ -974,7 +974,7 @@ void Iax2AnalysisDialog::saveAudio(Iax2AnalysisDialog::StreamDirection direction
                 if (stop_flag) {
                     break;
                 }
-                ui->progressFrame->setValue(fwd_tempfile_->pos() * 100 / fwd_tempfile_->size());
+                ui->progressFrame->setValue(int(fwd_tempfile_->pos() * 100 / fwd_tempfile_->size()));
 
                 if (fwd_statinfo_.pt == PT_PCMU) {
                     sample = ulaw2linear((unsigned char)f_rawvalue);
@@ -1001,7 +1001,7 @@ void Iax2AnalysisDialog::saveAudio(Iax2AnalysisDialog::StreamDirection direction
                 if (stop_flag) {
                     break;
                 }
-                ui->progressFrame->setValue(rev_tempfile_->pos() * 100 / rev_tempfile_->size());
+                ui->progressFrame->setValue(int(rev_tempfile_->pos() * 100 / rev_tempfile_->size()));
 
                 if (rev_statinfo_.pt == PT_PCMU) {
                     sample = ulaw2linear((unsigned char)r_rawvalue);
@@ -1041,8 +1041,8 @@ void Iax2AnalysisDialog::saveAudio(Iax2AnalysisDialog::StreamDirection direction
                 if (stop_flag) {
                     break;
                 }
-                int fwd_pct = fwd_tempfile_->pos() * 100 / fwd_tempfile_->size();
-                int rev_pct = rev_tempfile_->pos() * 100 / rev_tempfile_->size();
+                int fwd_pct = int(fwd_tempfile_->pos() * 100 / fwd_tempfile_->size());
+                int rev_pct = int(rev_tempfile_->pos() * 100 / rev_tempfile_->size());
                 ui->progressFrame->setValue(qMin(fwd_pct, rev_pct));
 
                 if (f_write_silence > 0) {
@@ -1108,13 +1108,13 @@ void Iax2AnalysisDialog::saveAudio(Iax2AnalysisDialog::StreamDirection direction
         switch (direction) {
         /* Only forward direction */
         case dir_forward_: {
-            progress_pct = fwd_tempfile_->pos() * 100 / fwd_tempfile_->size();
+            progress_pct = int(fwd_tempfile_->pos() * 100 / fwd_tempfile_->size());
             tempfile = fwd_tempfile_;
             break;
         }
             /* only reversed direction */
         case dir_reverse_: {
-            progress_pct = rev_tempfile_->pos() * 100 / rev_tempfile_->size();
+            progress_pct = int(rev_tempfile_->pos() * 100 / rev_tempfile_->size());
             tempfile = rev_tempfile_;
             break;
         }
@@ -1198,8 +1198,8 @@ void Iax2AnalysisDialog::saveCsv(Iax2AnalysisDialog::StreamDirection direction)
     if (direction == dir_reverse_ || direction == dir_both_) {
         save_file.write("Reverse\n");
 
-        for (int row = 0; row < ui->forwardTreeWidget->topLevelItemCount(); row++) {
-            QTreeWidgetItem *ti = ui->forwardTreeWidget->topLevelItem(row);
+        for (int row = 0; row < ui->reverseTreeWidget->topLevelItemCount(); row++) {
+            QTreeWidgetItem *ti = ui->reverseTreeWidget->topLevelItem(row);
             if (ti->type() != iax2_analysis_type_) continue;
             Iax2AnalysisTreeWidgetItem *ra_ti = dynamic_cast<Iax2AnalysisTreeWidgetItem *>((Iax2AnalysisTreeWidgetItem *)ti);
             QStringList values;

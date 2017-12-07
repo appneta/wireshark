@@ -33,9 +33,10 @@ extcap_PROGRAMS = \
 	@androiddump_bin@	\
 	@randpktdump_bin@	\
 	@sshdump_bin@		\
-	@ciscodump_bin@
+	@ciscodump_bin@		\
+	@udpdump_bin@
 
-EXTRA_PROGRAMS = androiddump randpktdump sshdump ciscodump
+EXTRA_PROGRAMS = androiddump randpktdump sshdump ciscodump udpdump
 
 androiddump_SOURCES = \
 	androiddump.c	\
@@ -49,6 +50,7 @@ endif
 
 # Libraries and plugin flags with which to link androiddump.
 androiddump_LDADD = \
+	../ui/libui.a			\
 	../wiretap/libwiretap.la	\
 	../wsutil/libwsutil.la		\
 	@GLIB_LIBS@
@@ -66,6 +68,7 @@ endif
 # Libraries and plugin flags with which to link randpktdump.
 randpktdump_LDADD = \
 	../randpkt_core/librandpkt_core.a	\
+	../ui/libui.a			\
 	../wiretap/libwiretap.la	\
 	../wsutil/libwsutil.la		\
 	@GLIB_LIBS@
@@ -105,6 +108,22 @@ ciscodump_LDADD = \
 	../wsutil/libwsutil.la		\
 	@GLIB_LIBS@			\
 	@LIBSSH_LIBS@
+
+udpdump_SOURCES = \
+	udpdump.c \
+	extcap-base.c
+
+if ENABLE_STATIC
+	udpdump_LDFLAGS = -Wl,-static -all-static
+else
+	udpdump_LDFLAGS = -export-dynamic
+endif
+
+# Libraries and plugin flags with which to link udpdump.
+udpdump_LDADD = \
+	../writecap/libwritecap.a	\
+	../wsutil/libwsutil.la		\
+	@GLIB_LIBS@
 
 noinst_HEADERS = \
 	extcap-base.h	\

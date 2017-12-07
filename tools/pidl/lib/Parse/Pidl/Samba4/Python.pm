@@ -224,7 +224,7 @@ sub PythonStruct($$$$$$)
 			if ($l->{TYPE} eq "POINTER" and
 				not ($nl->{TYPE} eq "ARRAY" and ($nl->{IS_FIXED} or is_charset_array($e, $nl))) and
 				not ($nl->{TYPE} eq "DATA" and Parse::Pidl::Typelist::scalar_is_reference($nl->{DATA_TYPE}))) {
-				$self->pidl("talloc_unlink(pytalloc_get_mem_ctx(py_obj), discard_const($varname));");
+				$self->pidl("talloc_unlink($mem_ctx, discard_const($varname));");
 			}
 			$self->ConvertObjectFromPython($env, $mem_ctx, $e, "value", $varname, "return -1;");
 			$self->pidl("return 0;");
@@ -269,17 +269,28 @@ sub PythonStruct($$$$$$)
 		$self->pidl("{");
 		$self->indent;
 		$self->pidl("$cname *object = ($cname *)pytalloc_get_ptr(py_obj);");
+		$self->pidl("PyObject *ret = NULL;");
 		$self->pidl("DATA_BLOB blob;");
 		$self->pidl("enum ndr_err_code err;");
-		$self->pidl("err = ndr_push_struct_blob(&blob, pytalloc_get_mem_ctx(py_obj), object, (ndr_push_flags_fn_t)ndr_push_$name);");
+		$self->pidl("TALLOC_CTX *tmp_ctx = talloc_new(pytalloc_get_mem_ctx(py_obj));");
+		$self->pidl("if (tmp_ctx == NULL) {");
+		$self->indent;
+		$self->pidl("PyErr_SetNdrError(NDR_ERR_ALLOC);");
+		$self->pidl("return NULL;");
+		$self->deindent;
+		$self->pidl("}");
+		$self->pidl("err = ndr_push_struct_blob(&blob, tmp_ctx, object, (ndr_push_flags_fn_t)ndr_push_$name);");
 		$self->pidl("if (err != NDR_ERR_SUCCESS) {");
 		$self->indent;
+		$self->pidl("TALLOC_FREE(tmp_ctx);");
 		$self->pidl("PyErr_SetNdrError(err);");
 		$self->pidl("return NULL;");
 		$self->deindent;
 		$self->pidl("}");
 		$self->pidl("");
-		$self->pidl("return PyString_FromStringAndSize((char *)blob.data, blob.length);");
+		$self->pidl("ret = PyString_FromStringAndSize((char *)blob.data, blob.length);");
+		$self->pidl("TALLOC_FREE(tmp_ctx);");
+		$self->pidl("return ret;");
 		$self->deindent;
 		$self->pidl("}");
 		$self->pidl("");
@@ -376,15 +387,16 @@ sub PythonStruct($$$$$$)
 	}
 	$self->pidl(".tp_methods = $py_methods,");
 	$self->pidl(".tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,");
-	$self->pidl(".tp_basicsize = sizeof(pytalloc_Object),");
 	$self->pidl(".tp_new = py_$name\_new,");
 	$self->deindent;
 	$self->pidl("};");
 
 	$self->pidl("");
 
-	my $talloc_typename = $self->import_type_variable("talloc", "Object");
-	$self->register_module_prereadycode(["$name\_Type.tp_base = $talloc_typename;", ""]);
+	my $talloc_typename = $self->import_type_variable("talloc", "BaseObject");
+	$self->register_module_prereadycode(["$name\_Type.tp_base = $talloc_typename;",
+					     "$name\_Type.tp_basicsize = pytalloc_BaseObject_size();",
+					     ""]);
 
 	return "&$typeobject";
 }
@@ -810,7 +822,6 @@ sub Interface($$$)
 		$self->indent;
 		$self->pidl("PyObject_HEAD_INIT(NULL) 0,");
 		$self->pidl(".tp_name = \"$basename.$interface->{NAME}\",");
-		$self->pidl(".tp_basicsize = sizeof(pytalloc_Object),");
 		$self->pidl(".tp_doc = $docstring,");
 		$self->pidl(".tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,");
 		$self->pidl(".tp_new = syntax_$interface->{NAME}_new,");
@@ -821,7 +832,9 @@ sub Interface($$$)
 
 		$self->register_module_typeobject("abstract_syntax", "&$syntax_typename");
 		my $ndr_typename = $self->import_type_variable("samba.dcerpc.misc", "ndr_syntax_id");
-		$self->register_module_prereadycode(["$syntax_typename.tp_base = $ndr_typename;", ""]);
+		$self->register_module_prereadycode(["$syntax_typename.tp_base = $ndr_typename;",
+						     "$syntax_typename.tp_basicsize = pytalloc_BaseObject_size();",
+						     ""]);
 	}
 
 	$self->pidl_hdr("\n");
@@ -945,6 +958,55 @@ sub assign($$$)
 	} else {
 		$self->pidl("$dest = $src;");
 	}
+}
+
+sub ConvertStringFromPythonData($$$$$)
+{
+	my ($self, $mem_ctx, $py_var, $target, $fail) = @_;
+
+	$self->pidl("{");
+	$self->indent;
+	$self->pidl("const char *test_str;");
+	$self->pidl("const char *talloc_str;");
+	$self->pidl("PyObject *unicode = NULL;");
+	$self->pidl("if (PyUnicode_Check($py_var)) {");
+	$self->indent;
+	# FIXME: Use Unix charset setting rather than utf-8
+	$self->pidl("unicode = PyUnicode_AsEncodedString($py_var, \"utf-8\", \"ignore\");");
+	$self->pidl("if (unicode == NULL) {");
+	$self->indent;
+	$self->pidl("PyErr_NoMemory();");
+	$self->pidl("$fail");
+	$self->deindent;
+	$self->pidl("}");
+
+	$self->pidl("test_str = PyString_AS_STRING(unicode);");
+	$self->deindent;
+	$self->pidl("} else if (PyString_Check($py_var)) {");
+	$self->indent;
+	$self->pidl("test_str = PyString_AS_STRING($py_var);");
+	$self->deindent;
+	$self->pidl("} else {");
+	$self->indent;
+	$self->pidl("PyErr_Format(PyExc_TypeError, \"Expected string or unicode object, got %s\", Py_TYPE($py_var)->tp_name);");
+	$self->pidl("$fail");
+	$self->deindent;
+	$self->pidl("}");
+	$self->pidl("talloc_str = talloc_strdup($mem_ctx, test_str);");
+	$self->pidl("if (unicode != NULL) {");
+	$self->indent;
+	$self->pidl("Py_DECREF(unicode);");
+	$self->deindent;
+	$self->pidl("}");
+	$self->pidl("if (talloc_str == NULL) {");
+	$self->indent;
+	$self->pidl("PyErr_NoMemory();");
+	$self->pidl("$fail");
+	$self->deindent;
+	$self->pidl("}");
+	$self->pidl("$target = talloc_str;");
+	$self->deindent;
+	$self->pidl("}");
 }
 
 sub ConvertObjectFromPythonData($$$$$$;$)
@@ -1101,33 +1163,17 @@ sub ConvertObjectFromPythonData($$$$$$;$)
 	}
 
 	if ($actual_ctype->{TYPE} eq "SCALAR" and
-		($actual_ctype->{NAME} eq "string" or $actual_ctype->{NAME} eq "nbt_string" or $actual_ctype->{NAME} eq "nbt_name" or $actual_ctype->{NAME} eq "wrepl_nbt_name")) {
-		$self->pidl("$target = talloc_strdup($mem_ctx, PyString_AS_STRING($cvar));");
-		return;
-	}
-
-	if ($actual_ctype->{TYPE} eq "SCALAR" and ($actual_ctype->{NAME} eq "dns_string" or $actual_ctype->{NAME} eq "dns_name")) {
-		$self->pidl("$target = talloc_strdup($mem_ctx, PyString_AS_STRING($cvar));");
-		return;
-	}
-
-	if ($actual_ctype->{TYPE} eq "SCALAR" and $actual_ctype->{NAME} eq "ipv4address") {
-		$self->pidl("$target = PyString_AS_STRING($cvar);");
-		return;
-	}
-
-	if ($actual_ctype->{TYPE} eq "SCALAR" and $actual_ctype->{NAME} eq "ipv6address") {
-		$self->pidl("$target = PyString_AsString($cvar);");
-		return;
-	}
-
-	if ($actual_ctype->{TYPE} eq "SCALAR" and $actual_ctype->{NAME} eq "dnsp_name") {
-		$self->pidl("$target = PyString_AS_STRING($cvar);");
-		return;
-	}
-
-	if ($actual_ctype->{TYPE} eq "SCALAR" and $actual_ctype->{NAME} eq "dnsp_string") {
-		$self->pidl("$target = PyString_AS_STRING($cvar);");
+		($actual_ctype->{NAME} eq "string"
+		 or $actual_ctype->{NAME} eq "nbt_string"
+		 or $actual_ctype->{NAME} eq "nbt_name"
+		 or $actual_ctype->{NAME} eq "wrepl_nbt_name"
+		 or $actual_ctype->{NAME} eq "dns_string"
+		 or $actual_ctype->{NAME} eq "dnsp_string"
+		 or $actual_ctype->{NAME} eq "dns_name"
+		 or $actual_ctype->{NAME} eq "ipv4address"
+		 or $actual_ctype->{NAME} eq "ipv6address"
+		 or $actual_ctype->{NAME} eq "dnsp_name")) {
+	        $self->ConvertStringFromPythonData($mem_ctx, $cvar, $target, $fail);
 		return;
 	}
 
@@ -1172,6 +1218,14 @@ sub ConvertObjectFromPythonLevel($$$$$$$$)
 		$pl = GetPrevLevel($e, $pl);
 	}
 
+        $self->pidl("if ($py_var == NULL) {");
+        $self->indent;
+        $self->pidl("PyErr_Format(PyExc_AttributeError, \"Cannot delete NDR object: " .
+                    mapTypeName($var_name) . "\");");
+        $self->pidl($fail);
+        $self->deindent;
+        $self->pidl("}");
+
 	if ($l->{TYPE} eq "POINTER") {
 		if ($l->{POINTER_TYPE} ne "ref") {
 			$self->pidl("if ($py_var == Py_None) {");
@@ -1205,21 +1259,7 @@ sub ConvertObjectFromPythonLevel($$$$$$$$)
 		}
 
 		if (is_charset_array($e, $l)) {
-			$self->pidl("if (PyUnicode_Check($py_var)) {");
-			$self->indent;
-			# FIXME: Use Unix charset setting rather than utf-8
-			$self->pidl($var_name . " = PyString_AS_STRING(PyUnicode_AsEncodedString($py_var, \"utf-8\", \"ignore\"));");
-			$self->deindent;
-			$self->pidl("} else if (PyString_Check($py_var)) {");
-			$self->indent;
-			$self->pidl($var_name . " = PyString_AS_STRING($py_var);");
-			$self->deindent;
-			$self->pidl("} else {");
-			$self->indent;
-			$self->pidl("PyErr_Format(PyExc_TypeError, \"Expected string or unicode object, got %s\", Py_TYPE($py_var)->tp_name);");
-			$self->pidl("$fail");
-			$self->deindent;
-			$self->pidl("}");
+		        $self->ConvertStringFromPythonData($mem_ctx, $py_var, $var_name, $fail);
 		} else {
 			my $counter = "$e->{NAME}_cntr_$l->{LEVEL_INDEX}";
 			$self->pidl("PY_CHECK_TYPE(&PyList_Type, $py_var, $fail);");

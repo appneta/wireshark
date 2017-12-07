@@ -113,6 +113,15 @@ VALUE_STRING_ARRAY2_GLOBAL_DEF(WERR_errors); /* XXX: Remove GLOBAL_DEF once all 
 value_string_ext WERR_errors_ext = VALUE_STRING_EXT_INIT(WERR_errors);
 
 /*
+ * HRES error codes.
+ */
+
+VALUE_STRING_ARRAY2_GLOBAL_DEF(HRES_errors); /* XXX: Remove GLOBAL_DEF once all PIDL generated dissectors
+						     ref HRES_errors_ext */
+value_string_ext HRES_errors_ext = VALUE_STRING_EXT_INIT(HRES_errors);
+
+
+/*
  * DOS error codes.
  */
 
@@ -238,6 +247,7 @@ const value_string NT_errors[] = {
 	{ 0x80000024, "STATUS_SERVER_HAS_OPEN_HANDLES" },
 	{ 0x80000025, "STATUS_ALREADY_DISCONNECTED" },
 	{ 0x80000026, "STATUS_LONGJUMP" },
+	{ 0x8000002D, "STATUS_STOPPED_ON_SYMLINK" },
 	{ 0x80000288, "STATUS_DEVICE_REQUIRES_CLEANING" },
 	{ 0x80000289, "STATUS_DEVICE_DOOR_OPEN" },
 	{ 0x80040111, "MAPI_E_LOGON_FAILED" },
@@ -977,6 +987,18 @@ const value_string NT_errors[] = {
 	{ 0xC003005C, "RPC_NT_INVALID_PIPE_OBJECT" },
 	{ 0xC003005D, "RPC_NT_INVALID_PIPE_OPERATION" },
 	{ 0xC003005E, "RPC_NT_WRONG_PIPE_VERSION" },
+	{ 0xC05C0000, "STATUS_SVHDX_ERROR_STORED" },
+	{ 0xC05CFF00, "STATUS_SVHDX_ERROR_NOT_AVAILABLE" },
+	{ 0xC05CFF01, "STATUS_SVHDX_UNIT_ATTENTION_AVAILABLE" },
+	{ 0xC05CFF02, "STATUS_SVHDX_UNIT_ATTENTION_CAPACITY_DATA_CHANGED" },
+	{ 0xC05CFF03, "STATUS_SVHDX_UNIT_ATTENTION_RESERVATIONS_PREEMPTED" },
+	{ 0xC05CFF04, "STATUS_SVHDX_UNIT_ATTENTION_RESERVATIONS_RELEASED" },
+	{ 0xC05CFF05, "STATUS_SVHDX_UNIT_ATTENTION_REGISTRATIONS_PREEMPTED" },
+	{ 0xC05CFF06, "STATUS_SVHDX_UNIT_ATTENTION_OPERATING_DEFINITION_CHANGED" },
+	{ 0xC05CFF07, "STATUS_SVHDX_RESERVATION_CONFLICT" },
+	{ 0xC05CFF08, "STATUS_SVHDX_WRONG_FILE_TYPE" },
+	{ 0xC05CFF09, "STATUS_SVHDX_VERSION_MISMATCH" },
+	{ 0xC05CFF0A, "STATUS_VHD_SHARED" },
 	{ 0,          NULL }
 };
 value_string_ext NT_errors_ext = VALUE_STRING_EXT_INIT(NT_errors);
@@ -1547,9 +1569,9 @@ dissect_nt_sid(tvbuff_t *tvb, int offset, proto_tree *parent_tree,
 	/* Add revision, num_auth, and authority */
 	proto_tree_add_item(subtree, hf_nt_sid_revision, tvb, offset_sid_start, 1, ENC_LITTLE_ENDIAN);
 	proto_tree_add_item(subtree, hf_nt_sid_num_auth, tvb, offset_sid_start+1, 1, ENC_LITTLE_ENDIAN);
-	proto_tree_add_uint64_format_value(subtree,
+	proto_tree_add_uint64(subtree,
 		(sid_display_hex ? hf_nt_sid_auth_hex : hf_nt_sid_auth_dec),
-		tvb, offset_sid_start+2, 6, authority, "%" G_GINT64_MODIFIER "u", authority);
+		tvb, offset_sid_start+2, 6, authority);
 
 	/* Add subauthorities */
 	proto_tree_add_string_format_value(subtree, hf_nt_sid_subauth, tvb, sa_offset,

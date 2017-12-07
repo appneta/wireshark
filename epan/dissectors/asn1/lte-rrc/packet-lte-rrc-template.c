@@ -1,9 +1,9 @@
 /* packet-lte-rrc-template.c
  * Routines for Evolved Universal Terrestrial Radio Access (E-UTRA);
  * Radio Resource Control (RRC) protocol specification
- * (3GPP TS 36.331 V13.2.0 Release 13) packet dissection
+ * (3GPP TS 36.331 V13.5.0 Release 13) packet dissection
  * Copyright 2008, Vincent Helfre
- * Copyright 2009-2016, Pascal Quantin
+ * Copyright 2009-2017, Pascal Quantin
  *
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
@@ -63,11 +63,12 @@ static dissector_handle_t rrc_irat_ho_to_utran_cmd_handle = NULL;
 static dissector_handle_t rrc_sys_info_cont_handle = NULL;
 static dissector_handle_t gsm_a_dtap_handle = NULL;
 static dissector_handle_t gsm_rlcmac_dl_handle = NULL;
+static dissector_handle_t lte_rrc_dl_ccch_handle;
 
-static GHashTable *lte_rrc_etws_cmas_dcs_hash = NULL;
+static wmem_map_t *lte_rrc_etws_cmas_dcs_hash = NULL;
 
 /* Keep track of where/how the System Info value has changed */
-static GHashTable *lte_rrc_system_info_value_changed_hash = NULL;
+static wmem_map_t *lte_rrc_system_info_value_changed_hash = NULL;
 static guint8     system_info_value_current;
 static gboolean   system_info_value_current_set;
 
@@ -307,6 +308,9 @@ static expert_field ei_lte_rrc_unexpected_length_value = EI_INIT;
 static expert_field ei_lte_rrc_too_many_group_a_rapids = EI_INIT;
 static expert_field ei_lte_rrc_invalid_drx_config = EI_INIT;
 
+static const unit_name_string units_sr_periods = { " SR period", " SR periods" };
+static const unit_name_string units_short_drx_cycles = { " shortDRX-Cycle", " shortDRX-Cycles" };
+
 static reassembly_table lte_rrc_sib11_reassembly_table;
 static reassembly_table lte_rrc_sib12_reassembly_table;
 
@@ -513,8 +517,8 @@ static const true_false_string lte_rrc_eutra_cap_feat_group_ind_41_val = {
   "Measurement reporting event: Event B1 - Neighbour > threshold for UTRAN FDD - Not supported"
 };
 static const true_false_string lte_rrc_eutra_cap_feat_group_ind_42_val = {
-  "Undefined - Supported",
-  "Undefined - Not supported"
+  "DCI format 3a - Supported",
+  "DCI format 3a - Not supported"
 };
 static const true_false_string lte_rrc_eutra_cap_feat_group_ind_43_val = {
   "Undefined - Supported",
@@ -820,6 +824,18 @@ static const value_string lte_rrc_q_RxLevMinOffset_vals[] = {
   { 6, "12dB"},
   { 7, "14dB"},
   { 8, "16dB"},
+  { 0, NULL}
+};
+
+static const value_string lte_rrc_delta_RxLevMin_v1350_vals[] = {
+  { -8, "-16dBm"},
+  { -7, "-14dBm"},
+  { -6, "-12dBm"},
+  { -5, "-10dBm"},
+  { -4, "-8dBm"},
+  { -3, "-6dBm"},
+  { -2, "-4dBm"},
+  { -1, "-2dBm"},
   { 0, NULL}
 };
 
@@ -2198,7 +2214,7 @@ static const value_string lte_rrc_messageIdentifier_vals[] = {
   { 0x112b, "CMAS Identifier for operator defined use for additional languages"},
   {      0, NULL},
 };
-static value_string_ext lte_rrc_messageIdentifier_vals_ext = VALUE_STRING_EXT_INIT(lte_rrc_messageIdentifier_vals);
+value_string_ext lte_rrc_messageIdentifier_vals_ext = VALUE_STRING_EXT_INIT(lte_rrc_messageIdentifier_vals);
 
 static const value_string lte_rrc_serialNumber_gs_vals[] = {
   { 0, "Display mode immediate, cell wide"},
@@ -3182,26 +3198,6 @@ dissect_lte_rrc_PCCH_NB(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
   return tvb_captured_length(tvb);
 }
 
-static void
-lte_rrc_init_protocol(void)
-{
-  lte_rrc_etws_cmas_dcs_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
-  lte_rrc_system_info_value_changed_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
-  reassembly_table_init(&lte_rrc_sib11_reassembly_table,
-                        &addresses_reassembly_table_functions);
-  reassembly_table_init(&lte_rrc_sib12_reassembly_table,
-                        &addresses_reassembly_table_functions);
-}
-
-static void
-lte_rrc_cleanup_protocol(void)
-{
-  g_hash_table_destroy(lte_rrc_etws_cmas_dcs_hash);
-  g_hash_table_destroy(lte_rrc_system_info_value_changed_hash);
-  reassembly_table_destroy(&lte_rrc_sib11_reassembly_table);
-  reassembly_table_destroy(&lte_rrc_sib12_reassembly_table);
-}
-
 /*--- proto_register_rrc -------------------------------------------*/
 void proto_register_lte_rrc(void) {
 
@@ -3624,7 +3620,7 @@ void proto_register_lte_rrc(void) {
         NULL, HFILL }},
     { &hf_lte_rrc_warningMessageSegment_decoded_page,
       { "Decoded Page", "lte-rrc.warningMessageSegment.decoded_page",
-        FT_STRING, BASE_NONE, NULL, 0,
+        FT_STRING, STR_UNICODE, NULL, 0,
         NULL, HFILL }},
     { &hf_lte_rrc_interBandTDD_CA_WithDifferentConfig_bit1,
       { "Bit 1", "lte-rrc.interBandTDD_CA_WithDifferentConfig.bit1",
@@ -3982,7 +3978,7 @@ void proto_register_lte_rrc(void) {
   proto_lte_rrc = proto_register_protocol(PNAME, PSNAME, PFNAME);
 
   /* These entry points will first create an lte_rrc root node */
-  register_dissector("lte_rrc.dl_ccch", dissect_lte_rrc_DL_CCCH, proto_lte_rrc);
+  lte_rrc_dl_ccch_handle = register_dissector("lte_rrc.dl_ccch", dissect_lte_rrc_DL_CCCH, proto_lte_rrc);
   register_dissector("lte_rrc.dl_dcch", dissect_lte_rrc_DL_DCCH, proto_lte_rrc);
   register_dissector("lte_rrc.ul_ccch", dissect_lte_rrc_UL_CCCH, proto_lte_rrc);
   register_dissector("lte_rrc.ul_dcch", dissect_lte_rrc_UL_DCCH, proto_lte_rrc);
@@ -4011,8 +4007,14 @@ void proto_register_lte_rrc(void) {
   /* Register the dissectors defined in lte-rrc.conf */
 #include "packet-lte-rrc-dis-reg.c"
 
-  register_init_routine(&lte_rrc_init_protocol);
-  register_cleanup_routine(&lte_rrc_cleanup_protocol);
+  lte_rrc_etws_cmas_dcs_hash = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), g_direct_hash, g_direct_equal);
+  lte_rrc_system_info_value_changed_hash = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), g_direct_hash, g_direct_equal);
+
+  reassembly_table_register(&lte_rrc_sib11_reassembly_table,
+                        &addresses_reassembly_table_functions);
+  reassembly_table_register(&lte_rrc_sib12_reassembly_table,
+                        &addresses_reassembly_table_functions);
+
 }
 
 
@@ -4020,10 +4022,7 @@ void proto_register_lte_rrc(void) {
 void
 proto_reg_handoff_lte_rrc(void)
 {
-	static dissector_handle_t lte_rrc_dl_ccch_handle;
-
-	lte_rrc_dl_ccch_handle = find_dissector("lte_rrc.dl_ccch");
-	dissector_add_for_decode_as("udp.port", lte_rrc_dl_ccch_handle);
+	dissector_add_for_decode_as_with_preference("udp.port", lte_rrc_dl_ccch_handle);
 	nas_eps_handle = find_dissector("nas-eps");
 	rrc_irat_ho_to_utran_cmd_handle = find_dissector("rrc.irat.ho_to_utran_cmd");
 	rrc_sys_info_cont_handle = find_dissector("rrc.sysinfo.cont");

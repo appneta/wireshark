@@ -55,14 +55,15 @@
 #include <wsutil/plugins.h>
 #endif
 
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 
 #include <wiretap/merge.h>
-#include <wiretap/pcap-encap.h>
 
 #ifdef _WIN32
 #include <wsutil/unicode-utils.h>
 #endif /* _WIN32 */
+
+#include "ui/failure_message.h"
 
 /*
  * Show the usage
@@ -130,14 +131,15 @@ string_elem_print(gpointer data, gpointer not_used _U_)
 
 #ifdef HAVE_PLUGINS
 /*
- *  Don't report failures to load plugins because most (non-wiretap) plugins
- *  *should* fail to load (because we're not linked against libwireshark and
- *  dissector plugins need libwireshark).
+ * General errors and warnings are reported with an console message
+ * in mergecap.
  */
 static void
-failure_message(const char *msg_format _U_, va_list ap _U_)
+failure_warning_message(const char *msg_format, va_list ap)
 {
-  return;
+  fprintf(stderr, "mergecap: ");
+  vfprintf(stderr, msg_format, ap);
+  fprintf(stderr, "\n");
 }
 #endif
 
@@ -253,20 +255,19 @@ main(int argc, char *argv[])
   gboolean            do_append          = FALSE;
   gboolean            verbose            = FALSE;
   int                 in_file_count      = 0;
-  guint               snaplen            = 0;
+  guint32             snaplen            = 0;
 #ifdef PCAP_NG_DEFAULT
   int                 file_type          = WTAP_FILE_TYPE_SUBTYPE_PCAPNG; /* default to pcap format */
 #else
   int                 file_type          = WTAP_FILE_TYPE_SUBTYPE_PCAP; /* default to pcapng format */
 #endif
-  int                 out_fd;
   int                 err                = 0;
   gchar              *err_info           = NULL;
   int                 err_fileno;
+  guint32             err_framenum;
   char               *out_filename       = NULL;
-  merge_result        status;
+  merge_result        status             = MERGE_OK;
   idb_merge_mode      mode               = IDB_MERGE_MODE_MAX;
-  gboolean            use_stdout         = FALSE;
   merge_progress_callback_t cb;
 
   cmdarg_err_init(mergecap_cmdarg_err, mergecap_cmdarg_err_cont);
@@ -289,6 +290,8 @@ main(int argc, char *argv[])
        "\n"
        "%s",
     get_ws_vcs_version_info(), comp_info_str->str, runtime_info_str->str);
+  g_string_free(comp_info_str, TRUE);
+  g_string_free(runtime_info_str, TRUE);
 
   /*
    * Get credential information for later use.
@@ -310,11 +313,16 @@ main(int argc, char *argv[])
   wtap_init();
 
 #ifdef HAVE_PLUGINS
-  init_report_err(failure_message,NULL,NULL,NULL);
+  init_report_message(failure_warning_message, failure_warning_message,
+                      NULL, NULL, NULL);
 
   /* Scan for plugins.  This does *not* call their registration routines;
-    that's done later. */
-  scan_plugins();
+     that's done later.
+
+     Don't report failures to load plugins because most (non-wiretap)
+     plugins *should* fail to load (because we're not linked against
+     libwireshark and dissector plugins need libwireshark).*/
+  scan_plugins(DONT_REPORT_LOAD_FAILURE);
 
   /* Register all libwiretap plugin modules. */
   register_all_wiretap_modules();
@@ -334,7 +342,8 @@ main(int argc, char *argv[])
         fprintf(stderr, "mergecap: \"%s\" isn't a valid capture file type\n",
                 optarg);
         list_capture_types();
-        exit(1);
+        status = MERGE_ERR_INVALID_OPTION;
+        goto clean_exit;
       }
       break;
 
@@ -344,7 +353,7 @@ main(int argc, char *argv[])
              "See https://www.wireshark.org for more information.\n",
              get_ws_vcs_version_info());
       print_usage(stdout);
-      exit(0);
+      goto clean_exit;
       break;
 
     case 'I':
@@ -353,12 +362,13 @@ main(int argc, char *argv[])
         fprintf(stderr, "mergecap: \"%s\" isn't a valid IDB merge mode\n",
                 optarg);
         list_idb_merge_modes();
-        exit(1);
+        status = MERGE_ERR_INVALID_OPTION;
+        goto clean_exit;
       }
       break;
 
     case 's':
-      snaplen = get_positive_int(optarg, "snapshot length");
+      snaplen = get_nonzero_guint32(optarg, "snapshot length");
       break;
 
     case 'v':
@@ -366,10 +376,12 @@ main(int argc, char *argv[])
       break;
 
     case 'V':
+      comp_info_str = get_compiled_version_info(NULL, NULL);
+      runtime_info_str = get_runtime_version_info(NULL);
       show_version("Mergecap (Wireshark)", comp_info_str, runtime_info_str);
       g_string_free(comp_info_str, TRUE);
       g_string_free(runtime_info_str, TRUE);
-      exit(0);
+      goto clean_exit;
       break;
 
     case 'w':
@@ -387,7 +399,8 @@ main(int argc, char *argv[])
       default:
         print_usage(stderr);
       }
-      exit(1);
+      status = MERGE_ERR_INVALID_OPTION;
+      goto clean_exit;
       break;
     }
   }
@@ -402,7 +415,8 @@ main(int argc, char *argv[])
   if (!out_filename) {
     fprintf(stderr, "mergecap: an output filename must be set with -w\n");
     fprintf(stderr, "          run with -h for help\n");
-    return 1;
+    status = MERGE_ERR_INVALID_OPTION;
+    goto clean_exit;
   }
   if (in_file_count < 1) {
     fprintf(stderr, "mergecap: No input files were specified\n");
@@ -412,7 +426,8 @@ main(int argc, char *argv[])
   /* setting IDB merge mode must use PCAPNG output */
   if (mode != IDB_MERGE_MODE_MAX && file_type != WTAP_FILE_TYPE_SUBTYPE_PCAPNG) {
     fprintf(stderr, "The IDB merge mode can only be used with PCAPNG output format\n");
-    return 1;
+    status = MERGE_ERR_INVALID_OPTION;
+    goto clean_exit;
   }
 
   /* if they didn't set IDB merge mode, set it to our default */
@@ -422,24 +437,19 @@ main(int argc, char *argv[])
 
   /* open the outfile */
   if (strcmp(out_filename, "-") == 0) {
-    /* use stdout as the outfile */
-    use_stdout = TRUE;
-    out_fd = 1 /*stdout*/;
+    /* merge the files to the standard output */
+    status = merge_files_to_stdout(file_type,
+                                   (const char *const *) &argv[optind],
+                                   in_file_count, do_append, mode, snaplen,
+                                   "mergecap", verbose ? &cb : NULL,
+                                   &err, &err_info, &err_fileno, &err_framenum);
   } else {
-    /* open the outfile */
-    out_fd = ws_open(out_filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
-    if (out_fd == -1) {
-      fprintf(stderr, "mergecap: Couldn't open output file %s: %s\n",
-              out_filename, g_strerror(errno));
-      exit(1);
-    }
+    /* merge the files to the outfile */
+    status = merge_files(out_filename, file_type,
+                         (const char *const *) &argv[optind], in_file_count,
+                         do_append, mode, snaplen, "mergecap", verbose ? &cb : NULL,
+                         &err, &err_info, &err_fileno, &err_framenum);
   }
-
-  /* merge the files */
-  status = merge_files(out_fd, out_filename, file_type,
-                       (const char *const *) &argv[optind], in_file_count,
-                       do_append, mode, snaplen, "mergecap", verbose ? &cb : NULL,
-                       &err, &err_info, &err_fileno);
 
   switch (status) {
     case MERGE_OK:
@@ -451,28 +461,45 @@ main(int argc, char *argv[])
       break;
 
     case MERGE_ERR_CANT_OPEN_INFILE:
-      fprintf(stderr, "mergecap: Can't open %s: %s (%s)\n", argv[optind + err_fileno],
-              wtap_strerror(err), err_info ? err_info : "no more information");
+      cfile_open_failure_message("mergecap", argv[optind + err_fileno],
+                                 err, err_info);
       break;
 
     case MERGE_ERR_CANT_OPEN_OUTFILE:
-      fprintf(stderr, "mergecap: Can't open or create %s: %s\n", out_filename,
-                  wtap_strerror(err));
-      if (!use_stdout)
-        ws_close(out_fd);
+      cfile_dump_open_failure_message("mergecap", out_filename, err, file_type);
       break;
 
-    case MERGE_ERR_CANT_READ_INFILE:      /* fall through */
+    case MERGE_ERR_CANT_READ_INFILE:
+      cfile_read_failure_message("mergecap", argv[optind + err_fileno],
+                                 err, err_info);
+      break;
+
     case MERGE_ERR_BAD_PHDR_INTERFACE_ID:
+      cmdarg_err("Record %u of \"%s\" has an interface ID that does not match any IDB in its file.",
+                 err_framenum, argv[optind + err_fileno]);
+      break;
+
     case MERGE_ERR_CANT_WRITE_OUTFILE:
+       cfile_write_failure_message("mergecap", argv[optind + err_fileno],
+                                   out_filename, err, err_info, err_framenum,
+                                   file_type);
+       break;
+
     case MERGE_ERR_CANT_CLOSE_OUTFILE:
+        cfile_close_failure_message(out_filename, err);
+        break;
+
     default:
-      fprintf(stderr, "mergecap: %s\n", err_info ? err_info : "unknown error");
+      cmdarg_err("Unknown merge_files error %d", status);
       break;
   }
 
-  g_free(err_info);
-
+clean_exit:
+  wtap_cleanup();
+  free_progdirs();
+#ifdef HAVE_PLUGINS
+  plugins_cleanup();
+#endif
   return (status == MERGE_OK) ? 0 : 2;
 }
 

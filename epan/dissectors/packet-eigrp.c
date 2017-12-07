@@ -32,13 +32,12 @@
 #include <epan/ipproto.h>
 #include <epan/expert.h>
 
+#include "packet-eigrp.h"
 #include "packet-ipx.h"
 #include "packet-atalk.h"
 
 /*
- * Originally Cisco proprietary; now the subject of an I-D:
- *
- *    https://tools.ietf.org/html/draft-savage-eigrp-04
+ * Originally Cisco proprietary; now the subject of RFC 7868.
  */
 
 /**
@@ -516,6 +515,7 @@ static int hf_eigrp_cable_range = -1;
 static int hf_eigrp_metric_delay = -1;
 static int hf_eigrp_metric_bandwidth = -1;
 static int hf_eigrp_checksum = -1;
+static int hf_eigrp_checksum_status = -1;
 static int hf_eigrp_metric_comm_type = -1;
 static int ett_metric_comm_type = -1;
 static int hf_eigrp_extcomm_eigrp_flag = -1;
@@ -608,7 +608,7 @@ static const value_string eigrp_tlv2string[] = {
     { 0, NULL}
 };
 
-static const value_string eigrp_proto2string[] = {
+const value_string eigrp_proto2string[] = {
     { IGRP1_PROTID,             "IGRP"},
     { IGRP2_PROTID,             "EIGRP"},
     { STATIC_PROTID,            "Static Route"},
@@ -1074,7 +1074,7 @@ dissect_eigrp_metric_flags (proto_tree *tree, tvbuff_t *tvb, int offset, int lim
 
     /* Decode the route flags field */
     sub_tree = proto_tree_add_subtree(tree, tvb, offset, limit, ett_eigrp_metric_flags, NULL, "Flags");
-    sub_tvb = tvb_new_subset(tvb, offset, limit, -1);
+    sub_tvb = tvb_new_subset_length_caplen(tvb, offset, limit, -1);
 
     /* just care about 'flags' byte, there are no MP flags for now */
     proto_tree_add_item(sub_tree, hf_eigrp_metric_flags_srcwd, sub_tvb, 0, 1,
@@ -1295,7 +1295,7 @@ dissect_eigrp_services (proto_item *ti, proto_tree *tree, tvbuff_t *tvb,
 
     remaining = tvb_captured_length_remaining(tvb, offset);
     sub_tree = proto_tree_add_subtree(tree, tvb, offset, remaining, ett_eigrp_tlv_metric, &sub_ti, "SAF Service ");
-    sub_tvb = tvb_new_subset(tvb, offset, remaining, -1);
+    sub_tvb = tvb_new_subset_length_caplen(tvb, offset, remaining, -1);
     sub_offset = 0;
 
     for (; tvb_reported_length_remaining(sub_tvb, sub_offset) > 0; ) {
@@ -1330,7 +1330,7 @@ dissect_eigrp_services (proto_item *ti, proto_tree *tree, tvbuff_t *tvb,
          */
         reach_tree = proto_tree_add_subtree(sub_tree, sub_tvb, sub_offset, 22,
                                        ett_eigrp_saf_reachability, NULL, "Reachability");
-        reach_tvb = tvb_new_subset(sub_tvb, sub_offset, 22, -1);
+        reach_tvb = tvb_new_subset_length_caplen(sub_tvb, sub_offset, 22, -1);
 
         afi = tvb_get_ntohs(reach_tvb, 0);
         proto_tree_add_item(reach_tree, hf_eigrp_saf_reachability_afi,
@@ -1425,7 +1425,7 @@ dissect_eigrp_legacy_metric (proto_tree *tree, tvbuff_t *tvb, int offset)
     tvbuff_t   *sub_tvb;
 
     sub_tree = proto_tree_add_subtree(tree, tvb, offset, 16, ett_eigrp_tlv_metric, NULL, "Legacy Metric");
-    sub_tvb = tvb_new_subset(tvb, offset, 16, -1);
+    sub_tvb = tvb_new_subset_length_caplen(tvb, offset, 16, -1);
 
     proto_tree_add_item(sub_tree, hf_eigrp_legacy_metric_delay, sub_tvb,
                         0, 4, ENC_BIG_ENDIAN);
@@ -1486,7 +1486,7 @@ dissect_eigrp_ipx_extdata (proto_tree *tree, tvbuff_t *tvb, int offset)
     int         sub_offset = 0;
 
     sub_tree = proto_tree_add_subtree(tree, tvb, offset, 20, ett_eigrp_tlv_extdata, NULL, "External Data");
-    sub_tvb = tvb_new_subset(tvb, offset, 20, -1);
+    sub_tvb = tvb_new_subset_length_caplen(tvb, offset, 20, -1);
 
     /* Decode the external route source info */
     proto_tree_add_item(sub_tree, hf_eigrp_ipx_extdata_routerid, sub_tvb,
@@ -1553,7 +1553,7 @@ dissect_eigrp_extdata (proto_tree *tree, tvbuff_t *tvb, int offset)
     int         sub_offset = 0;
 
     sub_tree = proto_tree_add_subtree(tree, tvb, offset, 20, ett_eigrp_tlv_extdata, NULL, "External Data");
-    sub_tvb = tvb_new_subset(tvb, offset, 20, -1);
+    sub_tvb = tvb_new_subset_length_caplen(tvb, offset, 20, -1);
 
     /* Decode the external route source info */
     proto_tree_add_item(sub_tree, hf_eigrp_extdata_origrid, sub_tvb,
@@ -2143,7 +2143,7 @@ dissect_eigrp_wide_metric_attr (proto_tree *tree, tvbuff_t *tvb,
     limit *= 2;   /* words to bytes */
 
     sub_tree = proto_tree_add_subtree(tree, tvb, offset, limit, ett_eigrp_tlv_attr, NULL, "Attributes");
-    sub_tvb    = tvb_new_subset(tvb, offset, limit, -1);
+    sub_tvb    = tvb_new_subset_length_caplen(tvb, offset, limit, -1);
     sub_offset = 0;
 
     while (limit > 0) {
@@ -2173,7 +2173,7 @@ dissect_eigrp_wide_metric_attr (proto_tree *tree, tvbuff_t *tvb,
 
         case EIGRP_ATTR_COMM:
             dissect_eigrp_metric_comm(sub_tree,
-                                      tvb_new_subset(sub_tvb, sub_offset, 8, -1),
+                                      tvb_new_subset_length_caplen(sub_tvb, sub_offset, 8, -1),
                                       sub_offset, limit);
             break;
 
@@ -2245,7 +2245,7 @@ dissect_eigrp_wide_metric (proto_tree *tree, tvbuff_t *tvb, int offset)
     guint64     big_num;
 
     sub_tree = proto_tree_add_subtree(tree, tvb, offset, 24, ett_eigrp_tlv_metric, NULL, "Wide Metric");
-    sub_tvb = tvb_new_subset(tvb, offset, 24, -1);
+    sub_tvb = tvb_new_subset_length_caplen(tvb, offset, 24, -1);
 
     attr_size = tvb_get_guint8(sub_tvb, 0);
 
@@ -2463,7 +2463,7 @@ dissect_eigrp (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
                         ENC_BIG_ENDIAN);
 
     size          = tvb_captured_length(tvb);
-    proto_tree_add_checksum(eigrp_tree, tvb, 2, hf_eigrp_checksum, -1, &ei_eigrp_checksum_bad,
+    proto_tree_add_checksum(eigrp_tree, tvb, 2, hf_eigrp_checksum, hf_eigrp_checksum_status, &ei_eigrp_checksum_bad,
                             pinfo, ip_checksum_tvb(tvb, 0, size), ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
 
     /* Decode the EIGRP Flags Field */
@@ -3303,6 +3303,7 @@ proto_register_eigrp(void)
       { &hf_eigrp_metric_delay, { "Delay", "eigrp.metric.delay", FT_UINT64, BASE_DEC, NULL, 0x0, NULL, HFILL }},
       { &hf_eigrp_metric_bandwidth, { "Bandwidth", "eigrp.metric.bandwidth", FT_UINT64, BASE_DEC, NULL, 0x0, NULL, HFILL }},
       { &hf_eigrp_checksum, { "Checksum", "eigrp.checksum", FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+      { &hf_eigrp_checksum_status, { "Checksum Status", "eigrp.checksum.status", FT_UINT8, BASE_NONE, VALS(proto_checksum_vals), 0x0, NULL, HFILL }},
       { &hf_eigrp_metric_comm_type, { "Type", "eigrp.metric.comm_type", FT_UINT16, BASE_DEC, VALS(eigrp_metric_comm_type_vals), 0x0, NULL, HFILL }},
       { &hf_eigrp_extcomm_eigrp_flag, { "FLAG", "eigrp.extcomm.flag", FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL }},
       { &hf_eigrp_extcomm_eigrp_tag, { "TAG", "eigrp.extcomm.tag", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},

@@ -40,7 +40,6 @@
 #include <math.h>
 
 #include <epan/packet.h>
-#include <epan/prefs.h>
 #include <epan/expert.h>
 #include <epan/strutil.h>
 #include "packet-tcp.h"
@@ -203,12 +202,6 @@ static expert_field ei_ldss_unrecognized_line = EI_INIT;
 
 static dissector_handle_t	ldss_udp_handle;
 static dissector_handle_t	ldss_tcp_handle;
-
-/* Global variables associated with the preferences for ldss */
-static guint	global_udp_port_ldss	= UDP_PORT_LDSS;
-
-/* Avoid creating conversations and data twice */
-static unsigned int highest_num_seen = 0;
 
 /* When seeing a broadcast talking about an open TCP port on a host, create
  * a conversation to dissect anything sent/received at that address.  Setup
@@ -401,9 +394,8 @@ dissect_ldss_broadcast(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	 * These steps only need to be done once per packet, so a variable
 	 * tracks the highest frame number seen. Handles the case of first frame
 	 * being frame zero. */
-	if (messageDetail != INFERRED_PEERSHUTDOWN &&
-	    (highest_num_seen == 0 ||
-	     highest_num_seen < pinfo->num)) {
+	if ((messageDetail != INFERRED_PEERSHUTDOWN) &&
+	    !PINFO_FD_VISITED(pinfo)) {
 
 		ldss_broadcast_t *data;
 
@@ -423,16 +415,13 @@ dissect_ldss_broadcast(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 		data->file->digest_type = digest_type;
 
 		data->broadcaster = wmem_new0(wmem_file_scope(), ldss_broadcaster_t);
-		copy_address(&data->broadcaster->addr, &pinfo->src);
+		copy_address_wmem(wmem_file_scope(), &data->broadcaster->addr, &pinfo->src);
 		data->broadcaster->port = port;
 
 		/* Dissect any future pushes/pulls */
 		if (port > 0) {
 			prepare_ldss_transfer_conv(data);
 		}
-
-		/* Record that the frame was processed */
-		highest_num_seen = pinfo->num;
 	}
 
 	return tvb_captured_length(tvb);
@@ -493,13 +482,11 @@ dissect_ldss_transfer (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 
 		col_set_str(pinfo->cinfo, COL_INFO, "LDSS File Transfer (Requesting file - pull)");
 
-		if (highest_num_seen == 0 ||
-		    highest_num_seen < pinfo->num) {
+		if (transfer_info->req == NULL) {
 
 			already_dissected = FALSE;
 			transfer_info->req = wmem_new0(wmem_file_scope(), ldss_file_request_t);
 			transfer_info->req->file = wmem_new0(wmem_file_scope(), ldss_file_t);
-			highest_num_seen = pinfo->num;
 		}
 
 		ti = proto_tree_add_item(tree, proto_ldss,
@@ -795,15 +782,6 @@ dissect_ldss (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U
 	return 0;
 }
 
-/* Initialize the highest num seen each time a
- * new file is loaded or re-loaded in wireshark */
-static void
-ldss_init_protocol(void)
-{
-	/* We haven't dissected anything yet. */
-	highest_num_seen = 0;
-}
-
 void
 proto_register_ldss (void) {
 	static hf_register_info hf[] =	{
@@ -957,7 +935,6 @@ proto_register_ldss (void) {
 		{ &ei_ldss_unrecognized_line, { "ldss.unrecognized_line", PI_PROTOCOL, PI_WARN, "Unrecognized line ignored", EXPFILL }},
 	};
 
-	module_t     *ldss_module;
 	expert_module_t* expert_ldss;
 
 	proto_ldss = proto_register_protocol("Local Download Sharing Service", "LDSS", "ldss");
@@ -965,16 +942,6 @@ proto_register_ldss (void) {
 	proto_register_subtree_array(ett, array_length(ett));
 	expert_ldss = expert_register_protocol(proto_ldss);
 	expert_register_field_array(expert_ldss, ei, array_length(ei));
-
-	ldss_module = prefs_register_protocol(	proto_ldss, proto_reg_handoff_ldss);
-	prefs_register_uint_preference(		ldss_module, "udp_port",
-						"LDSS UDP Port",
-						"The UDP port on which "
-						"Local Download Sharing Service "
-						"broadcasts will be sent",
-						10, &global_udp_port_ldss);
-
-	register_init_routine(&ldss_init_protocol);
 }
 
 
@@ -982,19 +949,9 @@ proto_register_ldss (void) {
 void
 proto_reg_handoff_ldss (void)
 {
-	static guint	  saved_udp_port_ldss;
-	static gboolean	  ldss_initialized	= FALSE;
-
-	if (!ldss_initialized) {
-		ldss_udp_handle = create_dissector_handle(dissect_ldss, proto_ldss);
-		ldss_tcp_handle = create_dissector_handle(dissect_ldss_transfer, proto_ldss);
-		ldss_initialized = TRUE;
-	}
-	else {
-		dissector_delete_uint("udp.port", saved_udp_port_ldss, ldss_udp_handle);
-	}
-	dissector_add_uint("udp.port", global_udp_port_ldss, ldss_udp_handle);
-	saved_udp_port_ldss = global_udp_port_ldss;
+	ldss_udp_handle = create_dissector_handle(dissect_ldss, proto_ldss);
+	ldss_tcp_handle = create_dissector_handle(dissect_ldss_transfer, proto_ldss);
+	dissector_add_uint_with_preference("udp.port", UDP_PORT_LDSS, ldss_udp_handle);
 }
 
 /*

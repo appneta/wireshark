@@ -23,6 +23,8 @@
  *
  * Please refer to the following specs for protocol detail:
  * - draft-ietf-p2psip-base-15
+ * - RFC 6940 (does this incorporate all changes between
+ *   draft-ietf-p2psip-base-15 and RFC 6940, if any?)
  */
 
 #include "config.h"
@@ -343,7 +345,7 @@ dissect_reload_framing_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
     proto_tree_add_item(message_tree, hf_reload_framing_message_length, tvb, offset, 3, ENC_BIG_ENDIAN);
     offset += 3;
     proto_tree_add_item(message_tree, hf_reload_framing_message_data, tvb, offset, message_length, ENC_NA);
-    next_tvb = tvb_new_subset(tvb, offset, effective_length - offset, message_length);
+    next_tvb = tvb_new_subset_length_caplen(tvb, offset, effective_length - offset, message_length);
     if (reload_handle == NULL) {
       expert_add_info(pinfo, ti, &ei_reload_no_dissector);
       return tvb_captured_length(tvb);
@@ -383,7 +385,7 @@ dissect_reload_framing_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
               continue;
             }
             else {
-              /* 1st acked in a serie */
+              /* 1st acked in a series */
               if (last_received<0) {
                 /* 1st acked ever */
                 received_tree = proto_item_add_subtree(ti_received, ett_reload_framing_received);
@@ -592,8 +594,8 @@ proto_reg_handoff_reload_framing(void)
 
   reload_handle = find_dissector_add_dependency("reload", proto_reload_framing);
 
-  dissector_add_uint("tcp.port", TCP_PORT_RELOAD, reload_framing_tcp_handle);
-  dissector_add_uint("udp.port", UDP_PORT_RELOAD, reload_framing_udp_handle);
+  dissector_add_uint_with_preference("tcp.port", TCP_PORT_RELOAD, reload_framing_tcp_handle);
+  dissector_add_uint_with_preference("udp.port", UDP_PORT_RELOAD, reload_framing_udp_handle);
 
   heur_dissector_add("udp",  dissect_reload_framing_heur, "RELOAD Framing over UDP", "reload_framing_udp", proto_reload_framing, HEURISTIC_ENABLE);
   heur_dissector_add("tcp",  dissect_reload_framing_heur, "RELOAD Framing over TCP", "reload_framing_tcp", proto_reload_framing, HEURISTIC_ENABLE);

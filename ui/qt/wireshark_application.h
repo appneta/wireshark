@@ -60,23 +60,31 @@ class WiresharkApplication : public QApplication
     Q_OBJECT
 public:
     explicit WiresharkApplication(int &argc,  char **argv);
+    ~WiresharkApplication();
 
     enum AppSignal {
-        ColumnsChanged,
         CaptureFilterListChanged,
+        ColumnsChanged,
         DisplayFilterListChanged,
+        FieldsChanged,
         FilterExpressionsChanged,
+        LocalInterfacesChanged,
         NameResolutionChanged,
         PacketDissectionChanged,
         PreferencesChanged,
-        RecentFilesRead,
-        FieldsChanged
+        RecentCapturesChanged,
+        RecentPreferencesRead
+    };
+
+    enum MainMenuItem {
+        FileOpenDialog,
+        CaptureOptionsDialog
     };
 
     void registerUpdate(register_action_e action, const char *message);
     void emitAppSignal(AppSignal signal);
     // Emitting app signals (PacketDissectionChanged in particular) from
-    // dialogs on OS X can be problematic. Dialogs should call queueAppSignal
+    // dialogs on macOS can be problematic. Dialogs should call queueAppSignal
     // instead.
     void queueAppSignal(AppSignal signal) { app_signals_ << signal; }
     // Flush queued app signals. Should be called from the main window after
@@ -95,9 +103,10 @@ public:
 
     void allSystemsGo();
     void refreshLocalInterfaces();
-    struct _e_prefs * readConfigurationFiles(char **gdp_path, char **dp_path, bool reset);
+    struct _e_prefs * readConfigurationFiles(bool reset);
     QList<recent_item_status *> recentItems() const;
     void addRecentItem(const QString filename, qint64 size, bool accessible);
+    void removeRecentItem(const QString &filename);
     QDir lastOpenDir();
     void setLastOpenDir(const char *dir_name);
     void setLastOpenDir(QString *dir_str);
@@ -105,7 +114,7 @@ public:
     const QFont monospaceFont() const { return mono_font_; }
     void setMonospaceFont(const char *font_string);
     int monospaceTextSize(const char *str);
-    void setConfigurationProfile(const gchar *profile_name);
+    void setConfigurationProfile(const gchar *profile_name, bool write_recent = true);
     void reloadLuaPluginsDelayed();
     bool isInitialized() { return initialized_; }
     void setReloadingLua(bool is_reloading) { is_reloading_lua_ = is_reloading; }
@@ -116,10 +125,18 @@ public:
     const QString windowTitleString(QStringList title_parts);
     const QString windowTitleString(QString title_part) { return windowTitleString(QStringList() << title_part); }
     void applyCustomColorsFromRecent();
+#ifdef HAVE_SOFTWARE_UPDATE
+    void rejectSoftwareUpdate() { software_update_ok_ = false; }
+    bool softwareUpdateCanShutdown();
+    void softwareUpdateShutdownRequest();
+#endif
+    QWidget *mainWindow();
 
     QTranslator translator;
     QTranslator translatorQt;
     void loadLanguage(const QString language);
+
+    void doTriggerMenuItem(MainMenuItem menuItem);
 
 private:
     bool initialized_;
@@ -135,7 +152,15 @@ private:
     static QString window_title_separator_;
     QList<AppSignal> app_signals_;
     int active_captures_;
+#ifdef HAVE_SOFTWARE_UPDATE
+    bool software_update_ok_;
+#endif
+
     void storeCustomColorsInRecent();
+#ifdef _WIN32
+    unsigned int fileVersion(QString file_path);
+    void checkForDbar();
+#endif
 
 protected:
     bool event(QEvent *event);
@@ -144,8 +169,9 @@ signals:
     void appInitialized();
     void localInterfaceListChanged();
     void openCaptureFile(QString cf_path, QString display_filter, unsigned int type);
-    void recentFilesRead();
-    void updateRecentItemStatus(const QString &filename, qint64 size, bool accessible);
+    void openCaptureOptions();
+    void recentPreferencesRead();
+    void updateRecentCaptureStatus(const QString &filename, qint64 size, bool accessible);
     void splashUpdate(register_action_e action, const char *message);
     void profileChanging();
     void profileNameChanged(const gchar *profile_name);
@@ -160,22 +186,31 @@ signals:
     void checkDisplayFilter();
     void fieldsChanged();
     void reloadLuaPlugins();
+#ifdef HAVE_SOFTWARE_UPDATE
+    // Each of these are called from a separate thread.
+    void softwareUpdateRequested();
+    void softwareUpdateClose();
+    void softwareUpdateQuit();
+#endif
 
     void openStatCommandDialog(const QString &menu_path, const char *arg, void *userdata);
     void openTapParameterDialog(const QString cfg_str, const QString arg, void *userdata);
 
+    /* Signals activation and stop of a capture. The value provides the number of active captures */
+    void captureActive(int);
+
 public slots:
-    void clearRecentItems();
+    void clearRecentCaptures();
     void captureFileReadStarted();
-    void captureStarted() { active_captures_++; }
-    void captureFinished() { active_captures_--; }
+    void captureStarted();
+    void captureFinished();
     void updateTaps();
 
 private slots:
     void cleanup();
     void ifChangeEventsAvailable();
     void itemStatusFinished(const QString filename = "", qint64 size = 0, bool accessible = false);
-    void refreshRecentFiles(void);
+    void refreshRecentCaptures(void);
     void refreshAddressResolution(void);
 };
 

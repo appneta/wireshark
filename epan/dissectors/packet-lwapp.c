@@ -32,6 +32,9 @@
 void proto_register_lwapp(void);
 void proto_reg_handoff_lwapp(void);
 
+#define LWAPP_8023_PORT     12220 /* Not IANA registered */
+#define LWAPP_UDP_PORT_RANGE  "12222-12223" /* Not IANA registered */
+
 #define LWAPP_FLAGS_T 0x04
 #define LWAPP_FLAGS_F 0x02
 #define LWAPP_FLAGS_FT 0x01
@@ -514,14 +517,11 @@ proto_register_lwapp(void)
     };
     module_t *lwapp_module;
 
-    proto_lwapp = proto_register_protocol ("LWAPP Encapsulated Packet",
-                                         "LWAPP", "lwapp");
+    proto_lwapp = proto_register_protocol ("LWAPP Encapsulated Packet", "LWAPP", "lwapp");
 
-    proto_lwapp_l3 = proto_register_protocol ("LWAPP Layer 3 Packet",
-                                         "LWAPP-L3", "lwapp-l3");
+    proto_lwapp_l3 = proto_register_protocol_in_name_only ("LWAPP Layer 3 Packet", "LWAPP-L3", "lwapp-l3", proto_lwapp, FT_PROTOCOL);
 
-    proto_lwapp_control = proto_register_protocol ("LWAPP Control Message",
-                                         "LWAPP-CNTL", "lwapp-cntl");
+    proto_lwapp_control = proto_register_protocol_in_name_only ("LWAPP Control Message", "LWAPP-CNTL", "lwapp-cntl", proto_lwapp, FT_PROTOCOL);
     proto_register_field_array(proto_lwapp, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
 
@@ -573,12 +573,10 @@ proto_reg_handoff_lwapp(void)
      */
 
     /* Obsoleted LWAPP via encapsulated 802.3 over UDP */
-
-    dissector_add_uint("udp.port", 12220, lwapp_l3_handle);
+    dissector_add_uint_with_preference("udp.port", LWAPP_8023_PORT, lwapp_l3_handle);
 
     /* new-style lwapp directly over UDP: L3-lwapp*/
-    dissector_add_uint("udp.port", 12222, lwapp_handle);
-    dissector_add_uint("udp.port", 12223, lwapp_handle);
+    dissector_add_uint_range_with_preference("udp.port", LWAPP_UDP_PORT_RANGE, lwapp_handle);
 
     /* Lwapp over L2 */
     dissector_add_uint("ethertype", 0x88bb, lwapp_handle);

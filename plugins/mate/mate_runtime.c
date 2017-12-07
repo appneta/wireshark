@@ -46,7 +46,6 @@ typedef struct _gogkey {
 
 
 static mate_runtime_data* rd = NULL;
-static mate_config* mc = NULL;
 
 static int zero = 5;
 
@@ -131,11 +130,11 @@ static void destroy_gogs_in_cfg(gpointer k _U_, gpointer v, gpointer p _U_) {
 	c->last_id = 0;
 }
 
-void initialize_mate_runtime(void) {
+void initialize_mate_runtime(mate_config* mc) {
 
 	dbg_print (dbg,5,dbg_facility,"initialize_mate: entering");
 
-	if (( mc = mate_cfg() )) {
+	if (mc) {
 		if (rd == NULL ) {
 			rd = (mate_runtime_data *)g_malloc(sizeof(mate_runtime_data));
 		} else {
@@ -301,7 +300,7 @@ static void gog_remove_keys (mate_gog* gog) {
 
 }
 
-static void reanalyze_gop(mate_gop* gop) {
+static void reanalyze_gop(mate_config* mc, mate_gop* gop) {
 	LoAL* gog_keys = NULL;
 	AVPL* curr_gogkey = NULL;
 	mate_cfg_gop* gop_cfg = NULL;
@@ -333,7 +332,7 @@ static void reanalyze_gop(mate_gop* gop) {
 		while (( curr_gogkey = get_next_avpl(gog_keys,&cookie) )) {
 			gop_cfg = (mate_cfg_gop *)g_hash_table_lookup(mc->gopcfgs,curr_gogkey->name);
 
-			if (( gogkey_match = new_avpl_exact_match(gop_cfg->name,gog->avpl,curr_gogkey,FALSE) )) {
+			if (( gogkey_match = new_avpl_pairs_match(gop_cfg->name, gog->avpl, curr_gogkey, TRUE, FALSE) )) {
 
 				gog_key = (gogkey *)g_malloc(sizeof(gogkey));
 
@@ -372,7 +371,7 @@ static void reanalyze_gop(mate_gop* gop) {
 	}
 }
 
-static void analyze_gop(mate_gop* gop) {
+static void analyze_gop(mate_config* mc, mate_gop* gop) {
 	mate_cfg_gog* cfg = NULL;
 	LoAL* gog_keys = NULL;
 	AVPL* curr_gogkey = NULL;
@@ -397,7 +396,7 @@ static void analyze_gop(mate_gop* gop) {
 		dbg_print (dbg_gog,1,dbg_facility,"analyze_gop: got gog_keys: %s",gog_keys->name) ;
 
 		while (( curr_gogkey = get_next_avpl(gog_keys,&cookie) )) {
-			if (( gogkey_match = new_avpl_exact_match(gop->cfg->name,gop->avpl,curr_gogkey,TRUE) )) {
+			if (( gogkey_match = new_avpl_pairs_match(gop->cfg->name, gop->avpl, curr_gogkey, TRUE, TRUE) )) {
 
 				key = avpl_to_str(gogkey_match);
 
@@ -453,13 +452,13 @@ static void analyze_gop(mate_gop* gop) {
 
 		if (gogkey_match) delete_avpl(gogkey_match,TRUE);
 
-		reanalyze_gop(gop);
+		reanalyze_gop(mc, gop);
 	}
 }
 
 
 
-static void analyze_pdu(mate_pdu* pdu) {
+static void analyze_pdu(mate_config* mc, mate_pdu* pdu) {
 	/* TODO:
 	return a g_boolean to tell we've destroyed the pdu when the pdu is unnassigned
 	destroy the unassigned pdu
@@ -484,7 +483,7 @@ static void analyze_pdu(mate_pdu* pdu) {
 	if (! (cfg = (mate_cfg_gop *)g_hash_table_lookup(mc->gops_by_pduname,pdu->cfg->name)) )
 		return;
 
-	if ((gopkey_match = new_avpl_exact_match("gop_key_match",pdu->avpl,cfg->key, TRUE))) {
+	if ((gopkey_match = new_avpl_pairs_match("gop_key_match", pdu->avpl, cfg->key, TRUE, TRUE))) {
 		gop_key = avpl_to_str(gopkey_match);
 
 		g_hash_table_lookup_extended(cfg->gop_index,(gconstpointer)gop_key,(gpointer *)&orig_gop_key,(gpointer *)&gop);
@@ -512,7 +511,7 @@ static void analyze_pdu(mate_pdu* pdu) {
 
 				dbg_print (dbg_gop,2,dbg_facility,"analyze_pdu: got candidate start");
 
-				if (( is_start = new_avpl_exact_match("",pdu->avpl, candidate_start, FALSE) )) {
+				if (( is_start = new_avpl_pairs_match("", pdu->avpl, candidate_start, TRUE, FALSE) )) {
 					delete_avpl(is_start,FALSE);
 					if ( gop->released ) {
 						dbg_print (dbg_gop,3,dbg_facility,"analyze_pdu: start on released gop, let's create a new gop");
@@ -551,7 +550,7 @@ static void analyze_pdu(mate_pdu* pdu) {
 				if (gog_keys) {
 
 					while (( curr_gogkey = get_next_avpl(gog_keys,&cookie) )) {
-						if (( gogkey_match = new_avpl_exact_match(cfg->name,gopkey_match,curr_gogkey,FALSE) )) {
+						if (( gogkey_match = new_avpl_pairs_match(cfg->name, gopkey_match, curr_gogkey, TRUE, FALSE) )) {
 							gogkey_str = avpl_to_str(gogkey_match);
 
 							if (g_hash_table_lookup(cfg->gog_index,gogkey_str)) {
@@ -582,7 +581,7 @@ static void analyze_pdu(mate_pdu* pdu) {
 			} else {
 				candidate_start = cfg->start;
 
-				if (( is_start = new_avpl_exact_match("",pdu->avpl, candidate_start, FALSE) )) {
+				if (( is_start = new_avpl_pairs_match("", pdu->avpl, candidate_start, TRUE, FALSE) )) {
 					delete_avpl(is_start,FALSE);
 					gop = new_gop(cfg,pdu,gop_key);
 				} else {
@@ -618,7 +617,7 @@ static void analyze_pdu(mate_pdu* pdu) {
 			candidate_stop = cfg->stop;
 
 			if (candidate_stop) {
-				is_stop = new_avpl_exact_match("",pdu->avpl, candidate_stop,FALSE);
+				is_stop = new_avpl_pairs_match("", pdu->avpl, candidate_stop, TRUE, FALSE);
 			} else {
 				is_stop = new_avpl("");
 			}
@@ -643,9 +642,9 @@ static void analyze_pdu(mate_pdu* pdu) {
 		gop->last_n = gop->avpl->len;
 
 		if (gop->gog) {
-			reanalyze_gop(gop);
+			reanalyze_gop(mc, gop);
 		} else {
-			analyze_gop(gop);
+			analyze_gop(mc, gop);
 		}
 
 	} else {
@@ -833,7 +832,7 @@ static mate_pdu* new_pdu(mate_cfg_pdu* cfg, guint32 framenum, field_info* proto,
 }
 
 
-extern void mate_analyze_frame(packet_info *pinfo, proto_tree* tree) {
+extern void mate_analyze_frame(mate_config *mc, packet_info *pinfo, proto_tree* tree) {
 	mate_cfg_pdu* cfg;
 	GPtrArray* protos;
 	field_info* proto;
@@ -882,7 +881,7 @@ extern void mate_analyze_frame(packet_info *pinfo, proto_tree* tree) {
 						}
 					}
 
-					analyze_pdu(pdu);
+					analyze_pdu(mc, pdu);
 
 					if ( ! pdu->gop && cfg->drop_unassigned) {
 						delete_avpl(pdu->avpl,TRUE);

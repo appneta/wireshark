@@ -28,7 +28,7 @@
  *
  * http://standards.ieee.org/regauth/oui/oui.txt
  *
- * http://www.cisco.com/univercd/cc/td/doc/product/lan/trsrb/vlan.htm
+ * http://docstore.mik.ua/univercd/cc/td/doc/product/lan/trsrb/vlan.htm
  *
  * for the PIDs for VTP and DRiP that go with an OUI of OUI_CISCO.
  */
@@ -69,6 +69,7 @@
 #define OUI_IEEE_802_1QBG   0x001B3F    /* IEEE 802.1 Qbg */
 #define OUI_NINTENDO        0x001F32
 #define OUI_TURBOCELL       0x0020F6    /* KarlNet, who brought you Turbocell */
+#define OUI_AVAYA           0x00400D    /* Avaya */
 #define OUI_CISCOWL         0x004096    /* Cisco Wireless (Aironet) */
 #define OUI_MARVELL         0x005043    /* Marvell Semiconductor */
 #define OUI_WPAWME          0x0050F2    /* Wi-Fi : WPA / WME */
@@ -86,6 +87,8 @@
 #define OUI_HYTEC_GER       0x30B216    /* Hytec Geraetebau GmbH */
 #define OUI_WFA             0x506F9A    /* Wi-Fi Alliance */
 #define OUI_3GPP2           0xCF0002    /* 3GPP2 */
+#define OUI_MERU            0x000ce6    /* Meru Network (Fortinet) */
+#define OUI_ZEBRA_EXTREME   0x00A0F8    /* Extreme/WING (Zebra) */
 
 extern const value_string oui_vals[];
 

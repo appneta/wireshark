@@ -407,11 +407,39 @@ static int TreeItem_add_item_any(lua_State *L, gboolean little_endian) {
                     item = proto_tree_add_int64(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,checkInt64(L,1));
                     break;
                 case FT_IPv4:
-                    item = proto_tree_add_ipv4(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,*((const guint32*)(checkAddress(L,1)->data)));
+                    {
+                        Address addr = checkAddress(L,1);
+                        if (addr->type != AT_IPv4) {
+                            luaL_error(L, "Expected IPv4 address for FT_IPv4 field");
+                            return 0;
+                        }
+
+                        item = proto_tree_add_ipv4(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,*((const guint32*)(addr->data)));
+                    }
+                    break;
+                case FT_IPv6:
+                    {
+                        Address addr = checkAddress(L,1);
+                        if (addr->type != AT_IPv6) {
+                            luaL_error(L, "Expected IPv6 address for FT_IPv6 field");
+                            return 0;
+                        }
+
+                        item = proto_tree_add_ipv6(tree_item->tree, hfid, tvbr->tvb->ws_tvb, tvbr->offset, tvbr->len, (struct e_in6_addr *)addr->data);
+                    }
                     break;
                 case FT_ETHER:
+                    {
+                        Address addr = checkAddress(L,1);
+                        if (addr->type != AT_ETHER) {
+                            luaL_error(L, "Expected MAC address for FT_ETHER field");
+                            return 0;
+                        }
+
+                        item = proto_tree_add_ether(tree_item->tree, hfid, tvbr->tvb->ws_tvb, tvbr->offset, tvbr->len, (const guint8 *)addr->data);
+                    }
+                    break;
                 case FT_UINT_BYTES:
-                case FT_IPv6:
                 case FT_IPXNET:
                 case FT_GUID:
                 case FT_OID:
@@ -521,9 +549,10 @@ static int TreeItem_get_text(lua_State* L) {
     TreeItem ti = checkTreeItem(L,1);
     gchar label_str[ITEM_LABEL_LENGTH+1];
     gchar *label_ptr;
-    field_info *fi = PITEM_FINFO(ti->item);
 
-    if(fi) {
+    if (ti->item) {
+        field_info *fi = PITEM_FINFO(ti->item);
+
         if (!fi->rep) {
             label_ptr = label_str;
             proto_item_fill_label(fi, label_str);
@@ -837,6 +866,37 @@ WSLUA_METHOD TreeItem_set_len(lua_State *L) {
     WSLUA_RETURN(1); /* The same TreeItem. */
 }
 
+WSLUA_METHOD TreeItem_referenced(lua_State *L) {
+    /* Checks if a ProtoField or Dissector is referenced by a filter/tap/UI.
+
+    If this function returns FALSE, it means that the field (or dissector) does not need to be dissected
+    and can be safely skipped. By skipping a field rather than dissecting it, the dissector will
+    usually run faster since Wireshark will not do extra dissection work when it doesn't need the field.
+
+    You can use this in conjunction with the TreeItem.visible attribute. This function will always return
+    TRUE when the TreeItem is visible. When it is not visible and the field is not referenced, you can
+    speed up the dissection by not dissecting the field as it is not needed for display or filtering.
+
+    This function takes one parameter that can be a ProtoField or a Dissector. The Dissector form is
+    usefull when you need to decide whether to call a sub-dissector.
+
+    @since 2.4
+    */
+#define WSLUA_ARG_TreeItem_referenced_PROTOFIELD 2 /* The ProtoField or Dissector to check if referenced. */
+    TreeItem ti = checkTreeItem(L, 1);
+    if (!ti) return 0;
+    ProtoField f = shiftProtoField(L, WSLUA_ARG_TreeItem_referenced_PROTOFIELD);
+    if (f) {
+        lua_pushboolean(L, proto_field_is_referenced(ti->tree, f->hfid));
+    }
+    else {
+        Dissector d = checkDissector(L, WSLUA_ARG_TreeItem_referenced_PROTOFIELD);
+        if (!d) return 0;
+        lua_pushboolean(L, proto_field_is_referenced(ti->tree, dissector_handle_get_protocol_index(d)));
+    }
+    WSLUA_RETURN(1); /* A boolean indicating if the ProtoField/Dissector is referenced */
+}
+
 WSLUA_METAMETHOD TreeItem__tostring(lua_State* L) {
     /* Returns string debug information about the `TreeItem`.
 
@@ -892,6 +952,7 @@ WSLUA_METHODS TreeItem_methods[] = {
     WSLUA_CLASS_FNREG(TreeItem,set_generated),
     WSLUA_CLASS_FNREG(TreeItem,set_hidden),
     WSLUA_CLASS_FNREG(TreeItem,set_len),
+    WSLUA_CLASS_FNREG(TreeItem,referenced),
     { NULL, NULL }
 };
 

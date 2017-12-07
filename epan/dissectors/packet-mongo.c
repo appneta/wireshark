@@ -33,7 +33,6 @@
 
 #include <epan/packet.h>
 #include <epan/exceptions.h>
-#include <epan/prefs.h>
 #include <epan/expert.h>
 #include "packet-tcp.h"
 
@@ -54,6 +53,8 @@ static dissector_handle_t mongo_handle;
 #define OP_GET_MORE     2005
 #define OP_DELETE       2006
 #define OP_KILL_CURSORS 2007
+#define OP_COMMAND      2010
+#define OP_COMMANDREPLY 2011
 
 /**************************************************************************/
 /*                      OpCode                                            */
@@ -68,6 +69,8 @@ static const value_string opcode_vals[] = {
   { OP_GET_MORE,  "Get More" },
   { OP_DELETE,  "Delete document" },
   { OP_KILL_CURSORS,  "Kill Cursors" },
+  { OP_COMMAND,  "Command Request (Cluster internal)" },
+  { OP_COMMANDREPLY,  "Command Reply (Cluster internal)" },
   { 0,  NULL }
 };
 
@@ -203,9 +206,13 @@ static int hf_mongo_element_value_objectid_inc = -1;
 static int hf_mongo_element_value_db_ptr = -1;
 static int hf_mongo_element_value_js_code = -1;
 static int hf_mongo_element_value_js_scope = -1;
+static int hf_mongo_database = -1;
+static int hf_mongo_commandname = -1;
+static int hf_mongo_metadata = -1;
+static int hf_mongo_commandargs = -1;
+static int hf_mongo_commandreply = -1;
+static int hf_mongo_outputdocs = -1;
 static int hf_mongo_unknown = -1;
-
-static guint global_mongo_tcp_port = TCP_PORT_MONGO;
 
 static gint ett_mongo = -1;
 static gint ett_mongo_doc = -1;
@@ -579,6 +586,41 @@ dissect_mongo_kill_cursors(tvbuff_t *tvb, guint offset, proto_tree *tree)
 }
 
 static int
+dissect_mongo_op_command(tvbuff_t *tvb, packet_info *pinfo, guint offset, proto_tree *tree)
+{
+  gint32 db_length, cmd_length;
+
+  db_length = tvb_strsize(tvb, offset);
+  proto_tree_add_item(tree, hf_mongo_database, tvb, offset, db_length, ENC_ASCII|ENC_NA);
+  offset += db_length;
+
+  cmd_length = tvb_strsize(tvb, offset);
+  proto_tree_add_item(tree, hf_mongo_commandname, tvb, offset, cmd_length, ENC_ASCII|ENC_NA);
+  offset += cmd_length;
+
+  offset += dissect_bson_document(tvb, pinfo, offset, tree, hf_mongo_metadata, 1);
+
+  offset += dissect_bson_document(tvb, pinfo, offset, tree, hf_mongo_commandargs, 1);
+
+  return offset;
+}
+
+static int
+dissect_mongo_op_commandreply(tvbuff_t *tvb, packet_info *pinfo, guint offset, proto_tree *tree)
+{
+
+  offset += dissect_bson_document(tvb, pinfo, offset, tree, hf_mongo_metadata, 1);
+
+  offset += dissect_bson_document(tvb, pinfo, offset, tree, hf_mongo_commandreply, 1);
+
+  if (tvb_reported_length_remaining(tvb, offset) > 0){
+    offset += dissect_bson_document(tvb, pinfo, offset, tree, hf_mongo_outputdocs, 1);
+  }
+
+  return offset;
+}
+
+static int
 dissect_mongo_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
     proto_item *ti;
@@ -640,6 +682,12 @@ dissect_mongo_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
     case OP_KILL_CURSORS:
       offset = dissect_mongo_kill_cursors(tvb, offset, mongo_tree);
       break;
+    case OP_COMMAND:
+      offset = dissect_mongo_op_command(tvb, pinfo, offset, mongo_tree);
+      break;
+    case OP_COMMANDREPLY:
+      offset = dissect_mongo_op_commandreply(tvb, pinfo, offset, mongo_tree);
+      break;
     default:
       /* No default Action */
       break;
@@ -675,7 +723,6 @@ dissect_mongo(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 void
 proto_register_mongo(void)
 {
-  module_t *mongo_module;
   expert_module_t* expert_mongo;
 
   static hf_register_info hf[] = {
@@ -1008,6 +1055,36 @@ proto_register_mongo(void)
       FT_NONE, BASE_NONE, NULL, 0x0,
       "Scope document for JavaScript evaluation", HFILL }
     },
+    { &hf_mongo_database,
+      { "database", "mongo.database",
+      FT_STRING, BASE_NONE, NULL, 0x0,
+      "the name of the database to run the command on", HFILL }
+    },
+    { &hf_mongo_commandname,
+      { "commandName", "mongo.commandname",
+      FT_STRING, BASE_NONE, NULL, 0x0,
+      "the name of the command", HFILL }
+    },
+    { &hf_mongo_metadata,
+      { "metadata", "mongo.metadata",
+      FT_NONE, BASE_NONE, NULL, 0x0,
+      NULL, HFILL }
+    },
+    { &hf_mongo_commandargs,
+      { "CommandArgs", "mongo.commandargs",
+      FT_NONE, BASE_NONE, NULL, 0x0,
+      NULL, HFILL }
+    },
+    { &hf_mongo_commandreply,
+      { "CommandReply", "mongo.commandreply",
+      FT_NONE, BASE_NONE, NULL, 0x0,
+      NULL, HFILL }
+    },
+    { &hf_mongo_outputdocs,
+      { "OutputDocs", "mongo.outputdocs",
+      FT_NONE, BASE_NONE, NULL, 0x0,
+      NULL, HFILL }
+    },
     { &hf_mongo_unknown,
       { "Unknown", "mongo.unknown",
       FT_BYTES, BASE_NONE, NULL, 0x0,
@@ -1041,32 +1118,13 @@ proto_register_mongo(void)
   proto_register_subtree_array(ett, array_length(ett));
   expert_mongo = expert_register_protocol(proto_mongo);
   expert_register_field_array(expert_mongo, ei, array_length(ei));
-
-  mongo_module = prefs_register_protocol(proto_mongo,
-      proto_reg_handoff_mongo);
-
-  prefs_register_uint_preference(mongo_module, "tcp.port", "MONGO TCP Port",
-       "MONGO TCP port if other than the default",
-       10, &global_mongo_tcp_port);
 }
 
 
 void
 proto_reg_handoff_mongo(void)
 {
-  static gboolean initialized = FALSE;
-  static int currentPort;
-
-  if (!initialized) {
-    initialized = TRUE;
-  } else {
-    dissector_delete_uint("tcp.port", currentPort, mongo_handle);
-  }
-
-  currentPort = global_mongo_tcp_port;
-
-  dissector_add_uint("tcp.port", currentPort, mongo_handle);
-
+  dissector_add_uint_with_preference("tcp.port", TCP_PORT_MONGO, mongo_handle);
 }
 /*
  * Editor modelines

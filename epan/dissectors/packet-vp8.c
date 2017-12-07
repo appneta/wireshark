@@ -179,7 +179,6 @@ dissect_vp8(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
     gboolean hasHeader = FALSE;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "VP8");
-    col_clear(pinfo->cinfo, COL_INFO);
 
     item = proto_tree_add_item(tree, proto_vp8, tvb, 0, -1, ENC_NA);
     vp8_tree = proto_item_add_subtree(item, ett_vp8);
@@ -580,7 +579,7 @@ proto_register_vp8(void)
                             "; Values must be in the range 96 - 127",
                             &temp_dynamic_payload_type_range, 127);
 
-    register_dissector("vp8", dissect_vp8, proto_vp8);
+    vp8_handle = register_dissector("vp8", dissect_vp8, proto_vp8);
 }
 
 static void
@@ -602,15 +601,14 @@ proto_reg_handoff_vp8(void)
     static gboolean  vp8_prefs_initialized      = FALSE;
 
     if (!vp8_prefs_initialized) {
-        vp8_handle = find_dissector("vp8");
         dissector_add_string("rtp_dyn_payload_type" , "VP8", vp8_handle);
         vp8_prefs_initialized = TRUE;
     } else {
         range_foreach(dynamic_payload_type_range, range_delete_vp8_rtp_pt_callback);
-        g_free(dynamic_payload_type_range);
+        wmem_free(wmem_epan_scope(), dynamic_payload_type_range);
     }
 
-    dynamic_payload_type_range = range_copy(temp_dynamic_payload_type_range);
+    dynamic_payload_type_range = range_copy(wmem_epan_scope(), temp_dynamic_payload_type_range);
     range_foreach(dynamic_payload_type_range, range_add_vp8_rtp_pt_callback);
 }
 

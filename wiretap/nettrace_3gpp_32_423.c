@@ -269,7 +269,7 @@ nettrace_parse_begin_time(guint8 *curr_pos, struct wtap_pkthdr *phdr)
 			phdr->presence_flags = 0; /* yes, we have no bananas^Wtime stamp */
 			phdr->ts.secs = 0;
 			phdr->ts.nsecs = 0;
-			g_warning("Failed to parse second time format, scan_found %u", scan_found);
+			/* g_warning("Failed to parse second time format, scan_found %u", scan_found); */
 			return curr_pos;
 		}
 	}
@@ -282,7 +282,7 @@ nettrace_parse_begin_time(guint8 *curr_pos, struct wtap_pkthdr *phdr)
 			phdr->presence_flags = 0; /* yes, we have no bananas^Wtime stamp */
 			phdr->ts.secs = 0;
 			phdr->ts.nsecs = 0;
-			g_warning("Failed to parse time, month is %u", month);
+			/* g_warning("Failed to parse time, month is %u", month); */
 			return curr_pos;
 		}
 		tm.tm_mon = month - 1; /* Zero count*/
@@ -290,8 +290,8 @@ nettrace_parse_begin_time(guint8 *curr_pos, struct wtap_pkthdr *phdr)
 			phdr->presence_flags = 0; /* yes, we have no bananas^Wtime stamp */
 			phdr->ts.secs = 0;
 			phdr->ts.nsecs = 0;
-			g_warning("Failed to parse time, %u-%02u-%2u is not a valid day",
-			    year, month, day);
+			/* g_warning("Failed to parse time, %u-%02u-%2u is not a valid day",
+			    year, month, day); */
 			return curr_pos;
 		}
 		tm.tm_mday = day;
@@ -299,7 +299,7 @@ nettrace_parse_begin_time(guint8 *curr_pos, struct wtap_pkthdr *phdr)
 			phdr->presence_flags = 0; /* yes, we have no bananas^Wtime stamp */
 			phdr->ts.secs = 0;
 			phdr->ts.nsecs = 0;
-			g_warning("Failed to parse time, hour is %u", hour);
+			/* g_warning("Failed to parse time, hour is %u", hour); */
 			return curr_pos;
 		}
 		tm.tm_hour = hour;
@@ -307,7 +307,7 @@ nettrace_parse_begin_time(guint8 *curr_pos, struct wtap_pkthdr *phdr)
 			phdr->presence_flags = 0; /* yes, we have no bananas^Wtime stamp */
 			phdr->ts.secs = 0;
 			phdr->ts.nsecs = 0;
-			g_warning("Failed to parse time, minute is %u", minute);
+			/* g_warning("Failed to parse time, minute is %u", minute); */
 			return curr_pos;
 		}
 		tm.tm_min = minute;
@@ -319,7 +319,7 @@ nettrace_parse_begin_time(guint8 *curr_pos, struct wtap_pkthdr *phdr)
 			phdr->presence_flags = 0; /* yes, we have no bananas^Wtime stamp */
 			phdr->ts.secs = 0;
 			phdr->ts.nsecs = 0;
-			g_warning("Failed to parse time, second is %u", second);
+			/* g_warning("Failed to parse time, second is %u", second); */
 			return curr_pos;
 		}
 		tm.tm_sec = second;
@@ -337,7 +337,7 @@ nettrace_parse_begin_time(guint8 *curr_pos, struct wtap_pkthdr *phdr)
 			phdr->ts.secs = phdr->ts.secs + UTCdiffsec;
 		}
 	} else {
-		g_warning("Failed to parse time, only %u fields", scan_found);
+		/* g_warning("Failed to parse time, only %u fields", scan_found); */
 		phdr->presence_flags = 0; /* yes, we have no bananas^Wtime stamp */
 		phdr->ts.secs = 0;
 		phdr->ts.nsecs = 0;
@@ -788,8 +788,7 @@ create_temp_pcapng_file(wtap *wth, int *err, gchar **err_info, nettrace_3gpp_32_
 	int_data_mand = (wtapng_if_descr_mandatory_t*)wtap_block_get_mandatory_data(int_data);
 	int_data_mand->wtap_encap = WTAP_ENCAP_WIRESHARK_UPPER_PDU;
 	int_data_mand->time_units_per_second = 1000000; /* default microsecond resolution */
-	int_data_mand->link_type = wtap_wtap_encap_to_pcap_encap(WTAP_ENCAP_WIRESHARK_UPPER_PDU);
-	int_data_mand->snap_len = WTAP_MAX_PACKET_SIZE;
+	int_data_mand->snap_len = WTAP_MAX_PACKET_SIZE_STANDARD;
 	wtap_block_add_string_option(int_data, OPT_IDB_NAME, "Fake IF", strlen("Fake IF"));
 	int_data_mand->num_stat_entries = 0;          /* Number of ISB:s */
 	int_data_mand->interface_statistics = NULL;
@@ -797,7 +796,7 @@ create_temp_pcapng_file(wtap *wth, int *err, gchar **err_info, nettrace_3gpp_32_
 	g_array_append_val(idb_inf->interface_data, int_data);
 
 	wdh_exp_pdu = wtap_dump_fdopen_ng(import_file_fd, WTAP_FILE_TYPE_SUBTYPE_PCAPNG, WTAP_ENCAP_WIRESHARK_UPPER_PDU,
-					  WTAP_MAX_PACKET_SIZE, FALSE, shb_hdrs, idb_inf, NULL, &exp_pdu_file_err);
+					  WTAP_MAX_PACKET_SIZE_STANDARD, FALSE, shb_hdrs, idb_inf, NULL, &exp_pdu_file_err);
 	if (wdh_exp_pdu == NULL) {
 		result = WTAP_OPEN_ERROR;
 		goto end;
@@ -978,7 +977,7 @@ create_temp_pcapng_file(wtap *wth, int *err, gchar **err_info, nettrace_3gpp_32_
 					}
 					exported_pdu_info.src_port = port;
 				} else {
-					g_warning("scan_found:%u, %u.%u.%u.%u Port %u transport %s", scan_found, d1, d2, d3, d4, port, transp_str);
+					/* g_warning("scan_found:%u, %u.%u.%u.%u Port %u transport %s", scan_found, d1, d2, d3, d4, port, transp_str); */
 				}
 			} else {
 				/* address not found*/
@@ -1024,7 +1023,7 @@ create_temp_pcapng_file(wtap *wth, int *err, gchar **err_info, nettrace_3gpp_32_
 					}
 					exported_pdu_info.dst_port = port;
 				} else {
-					g_warning("scan_found:%u, %u.%u.%u.%u Port %u transport %s", scan_found, d1, d2, d3, d4, port, transp_str);
+					/* g_warning("scan_found:%u, %u.%u.%u.%u Port %u transport %s", scan_found, d1, d2, d3, d4, port, transp_str); */
 				}
 			}
 			else {

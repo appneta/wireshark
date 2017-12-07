@@ -36,6 +36,10 @@
 
 #include <caputils/capture_ifinfo.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -50,6 +54,9 @@ extern "C" {
  * component of the entry for the long option, and have a case for that
  * option in the switch statement.
  *
+ * We also pick values < 4096, so as to leave values >= 4096 for
+ * other long options.
+ *
  * NOTE:
  * for tshark, we're using a leading - in the optstring to prevent getopt()
  * from permuting the argv[] entries, in this case, unknown argv[] entries
@@ -58,15 +65,6 @@ extern "C" {
  * values outside the range of ASCII graphic characters.
  */
 #define LONGOPT_NUM_CAP_COMMENT 128
-
-/*
- * Non-capture long-only options should start here, to avoid collision
- * with capture options.
- */
-#define MIN_NON_CAPTURE_LONGOPT  129
-#define LONGOPT_DISABLE_PROTOCOL  130
-#define LONGOPT_ENABLE_HEURISTIC  131
-#define LONGOPT_DISABLE_HEURISTIC 132
 
 /*
  * Options for capturing common to all capturing programs.
@@ -106,9 +104,6 @@ extern "C" {
     {"no-promiscuous-mode",  no_argument,       NULL, 'p'}, \
     {"snapshot-length",      required_argument, NULL, 's'}, \
     {"linktype",             required_argument, NULL, 'y'}, \
-    {"disable-protocol", required_argument, NULL, LONGOPT_DISABLE_PROTOCOL }, \
-    {"enable-heuristic", required_argument, NULL, LONGOPT_ENABLE_HEURISTIC }, \
-    {"disable-heuristic", required_argument, NULL, LONGOPT_DISABLE_HEURISTIC },
 
 #define OPTSTRING_CAPTURE_COMMON \
     "a:" OPTSTRING_A "b:" OPTSTRING_B "c:Df:i:" OPTSTRING_I "Lps:y:"
@@ -143,22 +138,22 @@ typedef enum {
 
 #ifdef HAVE_PCAP_REMOTE
 struct remote_host_info {
-    gchar    *remote_host;      /**< Host name or network address for remote capturing */
-    gchar    *remote_port;      /**< TCP port of remote RPCAP server */
-    gint      auth_type;        /**< Authentication type */
-    gchar    *auth_username;    /**< Remote authentication parameters */
-    gchar    *auth_password;    /**< Remote authentication parameters */
-    gboolean  datatx_udp;
-    gboolean  nocap_rpcap;
-    gboolean  nocap_local;
+    gchar        *remote_host;      /**< Host name or network address for remote capturing */
+    gchar        *remote_port;      /**< TCP port of remote RPCAP server */
+    capture_auth  auth_type;        /**< Authentication type */
+    gchar        *auth_username;    /**< Remote authentication parameters */
+    gchar        *auth_password;    /**< Remote authentication parameters */
+    gboolean      datatx_udp;
+    gboolean      nocap_rpcap;
+    gboolean      nocap_local;
 };
 
 struct remote_host {
-    gchar    *r_host;           /**< Host name or network address for remote capturing */
-    gchar    *remote_port;      /**< TCP port of remote RPCAP server */
-    gint      auth_type;        /**< Authentication type */
-    gchar    *auth_username;    /**< Remote authentication parameters */
-    gchar    *auth_password;    /**< Remote authentication parameters */
+    gchar        *r_host;           /**< Host name or network address for remote capturing */
+    gchar        *remote_port;      /**< TCP port of remote RPCAP server */
+    capture_auth  auth_type;        /**< Authentication type */
+    gchar        *auth_username;    /**< Remote authentication parameters */
+    gchar        *auth_password;    /**< Remote authentication parameters */
 };
 
 typedef struct remote_options_tag {
@@ -235,6 +230,13 @@ typedef struct interface_options_tag {
     GPid              extcap_pid;           /* pid of running process or INVALID_EXTCAP_PID */
     gpointer          extcap_userdata;
     guint             extcap_child_watch;
+#ifdef _WIN32
+    HANDLE            extcap_pipe_h;
+    HANDLE            extcap_control_in_h;
+    HANDLE            extcap_control_out_h;
+#endif
+    gchar            *extcap_control_in;
+    gchar            *extcap_control_out;
 #endif
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
     int               buffer_size;
@@ -334,6 +336,10 @@ typedef struct capture_options_tag {
 /* initialize the capture_options with some reasonable values */
 extern void
 capture_opts_init(capture_options *capture_opts);
+
+/* clean internal structures */
+extern void
+capture_opts_cleanup(capture_options *capture_opts);
 
 /* set a command line option value */
 extern int

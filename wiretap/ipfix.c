@@ -67,6 +67,8 @@
 #include "file_wrappers.h"
 #include "ipfix.h"
 
+#include <wsutil/strtoi.h>
+
 #if 0
 #define ipfix_debug(...) g_warning(__VA_ARGS__)
 #else
@@ -159,7 +161,7 @@ ipfix_read_message(FILE_T fh, struct wtap_pkthdr *phdr, Buffer *buf, int *err, g
         return FALSE;
     /*
      * The maximum value of msg_hdr.message_length is 65535, which is
-     * less than WTAP_MAX_PACKET_SIZE will ever be, so we don't need
+     * less than WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't need
      * to check it.
      */
 
@@ -192,7 +194,7 @@ ipfix_open(wtap *wth, int *err, gchar **err_info)
 
     /* number of records to scan before deciding if this really is IPFIX */
     if ((s = getenv("IPFIX_RECORDS_TO_CHECK")) != NULL) {
-        if ((n = atoi(s)) > 0 && n < 101) {
+        if (ws_strtoi32(s, NULL, &n) && n > 0 && n < 101) {
             records_for_ipfix_check = n;
         }
     }

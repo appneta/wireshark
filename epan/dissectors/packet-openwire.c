@@ -1814,7 +1814,7 @@ proto_register_openwire(void)
         { "UserID", "openwire.message.userid", FT_STRINGZ, BASE_NONE, NULL, 0x0, "Openwire message UserID", HFILL }},
 
      { &hf_openwire_message_receivedbydfbridge,
-        { "RecievedByDFBridge", "openwire.message.receivedbydfbridge", FT_UINT8, BASE_DEC, NULL, 0x0, "Openwire message ReceivedByDFBridge", HFILL }},
+        { "ReceivedByDFBridge", "openwire.message.receivedbydfbridge", FT_UINT8, BASE_DEC, NULL, 0x0, "Openwire message ReceivedByDFBridge", HFILL }},
 
      { &hf_openwire_message_droppable,
         { "Droppable", "openwire.message.droppable", FT_UINT8, BASE_DEC, NULL, 0x0, "Openwire message Droppable", HFILL }},
@@ -2006,7 +2006,7 @@ proto_reg_handoff_openwire(void)
 {
     heur_dissector_add("tcp", dissect_openwire_heur, "OpenWire over TCP", "openwire_tcp", proto_openwire, HEURISTIC_ENABLE);
     openwire_tcp_handle = create_dissector_handle(dissect_openwire_tcp, proto_openwire);
-    dissector_add_for_decode_as("tcp.port", openwire_tcp_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", openwire_tcp_handle);
 }
 
 /*

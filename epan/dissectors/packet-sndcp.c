@@ -97,22 +97,12 @@ static const fragment_items npdu_frag_items = {
 /* dissectors for the data portion of this protocol
  */
 static dissector_handle_t ip_handle;
+static dissector_handle_t sndcp_handle;
+
 
 /* reassembly of N-PDU
  */
 static reassembly_table npdu_reassembly_table;
-
-static void
-sndcp_defragment_init(void)
-{
-  reassembly_table_init(&npdu_reassembly_table, &addresses_reassembly_table_functions);
-}
-
-static void
-sndcp_defragment_cleanup(void)
-{
-  reassembly_table_destroy(&npdu_reassembly_table);
-}
 
 /* value strings
  */
@@ -559,9 +549,8 @@ proto_register_sndcp(void)
   /* Required function calls to register the header fields and subtrees used */
   proto_register_field_array(proto_sndcp, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
-  register_dissector("sndcp", dissect_sndcp, proto_sndcp);
-  register_init_routine(sndcp_defragment_init);
-  register_cleanup_routine(sndcp_defragment_cleanup);
+  sndcp_handle = register_dissector("sndcp", dissect_sndcp, proto_sndcp);
+  reassembly_table_register(&npdu_reassembly_table, &addresses_reassembly_table_functions);
 }
 
 /* If this dissector uses sub-dissector registration add a registration routine.
@@ -571,10 +560,6 @@ proto_register_sndcp(void)
 void
 proto_reg_handoff_sndcp(void)
 {
-  dissector_handle_t sndcp_handle;
-
-  sndcp_handle = find_dissector("sndcp");
-
   /* Register SNDCP dissector with LLC layer for SAPI 3,5,9 and 11
    */
   dissector_add_uint("llcgprs.sapi",  3, sndcp_handle);

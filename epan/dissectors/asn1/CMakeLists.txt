@@ -72,10 +72,12 @@ set(ASN1_SRC_DIRS
 	lppa
 	lppe
 	lte-rrc
+	m2ap
 	m3ap
 	mms
 	mpeg-audio
 	mpeg-pes
+	mudurl
 	nbap
 	ns_cert_exts
 	novell_pkis

@@ -22,38 +22,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
-
-/*
- * TODO:
- *	Find out the Unknown values
  *
- * Specs:
- *	No real specs exist. Some general description can be found at:
- *	http://www.cisco.com/en/US/products/hw/routers/ps368/products_configuration_guide_chapter09186a008069952a.html
+ * Protocol Spec:
+ *   https://tools.ietf.org/html/draft-foschiano-erspan-01
  *
- *	Some information on ERSPAN type III can be found at:
- *	http://www.cisco.com/en/US/docs/switches/datacenter/nexus1000/sw/4_0_4_s_v_1_3/system_management/configuration/guide/n1000v_system_9span.html
- *
- *	For ERSPAN packets, the "protocol type" field value in the GRE header
- *	is 0x88BE (version 1) or 0x22EB (version 2).
- *
- *	ERSPAN type II is version 1
- *	ERSPAN type III is version 2
- *
- * 0000000: d4c3 b2a1 0200 0400 0000 0000 0000 0000 <-- pcap header
- * 0000010: ffff 0000
- * 0000010:           7100 0000 <-- 0x71 (DLT_TYPE) = linux_cooked_capture (of course not)
- * 0000010:                     7507 f845 11d1 0500 <-- pcap record header
- * 0000020: 7a00 0000 7a00 0000
- * 0000020:                     0000 030a 0000 0000 <-- unknown
- * 0000030: 0000 0000
- * 0000030:           0000 88be <-- GRE header (version 1)
- * 0000030:                     1002 0001 0000 0380 <-- ERSPAN header (01: erspan-id)
- * 0000040: 00d0 b7a7 7480 0015 c721 75c0 0800 4500 <-- Ethernet packet
- * ...
- *
- *
+ * For ERSPAN packets, the "protocol type" field value in the GRE header
+ * is 0x88BE (version 1) or 0x22EB (version 2).
+ *   ERSPAN type II is version 1
+ *   ERSPAN type III is version 2
  */
 
 #include "config.h"
@@ -88,6 +64,24 @@ static int hf_erspan_hw = -1;
 static int hf_erspan_gra = -1;
 static int hf_erspan_o = -1;
 
+/* Optional Sub-header */
+static int hf_erspan_platid = -1;
+/* Platform ID = 1 */
+static int hf_erspan_pid1_domain_id = -1;
+static int hf_erspan_pid1_port_index = -1;
+/* Platform ID = 3 */
+static int hf_erspan_pid3_port_index = -1;
+static int hf_erspan_pid3_timestamp = -1;
+/* Platform ID = 4 */
+static int hf_erspan_pid4_rsvd1 = -1;
+static int hf_erspan_pid4_rsvd2 = -1;
+static int hf_erspan_pid4_rsvd3 = -1;
+/* Platform ID = 5 or 6 */
+static int hf_erspan_pid5_switchid = -1;
+static int hf_erspan_pid5_port_index = -1;
+static int hf_erspan_pid5_timestamp = -1;
+/* ID: 0x0, 0x2, 0x7-0x63 are reserved. */
+static int hf_erspan_pid_rsvd = -1;
 
 static expert_field ei_erspan_version_unknown = EI_INIT;
 
@@ -148,6 +142,7 @@ dissect_erspan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 	tvbuff_t *eth_tvb;
 	guint32 offset = 0;
 	guint16 version;
+	guint16 subheader = 0;
 
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_SHORT_NAME);
 	col_set_str(pinfo->cinfo, COL_INFO, PROTO_SHORT_NAME ":");
@@ -168,73 +163,137 @@ dissect_erspan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 
 
 	version = tvb_get_ntohs(tvb, offset) >> 12;
-	if (tree) {
-		ti_ver = proto_tree_add_item(erspan_tree, hf_erspan_version, tvb, offset, 2,
+
+	ti_ver = proto_tree_add_item(erspan_tree, hf_erspan_version, tvb, offset, 2,
+		ENC_BIG_ENDIAN);
+	if ((version != 1) && (version != 2 )) {
+		expert_add_info(pinfo, ti_ver, &ei_erspan_version_unknown);
+		return 2;
+	}
+	proto_tree_add_item(erspan_tree, hf_erspan_vlan, tvb, offset, 2,
+		ENC_BIG_ENDIAN);
+	offset += 2;
+
+	proto_tree_add_item(erspan_tree, hf_erspan_priority, tvb, offset, 2,
+		ENC_BIG_ENDIAN);
+
+	if (version == 1)
+		proto_tree_add_item(erspan_tree, hf_erspan_encap, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+	else
+		proto_tree_add_item(erspan_tree, hf_erspan_bso, tvb, offset, 2,
 			ENC_BIG_ENDIAN);
-		if ((version != 1) && (version != 2 )) {
-			expert_add_info(pinfo, ti_ver, &ei_erspan_version_unknown);
-			return 2;
-		}
-		proto_tree_add_item(erspan_tree, hf_erspan_vlan, tvb, offset, 2,
-			ENC_BIG_ENDIAN);
-		offset += 2;
-
-		proto_tree_add_item(erspan_tree, hf_erspan_priority, tvb, offset, 2,
-			ENC_BIG_ENDIAN);
-
-		if (version == 1)
-			proto_tree_add_item(erspan_tree, hf_erspan_encap, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-		else
-			proto_tree_add_item(erspan_tree, hf_erspan_bso, tvb, offset, 2,
-				ENC_BIG_ENDIAN);
 
 
-		proto_tree_add_item(erspan_tree, hf_erspan_truncated, tvb, offset, 2,
-			ENC_BIG_ENDIAN);
-		proto_tree_add_item(erspan_tree, hf_erspan_spanid, tvb, offset, 2,
-			ENC_BIG_ENDIAN);
-		offset += 2;
+	proto_tree_add_item(erspan_tree, hf_erspan_truncated, tvb, offset, 2,
+		ENC_BIG_ENDIAN);
+	proto_tree_add_item(erspan_tree, hf_erspan_spanid, tvb, offset, 2,
+		ENC_BIG_ENDIAN);
+	offset += 2;
 
-		if (version == 1) {
-			proto_tree_add_item(erspan_tree, hf_erspan_index, tvb,
-				offset, 4, ENC_BIG_ENDIAN);
-			offset += 4;
-		}
-		else {
-			proto_tree_add_item(erspan_tree, hf_erspan_timestamp, tvb,
-				offset, 4, ENC_BIG_ENDIAN);
-			offset += 4;
-
-			proto_tree_add_item(erspan_tree, hf_erspan_sgt, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-			offset += 2;
-
-			proto_tree_add_item(erspan_tree, hf_erspan_p, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-
-			proto_tree_add_item(erspan_tree, hf_erspan_ft, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-
-			proto_tree_add_item(erspan_tree, hf_erspan_hw, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-
-			proto_tree_add_item(erspan_tree, hf_erspan_direction2, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-
-			proto_tree_add_item(erspan_tree, hf_erspan_gra, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-
-			proto_tree_add_item(erspan_tree, hf_erspan_o, tvb,
-				offset, 2, ENC_BIG_ENDIAN);
-			offset += 2;
-		}
-
+	if (version == 1) {
+		proto_tree_add_item(erspan_tree, hf_erspan_index, tvb,
+			offset, 4, ENC_BIG_ENDIAN);
+		offset += 4;
 	}
 	else {
-		offset += 8;
-		if (version == 2)
-			offset += 12;
+		proto_tree_add_item(erspan_tree, hf_erspan_timestamp, tvb,
+			offset, 4, ENC_BIG_ENDIAN);
+		offset += 4;
+
+		proto_tree_add_item(erspan_tree, hf_erspan_sgt, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+		offset += 2;
+
+		proto_tree_add_item(erspan_tree, hf_erspan_p, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+
+		proto_tree_add_item(erspan_tree, hf_erspan_ft, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+
+		proto_tree_add_item(erspan_tree, hf_erspan_hw, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+
+		proto_tree_add_item(erspan_tree, hf_erspan_direction2, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+
+		proto_tree_add_item(erspan_tree, hf_erspan_gra, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+
+		proto_tree_add_item(erspan_tree, hf_erspan_o, tvb,
+			offset, 2, ENC_BIG_ENDIAN);
+
+		subheader = tvb_get_ntohs(tvb, offset) & 0x1;
+		offset += 2;
+
+		/* Platform Sepcific SubHeader, 8 octets, optional */
+		if (subheader) {
+			gint32 platform_id = tvb_get_ntohl(tvb, offset) >> 26;
+
+			proto_tree_add_item(erspan_tree, hf_erspan_platid, tvb,
+					offset, 2, ENC_BIG_ENDIAN);
+
+			switch (platform_id) {
+				case 1:
+					offset += 2;
+
+					proto_tree_add_item(erspan_tree, hf_erspan_pid1_domain_id,
+						tvb, offset, 2, ENC_BIG_ENDIAN);
+					offset += 2;
+
+					proto_tree_add_item(erspan_tree, hf_erspan_pid1_port_index,
+						tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					break;
+
+				case 3:
+					offset += 2;
+
+					proto_tree_add_item(erspan_tree, hf_erspan_pid3_port_index,
+						tvb, offset, 2, ENC_BIG_ENDIAN);
+					offset += 2;
+
+					proto_tree_add_item(erspan_tree, hf_erspan_pid3_timestamp,
+						tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					break;
+
+				case 4:
+					proto_tree_add_item(erspan_tree, hf_erspan_pid4_rsvd1, tvb,
+						offset, 4, ENC_BIG_ENDIAN);
+					proto_tree_add_item(erspan_tree, hf_erspan_pid4_rsvd2, tvb,
+						offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+
+					proto_tree_add_item(erspan_tree, hf_erspan_pid4_rsvd3, tvb,
+						offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					break;
+
+				case 5:
+				case 6:
+					proto_tree_add_item(erspan_tree, hf_erspan_pid5_switchid,
+						tvb, offset, 2, ENC_BIG_ENDIAN);
+					offset += 2;
+
+					proto_tree_add_item(erspan_tree, hf_erspan_pid5_port_index,
+						tvb, offset, 2, ENC_BIG_ENDIAN);
+					offset += 2;
+
+					proto_tree_add_item(erspan_tree, hf_erspan_pid5_timestamp,
+						tvb, offset, 4, ENC_BIG_ENDIAN);
+					offset += 4;
+					break;
+
+				default:
+					/* ID: 0x0, 0x2, 0x7-0x63 are reserved. */
+					proto_tree_add_item(erspan_tree, hf_erspan_pid_rsvd,
+						tvb, offset, 8, ENC_BIG_ENDIAN);
+					offset += 8;
+					break;
+
+			}
+		}
 	}
 
 	eth_tvb = tvb_new_subset_remaining(tvb, offset);
@@ -309,14 +368,68 @@ proto_register_erspan(void)
 		{ "Timestamp granularity", "erspan.gra", FT_UINT16, BASE_DEC, VALS(erspan_granularity_vals),
 			0x0006, NULL, HFILL }},
 
+		{ &hf_erspan_direction2,
+		{ "Direction",	"erspan.direction2", FT_UINT16, BASE_DEC, VALS(erspan_direction_vals),
+			0x0008, NULL, HFILL }},
 
 		{ &hf_erspan_o,
 		{ "Optional Sub headers", "erspan.o", FT_UINT16, BASE_DEC, NULL,
 			0x0001, NULL, HFILL }},
 
-		{ &hf_erspan_direction2,
-		{ "Direction",	"erspan.direction2", FT_UINT16, BASE_DEC, VALS(erspan_direction_vals),
-			0x0008, NULL, HFILL }},
+		/* Sub-header Fields, optional */
+		{ &hf_erspan_platid,
+		{ "Platform ID", "erspan.platid", FT_UINT16, BASE_DEC, NULL,
+			0xfc00, NULL, HFILL }},
+
+		/* ID = 1 */
+		{ &hf_erspan_pid1_domain_id,
+		{ "VSM Domain ID", "erspan.pid1.vsmid", FT_UINT16, BASE_DEC, NULL,
+			0x0fff, NULL, HFILL }},
+
+		{ &hf_erspan_pid1_port_index,
+		{ "Port ID/Index", "erspan.pid1.port_index", FT_UINT32, BASE_DEC, NULL,
+			0xffffffff, NULL, HFILL }},
+
+		/* ID = 3 */
+		{ &hf_erspan_pid3_port_index,
+		{ "Port ID/Index", "erspan.pid3.port_index", FT_UINT16, BASE_DEC, NULL,
+			0x3fff, NULL, HFILL }},
+
+		{ &hf_erspan_pid3_timestamp,
+		{ "Upper 32-bit Timestamp", "erspan.pid3.timestamp", FT_UINT32, BASE_DEC, NULL,
+			0xffffffff, NULL, HFILL }},
+
+		/* ID = 4 */
+		{ &hf_erspan_pid4_rsvd1,
+		{ "Reserved", "erspan.pid4.rsvd1", FT_UINT32, BASE_DEC, NULL,
+			0x3ffc0000, NULL, HFILL }},
+
+		{ &hf_erspan_pid4_rsvd2,
+		{ "Reserved", "erspan.pid4.rsvd2", FT_UINT32, BASE_DEC, NULL,
+			0x00003fff, NULL, HFILL }},
+
+		{ &hf_erspan_pid4_rsvd3,
+		{ "Reserved", "erspan.pid4.rsvd3", FT_UINT32, BASE_DEC, NULL,
+			0xffffffff, NULL, HFILL }},
+
+		/* ID = 5 or 6 */
+		{ &hf_erspan_pid5_switchid,
+		{ "Switch ID", "erspan.pid5.switchid", FT_UINT16, BASE_DEC, NULL,
+			0x03ff, NULL, HFILL }},
+
+		{ &hf_erspan_pid5_port_index,
+		{ "Port ID/Index", "erspan.pid5.port_index", FT_UINT16, BASE_DEC, NULL,
+			0xffff, NULL, HFILL }},
+
+		{ &hf_erspan_pid5_timestamp,
+		{ "Timestamp (seconds)", "erspan.pid5.timestamp", FT_UINT32, BASE_DEC, NULL,
+			0xffffffff, NULL, HFILL }},
+
+		/* Reserved */
+		{ &hf_erspan_pid_rsvd,
+		{ "Reserved", "erspan.pid.rsvd", FT_UINT64, BASE_DEC, NULL,
+			0x03ffffff, NULL, HFILL }},
+
 	};
 
 	static gint *ett[] = {

@@ -232,6 +232,7 @@ static int hf_var_devce_cyclic_data_block_size     = -1;
 static int hf_var_devce_cyclic_rw_block_size       = -1;
 static int hf_var_devce_event_block_size           = -1;
 static int hf_var_devce_service_block_size         = -1;
+static int hf_cip_data                             = -1;
 
 /* Subtree pointers for the dissection */
 static gint ett_cipmotion           = -1;
@@ -341,7 +342,7 @@ static const value_string cip_axis_control_vals[] =
 {
    { 0,    "No Request"               },
    { 1,    "Enable Request"           },
-   { 2,    "Disble Request"           },
+   { 2,    "Disable Request"          },
    { 3,    "Shutdown Request"         },
    { 4,    "Shutdown Reset Request"   },
    { 5,    "Abort Request"            },
@@ -442,7 +443,7 @@ static const value_string cip_event_type_vals[] = {
 #define SC_RUN_INERTIA_TEST         0x51
 #define SC_GET_INERTIA_TEST_DATA    0x52
 #define SC_RUN_HOOKUP_TEST          0x53
-#define SC_GET_HOOKUP_TEST_DATA     0x53
+#define SC_GET_HOOKUP_TEST_DATA     0x54
 
 /* Translate function to string - CIP Service codes */
 static const value_string cip_sc_vals[] = {
@@ -454,7 +455,7 @@ static const value_string cip_sc_vals[] = {
    { SC_RUN_MOTOR_TEST,            "Run Motor Test"            },
    { SC_GET_MOTOR_TEST_DATA,       "Get Motor Test Data"       },
    { SC_RUN_INERTIA_TEST,          "Run Inertia Test"          },
-   { SC_GET_INERTIA_TEST_DATA,     "Get Intertia Test Data"    },
+   { SC_GET_INERTIA_TEST_DATA,     "Get Inertia Test Data"     },
    { SC_RUN_HOOKUP_TEST,           "Run Hookup Test"           },
    { SC_GET_HOOKUP_TEST_DATA,      "Get Hookup Test Data"      },
    { 0,                            NULL                        }
@@ -1520,7 +1521,6 @@ static void
 dissect_var_inst_header(tvbuff_t* tvb, proto_tree* tree, guint32 offset, guint8* inst_number, guint32* cyc_size,
                         guint32* cyc_blk_size, guint32* evnt_size, guint32* servc_size)
 {
-   guint8      temp_data;
    proto_tree *header_tree;
 
    /* Create the tree for the entire instance data header */
@@ -1533,37 +1533,29 @@ dissect_var_inst_header(tvbuff_t* tvb, proto_tree* tree, guint32 offset, guint8*
    proto_tree_add_item(header_tree, hf_var_devce_instance, tvb, offset, 1, ENC_LITTLE_ENDIAN);
 
    /* The "size" fields in the instance data block header are all stored as number of 32-bit words the
-   * block uses since all blocks should pad up to 32-bits so to convert to bytes each is mulitplied by 4 */
+   * block uses since all blocks should pad up to 32-bits so to convert to bytes each is multiplied by 4 */
 
    /* Read the instance block size field in bytes from the instance data header */
-   temp_data = tvb_get_guint8(tvb, offset + 2);
-   proto_tree_add_uint_format_value(header_tree, hf_var_devce_instance_block_size,
-                                    tvb, offset + 2, 1, temp_data, "%d words", temp_data);
+   proto_tree_add_item(header_tree, hf_var_devce_instance_block_size, tvb, offset + 2, 1, ENC_NA);
 
    /* Read the cyclic block size field in bytes from the instance data header */
-   temp_data = tvb_get_guint8(tvb, offset + 3);
-   proto_tree_add_uint_format_value(header_tree, hf_var_devce_cyclic_block_size,
-                                    tvb, offset + 3, 1, temp_data, "%d words", temp_data);
+   proto_tree_add_item(header_tree, hf_var_devce_cyclic_block_size, tvb, offset + 3, 1, ENC_NA);
 
    /* Read the cyclic command block size field in bytes from the instance data header */
    *cyc_size = (tvb_get_guint8(tvb, offset + 4) * 4);
-   proto_tree_add_uint_format_value(header_tree, hf_var_devce_cyclic_data_block_size,
-                                    tvb, offset + 4, 1, (*cyc_size)/4, "%d words", (*cyc_size)/4);
+   proto_tree_add_item(header_tree, hf_var_devce_cyclic_data_block_size, tvb, offset + 4, 1, ENC_NA);
 
    /* Read the cyclic write block size field in bytes from the instance data header */
    *cyc_blk_size = (tvb_get_guint8(tvb, offset + 5) * 4);
-   proto_tree_add_uint_format_value(header_tree, hf_var_devce_cyclic_rw_block_size,
-                                    tvb, offset + 5, 1, (*cyc_blk_size)/4, "%d words", (*cyc_blk_size)/4);
+   proto_tree_add_item(header_tree, hf_var_devce_cyclic_rw_block_size, tvb, offset + 5, 1, ENC_NA);
 
    /* Read the event block size in bytes from the instance data header */
    *evnt_size = (tvb_get_guint8(tvb, offset + 6) * 4);
-   proto_tree_add_uint_format_value(header_tree, hf_var_devce_event_block_size,
-                                    tvb, offset + 6, 1, (*evnt_size)/4, "%d words", (*evnt_size)/4);
+   proto_tree_add_item(header_tree, hf_var_devce_event_block_size, tvb, offset + 6, 1, ENC_NA);
 
    /* Read the service block size in bytes from the instance data header */
    *servc_size = (tvb_get_guint8(tvb, offset + 7) * 4);
-   proto_tree_add_uint_format_value(header_tree, hf_var_devce_service_block_size,
-                                    tvb, offset + 7, 1, (*servc_size)/4, "%d words", (*servc_size)/4);
+   proto_tree_add_item(header_tree, hf_var_devce_service_block_size, tvb, offset + 7, 1, ENC_NA);
 }
 
 /*
@@ -1788,14 +1780,19 @@ static int
 dissect_cipmotion(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree, void* data _U_)
 {
    guint32     con_format;
-/*   guint32     seq_number; */
    guint32     update_id;
    proto_item *proto_item_top;
    proto_tree *proto_tree_top;
    guint32     offset = 0;
 
-   /* Pull the CIP class 1 sequence number from the incoming message */
-/*   seq_number = tvb_get_letohs(tvb, offset); */
+   /* Create display subtree for the protocol by creating an item and then
+    * creating a subtree from the item, the subtree must have been registered
+    * in proto_register_cipmotion already */
+   proto_item_top = proto_tree_add_item(tree, proto_cipmotion, tvb, 0, -1, ENC_NA);
+   proto_tree_top = proto_item_add_subtree(proto_item_top, ett_cipmotion);
+
+   /* Add the CIP class 1 sequence number to the tree */
+   proto_tree_add_item(proto_tree_top, hf_cip_class1_seqnum, tvb, offset, 2, ENC_LITTLE_ENDIAN);
    offset = (offset + 2);
 
    /* Pull the actual values for the connection format and update id from the
@@ -1804,87 +1801,79 @@ dissect_cipmotion(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree, void* dat
    update_id  = tvb_get_guint8(tvb, offset + 2);
 
    /* Make entries in Protocol column and Info column on summary display */
-   col_set_str(pinfo->cinfo, COL_PROTOCOL, "Motion");
+   col_set_str(pinfo->cinfo, COL_PROTOCOL, "CIP Motion");
 
    /* Add connection format and update number to the info column */
    col_add_fstr( pinfo->cinfo, COL_INFO, "%s, Update Id: %d",
                  val_to_str(con_format, cip_con_format_vals, "Unknown connection format (%x)"), update_id );
 
-   /* If tree is not NULL then Wireshark is requesting that the dissection
-    * panel be updated with the dissected packet, if tree is NULL then only
-    * the summary protocol and info columns need to be updated */
-   if ( tree )
+   /* Attempt to classify the incoming header */
+   if (( con_format == FORMAT_VAR_CONTROL_TO_DEVICE ) ||
+       ( con_format == FORMAT_VAR_DEVICE_TO_CONTROL ))
    {
-      /* Create display subtree for the protocol by creating an item and then
-       * creating a subtree from the item, the subtree must have been registered
-       * in proto_register_cipmotion already */
-      proto_item_top = proto_tree_add_item( tree, proto_cipmotion, tvb, 0, -1, ENC_NA );
-      proto_tree_top = proto_item_add_subtree( proto_item_top, ett_cipmotion );
+      /* Sizes of the individual channels within the connection */
+      guint32 cyc_size, cyc_blk_size, evnt_size, servc_size;
+      guint32 inst_count = 0, inst;
 
-      /* Add the CIP class 1 sequence number to the tree */
-      proto_tree_add_item( proto_tree_top, hf_cip_class1_seqnum, tvb, 0, 2, ENC_LITTLE_ENDIAN );
-
-      /* Attempt to classify the incoming header */
-      if (( con_format == FORMAT_VAR_CONTROL_TO_DEVICE ) ||
-          ( con_format == FORMAT_VAR_DEVICE_TO_CONTROL ))
+      /* Dissect the header fields */
+      switch(con_format)
       {
-         /* Sizes of the individual channels within the connection */
-         guint32 cyc_size, cyc_blk_size, evnt_size, servc_size;
-         guint32 inst_count = 0, inst;
+      case FORMAT_VAR_CONTROL_TO_DEVICE:
+         offset = dissect_var_cont_conn_header(tvb, proto_tree_top, &inst_count, offset);
+         break;
+      case FORMAT_VAR_DEVICE_TO_CONTROL:
+         offset = dissect_var_devce_conn_header(tvb, proto_tree_top, &inst_count, offset);
+         break;
+      }
 
-         /* Dissect the header fields */
+      /* Repeat the following dissections for each instance within the payload */
+      for( inst = 0; inst < inst_count; inst++ )
+      {
+         /* Actual instance number from header field */
+         guint8 instance;
+
+         /* Dissect the instance data header */
+         dissect_var_inst_header( tvb, proto_tree_top, offset, &instance,
+                                    &cyc_size, &cyc_blk_size, &evnt_size, &servc_size );
+
+         /* Increment the offset to just beyond the instance header */
+         offset += 8;
+
+         /* Dissect the cyclic command (actual) data if any exists */
+         /* Dissect the cyclic write (read) data if any exists */
+         /* Dissect the event data block if there is any event data */
          switch(con_format)
          {
          case FORMAT_VAR_CONTROL_TO_DEVICE:
-            offset = dissect_var_cont_conn_header(tvb, proto_tree_top, &inst_count, offset);
+            if ( cyc_size > 0 )
+               offset = dissect_cntr_cyclic( con_format, tvb, proto_tree_top, offset, cyc_size, instance );
+            if ( cyc_blk_size > 0 )
+               offset = dissect_cyclic_wt(tvb, proto_tree_top, offset, cyc_blk_size);
+            if ( evnt_size > 0 )
+               offset = dissect_cntr_event(tvb, proto_tree_top, offset, evnt_size);
+            if ( servc_size > 0 )
+               offset = dissect_cntr_service(tvb, proto_tree_top, offset, servc_size);
             break;
          case FORMAT_VAR_DEVICE_TO_CONTROL:
-            offset = dissect_var_devce_conn_header(tvb, proto_tree_top, &inst_count, offset);
+            if ( cyc_size > 0 )
+               offset = dissect_devce_cyclic( con_format, tvb, proto_tree_top, offset, cyc_size, instance );
+            if ( cyc_blk_size > 0 )
+               offset = dissect_cyclic_rd( tvb, proto_tree_top, offset, cyc_blk_size );
+            if ( evnt_size > 0 )
+               offset = dissect_devce_event(tvb, proto_tree_top, offset, evnt_size);
+            if ( servc_size > 0 )
+               offset = dissect_devce_service(tvb, proto_tree_top, offset, servc_size);
             break;
          }
 
-         /* Repeat the following dissections for each instance within the payload */
-         for( inst = 0; inst < inst_count; inst++ )
-         {
-            /* Actual instance number from header field */
-            guint8 instance;
+      } /* End of instance for( ) loop */
+   }
 
-            /* Dissect the instance data header */
-            dissect_var_inst_header( tvb, proto_tree_top, offset, &instance,
-                                     &cyc_size, &cyc_blk_size, &evnt_size, &servc_size );
-
-            /* Increment the offset to just beyond the instance header */
-            offset += 8;
-
-            /* Dissect the cyclic command (actual) data if any exists */
-            /* Dissect the cyclic write (read) data if any exists */
-            /* Dissect the event data block if there is any event data */
-            switch(con_format)
-            {
-            case FORMAT_VAR_CONTROL_TO_DEVICE:
-               if ( cyc_size > 0 )
-                  offset = dissect_cntr_cyclic( con_format, tvb, proto_tree_top, offset, cyc_size, instance );
-               if ( cyc_blk_size > 0 )
-                  offset = dissect_cyclic_wt(tvb, proto_tree_top, offset, cyc_blk_size);
-               if ( evnt_size > 0 )
-                  offset = dissect_cntr_event(tvb, proto_tree_top, offset, evnt_size);
-               if ( servc_size > 0 )
-                  offset = dissect_cntr_service(tvb, proto_tree_top, offset, servc_size);
-               break;
-            case FORMAT_VAR_DEVICE_TO_CONTROL:
-               if ( cyc_size > 0 )
-                  offset = dissect_devce_cyclic( con_format, tvb, proto_tree_top, offset, cyc_size, instance );
-               if ( cyc_blk_size > 0 )
-                  offset = dissect_cyclic_rd( tvb, proto_tree_top, offset, cyc_blk_size );
-               if ( evnt_size > 0 )
-                  offset = dissect_devce_event(tvb, proto_tree_top, offset, evnt_size);
-               if ( servc_size > 0 )
-                  offset = dissect_devce_service(tvb, proto_tree_top, offset, servc_size);
-               break;
-            }
-
-         } /* End of instance for( ) loop */
-      }
+   // Display any remaining unparsed data.
+   int remain_len = tvb_reported_length_remaining(tvb, offset);
+   if (remain_len > 0)
+   {
+      proto_tree_add_item(proto_tree_top, hf_cip_data, tvb, offset, remain_len, ENC_NA);
    }
 
    return tvb_captured_length(tvb);
@@ -1923,7 +1912,7 @@ proto_register_cipmotion(void)
       },
 
       { &hf_cip_class1_seqnum,
-        { "CIP Class 1 Sequence Number", "cipm.class1seqnum",
+        { "CIP Class 1 Sequence Count", "cipm.class1seqnum",
           FT_UINT16, BASE_DEC, NULL, 0,
           NULL, HFILL }
       },
@@ -2143,7 +2132,7 @@ proto_register_cipmotion(void)
       { &hf_cip_act_data_pos,
         { "Actual Position", "cipm.act.pos",
           FT_BOOLEAN, 8, TFS(&tfs_true_false), ACTUAL_DATA_SET_POSITION,
-          "Acutal Data Set: Actual Position", HFILL}
+          "Actual Data Set: Actual Position", HFILL}
       },
       { &hf_cip_act_data_vel,
         { "Actual Velocity", "cipm.act.vel",
@@ -2562,7 +2551,7 @@ proto_register_cipmotion(void)
       },
       { &hf_cip_svc_code,
         { "Service Code", "cipm.svc.code",
-          FT_UINT8, BASE_DEC, VALS(cip_sc_vals), 0,
+          FT_UINT8, BASE_HEX, VALS(cip_sc_vals), 0,
           "Service Data Block: Service Code", HFILL}
       },
       { &hf_cip_svc_sts,
@@ -2675,32 +2664,32 @@ proto_register_cipmotion(void)
       },
       { &hf_var_devce_instance_block_size,
         { "Instance Block Size", "cipm.var_devce.header.instance_block_size",
-          FT_UINT8, BASE_DEC, NULL, 0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_word_words, 0,
           "Variable Device Header: Instance Block Size", HFILL}
       },
       { &hf_var_devce_cyclic_block_size,
         { "Cyclic Block Size", "cipm.var_devce.header.cyclic_block_size",
-          FT_UINT8, BASE_DEC, NULL, 0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_word_words, 0,
           "Variable Device Header: Cyclic Block Size", HFILL}
       },
       { &hf_var_devce_cyclic_data_block_size,
         { "Cyclic Data Block Size", "cipm.var_devce.header.cyclic_data_block_size",
-          FT_UINT8, BASE_DEC, NULL, 0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_word_words, 0,
           "Variable Device Header: Cyclic Data Block Size", HFILL}
       },
       { &hf_var_devce_cyclic_rw_block_size,
         { "Cyclic Read/Write Block Size", "cipm.var_devce.header.cyclic_rw_block_size",
-          FT_UINT8, BASE_DEC, NULL, 0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_word_words, 0,
           "Variable Device Header: Cyclic Read/Write Block Size", HFILL}
       },
       { &hf_var_devce_event_block_size,
         { "Event Block Size", "cipm.var_devce.header.event_block_size",
-          FT_UINT8, BASE_DEC, NULL, 0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_word_words, 0,
           "Variable Device Header: Event Block Size", HFILL}
       },
       { &hf_var_devce_service_block_size,
         { "Service Block Size", "cipm.var_devce.header.service_block_size",
-          FT_UINT8, BASE_DEC, NULL, 0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_word_words, 0,
           "Variable Device Header: Service Block Size", HFILL}
       },
 
@@ -2712,7 +2701,7 @@ proto_register_cipmotion(void)
       { &hf_cip_axis_sts_local_ctrl,
         { "Local Control", "cipm.axis.local",
           FT_BOOLEAN, 32, TFS(&tfs_true_false), 0x00000001,
-          "Axis Status Data Set: Local Contol", HFILL }
+          "Axis Status Data Set: Local Control", HFILL }
       },
       { &hf_cip_axis_sts_alarm,
         { "Alarm", "cipm.axis.alarm",
@@ -2884,6 +2873,11 @@ proto_register_cipmotion(void)
         { "Torque Trim", "cipm.trqtrim",
           FT_FLOAT, BASE_NONE, NULL, 0,
           "Cyclic Data Set: Torque Trim", HFILL }
+      },
+      { &hf_cip_data,
+        { "Data", "cipm.data",
+        FT_BYTES, BASE_NONE, NULL, 0,
+          NULL, HFILL }
       }
    };
 

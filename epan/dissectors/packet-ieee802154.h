@@ -140,7 +140,7 @@
 /* Frame version definitions. */
 #define IEEE802154_VERSION_2003                0x0
 #define IEEE802154_VERSION_2006                0x1
-#define IEEE802154_VERSION_2012e               0x2
+#define IEEE802154_VERSION_2015                0x2
 #define IEEE802154_VERSION_RESERVED            0x3
 
 /* Address Mode Definitions */
@@ -186,13 +186,18 @@
 #define IEEE802154_BCAST_PAN                0xFFFF
 
 /*  Bit mask for PHY length field */
-#define IEEE802154_PHY_LENGTH_MASK          0x7f
+#define IEEE802154_PHY_LENGTH_MASK          0x7F
 
 /* Auxiliary Security Header */
 #define IEEE802154_AUX_SEC_LEVEL_MASK       0x07  /* Security Level */
 #define IEEE802154_AUX_KEY_ID_MODE_MASK     0x18  /* Key Identifier Mode */
 #define IEEE802154_AUX_KEY_ID_MODE_SHIFT    3
 #define IEEE802154_AUX_KEY_RESERVED_MASK    0xE0  /* Reserved */
+
+/* Thread-specific well-known key support */
+#define IEEE802154_THR_WELL_KNOWN_KEY_INDEX 0xff
+#define IEEE802154_THR_WELL_KNOWN_KEY_SRC   0xffffffff
+#define IEEE802154_THR_WELL_KNOWN_EXT_ADDR  0x3506feb823d48712ULL
 
 typedef enum {
     SECURITY_LEVEL_NONE = 0x00,
@@ -211,6 +216,12 @@ typedef enum {
     KEY_ID_MODE_KEY_EXPLICIT_4 = 0x02,
     KEY_ID_MODE_KEY_EXPLICIT_8 = 0x03
 } ieee802154_key_id_mode;
+
+typedef enum {
+    KEY_HASH_NONE = 0x00,
+    KEY_HASH_ZIP = 0x01,
+    KEY_HASH_THREAD = 0x02
+} ieee802154_key_hash;
 
 /* Header IE Element ID */
 #define IEEE802154_HEADER_VENDOR_SPECIFIC   0x00
@@ -241,11 +252,17 @@ typedef enum {
 #define IEEE802154_PAYLOAD_IE_ESDU           0x0 /* Encapsulated Service Data Unit */
 #define IEEE802154_PAYLOAD_IE_MLME           0x1 /* Media Access Control (MAC) subLayer Management Entity */
 #define IEEE802154_PAYLOAD_IE_VENDOR         0x2 /* Vendor Specific */
+ /*For the Plugtest - Paris 2016, 6top group ID took the reserved value 0x3*/
+#define IEEE802154_PAYLOAD_IE_IETF           0x3
 /* Reserved 0x3-0xe */
 #define IEEE802154_PAYLOAD_IE_GID_TERM       0xf
 
 /* Payload IE (Nested) Sub ID */
-/* 0x00 - 0x0f Reserved for Long Format */
+/* Payload IE (Nested) Sub ID - long format */
+/* 0x0 - 0x7 Reserved */
+/* 0x0 - 0x8 Vendor Specific */
+#define IEEE802154_MLME_SUBIE_CHANNEL_HOPPING            0x9
+/* 0xa - 0xf Reserved */
 /* 0x10 - 0x19 Short Format Reserved */
 #define IEEE802154_MLME_SUBIE_TSCH_SYNCH                 0x1A
 #define IEEE802154_MLME_SUBIE_TSCH_SLOTFR_LINK           0x1B
@@ -277,6 +294,8 @@ typedef enum {
 #define IEEE802154_MLME_SUBIE_RCC_PHY_OPER_MODE          0x36
 /* 0x37-0x7f Reserved */
 
+/* IETF IE - Sub IE */
+#define IEEE802154_IETF_SUBIE_6TOP  0x00 /* not formally assigned yet */
 
 /* IEEE 802.15.4 cipher block size. */
 #define IEEE802154_CIPHER_SIZE                16
@@ -285,6 +304,41 @@ typedef enum {
 #define IEEE802154_MIC_LENGTH(_level_) ((0x2 << ((_level_) & 0x3)) & ~0x3)
 /* Macro to check for payload encryption. */
 #define IEEE802154_IS_ENCRYPTED(_level_) ((_level_) & 0x4)
+
+/*SIXTOP Bit-mask*/
+#define IETF_6TOP_VERSION                0x0F
+#define IETF_6TOP_TYPE                   0x30
+#define IETF_6TOP_FLAGS_RESERVED         0xC0
+#define IETF_6TOP_SEQNUM                 0x0F
+#define IETF_6TOP_GAB                    0x30
+#define IETF_6TOP_GBA                    0xC0
+
+/* SIXTOP CMD and RC identifiers */
+#define IETF_6TOP_CMD_ADD              0x01
+#define IETF_6TOP_CMD_DELETE           0x02
+#define IETF_6TOP_CMD_STATUS           0x03
+#define IETF_6TOP_CMD_LIST             0x04
+#define IETF_6TOP_CMD_CLEAR            0x05
+#define IETF_6TOP_RC_SUCCESS           0x06
+#define IETF_6TOP_RC_ERR_VER           0x07
+#define IETF_6TOP_RC_ERR_SFID          0x08
+#define IETF_6TOP_RC_ERR_GEN           0x09
+#define IETF_6TOP_RC_ERR_BUSY          0x0A
+#define IETF_6TOP_RC_ERR_NORES         0x0B
+#define IETF_6TOP_RC_ERR_RESET         0x0C
+#define IETF_6TOP_RC_ERR               0x0D
+
+/* SIXTOP Message Types */
+#define IETF_6TOP_TYPE_REQUEST         0x00
+#define IETF_6TOP_TYPE_RESPONSE        0x01
+#define IETF_6TOP_TYPE_CONFIRMATION    0x02
+#define IETF_6TOP_TYPE_RESERVED        0x03
+
+/* SIXTOP Cell Options */
+#define IETF_6TOP_CELL_OPTION_TX       0x01
+#define IETF_6TOP_CELL_OPTION_RX       0x02
+#define IETF_6TOP_CELL_OPTION_SHARED   0x04
+#define IETF_6TOP_CELL_OPTION_RESERVED 0xF8
 
 /*  Structure containing information regarding all necessary packet fields. */
 typedef struct {
@@ -299,12 +353,9 @@ typedef struct {
     gboolean    pan_id_compression;
     gboolean    seqno_suppression;
     gboolean    ie_present;
-
     guint8      seqno;
-
     /* determined during processing of Header IE*/
     gboolean    payload_ie_present;
-
     /* Addressing Info. */
     guint16     dst_pan;
     guint16     src_pan;
@@ -363,12 +414,56 @@ typedef struct {
     guint16             src16;
     guint16             dst16;
     ieee802154_map_rec *map_rec;
+    void               *packet;
 } ieee802154_hints_t;
+
+typedef enum {
+    DECRYPT_PACKET_SUCCEEDED,
+    DECRYPT_NOT_ENCRYPTED,
+    DECRYPT_VERSION_UNSUPPORTED,
+    DECRYPT_PACKET_TOO_SMALL,
+    DECRYPT_PACKET_NO_EXT_SRC_ADDR,
+    DECRYPT_PACKET_NO_KEY,
+    DECRYPT_PACKET_DECRYPT_FAILED,
+    DECRYPT_PACKET_MIC_CHECK_FAILED
+} ws_decrypt_status;
+
+/* UAT key structure. */
+typedef struct {
+    gchar *pref_key;
+    guint  key_index;
+    ieee802154_key_hash hash_type;
+    guint8 key[IEEE802154_CIPHER_SIZE];
+    guint8 mle_key[IEEE802154_CIPHER_SIZE];
+} ieee802154_key_t;
 
 /* */
 void dissect_ieee802154_superframe      (tvbuff_t *, packet_info *, proto_tree *, guint *);
 void dissect_ieee802154_gtsinfo         (tvbuff_t *, packet_info *, proto_tree *, guint *);
 void dissect_ieee802154_pendaddr        (tvbuff_t *, packet_info *, proto_tree *, guint *);
+void dissect_ieee802154_aux_sec_header_and_key(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, ieee802154_packet *packet, guint *offset);
+void ccm_init_block(gchar *block, gboolean adata, gint M, guint64 addr, guint32 frame_counter, guint8 level, gint ctr_val);
+gboolean ccm_ctr_encrypt(const gchar *key, const gchar *iv, gchar *mic, gchar *data, gint length);
+gboolean ccm_cbc_mac(const gchar *key, const gchar *iv, const gchar *a, gint a_len, const gchar *m, gint m_len, gchar *mic);
+
+typedef struct {
+    unsigned char* rx_mic;
+    guint*         rx_mic_length;
+    guint          aux_offset;
+    guint          aux_length;
+    ws_decrypt_status* status;
+    unsigned char *key;
+    guint key_number;
+} ieee802154_payload_info_t;
+
+typedef gboolean (*ieee802154_set_key_func) (ieee802154_packet * packet, unsigned char* key, unsigned char* alt_key, ieee802154_key_t* key_info);
+typedef tvbuff_t* (*ieee802154_payload_func) (tvbuff_t *, guint, packet_info *, ieee802154_packet *, ieee802154_payload_info_t*);
+tvbuff_t *dissect_ieee802154_payload(tvbuff_t * tvb, guint offset, packet_info * pinfo, proto_tree* key_tree, ieee802154_packet * packet,
+                                     ieee802154_payload_info_t* payload_info, ieee802154_set_key_func set_key_func, ieee802154_payload_func payload_func);
+
+
+typedef gboolean (*ieee802154_set_mac_key_func) (ieee802154_packet * packet, unsigned char* key, unsigned char* alt_key, ieee802154_key_t* uat_key);
+extern void register_ieee802154_mac_key_hash_handler(guint hash_identifier, ieee802154_set_mac_key_func key_func);
 
 /* Short to Extended Address Prototypes */
 extern ieee802154_map_rec *ieee802154_addr_update(ieee802154_map_tab_t *, guint16, guint16, guint64,
@@ -380,5 +475,7 @@ extern gboolean ieee802154_long_addr_equal(gconstpointer a, gconstpointer b);
 
 extern gboolean ieee802154_short_addr_invalidate(guint16, guint16, guint);
 extern gboolean ieee802154_long_addr_invalidate(guint64, guint);
+
+extern ieee802154_map_tab_t ieee802154_map;
 
 #endif /* PACKET_IEEE802154_H */

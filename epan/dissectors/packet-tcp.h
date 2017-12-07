@@ -113,14 +113,17 @@ typedef struct tcpheader {
 
 /*
  * Private data passed from the TCP dissector to subdissectors.
+ * NOTE: This structure is used by Export PDU functionality so
+ * make sure that handling is also updated if this structure
+ * changes!
  */
 struct tcpinfo {
 	guint32 seq;             /* Sequence number of first byte in the data */
 	guint32 nxtseq;          /* Sequence number of first byte after data */
 	guint32 lastackseq;      /* Sequence number of last ack */
 	gboolean is_reassembled; /* This is reassembled data. */
-	guint16	flags;           /* TCP flags */
-	guint16	urgent_pointer;  /* Urgent pointer value for the current packet. */
+	guint16 flags;           /* TCP flags */
+	guint16 urgent_pointer;  /* Urgent pointer value for the current packet. */
 };
 
 /*
@@ -293,7 +296,7 @@ typedef enum {
 typedef struct tcp_analyze_seq_flow_info_t {
 	tcp_unacked_t *segments;/* List of segments for which we haven't seen an ACK */
 	guint16 segment_count;	/* How many unacked segments we're currently storing */
-	guint32 lastack;	/* last seen ack */
+	guint32 lastack;	/* Last seen ack for the reverse flow */
 	nstime_t lastacktime;	/* Time of the last ack packet */
 	guint32 lastnondupack;	/* frame number of last seen non dupack */
 	guint32 dupacknum;	/* dupack number */

@@ -23,8 +23,8 @@ include(UseABICheck)
 
 set(WSUTIL_COMMON_FILES
 	adler32.c
-	aes.c
 	airpdcap_wep.c
+	base32.c
 	base64.c
 	bitswap.c
 	buffer.c
@@ -40,33 +40,32 @@ set(WSUTIL_COMMON_FILES
 	crc7.c
 	crc8.c
 	crc11.c
-	des.c
 	eax.c
 	filesystem.c
 	frequency-utils.c
 	g711.c
+	glib-compat.c
 	inet_addr.c
 	interface.c
 	jsmn.c
-	md4.c
-	md5.c
 	mpeg-audio.c
 	nstime.c
+	cpu_info.c
 	os_version_info.c
 	plugins.c
 	privileges.c
-	sha1.c
-	sha2.c
 	sober128.c
 	strnatcmp.c
 	str_util.c
-	rc4.c
-	report_err.c
+	strtoi.c
+	report_message.c
 	tempfile.c
 	time_util.c
 	type_util.c
 	unicode-utils.c
 	ws_mempbrk.c
+	wsgcrypt.c
+	wsjsmn.c
 )
 
 set(WSUTIL_FILES ${WSUTIL_COMMON_FILES})
@@ -80,7 +79,7 @@ if(WIN32)
 ENDIF(WIN32)
 
 
-if(HAVE_OS_X_FRAMEWORKS)
+if(HAVE_MACOS_FRAMEWORKS)
 	list(APPEND WSUTIL_FILES cfutils.c)
 endif()
 
@@ -164,7 +163,7 @@ endif()
 
 if(APPLE)
 	#
-	# We assume that APPLE means OS X so that we have the OS X
+	# We assume that APPLE means macOS so that we have the macOS
 	# frameworks.
 	#
 	FIND_LIBRARY (APPLE_CORE_FOUNDATION_LIBRARY CoreFoundation)
@@ -180,40 +179,25 @@ set(wsutil_LIBS
 	${WIN_WSOCK32_LIBRARY}
 )
 IF(WIN32)
-	set(wsutil_LIBS ${wsutil_LIBS} "ws2_32.lib")
+	set(wsutil_LIBS ${wsutil_LIBS} "iphlpapi.lib" "ws2_32.lib")
 ENDIF(WIN32)
 
 set(CLEAN_FILES
 	${WSUTIL_FILES}
 )
 
-if (WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${CLEAN_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-else()
-	#
-	# Set the property to an empty string, so that if we try
-	# to get it below, it succeeds.
-	#
-	set_source_files_properties(
-		${CLEAN_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ""
-	)
-endif()
+set_source_files_properties(
+	${CLEAN_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 if (HAVE_SSE4_2)
-	get_source_file_property(
-		WS_MEMPBRK_SSE42_COMPILE_FLAGS
-		ws_mempbrk_sse42.c
-		COMPILE_FLAGS
-	)
+	# TODO with CMake 2.8.12, we could use COMPILE_OPTIONS and just append
+	# instead of this COMPILE_FLAGS duplication...
 	set_source_files_properties(
 		ws_mempbrk_sse42.c
 		PROPERTIES
-		COMPILE_FLAGS "${WS_MEMPBRK_SSE42_COMPILE_FLAGS} ${SSE4_2_FLAG}"
+		COMPILE_FLAGS "${WERROR_COMMON_FLAGS} ${SSE4_2_FLAG}"
 	)
 endif()
 
@@ -222,13 +206,22 @@ add_library(wsutil ${LINK_MODE_LIB}
 	${CMAKE_BINARY_DIR}/image/libwsutil.rc
 )
 
+<<<<<<< HEAD
 set(FULL_SO_VERSION "7.0.0")
+=======
+set(FULL_SO_VERSION "8.0.0")
+>>>>>>> upstream/master-2.4
 
 set_target_properties(wsutil PROPERTIES
 	PREFIX "lib"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
+<<<<<<< HEAD
 	VERSION ${FULL_SO_VERSION} SOVERSION 7
+=======
+	VERSION ${FULL_SO_VERSION} SOVERSION 8
+>>>>>>> upstream/master-2.4
 	FOLDER "DLLs")
 
 if(ENABLE_APPLICATION_BUNDLE)
@@ -259,7 +252,12 @@ if(NOT ${ENABLE_STATIC})
 	)
 endif()
 
-add_definitions( -DTOP_SRCDIR=\"${CMAKE_SOURCE_DIR}\" )
+# Export build-time datadir (note: the macro "DATAFILE_DIR" is defined in
+# config.h and points to the install-time data directory, hence the different
+# name).
+set_property(SOURCE filesystem.c APPEND PROPERTY
+	COMPILE_DEFINITIONS BUILD_TIME_DATAFILE_DIR="${DATAFILE_DIR}"
+)
 
 CHECKAPI(
 	NAME
@@ -269,6 +267,8 @@ CHECKAPI(
 	SOURCES
 	  ${WSUTIL_COMMON_FILES}
 )
+
+set_source_files_properties(jsmn.c PROPERTIES COMPILE_DEFINITIONS "JSMN_STRICT")
 
 #
 # Editor modelines  -  http://www.wireshark.org/tools/modelines.html

@@ -29,11 +29,18 @@
 
 extern value_string_ext E212_codes_ext;
 
+extern value_string_ext mcc_mnc_2digits_codes_ext;
+
+extern value_string_ext mcc_mnc_3digits_codes_ext;
+
 typedef enum {
     E212_NONE,
     E212_LAI,
     E212_RAI,
-    E212_SAI
+    E212_SAI,
+    E212_CGI,
+    E212_ECGI,
+    E212_TAI
 } e212_number_type_t;
 
 gchar* dissect_e212_mcc_mnc_wmem_packet_str(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset, e212_number_type_t number_type, gboolean little_endian);
@@ -43,6 +50,9 @@ int dissect_e212_mcc_mnc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, in
 
 WS_DLL_PUBLIC
 int dissect_e212_mcc_mnc_in_address(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset);
+
+WS_DLL_PUBLIC
+int dissect_e212_mcc_mnc_in_utf8_address(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset);
 
 /**
  *

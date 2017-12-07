@@ -98,7 +98,7 @@ add_extensions(GSList *extensions, const gchar *extension,
 	/*
 	 * Add the specified extension.
 	 */
-	extensions = g_slist_append(extensions, g_strdup(extension));
+	extensions = g_slist_prepend(extensions, g_strdup(extension));
 
 	/*
 	 * Now add the extensions for compressed-file versions of
@@ -107,7 +107,7 @@ add_extensions(GSList *extensions, const gchar *extension,
 	for (compressed_file_extensionp = compressed_file_extensions;
 	    *compressed_file_extensionp != NULL;
 	    compressed_file_extensionp++) {
-		extensions = g_slist_append(extensions,
+		extensions = g_slist_prepend(extensions,
 		    g_strdup_printf("%s.%s", extension,
 		      *compressed_file_extensionp));
 	}
@@ -124,36 +124,36 @@ add_extensions(GSList *extensions, const gchar *extension,
  * extension used by a number of capture file types.
  */
 static const struct file_extension_info file_type_extensions_base[] = {
-	{ "Wireshark/tcpdump/... - pcap", "pcap;cap;dmp" },
-	{ "Wireshark/... - pcapng", "pcapng;ntar" },
-	{ "Network Monitor, Surveyor, NetScaler", "cap" },
-	{ "InfoVista 5View capture", "5vw" },
-	{ "Sniffer (DOS)", "cap;enc;trc;fdc;syc" },
-	{ "Cinco NetXRay, Sniffer (Windows)", "cap;caz" },
-	{ "Endace ERF capture", "erf" },
-	{ "EyeSDN USB S0/E1 ISDN trace format", "trc" },
-	{ "HP-UX nettl trace", "trc0;trc1" },
-	{ "Network Instruments Observer", "bfr" },
-	{ "Colasoft Capsa", "cscpkt" },
-	{ "Novell LANalyzer", "tr1" },
-	{ "Tektronix K12xx 32-bit .rf5 format", "rf5" },
-	{ "Savvius *Peek", "pkt;tpc;apc;wpz" },
-	{ "Catapult DCT2000 trace (.out format)", "out" },
-	{ "Micropross mplog", "mplog" },
-	{ "MPEG files", "mpg;mp3" },
-	{ "TamoSoft CommView", "ncf" },
-	{ "Symbian OS btsnoop", "log" },
-	{ "Transport-Neutral Encapsulation Format", "tnef" },
-	{ "XML files (including Gammu DCT3 traces)", "xml" },
-	{ "OS X PacketLogger", "pklg" },
-	{ "Daintree SNA", "dcf" },
-	{ "JPEG/JFIF files", "jpg;jpeg;jfif" },
-	{ "IPFIX File Format", "pfx;ipfix" },
-	{ "Aethra .aps file", "aps" },
-	{ "MPEG2 transport stream", "mp2t;ts;mpg" },
-	{ "Ixia IxVeriWave .vwr Raw 802.11 Capture", "vwr" },
-	{ "CAM Inspector file", "camins" },
-	{ "JavaScript Object Notation file", "json" }
+	{ "Wireshark/tcpdump/... - pcap", TRUE, "pcap;cap;dmp" },
+	{ "Wireshark/... - pcapng", TRUE, "pcapng;ntar" },
+	{ "Network Monitor, Surveyor, NetScaler", TRUE, "cap" },
+	{ "InfoVista 5View capture", TRUE, "5vw" },
+	{ "Sniffer (DOS)", TRUE, "cap;enc;trc;fdc;syc" },
+	{ "Cinco NetXRay, Sniffer (Windows)", TRUE, "cap;caz" },
+	{ "Endace ERF capture", TRUE, "erf" },
+	{ "EyeSDN USB S0/E1 ISDN trace format", TRUE, "trc" },
+	{ "HP-UX nettl trace", TRUE, "trc0;trc1" },
+	{ "Network Instruments Observer", TRUE, "bfr" },
+	{ "Colasoft Capsa", TRUE, "cscpkt" },
+	{ "Novell LANalyzer", TRUE, "tr1" },
+	{ "Tektronix K12xx 32-bit .rf5 format", TRUE, "rf5" },
+	{ "Savvius *Peek", TRUE, "pkt;tpc;apc;wpz" },
+	{ "Catapult DCT2000 trace (.out format)", TRUE, "out" },
+	{ "Micropross mplog", TRUE, "mplog" },
+	{ "TamoSoft CommView", TRUE, "ncf" },
+	{ "Symbian OS btsnoop", TRUE, "log" },
+	{ "XML files (including Gammu DCT3 traces)", TRUE, "xml" },
+	{ "macOS PacketLogger", TRUE, "pklg" },
+	{ "Daintree SNA", TRUE, "dcf" },
+	{ "IPFIX File Format", TRUE, "pfx;ipfix" },
+	{ "Aethra .aps file", TRUE, "aps" },
+	{ "MPEG2 transport stream", TRUE, "mp2t;ts;mpg" },
+	{ "Ixia IxVeriWave .vwr Raw 802.11 Capture", TRUE, "vwr" },
+	{ "CAM Inspector file", TRUE, "camins" },
+	{ "MPEG files", FALSE, "mpg;mp3" },
+	{ "Transport-Neutral Encapsulation Format", FALSE, "tnef" },
+	{ "JPEG/JFIF files", FALSE, "jpg;jpeg;jfif" },
+	{ "JavaScript Object Notation file", FALSE, "json" }
 };
 
 #define	N_FILE_TYPE_EXTENSIONS	(sizeof file_type_extensions_base / sizeof file_type_extensions_base[0])
@@ -253,14 +253,24 @@ wtap_get_file_extension_type_extensions(guint extension_type)
 	return extensions;
 }
 
-/* Return a list of all extensions that are used by all file types,
-   including compressed extensions, e.g. not just "pcap" but also
-   "pcap.gz" if we can read gzipped files.
+/* Return a list of all extensions that are used by all capture file
+   types, including compressed extensions, e.g. not just "pcap" but
+   also "pcap.gz" if we can read gzipped files.
+
+   "Capture files" means "include file types that correspond to
+   collections of network packets, but not file types that
+   store data that just happens to be transported over protocols
+   such as HTTP but that aren't collections of network packets",
+   so that it could be used for "All Capture Files" without picking
+   up JPEG files or files such as that - those aren't capture files,
+   and we *do* have them listed in the long list of individual file
+   types, so omitting them from "All Capture Files" is the right
+   thing to do.
 
    All strings in the list are allocated with g_malloc() and must be freed
    with g_free(). */
 GSList *
-wtap_get_all_file_extensions_list(void)
+wtap_get_all_capture_file_extensions_list(void)
 {
 	GSList *extensions;
 	unsigned int i;
@@ -271,11 +281,17 @@ wtap_get_all_file_extensions_list(void)
 
 	for (i = 0; i < file_type_extensions_arr->len; i++) {
 		/*
-		 * Add all this file extension type's extensions, with
-		 * compressed variants.
+		 * Is this a capture file, rather than one of the
+		 * other random file types we can read?
 		 */
-		extensions = add_extensions_for_file_extensions_type(i,
-		    extensions, compressed_file_extension_table);
+		if (file_type_extensions[i].is_capture_file) {
+			/*
+			 * Yes.  Add all this file extension type's
+			 * extensions, with compressed variants.
+			 */
+			extensions = add_extensions_for_file_extensions_type(i,
+			    extensions, compressed_file_extension_table);
+		}
 	}
 
 	return extensions;
@@ -312,7 +328,7 @@ wtap_get_all_file_extensions_list(void)
  * to the following files so that the various desktop environments will
  * know that Wireshark can open the file:
  *	1) wireshark-mime-package.xml (for freedesktop.org environments)
- *	2) packaging/macosx/Info.plist.in (for OS X)
+ *	2) packaging/macosx/Info.plist.in (for macOS)
  *	3) packaging/nsis/AdditionalTasksPage.ini, packaging/nsis/common.nsh,
  *	   and packaging/wix/ComponentGroups.wxi (for Windows)
  *
@@ -352,7 +368,7 @@ static struct open_info open_info_base[] = {
 	 * PacketLogger must come before MPEG, because its files
 	 * are sometimes grabbed by mpeg_open.
 	 */
-	{ "OS X PacketLogger",                      OPEN_INFO_HEURISTIC, packetlogger_open,        "pklg",     NULL, NULL },
+	{ "macOS PacketLogger",                     OPEN_INFO_HEURISTIC, packetlogger_open,        "pklg",     NULL, NULL },
 	/* Some MPEG files have magic numbers, others just have heuristics. */
 	{ "MPEG",                                   OPEN_INFO_HEURISTIC, mpeg_open,                "mpg;mp3",  NULL, NULL },
 	{ "Daintree SNA",                           OPEN_INFO_HEURISTIC, daintree_sna_open,        "dcf",      NULL, NULL },
@@ -1109,7 +1125,6 @@ success:
 			/* No need to add an option, this is the default */
 			descr_mand->tsprecision = WTAP_TSPREC_USEC;
 		}
-		descr_mand->link_type = wtap_wtap_encap_to_pcap_encap(wth->file_encap);
 		descr_mand->snap_len = wth->snapshot_length;
 
 		descr_mand->num_stat_entries = 0;          /* Number of ISB:s */
@@ -1211,32 +1226,32 @@ static const struct file_type_subtype_info dump_open_table_base[] = {
 	  pcapng_dump_can_write_encap, pcapng_dump_open, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_PCAP_NSEC */
-	{ "Wireshark - nanosecond libpcap", "nseclibpcap", "pcap", "cap;dmp",
+	{ "Wireshark/tcpdump/... - nanosecond pcap", "nsecpcap", "pcap", "cap;dmp",
 	  FALSE, FALSE, 0,
 	  libpcap_dump_can_write_encap, libpcap_dump_open, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_PCAP_AIX */
-	{ "AIX tcpdump - libpcap", "aixlibpcap", "pcap", "cap;dmp",
+	{ "AIX tcpdump - pcap", "aixpcap", "pcap", "cap;dmp",
 	  FALSE, FALSE, 0,
 	  NULL, NULL, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_PCAP_SS991029 */
-	{ "Modified tcpdump - libpcap", "modlibpcap", "pcap", "cap;dmp",
+	{ "Modified tcpdump - pcap", "modpcap", "pcap", "cap;dmp",
 	  FALSE, FALSE, 0,
 	  libpcap_dump_can_write_encap, libpcap_dump_open, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_PCAP_NOKIA */
-	{ "Nokia tcpdump - libpcap ", "nokialibpcap", "pcap", "cap;dmp",
+	{ "Nokia tcpdump - pcap ", "nokiapcap", "pcap", "cap;dmp",
 	  FALSE, FALSE, 0,
 	  libpcap_dump_can_write_encap, libpcap_dump_open, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_PCAP_SS990417 */
-	{ "RedHat 6.1 tcpdump - libpcap", "rh6_1libpcap", "pcap", "cap;dmp",
+	{ "RedHat 6.1 tcpdump - pcap", "rh6_1pcap", "pcap", "cap;dmp",
 	  FALSE, FALSE, 0,
 	  libpcap_dump_can_write_encap, libpcap_dump_open, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_PCAP_SS990915 */
-	{ "SuSE 6.3 tcpdump - libpcap", "suse6_3libpcap", "pcap", "cap;dmp",
+	{ "SuSE 6.3 tcpdump - pcap", "suse6_3pcap", "pcap", "cap;dmp",
 	  FALSE, FALSE, 0,
 	  libpcap_dump_can_write_encap, libpcap_dump_open, NULL },
 
@@ -1297,7 +1312,7 @@ static const struct file_type_subtype_info dump_open_table_base[] = {
 
 	/* WTAP_FILE_TYPE_SUBTYPE_ERF */
 	{ "Endace ERF capture", "erf", "erf", NULL,
-	  FALSE, FALSE, 0,
+	  FALSE, TRUE, WTAP_COMMENT_PER_SECTION|WTAP_COMMENT_PER_INTERFACE|WTAP_COMMENT_PER_PACKET,
 	  erf_dump_can_write_encap, erf_dump_open, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_EYESDN */
@@ -1461,7 +1476,7 @@ static const struct file_type_subtype_info dump_open_table_base[] = {
 	  NULL, NULL, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_PACKETLOGGER */
-	{ "OS X PacketLogger", "pklg", "pklg", NULL,
+	{ "macOS PacketLogger", "pklg", "pklg", NULL,
 	  FALSE, FALSE, 0,
 	  NULL, NULL, NULL },
 
@@ -1490,7 +1505,7 @@ static const struct file_type_subtype_info dump_open_table_base[] = {
 	  FALSE, FALSE, 0,
 	  NULL, NULL, NULL },
 
-	/* WTAP_ENCAP_MIME */
+	/* WTAP_FILE_TYPE_SUBTYPE_MIME */
 	{ "MIME File Format", "mime", NULL, NULL,
 	   FALSE, FALSE, 0,
 	   NULL, NULL, NULL },
@@ -1581,7 +1596,7 @@ static const struct file_type_subtype_info dump_open_table_base[] = {
 	  NULL, NULL, NULL },
 
 	/* WTAP_FILE_TYPE_SUBTYPE_JSON */
-	{ "JavaScript Object Notation", "json", "json", "NULL",
+	{ "JavaScript Object Notation", "json", "json", NULL,
 	  FALSE, FALSE, 0,
 	  NULL, NULL, NULL },
 
@@ -1595,7 +1610,7 @@ static const struct file_type_subtype_info dump_open_table_base[] = {
 	  FALSE, FALSE, 0,
 	  NULL, NULL, NULL },
 
-	/* WTAP_FILE_TYPE_MPLOG */
+	/* WTAP_FILE_TYPE_SUBTYPE_MPLOG */
 	{ "Micropross mplog file", "mplog", "mplog", NULL,
 	  FALSE, FALSE, 0,
 	  NULL, NULL, NULL }
@@ -1970,12 +1985,25 @@ wtap_short_string_to_file_type_subtype(const char *short_name)
 	}
 
 	/*
-	 * We now call the "libpcap" file format just "pcap", but we
-	 * allow it to be specified as "libpcap" as well, for
-	 * backwards compatibility.
+	 * We now call the libpcap file format just pcap, but we allow
+	 * the various variants of it to be specified using names
+	 * containing "libpcap" as well as "pcap", for backwards
+	 * compatibility.
 	 */
 	if (strcmp(short_name, "libpcap") == 0)
 		return WTAP_FILE_TYPE_SUBTYPE_PCAP;
+	else if (strcmp(short_name, "nseclibpcap") == 0)
+		return WTAP_FILE_TYPE_SUBTYPE_PCAP_NSEC;
+	else if (strcmp(short_name, "aixlibpcap") == 0)
+		return WTAP_FILE_TYPE_SUBTYPE_PCAP_AIX;
+	else if (strcmp(short_name, "modlibpcap") == 0)
+		return WTAP_FILE_TYPE_SUBTYPE_PCAP_SS991029;
+	else if (strcmp(short_name, "nokialibpcap") == 0)
+		return WTAP_FILE_TYPE_SUBTYPE_PCAP_NOKIA;
+	else if (strcmp(short_name, "rh6_1libpcap") == 0)
+		return WTAP_FILE_TYPE_SUBTYPE_PCAP_SS990417;
+	else if (strcmp(short_name, "suse6_3libpcap") == 0)
+		return WTAP_FILE_TYPE_SUBTYPE_PCAP_SS990915;
 
 	return -1;	/* no such file type, or we can't write it */
 }
@@ -2061,7 +2089,8 @@ wtap_get_file_extensions_list(int file_type_subtype, gboolean include_compressed
 
 /*
  * Free a list returned by wtap_get_file_extension_type_extensions(),
- * wtap_get_all_file_extensions_list, or wtap_get_file_extensions_list().
+ * wtap_get_all_capture_file_extensions_list, or
+ * wtap_get_file_extensions_list().
  */
 void
 wtap_free_extensions_list(GSList *extensions)
@@ -2180,7 +2209,8 @@ wtap_dump_init_dumper(int file_type_subtype, int encap, int snaplen, gboolean co
 	if ((idb_inf != NULL) && (idb_inf->interface_data->len > 0)) {
 		guint itf_count;
 
-		/* XXX: what free's this stuff? */
+		/* Note: this memory is owned by wtap_dumper and will become
+		 * invalid after wtap_dump_close. */
 		wdh->interface_data = g_array_new(FALSE, FALSE, sizeof(wtap_block_t));
 		for (itf_count = 0; itf_count < idb_inf->interface_data->len; itf_count++) {
 			file_int_data = g_array_index(idb_inf->interface_data, wtap_block_t, itf_count);
@@ -2190,7 +2220,6 @@ wtap_dump_init_dumper(int file_type_subtype, int encap, int snaplen, gboolean co
 			if ((encap != WTAP_ENCAP_PER_PACKET) && (encap != file_int_data_mand->wtap_encap)) {
 				descr_mand = (wtapng_if_descr_mandatory_t*)wtap_block_get_mandatory_data(descr);
 				descr_mand->wtap_encap = encap;
-				descr_mand->link_type = wtap_wtap_encap_to_pcap_encap(encap);
 			}
 			g_array_append_val(wdh->interface_data, descr);
 		}
@@ -2199,7 +2228,25 @@ wtap_dump_init_dumper(int file_type_subtype, int encap, int snaplen, gboolean co
 		descr_mand = (wtapng_if_descr_mandatory_t*)wtap_block_get_mandatory_data(descr);
 		descr_mand->wtap_encap = encap;
 		descr_mand->time_units_per_second = 1000000; /* default microsecond resolution */
-		descr_mand->link_type = wtap_wtap_encap_to_pcap_encap(encap);
+		if (snaplen == 0) {
+			/*
+			 * No snapshot length was specified.  Pick an
+			 * appropriate snapshot length for this
+			 * link-layer type.
+			 *
+			 * We use WTAP_MAX_PACKET_SIZE_STANDARD for everything except
+			 * D-Bus, which has a maximum packet size of 128MB,
+			 * which is more than we want to put into files
+			 * with other link-layer header types, as that
+			 * might cause some software reading those files
+			 * to allocate an unnecessarily huge chunk of
+			 * memory for a packet buffer.
+			 */
+			if (encap == WTAP_ENCAP_DBUS)
+				snaplen = 128*1024*1024;
+			else
+				snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
+		}
 		descr_mand->snap_len = snaplen;
 		descr_mand->num_stat_entries = 0;          /* Number of ISB:s */
 		descr_mand->interface_statistics = NULL;
@@ -2367,45 +2414,40 @@ wtap_dump_open_stdout_ng(int file_type_subtype, int encap, int snaplen,
 			 wtapng_iface_descriptions_t *idb_inf,
 			 GArray* nrb_hdrs, int *err)
 {
+	int new_fd;
 	wtap_dumper *wdh;
-	WFILE_T fh;
 
-	/* Allocate and initialize a data structure for the output stream. */
-	wdh = wtap_dump_init_dumper(file_type_subtype, encap, snaplen, compressed,
-	    shb_hdrs, idb_inf, nrb_hdrs, err);
-	if (wdh == NULL)
+	/*
+	 * Duplicate the file descriptor, so that we can close the
+	 * wtap_dumper handle the same way we close any other
+	 * wtap_dumper handle, without closing the standard output.
+	 */
+	new_fd = ws_dup(1);
+	if (new_fd == -1) {
+		/* dup failed */
+		*err = errno;
 		return NULL;
-
+	}
 #ifdef _WIN32
 	/*
-	 * Put the standard output into binary mode.
+	 * Put the new descriptor into binary mode.
 	 *
 	 * XXX - even if the file format we're writing is a text
 	 * format?
 	 */
-	if (_setmode(1, O_BINARY) == -1) {
+	if (_setmode(new_fd, O_BINARY) == -1) {
 		/* "Should not happen" */
 		*err = errno;
-		g_free(wdh);
-		return NULL;	/* couldn't put standard output in binary mode */
+		ws_close(new_fd);
+		return NULL;
 	}
 #endif
 
-	/* In case "fopen()" fails but doesn't set "errno", set "errno"
-	   to a generic "the open failed" error. */
-	errno = WTAP_ERR_CANT_OPEN;
-	fh = wtap_dump_file_fdopen(wdh, 1);
-	if (fh == NULL) {
-		*err = errno;
-		g_free(wdh);
-		return NULL;	/* can't create standard I/O stream */
-	}
-	wdh->fh = fh;
-	wdh->is_stdout = TRUE;
-
-	if (!wtap_dump_open_finish(wdh, file_type_subtype, compressed, err)) {
-		wtap_dump_file_close(wdh);
-		g_free(wdh);
+	wdh = wtap_dump_fdopen_ng(new_fd, file_type_subtype, encap, snaplen,
+	    compressed, shb_hdrs, idb_inf, nrb_hdrs, err);
+	if (wdh == NULL) {
+		/* Failed; close the new FD */
+		ws_close(new_fd);
 		return NULL;
 	}
 	return wdh;
@@ -2550,6 +2592,7 @@ wtap_dump_close(wtap_dumper *wdh, int *err)
 	}
 	if (wdh->priv != NULL)
 		g_free(wdh->priv);
+	wtap_block_array_free(wdh->interface_data);
 	g_free(wdh);
 	return ret;
 }
@@ -2574,6 +2617,10 @@ wtap_dump_set_addrinfo_list(wtap_dumper *wdh, addrinfo_lists_t *addrinfo_lists)
 			return FALSE;
 	wdh->addrinfo_lists = addrinfo_lists;
 	return TRUE;
+}
+
+gboolean wtap_dump_get_needs_reload(wtap_dumper *wdh) {
+        return wdh->needs_reload;
 }
 
 /* internally open a file for writing (compressed or not) */
@@ -2636,7 +2683,7 @@ wtap_dump_file_write(wtap_dumper *wdh, const void *buf, size_t bufsize, int *err
 		errno = WTAP_ERR_CANT_WRITE;
 		nwritten = fwrite(buf, 1, bufsize, (FILE *)wdh->fh);
 		/*
-		 * At least according to the Mac OS X man page,
+		 * At least according to the macOS man page,
 		 * this can return a short count on an error.
 		 */
 		if (nwritten != bufsize) {
@@ -2655,24 +2702,11 @@ static int
 wtap_dump_file_close(wtap_dumper *wdh)
 {
 #ifdef HAVE_ZLIB
-	if(wdh->compressed) {
-		/*
-		 * Tell gzwfile_close() whether to close the descriptor
-		 * or not.
-		 */
-		return gzwfile_close((GZWFILE_T)wdh->fh, wdh->is_stdout);
-	} else
+	if(wdh->compressed)
+		return gzwfile_close((GZWFILE_T)wdh->fh);
+	else
 #endif
-	{
-		/*
-		 * Don't close the standard output.
-		 *
-		 * XXX - this really should do everything fclose() does,
-		 * including freeing all allocated data structures,
-		 * *except* for actually closing the file descriptor.
-		 */
-		return wdh->is_stdout ? fflush((FILE *)wdh->fh) : fclose((FILE *)wdh->fh);
-	}
+		return fclose((FILE *)wdh->fh);
 }
 
 gint64
@@ -2713,6 +2747,23 @@ wtap_dump_file_tell(wtap_dumper *wdh, int *err)
 		{
 			return rval;
 		}
+	}
+}
+
+void
+cleanup_open_routines(void)
+{
+	guint i;
+	struct open_info *i_open;
+
+	if (open_routines != NULL && open_info_arr) {
+		for (i = 0, i_open = open_routines; i < open_info_arr->len; i++, i_open++) {
+			if (i_open->extensions != NULL)
+				g_strfreev(i_open->extensions_set);
+		}
+
+		g_array_free(open_info_arr, TRUE);
+		open_info_arr = NULL;
 	}
 }
 

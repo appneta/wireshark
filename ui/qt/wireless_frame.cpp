@@ -148,7 +148,6 @@ void WirelessFrame::timerEvent(QTimerEvent *event)
     }
 }
 
-Q_DECLARE_METATYPE(struct ws80211_interface *)
 void WirelessFrame::updateWidgets()
 {
     bool enable_interface = false;
@@ -210,8 +209,8 @@ void WirelessFrame::getInterfaceInfo()
 
             ws80211_get_iface_info(iface->ifname, &iface_info);
 
-            for (guint i = 0; i < iface->frequencies->len; i++) {
-                guint32 frequency = g_array_index(iface->frequencies, guint32, i);
+            for (guint j = 0; j < iface->frequencies->len; j++) {
+                guint32 frequency = g_array_index(iface->frequencies, guint32, j);
                 double ghz = frequency / 1000.0;
                 QString chan_str = QString("%1 " UTF8_MIDDLE_DOT " %2%3")
                         .arg(ieee80211_mhz_to_chan(frequency))
@@ -273,22 +272,28 @@ void WirelessFrame::setInterfaceInfo()
 
     if (cur_iface.isEmpty() || cur_chan_idx < 0 || cur_type_idx < 0) return;
 
-#if defined(HAVE_LIBNL) && defined(HAVE_NL80211)
+#if defined(HAVE_LIBNL) && defined(HAVE_NL80211) && defined(HAVE_LIBPCAP)
     int frequency = ui->channelComboBox->itemData(cur_chan_idx).toInt();
     int chan_type = ui->channelTypeComboBox->itemData(cur_type_idx).toInt();
     int bandwidth = getBandwidthFromChanType(chan_type);
     int center_freq = getCenterFrequency(frequency, bandwidth);
     const gchar *chan_type_s = ws80211_chan_type_to_str(chan_type);
+    gchar *center_freq_s = NULL;
     gchar *data, *primary_msg, *secondary_msg;
     int ret;
 
     if (frequency < 0 || chan_type < 0) return;
 
+    if (center_freq != -1) {
+        center_freq_s = g_strdup(QString::number(center_freq).toUtf8().constData());
+    }
+
     ret = sync_interface_set_80211_chan(cur_iface.toUtf8().constData(),
                                         QString::number(frequency).toUtf8().constData(), chan_type_s,
-                                        QString::number(center_freq).toUtf8().constData(), "-1",
+                                        center_freq_s, NULL,
                                         &data, &primary_msg, &secondary_msg, main_window_update);
 
+    g_free(center_freq_s);
     g_free(data);
     g_free(primary_msg);
     g_free(secondary_msg);

@@ -42,11 +42,11 @@
 #define RANGE_HDR_SIZE (sizeof (range_t) - sizeof (range_admin_t))
 
 /* Allocate an empty range. */
-range_t *range_empty(void)
+range_t *range_empty(wmem_allocator_t *scope)
 {
    range_t *range;
 
-   range = (range_t *)g_malloc(RANGE_HDR_SIZE);
+   range = (range_t *)wmem_alloc(scope, RANGE_HDR_SIZE);
    range->nranges = 0;
    return range;
 }
@@ -78,9 +78,9 @@ range_t *range_empty(void)
  */
 
 convert_ret_t
-range_convert_str(range_t **rangep, const gchar *es, guint32 max_value)
+range_convert_str(wmem_allocator_t *scope, range_t **rangep, const gchar *es, guint32 max_value)
 {
-   return range_convert_str_work(rangep, es, max_value, TRUE);
+   return range_convert_str_work(scope, rangep, es, max_value, TRUE);
 }
 
 /*  This version of range_convert_str() allows the caller to specify whether
@@ -89,7 +89,7 @@ range_convert_str(range_t **rangep, const gchar *es, guint32 max_value)
  *  XXX - both the function and the variable could probably use better names.
  */
 convert_ret_t
-range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
+range_convert_str_work(wmem_allocator_t *scope, range_t **rangep, const gchar *es, guint32 max_value,
                        gboolean err_on_max)
 {
 
@@ -106,7 +106,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
       return CVT_SYNTAX_ERROR;
 
    /* Allocate a range; this has room for one subrange. */
-   range = (range_t *)g_malloc(RANGE_HDR_SIZE + sizeof (range_admin_t));
+   range = (range_t *)wmem_alloc(scope, RANGE_HDR_SIZE + sizeof (range_admin_t));
    range->nranges = 0;
    nranges = 1;
 
@@ -137,7 +137,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
             nranges = 4;
          else
             nranges += 4;
-         range = (range_t *)g_realloc(range, RANGE_HDR_SIZE +
+         range = (range_t *)wmem_realloc(scope, range, RANGE_HDR_SIZE +
                                       nranges*sizeof (range_admin_t));
       }
 
@@ -150,7 +150,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
          val = strtoul(p, &endp, 0);
          if (p == endp) {
             /* That wasn't a valid number. */
-            g_free(range);
+            wmem_free(scope, range);
             return CVT_SYNTAX_ERROR;
          }
          if (errno == ERANGE || val > max_value) {
@@ -158,7 +158,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
              * (e.g., except when reading from the preferences file).
              */
             if (err_on_max) {
-               g_free(range);
+               wmem_free(scope, range);
                return CVT_NUMBER_TOO_BIG;
             } else {
                /* Silently use the range's maximum value */
@@ -173,7 +173,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
             p++;
       } else {
          /* Neither empty nor a number. */
-         g_free(range);
+         wmem_free(scope, range);
          return CVT_SYNTAX_ERROR;
       }
 
@@ -196,7 +196,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
             val = strtoul(p, &endp, 0);
             if (p == endp) {
                /* That wasn't a valid number. */
-               g_free(range);
+               wmem_free(scope, range);
                return CVT_SYNTAX_ERROR;
             }
             if (errno == ERANGE || val > max_value) {
@@ -204,7 +204,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
                 * (e.g., except when reading from the preferences file).
                 */
                if (err_on_max) {
-                  g_free(range);
+                  wmem_free(scope, range);
                   return CVT_NUMBER_TOO_BIG;
                } else {
                   /* Silently use the range's maximum value */
@@ -219,7 +219,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
                p++;
          } else {
             /* Neither empty nor a number. */
-            g_free(range);
+            wmem_free(scope, range);
             return CVT_SYNTAX_ERROR;
          }
       } else if (c == ',' || c == '\0') {
@@ -229,7 +229,7 @@ range_convert_str_work(range_t **rangep, const gchar *es, guint32 max_value,
          range->ranges[range->nranges].high = range->ranges[range->nranges].low;
       } else {
          /* Invalid character. */
-         g_free(range);
+         wmem_free(scope, range);
          return CVT_SYNTAX_ERROR;
       }
       range->nranges++;
@@ -276,6 +276,99 @@ value_is_in_range(range_t *range, guint32 val)
          if (val >= range->ranges[i].low && val <= range->ranges[i].high)
             return TRUE;
       }
+   }
+   return(FALSE);
+}
+
+/* This function returns TRUE if val has successfully been added to
+ * a range.  This may extend an existing range or create a new one
+ */
+gboolean
+range_add_value(wmem_allocator_t *scope, range_t **range, guint32 val)
+{
+   guint i;
+
+   if ((range) && (*range)) {
+      for (i=0; i < (*range)->nranges; i++) {
+         if (val >= (*range)->ranges[i].low && val <= (*range)->ranges[i].high)
+            return TRUE;
+
+         if (val == (*range)->ranges[i].low-1)
+         {
+             /* Sink to a new low */
+             (*range)->ranges[i].low = val;
+             return TRUE;
+         }
+
+         if (val == (*range)->ranges[i].high+1)
+         {
+             /* Reach a new high */
+             (*range)->ranges[i].high = val;
+             return TRUE;
+         }
+      }
+
+      (*range) = (range_t *)wmem_realloc(scope, (*range), RANGE_HDR_SIZE +
+                                ((*range)->nranges+1)*sizeof (range_admin_t));
+      (*range)->nranges++;
+      (*range)->ranges[i].low = (*range)->ranges[i].high = val;
+      return TRUE;
+   }
+   return(FALSE);
+}
+
+/* This function returns TRUE if val has successfully been removed from
+ * a range.  This may delete an existing range
+ */
+gboolean
+range_remove_value(wmem_allocator_t *scope, range_t **range, guint32 val)
+{
+   guint i, j, new_j;
+   range_t *new_range;
+
+   if ((range) && (*range)) {
+      for (i=0; i < (*range)->nranges; i++) {
+
+          /* value is in the middle of the range, so it can't really be removed */
+         if (val > (*range)->ranges[i].low && val < (*range)->ranges[i].high)
+            return TRUE;
+
+         if ((val ==  (*range)->ranges[i].low) && (val == (*range)->ranges[i].high))
+         {
+             /* Remove the range item entirely */
+             new_range = (range_t*)wmem_alloc(scope, RANGE_HDR_SIZE + ((*range)->nranges-1)*sizeof (range_admin_t));
+             new_range->nranges = (*range)->nranges-1;
+             for (j=0, new_j = 0; j < (*range)->nranges; j++) {
+
+                 /* Skip the current range */
+                 if (j == i)
+                     continue;
+
+                 new_range->ranges[new_j].low = (*range)->ranges[j].low;
+                 new_range->ranges[new_j].high = (*range)->ranges[j].high;
+                 new_j++;
+             }
+
+             wmem_free(scope, *range);
+             *range = new_range;
+             return TRUE;
+         }
+
+         if (val == (*range)->ranges[i].low)
+         {
+             /* Raise low */
+             (*range)->ranges[i].low++;
+             return TRUE;
+         }
+
+         if (val == (*range)->ranges[i].high)
+         {
+             /* Reach a new high */
+             (*range)->ranges[i].high--;
+             return TRUE;
+         }
+      }
+      return TRUE;
    }
    return(FALSE);
 }
@@ -346,7 +439,7 @@ range_convert_range(wmem_allocator_t *scope, const range_t *range)
 
 /* Create a copy of a range. */
 range_t *
-range_copy(range_t *src)
+range_copy(wmem_allocator_t *scope, range_t *src)
 {
    range_t *dst;
    size_t range_size;
@@ -355,8 +448,7 @@ range_copy(range_t *src)
        return NULL;
 
    range_size = RANGE_HDR_SIZE + src->nranges*sizeof (range_admin_t);
-   dst = (range_t *)g_malloc(range_size);
-   memcpy(dst, src, range_size);
+   dst = (range_t *)wmem_memdup(scope, src, range_size);
    return dst;
 }
 

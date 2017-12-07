@@ -182,6 +182,8 @@ static gint ett_emule_sourceOBFU = -1;
 static expert_field ei_kademlia_tag_type = EI_INIT;
 static expert_field ei_kademlia_search_expression_type = EI_INIT;
 
+#define EDONKEY_TCP_PORT_RANGE "4661-4663" /* Not IANA registered */
+#define EDONKEY_UDP_PORT_RANGE "4665,4672" /* Not IANA registered */
 
 /* desegmentation of eDonkey over TCP */
 static gboolean edonkey_desegment = TRUE;
@@ -2950,7 +2952,7 @@ static int dissect_edonkey_tcp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree
               dissector = dissect_edonkey_tcp_message;
               break;
             }
-
+            /* FALL THROUGH */
         default:
             message_name = "Unknown";
             dissector = NULL;
@@ -3406,12 +3408,8 @@ void proto_reg_handoff_edonkey(void) {
     edonkey_tcp_handle = create_dissector_handle(dissect_edonkey_tcp, proto_edonkey);
     edonkey_udp_handle = create_dissector_handle(dissect_edonkey_udp, proto_edonkey);
 
-    dissector_add_uint("tcp.port", 4661, edonkey_tcp_handle);
-    dissector_add_uint("tcp.port", 4662, edonkey_tcp_handle);
-    dissector_add_uint("tcp.port", 4663, edonkey_tcp_handle);
-    dissector_add_uint("udp.port", 4665, edonkey_udp_handle);
-    dissector_add_uint("udp.port", 4672, edonkey_udp_handle);
-
+    dissector_add_uint_range_with_preference("tcp.port", EDONKEY_TCP_PORT_RANGE, edonkey_tcp_handle);
+    dissector_add_uint_range_with_preference("udp.port", EDONKEY_UDP_PORT_RANGE, edonkey_udp_handle);
 }
 
 /*

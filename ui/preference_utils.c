@@ -29,6 +29,8 @@
 #include <wsutil/filesystem.h>
 #include <epan/prefs.h>
 #include <epan/prefs-int.h>
+#include <epan/packet.h>
+#include <epan/decode_as.h>
 
 #ifdef HAVE_LIBPCAP
 #include "capture_opts.h"
@@ -38,199 +40,6 @@
 #include "ui/preference_utils.h"
 #include "ui/simple_dialog.h"
 
-guint
-pref_stash(pref_t *pref, gpointer unused _U_)
-{
-  switch (pref->type) {
-
-  case PREF_UINT:
-    pref->stashed_val.uint = *pref->varp.uint;
-    break;
-
-  case PREF_BOOL:
-    pref->stashed_val.boolval = *pref->varp.boolp;
-    break;
-
-  case PREF_ENUM:
-    pref->stashed_val.enumval = *pref->varp.enump;
-    break;
-
-  case PREF_STRING:
-  case PREF_FILENAME:
-  case PREF_DIRNAME:
-    g_free(pref->stashed_val.string);
-    pref->stashed_val.string = g_strdup(*pref->varp.string);
-    break;
-
-  case PREF_RANGE:
-    g_free(pref->stashed_val.range);
-    pref->stashed_val.range = range_copy(*pref->varp.range);
-    break;
-
-  case PREF_COLOR:
-    pref->stashed_val.color = *pref->varp.colorp;
-    break;
-
-  case PREF_STATIC_TEXT:
-  case PREF_UAT:
-  case PREF_CUSTOM:
-    break;
-
-  case PREF_OBSOLETE:
-    g_assert_not_reached();
-    break;
-  }
-  return 0;
-}
-
-guint
-pref_unstash(pref_t *pref, gpointer changed_p)
-{
-  gboolean *pref_changed_p = (gboolean *)changed_p;
-
-  /* Revert the preference to its saved value. */
-  switch (pref->type) {
-
-  case PREF_UINT:
-    if (*pref->varp.uint != pref->stashed_val.uint) {
-      *pref_changed_p = TRUE;
-      *pref->varp.uint = pref->stashed_val.uint;
-    }
-    break;
-
-  case PREF_BOOL:
-    if (*pref->varp.boolp != pref->stashed_val.boolval) {
-      *pref_changed_p = TRUE;
-      *pref->varp.boolp = pref->stashed_val.boolval;
-    }
-    break;
-
-  case PREF_ENUM:
-    if (*pref->varp.enump != pref->stashed_val.enumval) {
-      *pref_changed_p = TRUE;
-      *pref->varp.enump = pref->stashed_val.enumval;
-    }
-    break;
-
-  case PREF_STRING:
-  case PREF_FILENAME:
-  case PREF_DIRNAME:
-    if (strcmp(*pref->varp.string, pref->stashed_val.string) != 0) {
-      *pref_changed_p = TRUE;
-      g_free(*pref->varp.string);
-      *pref->varp.string = g_strdup(pref->stashed_val.string);
-    }
-    break;
-
-  case PREF_RANGE:
-    if (!ranges_are_equal(*pref->varp.range, pref->stashed_val.range)) {
-      *pref_changed_p = TRUE;
-      g_free(*pref->varp.range);
-      *pref->varp.range = range_copy(pref->stashed_val.range);
-    }
-    break;
-
-  case PREF_COLOR:
-    *pref->varp.colorp = pref->stashed_val.color;
-    break;
-
-  case PREF_STATIC_TEXT:
-  case PREF_UAT:
-  case PREF_CUSTOM:
-    break;
-
-  case PREF_OBSOLETE:
-    g_assert_not_reached();
-    break;
-  }
-  return 0;
-}
-
-void
-reset_stashed_pref(pref_t *pref) {
-  switch (pref->type) {
-
-  case PREF_UINT:
-    pref->stashed_val.uint = pref->default_val.uint;
-    break;
-
-  case PREF_BOOL:
-    pref->stashed_val.boolval = pref->default_val.boolval;
-    break;
-
-  case PREF_ENUM:
-    pref->stashed_val.enumval = pref->default_val.enumval;
-    break;
-
-  case PREF_STRING:
-  case PREF_FILENAME:
-  case PREF_DIRNAME:
-    g_free(pref->stashed_val.string);
-    pref->stashed_val.string = g_strdup(pref->default_val.string);
-    break;
-
-  case PREF_RANGE:
-    g_free(pref->stashed_val.range);
-    pref->stashed_val.range = range_copy(pref->default_val.range);
-    break;
-
-  case PREF_COLOR:
-    memcpy(&pref->stashed_val.color, &pref->default_val.color, sizeof(color_t));
-    break;
-
-  case PREF_STATIC_TEXT:
-  case PREF_UAT:
-  case PREF_CUSTOM:
-    break;
-
-  case PREF_OBSOLETE:
-    g_assert_not_reached();
-    break;
-  }
-}
-
-guint
-pref_clean_stash(pref_t *pref, gpointer unused _U_)
-{
-  switch (pref->type) {
-
-  case PREF_UINT:
-    break;
-
-  case PREF_BOOL:
-    break;
-
-  case PREF_ENUM:
-    break;
-
-  case PREF_STRING:
-  case PREF_FILENAME:
-  case PREF_DIRNAME:
-    if (pref->stashed_val.string != NULL) {
-      g_free(pref->stashed_val.string);
-      pref->stashed_val.string = NULL;
-    }
-    break;
-
-  case PREF_RANGE:
-    if (pref->stashed_val.range != NULL) {
-      g_free(pref->stashed_val.range);
-      pref->stashed_val.range = NULL;
-    }
-    break;
-
-  case PREF_STATIC_TEXT:
-  case PREF_UAT:
-  case PREF_COLOR:
-  case PREF_CUSTOM:
-    break;
-
-  case PREF_OBSOLETE:
-    g_assert_not_reached();
-    break;
-  }
-  return 0;
-}
 
 /* Fill in capture options with values from the preferences */
 void
@@ -292,17 +101,11 @@ prefs_store_ext_helper(const char * module_name, const char *pref_name, const ch
   if (!pref)
     return FALSE;
 
-  if ( pref->type == PREF_STRING )
+  if (prefs_get_type(pref) == PREF_STRING )
   {
-    g_free((void *)pref->stashed_val.string);
-    pref->stashed_val.string = (gchar *) g_strdup(pref_value);
-    /* unstash - taken from preferences_util */
-    if (strcmp(*pref->varp.string, pref->stashed_val.string) != 0)
-    {
-      pref_changed = TRUE;
-      g_free(*pref->varp.string);
-      *pref->varp.string = g_strdup(pref->stashed_val.string);
-    }
+    pref_changed = prefs_set_string_value(pref, pref_value, pref_stashed);
+    if ( ! pref_changed || prefs_get_string_value(pref, pref_stashed) != 0 )
+        pref_changed = prefs_set_string_value(pref, pref_value, pref_current);
   }
 
   return pref_changed;

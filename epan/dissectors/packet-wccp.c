@@ -564,8 +564,8 @@ static void wccp_fmt_ipaddress(gchar *buffer, guint32 host_addr, wccp_address_ta
   else
     {
       /* we need to decode the encoded address: */
-      guint16 reserv = (host_addr & 0xFF00) >> 16;
-      guint16 addr_index  = (host_addr & 0x00FF);
+      guint16 reserv = (host_addr & 0xFFFF0000) >> 16;
+      guint16 addr_index  = (host_addr & 0x0000FFFF);
 
       if (reserv != 0) {
         g_snprintf(buffer, ITEM_LABEL_LENGTH, "INVALID: reserved part non zero");
@@ -645,8 +645,8 @@ static proto_item* wccp_add_ipaddress_item(proto_tree* tree, int hf_index, int h
     host_addr = tvb_get_ntohl(tvb, offset);
 
     /* we need to decode the encoded address: */
-    reserv = (host_addr & 0xFF00) >> 16;
-    addr_index  = (host_addr & 0x00FF);
+    reserv = (host_addr & 0xFFFF0000) >> 16;
+    addr_index  = (host_addr & 0x0000FFFF);
 
     memset(&ipv6_zero, 0, sizeof(ipv6_zero));
 
@@ -1817,7 +1817,7 @@ dissect_wccp2_extended_assignment_data_element(tvbuff_t *tvb, int offset, gint l
       (length == (assignment_length + 4)))
     {
       expert_add_info_format(pinfo, element_item, &ei_wccp_assignment_length_bad,
-                             "Assignment length is %d but %d remain in the packet. Assuming that this is wrong as this is only 4 bytes to small, proceding with the assumption it is %d",
+                             "Assignment length is %d but %d remain in the packet. Assuming that this is wrong as this is only 4 bytes too small, proceeding with the assumption it is %d",
                              assignment_length, length, length);
       assignment_length = length;
     }
@@ -3569,7 +3569,7 @@ proto_reg_handoff_wccp(void)
   dissector_handle_t wccp_handle;
 
   wccp_handle = create_dissector_handle(dissect_wccp, proto_wccp);
-  dissector_add_uint("udp.port", UDP_PORT_WCCP, wccp_handle);
+  dissector_add_uint_with_preference("udp.port", UDP_PORT_WCCP, wccp_handle);
 }
 
 /*

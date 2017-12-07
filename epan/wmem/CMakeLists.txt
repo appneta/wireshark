@@ -44,13 +44,11 @@ set(WMEM_FILES
 )
 source_group(wmem FILES ${WMEM_FILES})
 
-if(WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${WMEM_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${WMEM_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 add_library(wmem OBJECT
 	${WMEM_FILES}
@@ -59,6 +57,7 @@ add_library(wmem OBJECT
 set_target_properties(wmem PROPERTIES
 	FOLDER "Libs/epan/wmem"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 )
 
 add_executable(wmem_test EXCLUDE_FROM_ALL wmem_test.c $<TARGET_OBJECTS:wmem>)
@@ -68,6 +67,7 @@ target_link_libraries(wmem_test ${GLIB2_LIBRARIES} wsutil)
 set_target_properties(wmem_test PROPERTIES
 	FOLDER "Tests"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 )
 
 CHECKAPI(

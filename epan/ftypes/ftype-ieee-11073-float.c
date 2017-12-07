@@ -219,7 +219,8 @@ sfloat_ieee_11073_val_to_repr(fvalue_t *fv, ftrepr_t rtype _U_, int field_displa
     guint16  mantissa;
     guint16  mantissa_sign;
     guint32  offset = 0;
-    gchar    mantissa_str[5];
+#define MANTISSA_STR_BUFFER_SIZE 5
+    gchar    mantissa_str[MANTISSA_STR_BUFFER_SIZE];
     guint8   mantissa_digits;
 
     if (fv->value.sfloat_ieee_11073 >= 0x07FE && fv->value.sfloat_ieee_11073 <= 0x0802) {
@@ -240,6 +241,7 @@ sfloat_ieee_11073_val_to_repr(fvalue_t *fv, ftrepr_t rtype _U_, int field_displa
             g_strlcpy(buf, "-INFINITY", size);
             break;
         }
+        return;
     }
 
     exponent = fv->value.sfloat_ieee_11073 >> 12;
@@ -262,7 +264,7 @@ sfloat_ieee_11073_val_to_repr(fvalue_t *fv, ftrepr_t rtype _U_, int field_displa
         offset += 1;
     }
 
-    mantissa_digits = g_snprintf(mantissa_str, size, "%u", mantissa);
+    mantissa_digits = g_snprintf(mantissa_str, MANTISSA_STR_BUFFER_SIZE, "%u", mantissa);
 
     if (exponent == 0) {
         memcpy(buf + offset, mantissa_str, mantissa_digits);
@@ -1438,24 +1440,8 @@ Example: 114 is 0x0072
         sfloat_ieee_11073_val_to_repr,        /* val_to_string_repr */
         sfloat_ieee_11073_val_repr_len,       /* len_string_repr */
 
-        NULL,                                 /* set_value_byte_array */
-        NULL,                                 /* set_value_bytes */
-        NULL,                                 /* set_value_guid */
-        NULL,                                 /* set_value_time */
-        NULL,                                 /* set_value_string */
-        NULL,                                 /* set_value_protocol */
-        sfloat_ieee_11073_value_set,          /* set_value_uinteger */
-        NULL,                                 /* set_value_sinteger */
-        NULL,                                 /* set_value_uinteger64 */
-        NULL,                                 /* set_value_sinteger64 */
-        NULL,                                 /* set_value_floating */
-
-        NULL,                                 /* get_value */
-        sfloat_ieee_11073_value_get,          /* get_value_uinteger */
-        NULL,                                 /* get_value_sinteger */
-        NULL,                                 /* get_value_uinteger64 */
-        NULL,                                 /* get_value_sinteger64 */
-        NULL,                                 /* get_value_floating */
+        { .set_value_uinteger = sfloat_ieee_11073_value_set }, /* union set_value */
+        { .get_value_uinteger = sfloat_ieee_11073_value_get }, /* union get_value */
 
         sfloat_ieee_11073_cmp_eq,
         sfloat_ieee_11073_cmp_ne,
@@ -1510,24 +1496,8 @@ Example: 36.4 is 0xFF00016C
         float_ieee_11073_val_to_repr,        /* val_to_string_repr */
         float_ieee_11073_val_repr_len,       /* len_string_repr */
 
-        NULL,                                /* set_value_byte_array */
-        NULL,                                /* set_value_bytes */
-        NULL,                                /* set_value_guid */
-        NULL,                                /* set_value_time */
-        NULL,                                /* set_value_string */
-        NULL,                                /* set_value_protocol */
-        float_ieee_11073_value_set,          /* set_value_uinteger */
-        NULL,                                /* set_value_sinteger */
-        NULL,                                /* set_value_uinteger64 */
-        NULL,                                /* set_value_sinteger64 */
-        NULL,                                /* set_value_floating */
-
-        NULL,                                /* get_value */
-        float_ieee_11073_value_get,          /* get_value_uinteger */
-        NULL,                                /* get_value_sinteger */
-        NULL,                                /* get_value_uinteger64 */
-        NULL,                                /* get_value_sinteger64 */
-        NULL,                                /* get_value_floating */
+        { .set_value_uinteger = float_ieee_11073_value_set }, /* union set_value */
+        { .get_value_uinteger = float_ieee_11073_value_get }, /* union get_value */
 
         float_ieee_11073_cmp_eq,
         float_ieee_11073_cmp_ne,

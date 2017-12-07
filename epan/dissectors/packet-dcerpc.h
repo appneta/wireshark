@@ -100,12 +100,18 @@ typedef struct _e_dce_dg_common_hdr_t {
     guint8 serial_lo;
 } e_dce_dg_common_hdr_t;
 
+struct _dcerpc_auth_subdissector_fns;
+
 typedef struct _dcerpc_auth_info {
-  guint8 auth_pad_len;
-  guint8 auth_level;
   guint8 auth_type;
+  guint8 auth_level;
+  guint32 auth_context_id;
+  guint8 auth_pad_len;
   guint32 auth_size;
-  tvbuff_t *auth_data;
+  struct _dcerpc_auth_subdissector_fns *auth_fns;
+  tvbuff_t *auth_tvb;
+  proto_item *auth_item;
+  proto_tree *auth_tree;
 } dcerpc_auth_info;
 
 typedef struct dcerpcstat_tap_data
@@ -204,6 +210,10 @@ typedef struct _dcerpc_info {
 guint16 dcerpc_tvb_get_ntohs (tvbuff_t *tvb, gint offset, guint8 *drep);
 guint32 dcerpc_tvb_get_ntohl (tvbuff_t *tvb, gint offset, guint8 *drep);
 void dcerpc_tvb_get_uuid (tvbuff_t *tvb, gint offset, guint8 *drep, e_guid_t *uuid);
+WS_DLL_PUBLIC
+int dissect_dcerpc_char (tvbuff_t *tvb, gint offset, packet_info *pinfo,
+                         proto_tree *tree, guint8 *drep,
+                         int hfindex, guint8 *pdata);
 WS_DLL_PUBLIC
 int dissect_dcerpc_uint8 (tvbuff_t *tvb, gint offset, packet_info *pinfo,
                           proto_tree *tree, guint8 *drep,

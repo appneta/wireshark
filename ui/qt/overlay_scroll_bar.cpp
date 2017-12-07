@@ -47,7 +47,7 @@
 class OsbProxyStyle : public QProxyStyle
 {
   public:
-    // Disable transient behavior. Mainly for OS X but possibly applies to
+    // Disable transient behavior. Mainly for macOS but possibly applies to
     // other platforms. If we want to enable transience we'll have to
     // handle the following at a minimum:
     //
@@ -71,7 +71,7 @@ class OsbProxyStyle : public QProxyStyle
 };
 
 OverlayScrollBar::OverlayScrollBar(Qt::Orientation orientation, QWidget *parent) :
-    QScrollBar(orientation, parent = 0),
+    QScrollBar(orientation, parent),
     child_sb_(orientation, this),
     packet_map_img_(QImage()),
     packet_map_width_(0),

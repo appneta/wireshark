@@ -32,6 +32,8 @@
 #include "wireshark_application.h"
 #include "ui/recent.h"
 
+#include <ui/qt/variant_pointer.h>
+
 #include <QActionGroup>
 #include <QMouseEvent>
 #include <QPainter>
@@ -59,7 +61,8 @@ ByteViewText::ByteViewText(QWidget *parent, tvbuff_t *tvb, proto_tree *tree, QTr
     format_actions_(new QActionGroup(this)),
     encoding_actions_(new QActionGroup(this)),
     encoding_(encoding),
-    hovered_byte_offset(-1),
+    hovered_byte_offset_(-1),
+    hovered_byte_lock_(false),
     p_bound_(0, 0),
     f_bound_(0, 0),
     fa_bound_(0, 0),
@@ -118,6 +121,12 @@ ByteViewText::ByteViewText(QWidget *parent, tvbuff_t *tvb, proto_tree *tree, QTr
 ByteViewText::~ByteViewText()
 {
     ctx_menu_.clear();
+}
+
+QSize ByteViewText::minimumSizeHint() const
+{
+    // Allow panel to be shrinked to any size
+    return QSize();
 }
 
 bool ByteViewText::hasDataSource(const tvbuff_t *ds_tvb) {
@@ -249,6 +258,7 @@ void ByteViewText::mousePressEvent (QMouseEvent *event) {
         return;
     }
 
+    hovered_byte_lock_ = !hovered_byte_lock_;
     QPoint pos = event->pos();
     field_info *fi = fieldAtPixel(pos);
 
@@ -256,7 +266,7 @@ void ByteViewText::mousePressEvent (QMouseEvent *event) {
         // XXX - This should probably be a ProtoTree method.
         QTreeWidgetItemIterator iter(tree_widget_);
         while (*iter) {
-            if (fi == (*iter)->data(0, Qt::UserRole).value<field_info *>()) {
+            if (fi == VariantPointer<field_info>::asPtr((*iter)->data(0, Qt::UserRole))) {
                 tree_widget_->setCurrentItem((*iter));
                 tree_widget_->scrollToItem((*iter));
             }
@@ -268,6 +278,10 @@ void ByteViewText::mousePressEvent (QMouseEvent *event) {
 
 void ByteViewText::mouseMoveEvent(QMouseEvent *event)
 {
+    if (hovered_byte_lock_) {
+        return;
+    }
+
     QString field_str;
     // XXX can the event really be NULL?
     if (!event) {
@@ -279,7 +293,7 @@ void ByteViewText::mouseMoveEvent(QMouseEvent *event)
         return;
     }
     QPoint pos = event->pos();
-    hovered_byte_offset = byteOffsetAtPixel(pos);
+    hovered_byte_offset_ = byteOffsetAtPixel(pos);
     field_info *fi = fieldAtPixel(pos);
     if (fi) {
         if (fi->length < 2) {
@@ -309,7 +323,9 @@ void ByteViewText::leaveEvent(QEvent *event)
 {
     QString empty;
     emit byteFieldHovered(empty);
-    hovered_byte_offset = -1;
+    if (!hovered_byte_lock_) {
+        hovered_byte_offset_ = -1;
+    }
     p_bound_ = p_bound_save_;
     f_bound_ = f_bound_save_;
     fa_bound_ = fa_bound_save_;
@@ -344,34 +360,34 @@ void ByteViewText::drawOffsetLine(QPainter &painter, const guint offset, const i
         '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 
     QString text;
-    highlight_state state = StateNormal, offset_state = StateOffsetNormal;
+    HighlightMode hl_mode = ModeNormal, offset_mode = ModeOffsetNormal;
     qreal hex_x = offsetPixels() + margin_;
     qreal ascii_x = offsetPixels() + hexPixels() + margin_;
 
     // Hex
     if (show_hex_) {
         for (guint tvb_pos = offset; tvb_pos < max_pos; tvb_pos++) {
-            highlight_state hex_state = StateNormal;
+            HighlightMode hex_state = ModeNormal;
             bool add_space = tvb_pos != offset;
-            bool highlight_text = tvb_pos == hovered_byte_offset;
+            bool draw_hover = tvb_pos == hovered_byte_offset_;
 
             if ((tvb_pos >= f_bound_.first && tvb_pos < f_bound_.second) || (tvb_pos >= fa_bound_.first && tvb_pos < fa_bound_.second)) {
-                hex_state = StateField;
-                offset_state = StateOffsetField;
+                hex_state = ModeField;
+                offset_mode = ModeOffsetField;
             } else if (tvb_pos >= p_bound_.first && tvb_pos < p_bound_.second) {
-                hex_state = StateProtocol;
+                hex_state = ModeProtocol;
             }
 
-            if (hex_state != state || highlight_text) {
-                if ((state == StateNormal || (state == StateProtocol && hex_state == StateField) || highlight_text) && add_space) {
+            if (hex_state != hl_mode || draw_hover) {
+                if ((hl_mode == ModeNormal || (hl_mode == ModeProtocol && hex_state == ModeField) || draw_hover) && add_space) {
                     add_space = false;
                     text += ' ';
                     /* insert a space every separator_interval_ bytes */
                     if ((tvb_pos % separator_interval_) == 0)
                         text += ' ';
                 }
-                hex_x += flushOffsetFragment(painter, hex_x, row_y, state, false, text);
-                state = hex_state;
+                hex_x += flushOffsetFragment(painter, hex_x, row_y, hl_mode, text);
+                hl_mode = hex_state;
             }
 
             if (add_space) {
@@ -392,39 +408,39 @@ void ByteViewText::drawOffsetLine(QPainter &painter, const guint offset, const i
                     text += (pd[tvb_pos] & (1 << j)) ? '1' : '0';
                 break;
             }
-            if (highlight_text) {
-                hex_x += flushOffsetFragment(painter, hex_x, row_y, state, true, text);
+            if (draw_hover) {
+                hex_x += flushOffsetFragment(painter, hex_x, row_y, ModeHover, text);
             }
         }
     }
     if (text.length() > 0) {
-        flushOffsetFragment(painter, hex_x, row_y, state, false, text);
+        flushOffsetFragment(painter, hex_x, row_y, hl_mode, text);
     }
-    state = StateNormal;
+    hl_mode = ModeNormal;
 
     // ASCII
     if (show_ascii_) {
         for (guint tvb_pos = offset; tvb_pos < max_pos; tvb_pos++) {
-            highlight_state ascii_state = StateNormal;
+            HighlightMode ascii_state = ModeNormal;
             bool add_space = tvb_pos != offset;
-            bool highlight_text = tvb_pos == hovered_byte_offset;
+            bool highlight_text = tvb_pos == hovered_byte_offset_;
 
             if ((tvb_pos >= f_bound_.first && tvb_pos < f_bound_.second) || (tvb_pos >= fa_bound_.first && tvb_pos < fa_bound_.second)) {
-                ascii_state = StateField;
-                offset_state = StateOffsetField;
+                ascii_state = ModeField;
+                offset_mode = ModeOffsetField;
             } else if (tvb_pos >= p_bound_.first && tvb_pos < p_bound_.second) {
-                ascii_state = StateProtocol;
+                ascii_state = ModeProtocol;
             }
 
-            if (ascii_state != state || highlight_text) {
-                if ((state == StateNormal || (state == StateProtocol && ascii_state == StateField) || highlight_text) && add_space) {
+            if (ascii_state != hl_mode || highlight_text) {
+                if ((hl_mode == ModeNormal || (hl_mode == ModeProtocol && ascii_state == ModeField) || highlight_text) && add_space) {
                     add_space = false;
                     /* insert a space every separator_interval_ bytes */
                     if ((tvb_pos % separator_interval_) == 0)
                         text += ' ';
                 }
-                ascii_x += flushOffsetFragment(painter, ascii_x, row_y, state, false, text);
-                state = ascii_state;
+                ascii_x += flushOffsetFragment(painter, ascii_x, row_y, hl_mode, text);
+                hl_mode = ascii_state;
             }
 
             if (add_space) {
@@ -439,25 +455,25 @@ void ByteViewText::drawOffsetLine(QPainter &painter, const guint offset, const i
 
             text += g_ascii_isprint(c) ? c : '.';
             if (highlight_text) {
-                ascii_x += flushOffsetFragment(painter, ascii_x, row_y, state, true, text);
+                ascii_x += flushOffsetFragment(painter, ascii_x, row_y, ModeHover, text);
             }
         }
     }
     if (text.length() > 0) {
-        flushOffsetFragment(painter, ascii_x, row_y, state, false, text);
+        flushOffsetFragment(painter, ascii_x, row_y, hl_mode, text);
     }
 
     // Offset. Must be drawn last in order for offset_state to be set.
     if (show_offset_) {
         text = QString("%1").arg(offset, offsetChars(), 16, QChar('0'));
-        flushOffsetFragment(painter, margin_, row_y, offset_state, false, text);
+        flushOffsetFragment(painter, margin_, row_y, offset_mode, text);
     }
 }
 
 // Draws a fragment of byte view text at the specifiec location using colors
 // for the specified state. Clears the text and returns the pixel width of the
 // drawn text.
-qreal ByteViewText::flushOffsetFragment(QPainter &painter, qreal x, int y, highlight_state state, gboolean extra_highlight, QString &text)
+qreal ByteViewText::flushOffsetFragment(QPainter &painter, qreal x, int y, HighlightMode mode, QString &text)
 {
     if (text.length() < 1) {
         return 0;
@@ -466,34 +482,40 @@ qreal ByteViewText::flushOffsetFragment(QPainter &painter, qreal x, int y, highl
     qreal width = fm.width(text);
     QRectF area(x, y, width, line_spacing_);
     // Background
-    if (state == StateField) {
+    switch (mode) {
+    case ModeField:
         painter.fillRect(area, palette().highlight());
-    } else if (state == StateProtocol) {
+        break;
+    case ModeProtocol:
         painter.fillRect(area, palette().window());
+        break;
+    case ModeHover:
+        painter.fillRect(area, ColorUtils::byteViewHoverColor(true));
+        break;
+    default:
+        break;
     }
 
     // Text
     QBrush text_brush;
-    switch (state) {
-    case StateNormal:
-    case StateProtocol:
+    switch (mode) {
+    case ModeNormal:
+    case ModeProtocol:
     default:
         text_brush = palette().windowText();
         break;
-    case StateField:
+    case ModeField:
         text_brush = palette().highlightedText();
         break;
-    case StateOffsetNormal:
+    case ModeOffsetNormal:
         text_brush = offset_normal_fg_;
         break;
-    case StateOffsetField:
+    case ModeOffsetField:
         text_brush = offset_field_fg_;
         break;
-    }
-
-    if (extra_highlight) {
-        painter.fillRect(area, QColor("yellow"));
-        text_brush = QColor("blue");
+    case ModeHover:
+        text_brush = ColorUtils::byteViewHoverColor(false);
+        break;
     }
 
     painter.setPen(QPen(text_brush.color()));
@@ -556,7 +578,7 @@ void ByteViewText::updateScrollbars()
 
     qint64 maxval = length / row_width_ + ((length % row_width_) ? 1 : 0) - viewport()->height() / line_spacing_;
 
-    verticalScrollBar()->setRange(0, qMax((qint64)0, maxval));
+    verticalScrollBar()->setRange(0, int(qMax((qint64)0, maxval)));
     horizontalScrollBar()->setRange(0, qMax(0, static_cast<int>((totalPixels() - viewport()->width()) / font_width_)));
 }
 

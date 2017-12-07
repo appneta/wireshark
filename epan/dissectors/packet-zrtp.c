@@ -27,6 +27,7 @@
 #include "config.h"
 
 #include <epan/packet.h>
+#include <epan/expert.h>
 #include <epan/crc32-tvb.h>
 #include <wsutil/crc32.h>
 #include "packet-rtp.h"
@@ -129,6 +130,12 @@ static gint ett_zrtp_msg_cc = -1;
 static gint ett_zrtp_msg_sc = -1;
 
 static gint ett_zrtp_checksum = -1;
+
+
+static expert_field ei_zrtp_checksum = EI_INIT;
+
+static dissector_handle_t zrtp_handle;
+
 
 /*
   Definitions
@@ -416,7 +423,7 @@ dissect_zrtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 
   calc_crc = ~crc32c_tvb_offset_calculate(tvb, 0, msg_offset+checksum_offset, CRC32C_PRELOAD);
 
-  proto_tree_add_checksum(zrtp_tree, tvb, msg_offset+checksum_offset, hf_zrtp_checksum, hf_zrtp_checksum_status, NULL, pinfo, calc_crc,
+  proto_tree_add_checksum(zrtp_tree, tvb, msg_offset+checksum_offset, hf_zrtp_checksum, hf_zrtp_checksum_status, &ei_zrtp_checksum, pinfo, calc_crc,
                             ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY);
   return tvb_captured_length(tvb);
 }
@@ -447,10 +454,10 @@ dissect_Conf2ACK(packet_info *pinfo) {
   dummy_srtp_info->mki_len = 0;
   dummy_srtp_info->auth_tag_len = 4;
 
-  srtp_add_address(pinfo, &pinfo->net_src, pinfo->srcport, pinfo->destport,
+  srtp_add_address(pinfo, PT_UDP, &pinfo->net_src, pinfo->srcport, pinfo->destport,
                    "ZRTP", pinfo->num, FALSE, NULL, dummy_srtp_info);
 
-  srtp_add_address(pinfo, &pinfo->net_dst, pinfo->destport, pinfo->srcport,
+  srtp_add_address(pinfo, PT_UDP, &pinfo->net_dst, pinfo->destport, pinfo->srcport,
                    "ZRTP", pinfo->num, FALSE, NULL, dummy_srtp_info);
 
   srtcp_add_address(pinfo, &pinfo->net_src, pinfo->srcport+1, pinfo->destport+1,
@@ -1128,19 +1135,24 @@ proto_register_zrtp(void)
     &ett_zrtp_checksum
   };
 
+  static ei_register_info ei[] = {
+    { &ei_zrtp_checksum, { "zrtp.bad_checksum", PI_CHECKSUM, PI_ERROR, "Bad checksum", EXPFILL }},
+  };
+
+  expert_module_t* expert_zrtp;
+
   proto_zrtp = proto_register_protocol("ZRTP", "ZRTP", "zrtp");
   proto_register_field_array(proto_zrtp, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
-  register_dissector("zrtp", dissect_zrtp, proto_zrtp);
+  zrtp_handle = register_dissector("zrtp", dissect_zrtp, proto_zrtp);
+  expert_zrtp = expert_register_protocol(proto_zrtp);
+  expert_register_field_array(expert_zrtp, ei, array_length(ei));
 }
 
 void
 proto_reg_handoff_zrtp(void)
 {
-  dissector_handle_t zrtp_handle;
-
-  zrtp_handle = find_dissector("zrtp");
-  dissector_add_for_decode_as("udp.port", zrtp_handle);
+  dissector_add_for_decode_as_with_preference("udp.port", zrtp_handle);
 }
 
 /*

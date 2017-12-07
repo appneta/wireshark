@@ -1168,7 +1168,7 @@ static const value_string artnet_esta_man_vals[] = {
   { 0x4C58, "Lex Products Corp." },
   { 0x4C59, "Laser Technology Ltd." },
   { 0x4C5A, "LightMinded Industries, Inc." },
-  { 0x4C5A, "Sumolight GmbH" },
+/*  { 0x4C5A, "Sumolight GmbH" }, */
   { 0x4C5B, "LightLife, Gesellschaft fuer audiovisuelle Erlebnisse mbH" },
   { 0x4C64, "LED Team" },
   { 0x4C65, "Legargeant and Associates" },
@@ -3189,7 +3189,7 @@ dissect_artnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 
   proto_tree_add_item_ret_string(artnet_header_tree, hf_artnet_header_id,
                         tvb, offset, 8, ENC_ASCII|ENC_NA, wmem_packet_scope(), &header);
-  col_append_fstr(pinfo->cinfo, COL_INFO, "%s", header);
+  col_append_str(pinfo->cinfo, COL_INFO, header);
   offset += 8;
 
   opcode = tvb_get_letohs(tvb, offset);
@@ -5368,7 +5368,7 @@ proto_reg_handoff_artnet(void) {
   dissector_handle_t artnet_handle;
 
   artnet_handle   = create_dissector_handle(dissect_artnet, proto_artnet);
-  dissector_add_for_decode_as("udp.port", artnet_handle);
+  dissector_add_for_decode_as_with_preference("udp.port", artnet_handle);
   rdm_handle      = find_dissector_add_dependency("rdm", proto_artnet);
   dmx_chan_handle = find_dissector_add_dependency("dmx-chan", proto_artnet);
 

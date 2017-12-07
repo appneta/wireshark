@@ -36,8 +36,8 @@
 void proto_register_cpfi(void);
 void proto_reg_handoff_cpfi(void);
 
-#define CPFI_DEFAULT_UDP_PORT      5000
-#define CPFI_DEFAULT_TTOT_UDP_PORT 5001
+#define CPFI_DEFAULT_UDP_PORT      5000 /* Not IANA registered */
+#define CPFI_DEFAULT_TTOT_UDP_PORT 5001 /* Not IANA registered */
 
 #define FIRST_TIO_CARD_ADDRESS    0x380
 
@@ -59,7 +59,6 @@ void proto_reg_handoff_cpfi(void);
 #define CPFI_EOF_ERROR_MASK   0x7FE00000
 
 /* configurable parameters */
-static guint gbl_cpfi_udp_port      = CPFI_DEFAULT_UDP_PORT;
 static guint gbl_cpfi_ttot_udp_port = CPFI_DEFAULT_TTOT_UDP_PORT;
 static gboolean cpfi_arrow_moves    = TRUE;
 
@@ -369,7 +368,7 @@ dissect_cpfi(tvbuff_t *message_tvb, packet_info *pinfo, proto_tree *tree, void *
   header_tvb = tvb_new_subset_length(message_tvb, 0, 8);
   dissect_cpfi_header(header_tvb, pinfo, cpfi_tree);
 
-  body_tvb = tvb_new_subset(message_tvb, 8, body_length, reported_body_length);
+  body_tvb = tvb_new_subset_length_caplen(message_tvb, 8, body_length, reported_body_length);
   fc_data.ethertype = 0;
   call_dissector_with_data(fc_handle, body_tvb, pinfo, tree, &fc_data);
 
@@ -378,7 +377,7 @@ dissect_cpfi(tvbuff_t *message_tvb, packet_info *pinfo, proto_tree *tree, void *
   col_prepend_fstr(pinfo->cinfo, COL_INFO, direction_and_port_string, left, arrow, right);
 
   /* Do the footer */
-  footer_tvb = tvb_new_subset(message_tvb, 8+body_length, length, 8);
+  footer_tvb = tvb_new_subset_length_caplen(message_tvb, 8+body_length, length, 8);
   dissect_cpfi_footer(footer_tvb, cpfi_tree);
 
   return(tvb_reported_length(message_tvb));
@@ -506,10 +505,6 @@ proto_register_cpfi(void)
 
   /* Register our configuration options for CPFI */
   cpfi_module = prefs_register_protocol(proto_cpfi, proto_reg_handoff_cpfi);
-  prefs_register_uint_preference(cpfi_module, "udp.port", "CPFI UDP Port",
-                 "Set the port for CPFI messages (if other"
-                 " than the default of 5000)",
-                 10, &gbl_cpfi_udp_port);
   prefs_register_uint_preference(cpfi_module, "udp.port2", "InstanceToInstance UDP Port",
                  "Set the port for InstanceToInstance messages (if other"
                  " than the default of 5001)",
@@ -530,25 +525,24 @@ proto_reg_handoff_cpfi(void)
 {
   static gboolean cpfi_init_complete = FALSE;
   static dissector_handle_t cpfi_handle;
-  static guint cpfi_udp_port;
   static guint cpfi_ttot_udp_port;
 
   if ( !cpfi_init_complete )
   {
     fc_handle     = find_dissector_add_dependency("fc", proto_cpfi);
     cpfi_handle   = create_dissector_handle(dissect_cpfi, proto_cpfi);
+    dissector_add_uint_with_preference("udp.port", CPFI_DEFAULT_UDP_PORT, cpfi_handle);
     cpfi_init_complete = TRUE;
   }
   else
   {
-    dissector_delete_uint("udp.port", cpfi_udp_port, cpfi_handle);
     dissector_delete_uint("udp.port", cpfi_ttot_udp_port, cpfi_handle);
   }
 
-  cpfi_udp_port      = gbl_cpfi_udp_port;
   cpfi_ttot_udp_port = gbl_cpfi_ttot_udp_port;
 
-  dissector_add_uint("udp.port", cpfi_udp_port, cpfi_handle);
+  /* Port preference has a specific enough name to not use
+     the "auto" preference */
   dissector_add_uint("udp.port", cpfi_ttot_udp_port, cpfi_handle);
 }
 

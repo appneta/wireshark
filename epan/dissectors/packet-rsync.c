@@ -33,6 +33,7 @@
 #include <epan/proto_data.h>
 
 void proto_register_rsync(void);
+void proto_reg_handoff_rsync(void);
 
 #define RSYNCD_MAGIC_HEADER "@RSYNCD:"
 #define RSYNCD_MAGIC_HEADER_LEN 8
@@ -306,10 +307,14 @@ dissect_rsync(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U
     return dissect_rsync_encap(tvb, pinfo, tree, rsync_desegment);
 }
 
+static void
+apply_rsync_prefs(void)
+{
+    /* Rsync uses the port preference to determine client/server */
+    glb_rsync_tcp_port = prefs_get_uint_value("rsync", "tcp.port");
+}
+
 /* Register protocol with Wireshark. */
-
-void proto_reg_handoff_rsync(void);
-
 void
 proto_register_rsync(void)
 {
@@ -334,14 +339,13 @@ proto_register_rsync(void)
 
     int proto_rsync;
 
-    proto_rsync = proto_register_protocol("RSYNC File Synchroniser",
-                                          "RSYNC", "rsync");
+    proto_rsync = proto_register_protocol("RSYNC File Synchroniser", "RSYNC", "rsync");
     hfi_rsync = proto_registrar_get_nth(proto_rsync);
 
     proto_register_fields(proto_rsync, hfi, array_length(hfi));
     proto_register_subtree_array(ett, array_length(ett));
 
-    rsync_module = prefs_register_protocol(proto_rsync, proto_reg_handoff_rsync);
+    rsync_module = prefs_register_protocol(proto_rsync, apply_rsync_prefs);
     prefs_register_uint_preference(rsync_module, "tcp_port",
                                    "rsync TCP Port",
                                    "Set the TCP port for RSYNC messages",
@@ -359,17 +363,7 @@ proto_register_rsync(void)
 void
 proto_reg_handoff_rsync(void)
 {
-    static gboolean initialized = FALSE;
-    static guint    saved_rsync_tcp_port;
-
-    if (!initialized) {
-        initialized = TRUE;
-    } else {
-        dissector_delete_uint("tcp.port", saved_rsync_tcp_port, rsync_handle);
-    }
-
-    dissector_add_uint("tcp.port", glb_rsync_tcp_port, rsync_handle);
-    saved_rsync_tcp_port = glb_rsync_tcp_port;
+    dissector_add_uint_with_preference("tcp.port", TCP_PORT_RSYNC, rsync_handle);
 }
 
 /*

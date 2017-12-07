@@ -156,7 +156,7 @@ static gboolean rtmpt_desegment = TRUE;
  */
 static guint rtmpt_max_packet_size = 32768;
 
-#define RTMP_PORT                     1935
+#define RTMP_PORT                     1935 /* Not IANA registered */
 
 #define RTMPT_MAGIC                   0x03
 #define RTMPT_HANDSHAKE_OFFSET_1         1
@@ -1732,14 +1732,14 @@ dissect_rtmpt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, rtmpt_conv_t 
         }
 
         if (tp->id>RTMPT_ID_MAX) {
-                col_append_sep_fstr(pinfo->cinfo, COL_INFO, "|", "%s",
+                col_append_sep_str(pinfo->cinfo, COL_INFO, "|",
                                 val_to_str(tp->id, rtmpt_handshake_vals, "Unknown (0x%01x)"));
                 col_set_fence(pinfo->cinfo, COL_INFO);
         } else if (sDesc) {
-                col_append_sep_fstr(pinfo->cinfo, COL_INFO, "|", "%s", sDesc);
+                col_append_sep_str(pinfo->cinfo, COL_INFO, "|", sDesc);
                 col_set_fence(pinfo->cinfo, COL_INFO);
         } else {
-                col_append_sep_fstr(pinfo->cinfo, COL_INFO, "|", "%s",
+                col_append_sep_str(pinfo->cinfo, COL_INFO, "|",
                                 val_to_str(tp->cmd, rtmpt_opcode_vals, "Unknown (0x%01x)"));
                 col_set_fence(pinfo->cinfo, COL_INFO);
         }
@@ -1876,6 +1876,7 @@ dissect_rtmpt_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, rtmpt_
         guint8  cmd;
         guint32 src;
         int     chunk_size;
+        guint32 save_seq = 0;
 
         rtmpt_frag_t   *tf;
         rtmpt_id_t     *ti;
@@ -1898,8 +1899,9 @@ dissect_rtmpt_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, rtmpt_
                 wmem_stack_push(packets, 0);
 
                 tp = (rtmpt_packet_t *)wmem_tree_lookup32_le(rconv->packets[cdir], seq+remain-1);
-                while (tp && tp->lastseq >= seq) {
+                while (tp && tp->lastseq >= seq && tp->lastseq >= save_seq) {
                         wmem_stack_push(packets, tp);
+                        save_seq = tp->lastseq+1; /* Ensure sequence is increasing */
                         tp = (rtmpt_packet_t *)wmem_tree_lookup32_le(rconv->packets[cdir], tp->lastseq-1);
                 }
 
@@ -2927,8 +2929,7 @@ proto_reg_handoff_rtmpt(void)
 
         heur_dissector_add("tcp", dissect_rtmpt_heur, "RTMPT over TCP", "rtmpt_tcp", proto_rtmpt, HEURISTIC_DISABLE);
         rtmpt_tcp_handle = create_dissector_handle(dissect_rtmpt_tcp, proto_rtmpt);
-/*      dissector_add_for_decode_as("tcp.port", rtmpt_tcp_handle); */
-        dissector_add_uint("tcp.port", RTMP_PORT, rtmpt_tcp_handle);
+        dissector_add_uint_with_preference("tcp.port", RTMP_PORT, rtmpt_tcp_handle);
 
         rtmpt_http_handle = create_dissector_handle(dissect_rtmpt_http, proto_rtmpt);
         dissector_add_string("media_type", "application/x-fcs", rtmpt_http_handle);

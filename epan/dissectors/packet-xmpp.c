@@ -392,16 +392,15 @@ dissect_xmpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 
     int proto_xml = dissector_handle_get_protocol_index(xml_handle);
 
+    gboolean whitespace_keepalive = ((tvb_reported_length(tvb) == 1) && tvb_get_guint8(tvb, 0) == ' ');
+
     /*check if desegment
      * now it checks that last char is '>',
      * TODO checks that first element in packet is closed*/
     int   indx;
     gchar last_char;
 
-    conversation = find_or_create_conversation(pinfo);
-    xmpp_info = (xmpp_conv_info_t *)conversation_get_proto_data(conversation, proto_xmpp);
-
-    if (!xmpp_info && xmpp_desegment)
+    if (xmpp_desegment && !whitespace_keepalive)
     {
         indx = tvb_reported_length(tvb) - 1;
         if (indx >= 0)
@@ -423,12 +422,17 @@ dissect_xmpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
     }
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "XMPP");
-
     col_clear(pinfo->cinfo, COL_INFO);
 
     /*if tree == NULL then xmpp_item and xmpp_tree will also NULL*/
     xmpp_item = proto_tree_add_item(tree, proto_xmpp, tvb, 0, -1, ENC_NA);
     xmpp_tree = proto_item_add_subtree(xmpp_item, ett_xmpp);
+
+    if (whitespace_keepalive) {
+        /* RFC 6120 section 4.6.1 */
+        col_set_str(pinfo->cinfo, COL_INFO, "Whitespace Keepalive");
+        return tvb_captured_length(tvb);
+    }
 
     call_dissector_with_data(xml_handle, tvb, pinfo, xmpp_tree, NULL);
 
@@ -457,6 +461,9 @@ dissect_xmpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 
     if(!xml_frame)
         return tvb_captured_length(tvb);
+
+    conversation = find_or_create_conversation(pinfo);
+    xmpp_info = (xmpp_conv_info_t *)conversation_get_proto_data(conversation, proto_xmpp);
 
     if (!xmpp_info) {
         xmpp_info = wmem_new(wmem_file_scope(), xmpp_conv_info_t);
@@ -523,9 +530,9 @@ dissect_xmpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
             xmpp_features(xmpp_tree, tvb, pinfo, packet);
         } else if (strcmp(packet->name, "starttls") == 0) {
             xmpp_starttls(xmpp_tree, tvb, pinfo, packet, xmpp_info);
-        }else if (strcmp(packet->name, "proceed") == 0) {
+        } else if (strcmp(packet->name, "proceed") == 0) {
             xmpp_proceed(xmpp_tree, tvb, pinfo, packet, xmpp_info);
-        }else {
+        } else {
             xmpp_proto_tree_show_first_child(xmpp_tree);
             expert_add_info_format(pinfo, xmpp_tree, &ei_xmpp_packet_unknown, "Unknown packet: %s", packet->name);
             col_set_str(pinfo->cinfo, COL_INFO, "UNKNOWN PACKET ");
@@ -1483,7 +1490,7 @@ void
 proto_reg_handoff_xmpp(void) {
     xml_handle  = find_dissector_add_dependency("xml", proto_xmpp);
 
-    dissector_add_uint("tcp.port", XMPP_PORT, xmpp_handle);
+    dissector_add_uint_with_preference("tcp.port", XMPP_PORT, xmpp_handle);
 
 }
 /*

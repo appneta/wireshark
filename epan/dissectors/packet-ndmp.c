@@ -1364,7 +1364,7 @@ dissect_execute_cdb_cdb(tvbuff_t *tvb, int offset, packet_info *pinfo,
 		tvb_rlen=tvb_reported_length_remaining(tvb, offset);
 		if(tvb_rlen>16)
 			tvb_rlen=16;
-		cdb_tvb=tvb_new_subset(tvb, offset, tvb_len, tvb_rlen);
+		cdb_tvb=tvb_new_subset_length_caplen(tvb, offset, tvb_len, tvb_rlen);
 
 		if(ndmp_conv_data->task && !ndmp_conv_data->task->itlq){
 			ndmp_conv_data->task->itlq=wmem_new(wmem_file_scope(), itlq_nexus_t);
@@ -1417,7 +1417,7 @@ dissect_execute_cdb_payload(tvbuff_t *tvb, int offset, packet_info *pinfo, proto
 		tvb_rlen=tvb_reported_length_remaining(tvb, offset);
 		if(tvb_rlen>(int)payload_len)
 			tvb_rlen=payload_len;
-		data_tvb=tvb_new_subset(tvb, offset, tvb_len, tvb_rlen);
+		data_tvb=tvb_new_subset_length_caplen(tvb, offset, tvb_len, tvb_rlen);
 
 		if(ndmp_conv_data->task && ndmp_conv_data->task->itlq){
 			/* ndmp conceptually always send both read and write
@@ -3416,19 +3416,6 @@ dissect_ndmp_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
 	return tvb_captured_length(tvb);
 }
 
-static void
-ndmp_init(void)
-{
-	reassembly_table_init(&ndmp_reassembly_table,
-	    &addresses_reassembly_table_functions);
-}
-
-static void
-ndmp_cleanup(void)
-{
-	reassembly_table_destroy(&ndmp_reassembly_table);
-}
-
 
 void
 proto_register_ndmp(void)
@@ -4259,15 +4246,15 @@ proto_register_ndmp(void)
 	"Reassemble fragmented NDMP messages spanning multiple packets",
 	"Whether the dissector should defragment NDMP messages spanning multiple packets.",
 	&ndmp_defragment);
-	register_init_routine(ndmp_init);
-	register_cleanup_routine(ndmp_cleanup);
+	reassembly_table_register(&ndmp_reassembly_table,
+	    &addresses_reassembly_table_functions);
 }
 
 void
 proto_reg_handoff_ndmp(void)
 {
 	ndmp_handle = create_dissector_handle(dissect_ndmp, proto_ndmp);
-	dissector_add_uint("tcp.port",TCP_PORT_NDMP, ndmp_handle);
+	dissector_add_uint_with_preference("tcp.port",TCP_PORT_NDMP, ndmp_handle);
 	heur_dissector_add("tcp", dissect_ndmp_heur, "NDMP over TCP", "ndmp_tcp", proto_ndmp, HEURISTIC_ENABLE);
 }
 

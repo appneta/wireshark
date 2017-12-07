@@ -372,8 +372,9 @@ wtap_open_return_val peektagged_open(wtap *wth, int *err, gchar **err_info)
     }
 
     /* skip 8 zero bytes */
-    if (file_seek (wth->fh, 8L, SEEK_CUR, err) == -1)
-        return WTAP_OPEN_NOT_MINE;
+    if (!wtap_read_bytes (wth->fh, NULL, 8, err, err_info)) {
+        return WTAP_OPEN_ERROR;
+    }
 
     /*
      * This is an Peek tagged file.
@@ -714,14 +715,14 @@ peektagged_read_packet(wtap *wth, FILE_T fh, struct wtap_pkthdr *phdr,
     if (sliceLength == 0)
         sliceLength = length;
 
-    if (sliceLength > WTAP_MAX_PACKET_SIZE) {
+    if (sliceLength > WTAP_MAX_PACKET_SIZE_STANDARD) {
         /*
          * Probably a corrupt capture file; don't blow up trying
          * to allocate space for an immensely-large packet.
          */
         *err = WTAP_ERR_BAD_FILE;
         *err_info = g_strdup_printf("peektagged: File has %u-byte packet, bigger than maximum of %u",
-            sliceLength, WTAP_MAX_PACKET_SIZE);
+            sliceLength, WTAP_MAX_PACKET_SIZE_STANDARD);
         return -1;
     }
 
@@ -852,7 +853,7 @@ static gboolean peektagged_read(wtap *wth, int *err, gchar **err_info,
 
     if (skip_len != 0) {
         /* Skip extra junk at the end of the packet data. */
-        if (!file_skip(wth->fh, skip_len, err))
+        if (!wtap_read_bytes(wth->fh, NULL, skip_len, err, err_info))
             return FALSE;
     }
 

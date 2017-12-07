@@ -6,10 +6,10 @@
 # Define variables for the components of the Wireshark version number.
 #
 m4_define([version_major], [2])
-m4_define([version_minor], [2])
+m4_define([version_minor], [4])
 m4_define([version_micro], [4])
 dnl Updated by make-version.pl
-m4_define([version_extra], [-appneta.31])
+m4_define([version_extra], [])
 m4_define([version_micro_extra], m4_join([], version_micro, version_extra))
 
 AC_INIT(Wireshark, [version_major.version_minor.version_micro_extra], http://bugs.wireshark.org/, , http://www.wireshark.org/)
@@ -46,7 +46,7 @@ dnl AC_CANONICAL_BUILD
 dnl AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE([1.11 tar-ustar dist-bzip2 no-dist-gzip subdir-objects])
+AM_INIT_AUTOMAKE([1.11 tar-ustar dist-xz no-dist-gzip subdir-objects])
 
 # Enable silent builds by default. Verbose builds can be enabled with "./configure
 # --enable-silent-rules ..." or "make V=1 ..."
@@ -58,7 +58,7 @@ AC_DEFINE(VERSION_MINOR, version_minor, [Wireshark's minor version])
 AC_DEFINE(VERSION_MICRO, version_micro, [Wireshark's micro version])
 
 dnl AC_DEFINE_UNQUOTED(VERSION_FLAVOR,
-dnl	["${WIRESHARK_VERSION_FLAVOR:-"Development Build"}"], [Wireshark's package flavor])
+dnl 	["${WIRESHARK_VERSION_FLAVOR:-"Development Build"}"], [Wireshark's package flavor])
 
 LT_PREREQ([2.2.2])
 LT_INIT([disable-static dlopen])
@@ -69,10 +69,12 @@ AC_CONFIG_LIBOBJ_DIR([wsutil])
 #
 # Checks for programs used in the main build process.
 #
-AC_PROG_CC_STDC
-if test "$ac_cv_prog_cc_stdc" = "no"
+# See doc/README.developer for allowed C99 features
+#
+AC_PROG_CC_C99
+if test "$ac_cv_prog_cc_c99" = "no"
 then
-	AC_MSG_ERROR([The C compiler does not support standard C])
+	AC_MSG_ERROR([The C compiler does not support C99])
 fi
 AC_PROG_CPP
 
@@ -86,7 +88,7 @@ if test ! -z "$CXX"; then
 	# system, and AC_PROG_CXX looks for, among other things,
 	# "CC" as a C++ compiler, and, if you have a case-insensitive
 	# file system and a C compiler named "cc" (both true, by
-	# default, on OS X), AC_PROG_CXX may end up thinking it's
+	# default, on macOS), AC_PROG_CXX may end up thinking it's
 	# the C++ compiler.
 	#
 	# So we check by feeding the purported C++ compiler a
@@ -220,7 +222,7 @@ if test -z "$PKG_CONFIG"; then
 fi
 
 #
-# Add configure argument to select OSX deployment target.
+# Add configure argument to select macOS deployment target.
 #
 AC_WIRESHARK_OSX_DEPLOY_TARGET
 
@@ -254,14 +256,14 @@ AC_ARG_WITH([qt],
 
 AC_ARG_WITH([gtk],
   AC_HELP_STRING( [--with-gtk=@<:@yes/no/2/3@:>@],
-	[use GTK+ @<:@default=yes, if available@:>@]),
+	[use GTK+ @<:@default=no@:>@]),
 	AS_CASE([$withval],
 	  [yes], [with_gtk="3 2 fail"],
 	  [no],  [with_gtk="no"],
 	  [3],   [with_gtk="3 fail3"],
 	  [2],   [with_gtk="2 fail2"],
 	  [AC_MSG_ERROR([--with-gtk must be one of yes/no/2/3])]),
-	with_gtk="3 2")
+	with_gtk="no")
 
 # GnuTLS
 # Version 3.0 switched from LGPLv2.1+ to LGPLv3+, then switched back to
@@ -300,35 +302,10 @@ if test "x$with_gnutls" = "xyes"; then
   fi
 fi
 
-# libgrypt
-gcrypt_message="no"
-want_gcrypt="if_available"
-AC_ARG_WITH([gcrypt],
-  AC_HELP_STRING( [--with-gcrypt=@<:@yes/no@:>@],
-		  [use gcrypt library @<:@default=yes, if available@:>@]),
-  [ with_gcrypt="$withval"; want_gcrypt="yes" ], with_gcrypt="yes")
-
-if test "x$with_gcrypt" = "xyes"; then
-  AM_PATH_LIBGCRYPT(1.4.2,
-	[
-		AC_DEFINE(HAVE_LIBGCRYPT, 1, [Define to use libgcrypt])
-		gcrypt_message="yes"
-	]
-	, [
-		if test x$libgcrypt_config_prefix != x ; then
-			AC_MSG_ERROR([[libgcrypt not found; install libgcrypt-devel package for your system]])
-		else
-			AS_ECHO(["libgcrypt not found, disabling decryption for ipsec, ssl, etc."])
-			gcrypt_message="no"
-		fi
-
-		# Error out if the user explicitly requested gcrypt
-		if test "x$want_gcrypt" = "xyes"; then
-		    AC_MSG_ERROR([libgcrypt library was requested, but is not available])
-		fi
-	]
-  )
-fi
+# libgrypt (for decryption, MAC, etc. functionality).
+AM_PATH_LIBGCRYPT(1.4.2, [ ] , [
+  AC_MSG_ERROR([[libgcrypt not installed for development; install libgcrypt, including any development package, for your system]])
+])
 
 AC_ARG_WITH(libnl,
   AC_HELP_STRING([--with-libnl@<:@=VERSION@:>@],
@@ -521,7 +498,7 @@ AM_CONDITIONAL(HAVE_RPM, [test "x$have_rpm" = xyes])
 # Debian
 AC_CHECK_PROG(HAVE_DPKG_BUILDPACKAGE, dpkg-buildpackage, "yes", "no")
 
-# OS X
+# macOS
 AC_CHECK_PROG(HAVE_XCODEBUILD, xcodebuild, "yes", "no")
 AC_CHECK_PROG(HAVE_HDIUTIL, hdiutil, "yes", "no")
 AC_CHECK_PROG(HAVE_BLESS, bless, "yes", "no")
@@ -535,12 +512,16 @@ fi
 AC_SUBST(HAVE_OSX_PACKAGING)
 
 #
-# Use this as a proxy for "is this OS X" (just in case somebody actually
+# Use this as a proxy for "is this macOS" (just in case somebody actually
 # built and installed Darwin as an OS, perhaps with some X11-based GUI,
 # don't look for Darwin).
 #
 AC_CHECK_PROG(have_sw_vers, sw_vers, "yes", "no")
-AM_CONDITIONAL(NOT_OS_X, test "x$have_sw_vers" = "xno")
+AM_CONDITIONAL(NOT_MACOS, test "x$have_sw_vers" = "xno")
+
+# Shellcheck
+AC_CHECK_PROG(HAVE_SHELLCHECK, shellcheck, "yes", "no")
+AM_CONDITIONAL(HAVE_SHELLCHECK, test x$HAVE_SHELLCHECK = xyes)
 
 #
 # Check compiler vendor. For GCC this will be 'gnu' and for Clang 'clang'.
@@ -589,7 +570,6 @@ AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wheader-guard)
 # The following are C only, not C++
 #
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wc++-compat, C)
-AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wdeclaration-after-statement, C)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wunused-const-variable, C)
 
 #
@@ -652,6 +632,13 @@ AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wjump-misses-init, C)
 # so only enable this for C for now.
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wshorten-64-to-32, C)
 
+#
+# Implicit function declarations are an error in C++ and most
+# likely a programming error in C. Turn -Wimplicit-int and
+# -Wimplicit-function-declaration into an error by default.
+#
+AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Werror=implicit, C)
+
 # Clang only. Avoid "argument unused during compilation" warnings
 # (for example, when getting the -gsplit-dwarf option or
 # when combining -fwrapv with -fno-strict-overflow)
@@ -689,9 +676,6 @@ then
 		AC_MSG_WARN(Compiler will export all symbols from shared libraries)
 	fi
 fi
-
-#Clang only
-AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wc99-extensions, C)
 
 #
 # Try to add some additional checks to CFLAGS.
@@ -764,6 +748,10 @@ AC_ARG_ENABLE(extra-compiler-warnings,
 		# never enable this one with -Werror.
 		#
 		AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wbad-function-cast, C)
+
+		# Works only with GCC 7
+		AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wduplicated-branches)
+
 	fi
 ])
 
@@ -781,6 +769,34 @@ AC_ARG_ENABLE(asan,
 	#
 	# XXX shouldn't this also be added to LDFLAGS?
 	AC_WIRESHARK_COMPILER_FLAGS_CHECK(-fsanitize=address)
+
+	# Disable ASAN for build-time tools, e.g. lemon
+	WS_CFLAGS_saved="$WS_CFLAGS"
+	WS_LDFLAGS_saved="$WS_LDFLAGS"
+	AC_WIRESHARK_COMPILER_FLAGS_CHECK(-fno-sanitize=all, C)
+	if test "x$can_add_to_cflags" = "xyes"
+	then
+		NO_SANITIZE_CFLAGS="-fno-sanitize=all"
+		NO_SANITIZE_LDFLAGS="-fno-sanitize=all"
+	fi
+	WS_CFLAGS="$WS_CFLAGS_saved"
+	WS_LDFLAGS="$WS_LDFLAGS_saved"
+
+])
+AC_SUBST(NO_SANITIZE_CFLAGS)
+AC_SUBST(NO_SANITIZE_LDFLAGS)
+
+# Try to enable UndefinedBehaviorSanitizer.
+#
+AC_ARG_ENABLE(ubsan,
+  AC_HELP_STRING( [--enable-ubsan],
+		  [Enable UndefinedBehaviorSanitizer (UBSan) for debugging@<:@default=no@:>@]),
+[
+	#
+	# Available since Clang >= 3.3 and GCC >= 4.9
+	#
+	# XXX shouldn't this also be added to LDFLAGS?
+	AC_WIRESHARK_COMPILER_FLAGS_CHECK(-fsanitize=undefined)
 
 ])
 
@@ -1047,6 +1063,22 @@ fi
 #
 AC_MSG_CHECKING(for platform-specific linker flags)
 case "$host_os" in
+aix*)
+	#
+	# If this is GCC or Clang, Add -Wl,-bbigtoc for big libraries.
+	# XXX - what if we're using xlc?  Is that necessary?  The
+	# xlc 7.0 manual says "Specifying -qpic=large has the same
+	# effect as passing -bbigtoc to ld"; do we need to tell xlc,
+	# when it's compiling, to generate different code for a large
+	# TOC, or is that just a linker flag?  For that matter, do we
+	# have to tell GCC or Clang to generate different code for a
+	# large TOC?
+	#
+	if test "x$GCC" = "xyes" -o "x$CC" = "xclang" ; then
+		LDFLAGS_BIGSHAREDLIB="-Wl,-bbigtoc"
+		AC_MSG_RESULT([AIX linker with GCC or Clang - added -Wl,-bbigtoc to large shared library linker flags and -Wl,-headerpad_max_install_names -Wl,-search_paths_first and -Wl,-headerpad_max_install_names to all linker flags])
+	fi
+	;;
 darwin*)
 	#
 	# Add -Wl,-single_module to the LDFLAGS used with shared
@@ -1076,16 +1108,17 @@ cygwin*)
 	# undefined symbols.
 	#
 	WS_LDFLAGS="$WS_LDFLAGS -no-undefined"
-	AC_MSG_RESULT(CygWin GNU ld - added -no-undefined)
+	AC_MSG_RESULT(Cygwin GNU ld - added -no-undefined)
 	;;
 *)
 	AC_MSG_RESULT(none needed)
 	;;
 esac
+AC_SUBST(LDFLAGS_BIGSHAREDLIB)
 AC_SUBST(LDFLAGS_SHAREDLIB)
 
 #
-# On "Darwin", which we assume to mean "OS X" rather than "iOS" or
+# On "Darwin", which we assume to mean "macOS" rather than "iOS" or
 # "just Darwin" (as we don't currently support iOS, and as I don't
 # think you can build and run "just Darwin" as an OS for PCs), we
 # arrange to build some programs with Application Services so they
@@ -1097,17 +1130,17 @@ AC_SUBST(LDFLAGS_SHAREDLIB)
 # get version information from plists and thus need Core Foundation
 # to process those plists.
 #
-have_os_x_frameworks=no
+have_macos_frameworks=no
 case "$host_os" in
 darwin*)
-	have_os_x_frameworks=yes
-	AC_DEFINE(HAVE_OS_X_FRAMEWORKS, 1, [Define to 1 if you have OS X frameworks])
+	have_macos_frameworks=yes
+	AC_DEFINE(HAVE_MACOS_FRAMEWORKS, 1, [Define to 1 if you have macOS frameworks])
 	APPLICATIONSERVICES_FRAMEWORKS="-framework ApplicationServices"
 	SYSTEMCONFIGURATION_FRAMEWORKS="-framework SystemConfiguration"
 	COREFOUNDATION_FRAMEWORKS="-framework CoreFoundation"
 
 	#
-	# OK, so we have the OS X frameworks; do they include
+	# OK, so we have the macOS frameworks; do they include
 	# CFPropertyListCreateWithStream, or do we have
 	# to fall back on CFPropertyListCreateFromStream?
 	# (They only differ in the error return, which we
@@ -1124,7 +1157,7 @@ esac
 AC_SUBST(APPLICATIONSERVICES_FRAMEWORKS)
 AC_SUBST(SYSTEMCONFIGURATION_FRAMEWORKS)
 AC_SUBST(COREFOUNDATION_FRAMEWORKS)
-AM_CONDITIONAL(HAVE_OS_X_FRAMEWORKS, [test "x$have_os_x_frameworks" = "xyes"])
+AM_CONDITIONAL(HAVE_MACOS_FRAMEWORKS, [test "x$have_macos_frameworks" = "xyes"])
 
 #
 # If we're running Solaris, and LD_LIBRARY_PATH is defined, add it as a
@@ -1176,7 +1209,7 @@ else
 	AC_MSG_RESULT(no)
 fi
 
-GLIB_MIN_VERSION=2.16.0
+GLIB_MIN_VERSION=2.22.0
 AC_SUBST(GLIB_MIN_VERSION)
 # GLib checks; we require GLib $GLIB_MIN_VERSION or later, and require gmodule
 # support, as we need that for dynamically loading plugins.
@@ -1221,7 +1254,7 @@ GTK2_MIN_VERSION=2.12.0
 AC_SUBST(GTK2_MIN_VERSION)
 GTK3_MIN_VERSION=3.0.0
 AC_SUBST(GTK3_MIN_VERSION)
-QT_MIN_VERSION=4.7.0
+QT_MIN_VERSION=4.8.0
 AC_SUBST(QT_MIN_VERSION)
 # GTK+ and Qt checks; we require GTK+ $GTK2_MIN_VERSION or later or
 # GTK3_MIN_VERSION or later or Qt $QT_MIN_VERSION or later.
@@ -1233,37 +1266,8 @@ AC_SUBST(QT_MIN_VERSION)
 # We don't add $GTK_LIBS or $Qt_LIBS to LIBS, because we don't want to
 # force all programs to be built with GTK+ or Qt.
 #
-# Release dates for GTK+ versions:
-# https://en.wikipedia.org/wiki/GTK+#Releases
-# 2.12.0: 14 Sep 2007
-# 2.14.0: 04 Sep 2008
-# 2.16.0: 13 Mar 2009
-# 2.18.0: 23 Sep 2009
-# 2.20.0: 23 Mar 2010
-# 2.22.0: 23 Sep 2010
-# 2.24.0: 30 Jan 2011
-# 3.0.0:  10 Feb 2011
-# 3.2.0:  25 Sep 2011
-# 3.4.0:  26 Mar 2012
-# 3.6.0:  24 Sep 2012
-# 3.8.0:  25 Mar 2013
-# 3.10.0: 23 Sep 2013
-# 3.12.0: 25 Mar 2014
-# 3.14.0: 30 Sep 2014
-# 3.16.0: 22 Mar 2015
-# 3.18.0  22 Sep 2015
-#
-# Release dates for Qt versions:
-# https://en.wikipedia.org/wiki/List_of_Qt_releases
-# 4.6.0:  01 Dec 2009
-# 4.7.0:  21 Sep 2010
-# 4.8.0:  15 Dec 2011
-# 5.0.0:  19 Dec 2012
-# 5.1.0:  03 Jul 2013
-# 5.2.0:  12 Dec 2013
-# 5.3.0:  20 May 2014
-# 5.4.0:  10 Dec 2015
-# 5.5.0:  01 Jul 2015
+# For a list of library versions and their support across different platforms,
+# see https://wiki.wireshark.org/Development/Support_library_version_tracking
 
 have_qt=no
 have_gtk=no
@@ -1306,18 +1310,19 @@ if test "x$enable_wireshark" = "xyes"; then
 			AC_SUBST(LRELEASE)
 
 			#
-			# On Darwin, find where the Qt frameworks are
-			# located, and add that to the rpath, just in
-			# case this is Qt 5.5 or later and the frameworks
-			# have an install name that begins with @rpath
-			# and aren't installed in a frameworks directory
-			# that's searched by default.
+			# On Darwin, make sure we're using Qt5 or later.
+			# If so, find where the Qt frameworks are located
+			# and add that to the rpath, just in case this is
+			# Qt 5.5 or later and the frameworks have an
+			# install name that begins with @rpath and aren't
+			# installed in a frameworks directory that's
+			# searched by default.
 			#
 			case "$host_os" in
 			darwin*)
 				if test $qt_version -le 4
 				then
-					Qt_LDFLAGS="-Wl,-rpath,"`$PKG_CONFIG --libs QtCore | sed -e 's/-F//' -e 's/ -framework.*//'`
+					AC_MSG_ERROR([macOS builds should use Qt5])
 				else
 					Qt_LDFLAGS="-Wl,-rpath,"`$PKG_CONFIG --libs Qt${qt_version}Core | sed -e 's/-F//' -e 's/ -framework.*//'`
 				fi
@@ -1445,19 +1450,19 @@ if test "$have_gtk" = "yes" -a "$have_qt" = "yes" ; then
 
 	wireshark_bin="wireshark\$(EXEEXT) wireshark-gtk\$(EXEEXT)"
 	wireshark_man="wireshark.1"
-	wireshark_SUBDIRS="codecs ui/qt ui/gtk"
+	wireshark_SUBDIRS="ui/qt ui/gtk"
 elif test "$have_gtk" = "no" -a "$have_qt" = "yes" ; then
 	# We don't have GTK+ but we have Qt.
 
 	wireshark_bin="wireshark\$(EXEEXT)"
 	wireshark_man="wireshark.1"
-	wireshark_SUBDIRS="codecs ui/qt"
+	wireshark_SUBDIRS="ui/qt"
 elif test "$have_gtk" = "yes" -a "$have_qt" = "no" ; then
 	# We have GTK+ but not Qt.
 
 	wireshark_bin="wireshark-gtk\$(EXEEXT)"
 	wireshark_man="wireshark.1"
-	wireshark_SUBDIRS="codecs ui/gtk"
+	wireshark_SUBDIRS="ui/gtk"
 	OSX_APP_FLAGS="$OSX_APP_FLAGS -gtk"
 	OSX_DMG_FLAGS="-gtk"
 elif test "$have_gtk" = "no" -a "$have_qt" = "no" ; then
@@ -1518,12 +1523,9 @@ LIBS="$ac_save_LIBS"
 ])
 if test "$ac_cv_glib_supports_modules" = yes ; then
   have_plugins=yes
-  plugins_dir="plugins"
 else
   have_plugins=no
-  plugins_dir=""
 fi
-AC_SUBST(plugins_dir)
 
 #
 # If we have <dlfcn.h>, check whether we have dladdr.
@@ -1594,15 +1596,15 @@ fi
 if test "x$have_gtk" = "xyes"
 then
     #
-    # We have GTK+; do we want the OS X integration functions and,
+    # We have GTK+; do we want the macOS integration functions and,
     # if so, do we have them and, if so, which versions do we have,
     # the old Carbon-based ones or the new Cocoa-based ones?
     #
-    AC_MSG_CHECKING(whether to use OS X integration functions)
+    AC_MSG_CHECKING(whether to use macOS integration functions)
 
     AC_ARG_WITH(osx-integration,
       AC_HELP_STRING( [--with-osx-integration],
-		      [use OS X integration functions @<:@default=yes, if available@:>@]),
+		      [use macOS integration functions @<:@default=yes, if available@:>@]),
     [
 	if test $withval = no
 	then
@@ -1876,25 +1878,18 @@ fi
 AC_SUBST(rawshark_bin)
 AC_SUBST(rawshark_man)
 
-# Enable/disable echld
-AC_ARG_ENABLE(echld,
-  AC_HELP_STRING( [--enable-echld],
-		  [support echld (Experimental) @<:@default=no@:>@]),
-    have_echld=$enableval,have_echld=no)
+# Enable/disable sharkd
+AC_ARG_ENABLE(sharkd,
+  AC_HELP_STRING( [--enable-sharkd],
+		  [build sharkd @<:@default=yes@:>@]),
+    sharkd=$enableval,enable_sharkd=yes)
 
-AM_CONDITIONAL(HAVE_ECHLD, test "x$have_echld" = "xyes")
-if test "x$have_echld" = "xyes"
-then
-  AC_DEFINE(HAVE_ECHLD, 1, [Define if echld is enabled])
-  echld_test_bin="echld_test\$(EXEEXT)"
-  echld_dir="echld"
+if test "x$enable_sharkd" = "xyes" ; then
+	sharkd_bin="sharkd\$(EXEEXT)"
 else
-  have_echld="no"
-  echld_test_bin=""
-  echld_dir=""
+	sharkd_bin=""
 fi
-AC_SUBST(echld_test_bin)
-AC_SUBST(echld_dir)
+AC_SUBST(sharkd_bin)
 
 # Enable/disable tfshark
 AC_ARG_ENABLE(tfshark,
@@ -1983,6 +1978,92 @@ else
 		fi
 	fi
 fi
+
+dnl lz4 check
+LZ4_LIBS=''
+AC_MSG_CHECKING(whether to use lz4 compression and decompression)
+
+AC_ARG_WITH(lz4,
+  AC_HELP_STRING([--with-lz4@<:@=DIR@:>@],
+		 [use lz4 (located in directory DIR, if supplied) for lz4 compression and decompression @<:@default=yes, if available@:>@]),
+[
+	if test "x$withval" = "xno"
+	then
+		want_lz4=no
+	elif test "x$withval" = "xyes"
+	then
+		want_lz4=yes
+	else
+		want_lz4=yes
+		lz4_dir="$withval"
+	fi
+],[
+	#
+	# Use lz4 if it's present, otherwise don't.
+	#
+	want_lz4=ifavailable
+	lz4_dir=
+])
+have_lz4=no
+if test "x$want_lz4" = "xno" ; then
+	AC_MSG_RESULT(no)
+else
+	AC_MSG_RESULT(yes)
+	AC_WIRESHARK_LZ4_CHECK
+	if test "x$want_lz4" = "xno" ; then
+		AC_MSG_RESULT(lz4 not found - disabling lz4 compression and decompression)
+	else
+		if test "x$ac_cv_func_LZ4_decompress_safe" = "xno" ; then
+			AC_MSG_RESULT(LZ4_decompress_safe not found in lz4 - disabling cql lz4 decompression)
+		else
+			have_lz4=yes
+		fi
+	fi
+fi
+AC_SUBST(LZ4_LIBS)
+
+dnl snappy check
+SNAPPY_LIBS=''
+AC_MSG_CHECKING(whether to use snappy compression and decompression)
+
+AC_ARG_WITH(snappy,
+  AC_HELP_STRING([--with-snappy@<:@=DIR@:>@],
+		 [use snappy (located in directory DIR, if supplied) for snappy compression and decompression @<:@default=yes, if available@:>@]),
+[
+	if test "x$withval" = "xno"
+	then
+		want_snappy=no
+	elif test "x$withval" = "xyes"
+	then
+		want_snappy=yes
+	else
+		want_snappy=yes
+		snappy_dir="$withval"
+	fi
+],[
+	#
+	# Use snappy if it's present, otherwise don't.
+	#
+	want_snappy=ifavailable
+	snappy_dir=
+])
+have_snappy=no
+if test "x$want_snappy" = "xno" ; then
+	AC_MSG_RESULT(no)
+else
+	AC_MSG_RESULT(yes)
+	AC_WIRESHARK_SNAPPY_CHECK
+	if test "x$want_snappy" = "xno" ; then
+		AC_MSG_RESULT(snappy not found - disabling snappy compression and decompression)
+	else
+		if test "x$ac_cv_func_snappy_uncompress" = "xno" ; then
+			AC_MSG_RESULT(snappy_uncompress not found in snappy - disabling cql snappy decompression)
+		else
+			have_snappy=yes
+		fi
+	fi
+fi
+AC_SUBST(SNAPPY_LIBS)
 
 dnl Lua check
 AC_ARG_WITH(lua,
@@ -2301,7 +2382,7 @@ dnl LIBSSH Check
 LIBSSH=''
 AC_MSG_CHECKING(whether to use the libssh library if available)
 
-AC_ARG_WITH(ssh,
+AC_ARG_WITH(libssh,
   AC_HELP_STRING( [--with-libssh@<:@=DIR@:>@],
 		  [use libssh (located in directory DIR, if supplied) @<:@default=yes, if present@:>@]),
 [
@@ -2321,6 +2402,31 @@ else
 	AC_WIRESHARK_LIBSSH_CHECK
 fi
 AC_SUBST(LIBSSH_LIBS)
+
+dnl nghttp2 Check
+NGHTTP2_LIBS=''
+AC_MSG_CHECKING(whether to use the nghttp2 HPACK library if available)
+
+AC_ARG_WITH(nghttp2,
+  AC_HELP_STRING( [--with-nghttp2@<:@=DIR@:>@],
+		  [use nghttp2 (located in directory DIR, if supplied) @<:@default=yes, if present@:>@]),
+[
+if   test "x$withval" = "xno";  then
+	want_nghttp2=no
+elif test "x$withval" = "xyes"; then
+	want_nghttp2=yes
+elif test -d "$withval"; then
+	want_nghttp2=yes
+	AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, ${withval}/lib)
+fi
+])
+if test "x$want_nghttp2" = "xno"; then
+	AC_MSG_RESULT(no)
+else
+	AC_MSG_RESULT(yes)
+	AC_WIRESHARK_NGHTTP2_CHECK
+fi
+AC_SUBST(NGHTTP2_LIBS)
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 # AC_C_CONST
@@ -2342,7 +2448,13 @@ AC_CHECK_MEMBERS([struct stat.__st_birthtime])
 # We need to know whether "struct sockaddr" has an "sa_len" member
 # for get_interface_list().
 
-AC_CHECK_MEMBERS([struct sockaddr.sa_len])
+AC_CHECK_MEMBERS([struct sockaddr.sa_len],,,
+                 [#ifdef HAVE_SYS_TYPES_H
+                  #include <sys/types.h>
+                  #endif
+                  #ifdef HAVE_SYS_SOCKET_H
+                  #include <sys/socket.h>
+                  #endif])
 
 # We must know our byte order
 AC_C_BIGENDIAN
@@ -2433,6 +2545,48 @@ else
 fi
 AM_CONDITIONAL(HAVE_SBC, test "x$have_sbc" = "xyes")
 
+#`
+# Check SpanDSP library for RTP Player
+# http://www.soft-switch.org/
+AC_ARG_WITH([spandsp],
+  AC_HELP_STRING( [--with-spandsp=@<:@yes/no@:>@],
+                 [use SpanDSP to play G.722/G.726 codecs @<:@default=yes, if available@:>@]),
+  with_spandsp="$withval"; want_spandsp="yes", with_spandsp="yes")
+
+PKG_CHECK_MODULES(SPANDSP, spandsp, [have_spandsp=yes], [have_spandsp=no])
+if test "x$with_spandsp" != "xno"; then
+    if (test "${have_spandsp}" = "yes"); then
+        AC_DEFINE(HAVE_SPANDSP, 1, [Define if you have the SpanDSP library])
+    elif test "x$want_spandsp" = "xyes"; then
+        # Error out if the user explicitly requested the SpanDSP library
+        AC_MSG_ERROR([SpanDSP library was requested, but is not available])
+    fi
+else
+    have_spandsp=no
+fi
+AM_CONDITIONAL(HAVE_SPANDSP, test "x$have_spandsp" = "xyes")
+
+#`
+# Libxml2 check
+AC_ARG_WITH(libxml2,
+  AC_HELP_STRING([--with-libxml2=@<:@yes/no@:>@],
+		 [Libxml2 is a XML C parser, which can be used for handling XML configuration in dissectors @<:@default=yes, if available@:>@]),
+  with_libxml2="$withval"; want_libxml2="yes", with_libxml2="yes")
+
+PKG_CHECK_MODULES(LIBXML2, libxml-2.0, [have_libxml2=yes], [have_libxml2=no])
+if test "x$with_libxml2" != "xno"; then
+    if (test "${have_libxml2}" = "yes"); then
+        AC_DEFINE(HAVE_LIBXML2, 1, [Define if you have libxml2])
+    elif test "x$want_libxml2" = "xyes"; then
+        # Error out if the user explicitly requested libxml2
+        AC_MSG_ERROR([Libxml2 was requested, but is not available])
+    fi
+else
+    have_libxml2=no
+fi
+AM_CONDITIONAL(HAVE_LIBXML2, test "x$have_libxml2" = "xyes")
+
+
 dnl
 dnl check whether plugins should be enabled and, if they should be,
 dnl check for plugins directory - stolen from Amanda's configure.ac
@@ -2454,8 +2608,12 @@ AC_ARG_WITH(plugins,
 AM_CONDITIONAL(HAVE_PLUGINS, test "x$have_plugins" = "xyes")
 if test x$have_plugins = xyes
 then
+  plugins_dir="plugins"
   AC_DEFINE(HAVE_PLUGINS, 1, [Define if plugins are enabled])
+else
+  plugins_dir=""
 fi
+AC_SUBST(plugins_dir)
 AC_SUBST(plugindir)
 
 #
@@ -2619,6 +2777,33 @@ fi
 AC_SUBST(randpktdump_bin)
 AC_SUBST(randpktdump_man)
 
+dnl udpdump check
+AC_MSG_CHECKING(whether to build udpdump)
+
+AC_ARG_ENABLE(udpdump,
+	AC_HELP_STRING( [--enable-udpdump],
+		[build udpdump @<:@default=yes@:>@]),
+	[],[enable_udpdump=yes])
+
+if test "x$have_extcap" != xyes; then
+	AC_MSG_RESULT([no, extcap disabled])
+	enable_udpdump=no
+elif test "x$enable_udpdump" = "xyes" ; then
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
+
+if test "x$enable_udpdump" = "xyes" ; then
+	udpdump_bin="udpdump\$(EXEEXT)"
+	udpdump_man="udpdump.1"
+else
+	udpdump_bin=""
+	udpdump_man=""
+fi
+AC_SUBST(udpdump_bin)
+AC_SUBST(udpdump_man)
+
 AM_CONDITIONAL(ENABLE_STATIC, test x$enable_static = xyes)
 if test x$enable_static = xyes -a x$have_plugins = xyes
 then
@@ -2729,10 +2914,12 @@ AC_CONFIG_FILES(
   epan/dissectors/asn1/lppa/Makefile
   epan/dissectors/asn1/lppe/Makefile
   epan/dissectors/asn1/lte-rrc/Makefile
+  epan/dissectors/asn1/m2ap/Makefile
   epan/dissectors/asn1/m3ap/Makefile
   epan/dissectors/asn1/mms/Makefile
   epan/dissectors/asn1/mpeg-audio/Makefile
   epan/dissectors/asn1/mpeg-pes/Makefile
+  epan/dissectors/asn1/mudurl/Makefile
   epan/dissectors/asn1/nbap/Makefile
   epan/dissectors/asn1/ns_cert_exts/Makefile
   epan/dissectors/asn1/novell_pkis/Makefile
@@ -2796,7 +2983,6 @@ AC_CONFIG_FILES(
   epan/dissectors/Makefile
   epan/dissectors/dcerpc/Makefile
   epan/ftypes/Makefile
-  epan/nghttp2/Makefile
   epan/wmem/Makefile
   epan/wslua/Makefile
   extcap/Makefile
@@ -2833,6 +3019,7 @@ AC_CONFIG_FILES(
   plugins/opcua/Makefile
   plugins/profinet/Makefile
   plugins/stats_tree/Makefile
+  plugins/transum/Makefile
   plugins/unistim/Makefile
   plugins/wimax/Makefile
   plugins/wimaxasncp/Makefile
@@ -2845,7 +3032,6 @@ AC_CONFIG_FILES(
   writecap/Makefile
   writecap/doxygen.cfg
   wsutil/Makefile
-  echld/Makefile
   _CUSTOM_AC_OUTPUT_
 )
 
@@ -2857,7 +3043,7 @@ AC_OUTPUT
 if test "x$have_gtk" = "xyes"; then
 	gtk_lib_message=" (with GTK+ v$GTK_VERSION"
 	if test "x$have_ige_mac" = "xyes"; then
-		gtk_lib_message="$gtk_lib_message and OS X integration)"
+		gtk_lib_message="$gtk_lib_message and macOS integration)"
 	else
 		gtk_lib_message="$gtk_lib_message)"
 	fi
@@ -2954,6 +3140,12 @@ else
 	ssh_userauth_agent_message="no"
 fi
 
+if test "x$have_good_nghttp2" = "xyes" ; then
+	nghttp2_message="yes"
+else
+	nghttp2_message="no"
+fi
+
 echo ""
 echo "  CPPFLAGS: $WS_CPPFLAGS $CPPFLAGS"
 echo ""
@@ -2982,11 +3174,12 @@ echo "                    Build text2pcap : $enable_text2pcap"
 echo "                      Build randpkt : $enable_randpkt"
 echo "                       Build dftest : $enable_dftest"
 echo "                     Build rawshark : $enable_rawshark"
+echo "                       Build sharkd : $enable_sharkd"
 echo "                  Build androiddump : $enable_androiddump"
 echo "                      Build sshdump : $enable_sshdump"
 echo "                    Build ciscodump : $enable_ciscodump"
 echo "                  Build randpktdump : $enable_randpktdump"
-echo "                        Build echld : $have_echld"
+echo "                      Build udpdump : $enable_udpdump"
 echo ""
 echo "   Save files as pcap-ng by default : $enable_pcap_ng_default"
 echo "  Install dumpcap with capabilities : $setcap_message"
@@ -3003,7 +3196,7 @@ echo "                   Use zlib library : $zlib_message"
 echo "               Use kerberos library : $krb5_message"
 echo "                 Use c-ares library : $c_ares_message"
 echo "                Use SMI MIB library : $libsmi_message"
-echo "             Use GNU gcrypt library : $gcrypt_message"
+echo "             Use GNU gcrypt library : yes"
 echo "             Use SSL crypto library : $ssl_message"
 echo "                 Use GnuTLS library : $tls_message"
 echo "     Use POSIX capabilities library : $libcap_message"
@@ -3012,4 +3205,9 @@ echo "                 Use libssh library : $libssh_message"
 echo "            Have ssh_userauth_agent : $ssh_userauth_agent_message"
 echo "                     Use nl library : $libnl_message"
 echo "              Use SBC codec library : $have_sbc"
+echo "                Use SpanDSP library : $have_spandsp"
+echo "                Use libxml2 library : $have_libxml2"
+echo "                Use nghttp2 library : $nghttp2_message"
+echo "                    Use LZ4 library : $have_lz4"
+echo "                 Use Snappy library : $have_snappy"
 #echo "       Use GDK-Pixbuf with GResource: $have_gresource_pixbuf"

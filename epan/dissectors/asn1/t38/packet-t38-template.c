@@ -196,18 +196,6 @@ static t38_packet_info t38_info_arr[MAX_T38_MESSAGES_IN_PACKET];
 static int t38_info_current=0;
 static t38_packet_info *t38_info=NULL;
 
-static void t38_defragment_init(void)
-{
-	/* Init reassembly table */
-	reassembly_table_init(&data_reassembly_table,
-                              &addresses_reassembly_table_functions);
-}
-
-static void t38_defragment_cleanup(void)
-{
-    reassembly_table_destroy(&data_reassembly_table);
-}
-
 
 /* Set up an T38 conversation */
 void t38_add_address(packet_info *pinfo,
@@ -721,13 +709,13 @@ proto_register_t38(void)
 	expert_register_field_array(expert_t38, ei, array_length(ei));
 	register_dissector("t38_udp", dissect_t38_udp, proto_t38);
 
-	/* Init reassemble tables for HDLC */
-	register_init_routine(t38_defragment_init);
-	register_cleanup_routine(t38_defragment_cleanup);
+	/* Register reassemble tables for HDLC */
+	reassembly_table_register(&data_reassembly_table,
+                              &addresses_reassembly_table_functions);
 
 	t38_tap = register_tap("t38");
 
-	t38_module = prefs_register_protocol(proto_t38, proto_reg_handoff_t38);
+	t38_module = prefs_register_protocol(proto_t38, NULL);
 	prefs_register_bool_preference(t38_module, "use_pre_corrigendum_asn1_specification",
 	    "Use the Pre-Corrigendum ASN.1 specification",
 	    "Whether the T.38 dissector should decode using the Pre-Corrigendum T.38 "
@@ -739,8 +727,6 @@ proto_register_t38(void)
 		"be dissected as RTP packet or T.38 packet. If enabled there is a risk that T.38 UDPTL "
 		"packets with sequence number higher than 32767 may be dissected as RTP.",
 	    &dissect_possible_rtpv2_packets_as_rtp);
-	prefs_register_obsolete_preference(t38_module, "tcp.port");
-	prefs_register_obsolete_preference(t38_module, "udp.port");
 	prefs_register_bool_preference(t38_module, "reassembly",
 		"Reassemble T.38 PDUs over TPKT over TCP",
 		"Whether the dissector should reassemble T.38 PDUs spanning multiple TCP segments "
@@ -764,16 +750,12 @@ proto_register_t38(void)
 void
 proto_reg_handoff_t38(void)
 {
-	static gboolean t38_prefs_initialized = FALSE;
-
-	if (!t38_prefs_initialized) {
-		t38_udp_handle=create_dissector_handle(dissect_t38_udp, proto_t38);
-		t38_tcp_handle=create_dissector_handle(dissect_t38_tcp, proto_t38);
-		t38_tcp_pdu_handle=create_dissector_handle(dissect_t38_tcp_pdu, proto_t38);
-		rtp_handle = find_dissector_add_dependency("rtp", proto_t38);
-		t30_hdlc_handle = find_dissector_add_dependency("t30.hdlc""rtp", proto_t38);
-		data_handle = find_dissector("data");
-		t38_prefs_initialized = TRUE;
-	}
+	t38_udp_handle=create_dissector_handle(dissect_t38_udp, proto_t38);
+	t38_tcp_handle=create_dissector_handle(dissect_t38_tcp, proto_t38);
+	t38_tcp_pdu_handle=create_dissector_handle(dissect_t38_tcp_pdu, proto_t38);
+	rtp_handle = find_dissector_add_dependency("rtp", proto_t38);
+	t30_hdlc_handle = find_dissector_add_dependency("t30.hdlc", proto_t38);
+	data_handle = find_dissector("data");
+	dissector_add_for_decode_as("tcp.port", t38_tcp_handle);
+	dissector_add_for_decode_as("udp.port", t38_udp_handle);
 }
-

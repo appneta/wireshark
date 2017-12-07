@@ -34,8 +34,11 @@
 #include <epan/prefs.h>
 #include <epan/reassemble.h>
 #include <epan/proto_data.h>
+#include <epan/expert.h>
 
 #include <wsutil/str_util.h>
+#include <wsutil/strtoi.h>
+
 #include "packet-ssl.h"
 #include "packet-ssl-utils.h"
 
@@ -64,6 +67,8 @@ static int hf_pop_data_fragment_error = -1;
 static int hf_pop_data_fragment_count = -1;
 static int hf_pop_data_reassembled_in = -1;
 static int hf_pop_data_reassembled_length = -1;
+
+static expert_field ei_pop_resp_tot_len_invalid = EI_INIT;
 
 static gint ett_pop = -1;
 static gint ett_pop_reqresp = -1;
@@ -131,7 +136,7 @@ dissect_pop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
   proto_tree             *pop_tree, *reqresp_tree;
   proto_item             *ti;
   gint                   offset = 0;
-  const guchar           *line;
+  guchar                 *line;
   gint                   next_offset;
   int                    linelen;
   int                    tokenlen;
@@ -160,13 +165,11 @@ dissect_pop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 
   /*
    * Find the end of the first line.
-   *
-   * Note that "tvb_find_line_end()" will return a value that is
-   * not longer than what's in the buffer, so the "tvb_get_ptr()"
-   * call won't throw an exception.
    */
   linelen = tvb_find_line_end(tvb, offset, -1, &next_offset, FALSE);
-  line = tvb_get_ptr(tvb, offset, linelen);
+  line = (guchar*)wmem_alloc(wmem_packet_scope(), linelen+1);
+  tvb_memcpy(tvb, line, offset, linelen);
+  line[linelen] = '\0';
 
   if (pinfo->match_uint == pinfo->destport) {
     is_request = TRUE;
@@ -189,7 +192,7 @@ dissect_pop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
   }
   else
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s: %s", is_request ? "C" : "S",
-                   format_text(line, linelen));
+                   format_text(wmem_packet_scope(), line, linelen));
 
   ti = proto_tree_add_item(tree, proto_pop, tvb, offset, -1, ENC_NA);
   pop_tree = proto_item_add_subtree(ti, ett_pop);
@@ -289,10 +292,12 @@ dissect_pop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
         if (data_val->msg_request) {
           /* this is a response to a RETR or TOP command */
 
-          if (g_ascii_strncasecmp(line, "+OK ", 4) == 0) {
+          if (g_ascii_strncasecmp(line, "+OK ", 4) == 0 && linelen > 4) {
             /* the message will be sent - work out how many bytes */
             data_val->msg_read_len = 0;
-            data_val->msg_tot_len = atoi(line + 4);
+            data_val->msg_tot_len = 0;
+            if (sscanf(line, "%*s %u %*s", &data_val->msg_tot_len) != 1)
+              expert_add_info(pinfo, ti, &ei_pop_resp_tot_len_invalid);
           }
           data_val->msg_request = FALSE;
         }
@@ -364,20 +369,11 @@ static gboolean response_is_continuation(const guchar *data)
   return TRUE;
 }
 
-static void pop_data_reassemble_init (void)
-{
-  reassembly_table_init (&pop_data_reassembly_table,
-                         &addresses_ports_reassembly_table_functions);
-}
-
-static void pop_data_reassemble_cleanup (void)
-{
-  reassembly_table_destroy(&pop_data_reassembly_table);
-}
-
 void
 proto_register_pop(void)
 {
+  expert_module_t* expert_pop;
+
   static hf_register_info hf[] = {
     { &hf_pop_response,
       { "Response",           "pop.response",
@@ -439,6 +435,11 @@ proto_register_pop(void)
         NULL, 0x00, "The total length of the reassembled payload", HFILL } },
   };
 
+  static ei_register_info ei[] = {
+    { &ei_pop_resp_tot_len_invalid, { "pop.response.tot_len.invalid", PI_MALFORMED, PI_ERROR,
+      "Length must be a string containing an integer", EXPFILL }}
+  };
+
   static gint *ett[] = {
     &ett_pop,
     &ett_pop_reqresp,
@@ -449,11 +450,12 @@ proto_register_pop(void)
 
 
   proto_pop = proto_register_protocol("Post Office Protocol", "POP", "pop");
-  register_dissector("pop", dissect_pop, proto_pop);
+  pop_handle = register_dissector("pop", dissect_pop, proto_pop);
   proto_register_field_array(proto_pop, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
-  register_init_routine (&pop_data_reassemble_init);
-  register_cleanup_routine (&pop_data_reassemble_cleanup);
+
+  reassembly_table_register (&pop_data_reassembly_table,
+                         &addresses_ports_reassembly_table_functions);
 
   /* Preferences */
   pop_module = prefs_register_protocol(proto_pop, NULL);
@@ -463,13 +465,15 @@ proto_register_pop(void)
     "Whether the POP dissector should reassemble RETR and TOP responses and spanning multiple TCP segments."
     " To use this option, you must also enable \"Allow subdissectors to reassemble TCP streams\" in the TCP protocol settings.",
     &pop_data_desegment);
+
+  expert_pop = expert_register_protocol(proto_pop);
+  expert_register_field_array(expert_pop, ei, array_length(ei));
 }
 
 void
 proto_reg_handoff_pop(void)
 {
-  pop_handle = find_dissector("pop");
-  dissector_add_uint("tcp.port", TCP_PORT_POP, pop_handle);
+  dissector_add_uint_with_preference("tcp.port", TCP_PORT_POP, pop_handle);
   ssl_dissector_add(TCP_PORT_SSL_POP, pop_handle);
 
   /* find the IMF dissector */

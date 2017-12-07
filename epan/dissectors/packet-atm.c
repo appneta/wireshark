@@ -1979,8 +1979,8 @@ proto_register_atm(void)
 
   proto_atm_lane = proto_register_protocol("ATM LAN Emulation", "ATM LANE", "lane");
 
-  atm_type_aal2_table = register_dissector_table("atm.aal2.type", "ATM AAL_2 type subdissector", proto_atm, FT_UINT32, BASE_DEC);
-  atm_type_aal5_table = register_dissector_table("atm.aal5.type", "ATM AAL_5 type subdissector", proto_atm, FT_UINT32, BASE_DEC);
+  atm_type_aal2_table = register_dissector_table("atm.aal2.type", "ATM AAL_2 type", proto_atm, FT_UINT32, BASE_DEC);
+  atm_type_aal5_table = register_dissector_table("atm.aal5.type", "ATM AAL_5 type", proto_atm, FT_UINT32, BASE_DEC);
 
   register_capture_dissector_table("atm.aal5.type", "ATM AAL_5");
   register_capture_dissector_table("atm_lane", "ATM LAN Emulation");
@@ -2004,6 +2004,8 @@ proto_register_atm(void)
 void
 proto_reg_handoff_atm(void)
 {
+  capture_dissector_handle_t atm_cap_handle;
+
   /*
    * Get handles for the Ethernet, Token Ring, Frame Relay, LLC,
    * SSCOP, LANE, and ILMI dissectors.
@@ -2023,8 +2025,11 @@ proto_reg_handoff_atm(void)
 
   dissector_add_uint("wtap_encap", WTAP_ENCAP_ATM_PDUS_UNTRUNCATED,
                 atm_untruncated_handle);
-  register_capture_dissector("wtap_encap", WTAP_ENCAP_ATM_PDUS, capture_atm, proto_atm);
-  register_capture_dissector("atm.aal5.type", TRAF_LANE, capture_lane, proto_atm_lane);
+
+  atm_cap_handle = create_capture_dissector_handle(capture_atm, proto_atm);
+  capture_dissector_add_uint("wtap_encap", WTAP_ENCAP_ATM_PDUS, atm_cap_handle);
+  atm_cap_handle = create_capture_dissector_handle(capture_lane, proto_atm_lane);
+  capture_dissector_add_uint("atm.aal5.type", TRAF_LANE, atm_cap_handle);
 }
 
 /*

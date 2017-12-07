@@ -228,7 +228,7 @@ dissect_gmr1_rach_kls1(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tree
 		proto_tree_add_item(tree, hf_rach_est_cause,
 		                    tvb, offset, 1, ENC_BIG_ENDIAN);
 
-		col_append_fstr(pinfo->cinfo, COL_INFO, "%s",
+		col_append_str(pinfo->cinfo, COL_INFO,
 		                val_to_str(ec, rach_est_cause_vals, "Unknown (%u)"));
 	}
 
@@ -834,7 +834,7 @@ dissect_gmprs_rach_type2_kls2(tvbuff_t *tvb, int offset,
 		proto_tree_add_item(tree, hf_rach_gmprs_req_type,
 				    tvb, offset + 8, 1, ENC_BIG_ENDIAN);
 
-		col_append_fstr(pinfo->cinfo, COL_INFO, "%s",
+		col_append_str(pinfo->cinfo, COL_INFO,
 		                val_to_str(req_type, rach_gmprs_req_type_vals, "Unknown (%u)"));
 	}
 
@@ -895,11 +895,13 @@ dissect_gmr1_rach(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
 		} else if (ec == 7) {
 			desc = "GMR-1 GmPRS Channel Request Type 2 (RACH)";
 			ies |= RACH_IE_CLASS2_GMPRS_TYPE2;
+#if 0 /* Fix -Wduplicated-branches */
 		} else if (ec == 12) {
 			/* Position verification exists in both GMR-1 and GmPRS-1
 			 * I have no idea how to differentiate them ... but from
 			 * off-the-air data, it seems it used the GMR-1 format */
 			ies |= RACH_IE_CLASS2_GMR1;
+#endif
 		} else {
 			ies |= RACH_IE_CLASS2_GMR1;
 		}

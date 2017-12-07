@@ -54,6 +54,7 @@ void proto_reg_handoff_mint(void);
 #define PORT_MINT_CONTROL_TUNNEL	24576
 /* 0x6001 */
 #define PORT_MINT_DATA_TUNNEL		24577
+#define PORT_MINT_RANGE				"24576-24577"
 
 static dissector_handle_t eth_handle;
 
@@ -722,7 +723,7 @@ proto_register_mint(void)
 
 	proto_mint = proto_register_protocol(PROTO_LONG_NAME, PROTO_SHORT_NAME, "mint");
 	/* Created to remove Decode As confusion */
-	proto_mint_data = proto_register_protocol("Media independent Network Transport Data", "MiNT (Data)", "mint_data");
+	proto_mint_data = proto_register_protocol_in_name_only("Media independent Network Transport Data", "MiNT (Data)", "mint_data", proto_mint, FT_PROTOCOL);
 
 	hfi_mint = proto_registrar_get_nth(proto_mint);
 	proto_register_fields(proto_mint, hfi, array_length(hfi));
@@ -736,8 +737,7 @@ proto_register_mint(void)
 void
 proto_reg_handoff_mint(void)
 {
-	dissector_add_uint("udp.port", PORT_MINT_CONTROL_TUNNEL, mint_control_handle);
-	dissector_add_uint("udp.port", PORT_MINT_DATA_TUNNEL, mint_data_handle);
+	dissector_add_uint_range_with_preference("udp.port", PORT_MINT_RANGE, mint_control_handle);
 	dissector_add_uint("ethertype", ETHERTYPE_MINT, mint_eth_handle);
 
 	eth_handle = find_dissector_add_dependency("eth_withoutfcs", hfi_mint->id);

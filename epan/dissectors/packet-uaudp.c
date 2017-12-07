@@ -25,12 +25,14 @@
 
 #include "epan/packet.h"
 #include "epan/prefs.h"
-#include "wsutil/report_err.h"
+#include "epan/expert.h"
+#include "wsutil/report_message.h"
 #include "wsutil/inet_addr.h"
 
 #include "packet-uaudp.h"
 
 void proto_register_uaudp(void);
+void proto_reg_handoff_uaudp(void);
 
 /* GLOBALS */
 
@@ -58,17 +60,25 @@ static int hf_uaudp_keepalive       = -1;
 static int hf_uaudp_qos_ip_tos      = -1;
 static int hf_uaudp_qos_8021_vlid   = -1;
 static int hf_uaudp_qos_8021_pri    = -1;
+static int hf_uaudp_superfast_connect = -1;
 static int hf_uaudp_expseq          = -1;
 static int hf_uaudp_sntseq          = -1;
+static int hf_uaudp_type            = -1;
+static int hf_uaudp_length          = -1;
+
 
 static gint ett_uaudp               = -1;
+static gint ett_uaudp_tlv           = -1;
+
+static expert_field ei_uaudp_tlv_length = EI_INIT;
 
 /* pref */
+#define UAUDP_PORT_RANGE "32000,32512" /* Not IANA registered */
+static range_t *ua_udp_range = NULL;
 static guint32 sys_ip;
 static const char* pref_sys_ip_s = "";
 
 static gboolean use_sys_ip = FALSE;
-static gboolean decode_ua  = TRUE;
 
 static const value_string uaudp_opcode_str[] =
 {
@@ -84,7 +94,6 @@ static const value_string uaudp_opcode_str[] =
 };
 value_string_ext uaudp_opcode_str_ext = VALUE_STRING_EXT_INIT(uaudp_opcode_str);
 
-#if 0 /* XXX: Unused ? */
 static const value_string uaudp_connect_vals[] =
 {
     { UAUDP_CONNECT_VERSION,        "Version" },
@@ -96,95 +105,23 @@ static const value_string uaudp_connect_vals[] =
     { UAUDP_CONNECT_QOS_IP_TOS,     "QoS IP TOS" },
     { UAUDP_CONNECT_QOS_8021_VLID,  "QoS 802.1 VLID" },
     { UAUDP_CONNECT_QOS_8021_PRI,   "QoS 802.1 PRI"},
+    { UAUDP_CONNECT_SUPERFAST_CONNECT, "SuperFast Connect"},
     { 0, NULL }
 };
 value_string_ext uaudp_connect_vals_ext = VALUE_STRING_EXT_INIT(uaudp_connect_vals);
-#endif
 
 static dissector_handle_t ua_sys_to_term_handle;
 static dissector_handle_t ua_term_to_sys_handle;
-
-typedef struct
-{
-    const char *name;
-    const char *text;
-    guint port;
-    guint last_port;
-} prefs_uaudp_t;
-
-static prefs_uaudp_t ports[] =
-{
-    {"port1", "Terminal UDP port (setting 1)",  32000,  32000},
-    {"port2", "Terminal UDP port (setting 2)",  32512,  32512},
-    {"port3", "Terminal UDP port (setting 3)",  0,  0},
-    {"port4", "Terminal UDP port (setting 4)",  0,  0},
-#if 0
-    {"port5", "Terminal UDP port (setting 5)",  0,  0},
-    {"port6", "Terminal UDP port (setting 6)",  0,  0},
-    {"port7", "Terminal UDP port (setting 7)",  0,  0},
-    {"port8", "Terminal UDP port (setting 8)",  0,  0}
-#endif
-};
-#define MAX_TERMINAL_PORTS (signed)(array_length(ports))
-
-static gboolean find_terminal_port(guint port)
-{
-    int i;
-    for (i=0; i<MAX_TERMINAL_PORTS; i++)
-        if (ports[i].port == port)
-            return TRUE;
-    return FALSE;
-}
-
-
-static void rV(proto_tree *tree, int *V, tvbuff_t *tvb, gint offset, gint8 L)
-{
-    switch(L)
-    {
-    case 1:
-        proto_tree_add_uint(tree,
-                    *V,
-                    tvb,
-                    offset,
-                    L+2,
-                    tvb_get_guint8(tvb, offset+2));
-        break;
-    case 2:
-        proto_tree_add_uint(tree,
-                    *V,
-                    tvb,
-                    offset,
-                    L+2,
-                    tvb_get_ntohs(tvb, offset+2));
-        break;
-    case 3:
-        proto_tree_add_uint(tree,
-                    *V,
-                    tvb,
-                    offset,
-                    L+2,
-                    tvb_get_ntoh24(tvb, offset+2));
-        break;
-    case 4:
-        proto_tree_add_uint(tree,
-                    *V,
-                    tvb,
-                    offset,
-                    L+2,
-                    tvb_get_ntohl(tvb, offset+2));
-        break;
-    }
-}
-
 
 /* UA/UDP DISSECTOR */
 static void _dissect_uaudp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                            e_ua_direction direction)
 {
     gint        offset = 0;
+    guint32     type, length;
     guint8      opcode;
-    proto_item *uaudp_item;
-    proto_tree *uaudp_tree;
+    proto_item *uaudp_item, *tlv_item, *tlv_len_item;
+    proto_tree *uaudp_tree, *connect_tree;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "UAUDP");
 
@@ -202,7 +139,7 @@ static void _dissect_uaudp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 "%s",
                 val_to_str_ext(opcode, &uaudp_opcode_str_ext, "unknown (0x%02x)"));
 
-    uaudp_item = proto_tree_add_protocol_format(tree, proto_uaudp, tvb, 0, 5,
+    uaudp_item = proto_tree_add_protocol_format(tree, proto_uaudp, tvb, 0, tvb_reported_length(tvb),
                             "Universal Alcatel/UDP Encapsulation Protocol, %s",
                             val_to_str_ext(opcode, &uaudp_opcode_str_ext, "unknown (0x%02x)"));
 
@@ -215,56 +152,133 @@ static void _dissect_uaudp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     {
     case UAUDP_CONNECT:
     {
-        if (!tree)
-            break;
-        while (tvb_offset_exists(tvb, offset))
+        while(tvb_reported_length_remaining(tvb, offset) > 0)
         {
-            guint8 T = tvb_get_guint8(tvb, offset+0);
-            guint8 L = tvb_get_guint8(tvb, offset+1);
+            type = tvb_get_guint8(tvb, offset+0);
+            connect_tree = proto_tree_add_subtree(uaudp_tree, tvb, offset, 0, ett_uaudp_tlv, &tlv_item,
+                                                    val_to_str_ext(type, &uaudp_connect_vals_ext, "Unknown %d"));
+            proto_tree_add_uint(connect_tree, hf_uaudp_type, tvb, offset, 1, type);
+            offset++;
+            tlv_len_item = proto_tree_add_item_ret_uint(connect_tree, hf_uaudp_length, tvb, offset, 1, ENC_NA, &length);
+            proto_item_set_len(tlv_item, length+2);
+            offset++;
 
-            switch(T)
+            switch(type)
             {
             case UAUDP_CONNECT_VERSION:
-                rV(uaudp_tree, &hf_uaudp_version        , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_version, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_WINDOW_SIZE:
-                rV(uaudp_tree, &hf_uaudp_window_size    , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_window_size, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_MTU:
-                rV(uaudp_tree, &hf_uaudp_mtu            , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_mtu, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_UDP_LOST:
-                rV(uaudp_tree, &hf_uaudp_udp_lost       , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_udp_lost, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_UDP_LOST_REINIT:
-                rV(uaudp_tree, &hf_uaudp_udp_lost_reinit, tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_udp_lost_reinit, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_KEEPALIVE:
-                rV(uaudp_tree, &hf_uaudp_keepalive      , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_keepalive, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_QOS_IP_TOS:
-                rV(uaudp_tree, &hf_uaudp_qos_ip_tos     , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_qos_ip_tos, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_QOS_8021_VLID:
-                rV(uaudp_tree, &hf_uaudp_qos_8021_vlid  , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_qos_8021_vlid, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             case UAUDP_CONNECT_QOS_8021_PRI:
-                rV(uaudp_tree, &hf_uaudp_qos_8021_pri   , tvb, offset, L);
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_qos_8021_pri, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
+                break;
+            case UAUDP_CONNECT_SUPERFAST_CONNECT:
+                if ((length >= 1) && (length <= 4))
+                {
+                    proto_tree_add_item(connect_tree, hf_uaudp_superfast_connect, tvb, offset, length, ENC_BIG_ENDIAN);
+                }
+                else
+                {
+                    expert_add_info_format(pinfo, tlv_len_item, &ei_uaudp_tlv_length, "Invalid length %d", length);
+                }
                 break;
             }
-            offset += (2 + L);
+            offset += length;
         }
         break;
     }
 
     case UAUDP_NACK:
     {
-        proto_tree_add_uint(uaudp_tree,
+        proto_tree_add_item(uaudp_tree,
                     hf_uaudp_expseq,
                     tvb,
                     offset,
                     2,
-                    tvb_get_ntohs(tvb, offset));
+                    ENC_BIG_ENDIAN);
         break;
     }
 
@@ -272,22 +286,21 @@ static void _dissect_uaudp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     {
         int datalen;
 
-        proto_tree_add_uint(uaudp_tree,
+        proto_tree_add_item_ret_uint(uaudp_tree,
                     hf_uaudp_expseq,
                     tvb,
                     offset+0,
                     2,
-                    tvb_get_ntohs(tvb, offset+0));
+                    ENC_BIG_ENDIAN,
+                    &ua_tap_info.expseq);
 
-        proto_tree_add_uint(uaudp_tree,
+        proto_tree_add_item_ret_uint(uaudp_tree,
                     hf_uaudp_sntseq,
                     tvb,
                     offset+2,
                     2,
-                    tvb_get_ntohs(tvb, offset+2));
-
-        ua_tap_info.expseq = hf_uaudp_expseq;
-        ua_tap_info.sntseq = hf_uaudp_sntseq;
+                    ENC_BIG_ENDIAN,
+                    &ua_tap_info.sntseq);
 
         offset  += 4;
         datalen  = tvb_reported_length(tvb) - offset;
@@ -372,12 +385,12 @@ static int dissect_uaudp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
     }
 
     /* use ports to find direction */
-    if (find_terminal_port(pinfo->srcport))
+    if (value_is_in_range(ua_udp_range, pinfo->srcport))
     {
         _dissect_uaudp(tvb, pinfo, tree, TERM_TO_SYS);
         return tvb_captured_length(tvb);
     }
-    else if (find_terminal_port(pinfo->destport))
+    else if (value_is_in_range(ua_udp_range, pinfo->destport))
     {
         _dissect_uaudp(tvb, pinfo, tree, SYS_TO_TERM);
         return tvb_captured_length(tvb);
@@ -387,14 +400,22 @@ static int dissect_uaudp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
     return tvb_captured_length(tvb);
 }
 
+static void
+apply_uaudp_prefs(void) {
+    ua_udp_range = prefs_get_range_value("uaudp", "udp.port");
 
-/* Register the protocol with Wireshark */
-void proto_reg_handoff_uaudp(void);
+    if (*pref_sys_ip_s) {
+        use_sys_ip = ws_inet_pton4(pref_sys_ip_s, &sys_ip);
+        if (!use_sys_ip) {
+            report_failure("Invalid value for pref uaudp.system_ip: %s",
+                    pref_sys_ip_s);
+        }
+    }
+}
 
 void proto_register_uaudp(void)
 {
     module_t *uaudp_module;
-    int       i;
 
     /* Setup list of header fields. See Section 1.6.1 for details */
     static hf_register_info hf_uaudp[] = {
@@ -527,6 +548,19 @@ void proto_register_uaudp(void)
             }
         },
         {
+            &hf_uaudp_superfast_connect,
+            {
+                "SuperFast Connect",
+                "uaudp.superfast_connect",
+                FT_UINT8,
+                BASE_DEC,
+                NULL,
+                0x0,
+                "UA/UDP SuperFast Connect",
+                HFILL
+            }
+        },
+        {
             &hf_uaudp_expseq,
             {
                 "Sequence Number (expected)",
@@ -552,18 +586,48 @@ void proto_register_uaudp(void)
                 HFILL
             }
         },
+        {
+            &hf_uaudp_type,
+            {
+                "Type",
+                "uaudp.type",
+                FT_UINT8,
+                BASE_DEC|BASE_EXT_STRING,
+                &uaudp_connect_vals_ext,
+                0x0,
+                NULL,
+                HFILL
+            }
+        },
+        {
+            &hf_uaudp_length,
+            {
+                "Length",
+                "uaudp.length",
+                FT_UINT8,
+                BASE_DEC,
+                NULL,
+                0x0,
+                NULL,
+                HFILL
+            }
+        },
     };
 
     /* Setup protocol subtree array */
     static gint *ett[] =
         {
             &ett_uaudp,
+            &ett_uaudp_tlv,
         };
 
+    static ei_register_info ei[] = {
+        { &ei_uaudp_tlv_length, { "uaudp.tlv_length_invalid", PI_PROTOCOL, PI_WARN, "Invalid length", EXPFILL }},
+    };
+    expert_module_t* expert_uaudp;
+
     /* Register the protocol name and description */
-    proto_uaudp = proto_register_protocol("UA/UDP Encapsulation Protocol",
-                          "UAUDP",
-                          "uaudp");
+    proto_uaudp = proto_register_protocol("UA/UDP Encapsulation Protocol", "UAUDP", "uaudp");
 
     uaudp_handle = register_dissector("uaudp", dissect_uaudp, proto_uaudp);
 #if 0 /* XXX: Not used ?? */
@@ -574,24 +638,20 @@ void proto_register_uaudp(void)
 
     proto_register_field_array(proto_uaudp, hf_uaudp, array_length(hf_uaudp));
     proto_register_subtree_array(ett, array_length(ett));
-
-    /* Register preferences */
-    uaudp_module = prefs_register_protocol(proto_uaudp, proto_reg_handoff_uaudp);
+    expert_uaudp = expert_register_protocol(proto_uaudp);
+    expert_register_field_array(expert_uaudp, ei, array_length(ei));
 
 #if 0
-    prefs_register_bool_preference(uaudp_module, "enable",
-                       "Enable UA/UDP decoding based on preferences",
-                       "Enable UA/UDP decoding based on preferences",
-                       &decode_ua);
+    uaudp_opcode_dissector_table =
+            register_dissector_table("uaudp.opcode",
+                                     "UAUDP opcode",
+                                     FT_UINT8,
+                                     BASE_DEC);
 #endif
-    for (i=0; i<MAX_TERMINAL_PORTS; i++) {
-        prefs_register_uint_preference(uaudp_module,
-                           ports[i].name,
-                           ports[i].text,
-                           ports[i].text,
-                           10,
-                           &ports[i].port);
-    }
+
+    /* Register preferences */
+    uaudp_module = prefs_register_protocol(proto_uaudp, apply_uaudp_prefs);
+
     prefs_register_string_preference(uaudp_module, "system_ip",
                      "System IP Address (optional)",
                      "IPv4 address of the DHS3 system."
@@ -604,62 +664,12 @@ void proto_register_uaudp(void)
 #endif
 }
 
-
 void proto_reg_handoff_uaudp(void)
 {
-    static gboolean           prefs_initialized = FALSE;
-    int i;
+    ua_sys_to_term_handle = find_dissector_add_dependency("ua_sys_to_term", proto_uaudp);
+    ua_term_to_sys_handle = find_dissector_add_dependency("ua_term_to_sys", proto_uaudp);
 
-    if (!prefs_initialized)
-    {
-        ua_sys_to_term_handle = find_dissector_add_dependency("ua_sys_to_term", proto_uaudp);
-        ua_term_to_sys_handle = find_dissector_add_dependency("ua_term_to_sys", proto_uaudp);
-#if 0
-        uaudp_opcode_dissector_table =
-            register_dissector_table("uaudp.opcode",
-                                     "UAUDP opcode",
-                                     FT_UINT8,
-                                     BASE_DEC);
-#endif
-        prefs_initialized     = TRUE;
-    }
-    else
-    {
-        for (i=0; i<MAX_TERMINAL_PORTS; i++)
-        {
-            if (ports[i].last_port)
-                dissector_delete_uint("udp.port", ports[i].last_port, uaudp_handle);
-        }
-        if (*pref_sys_ip_s) {
-            use_sys_ip = ws_inet_pton4(pref_sys_ip_s, &sys_ip);
-            if (!use_sys_ip) {
-                report_failure("Invalid value for pref uaudp.system_ip: %s",
-                        pref_sys_ip_s);
-            }
-        }
-    }
-
-    if (decode_ua)
-    {
-        int no_ports_registered = TRUE;
-
-        for (i=0; i < MAX_TERMINAL_PORTS; i++)
-        {
-            if (ports[i].port)
-            {
-                dissector_add_uint("udp.port", ports[i].port, uaudp_handle);
-                no_ports_registered = FALSE;
-            }
-            ports[i].last_port = ports[i].port;
-        }
-
-        if (no_ports_registered)
-        {
-            /* If all ports are set to 0, then just register the handle so
-             * at least "Decode As..." will work. */
-            dissector_add_for_decode_as("udp.port", uaudp_handle);
-        }
-    }
+    dissector_add_uint_range_with_preference("udp.port", UAUDP_PORT_RANGE, uaudp_handle);
 }
 
 /*

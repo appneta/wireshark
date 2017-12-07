@@ -121,7 +121,7 @@ cmp_compare(const fvalue_t *fv_a, const fvalue_t *fv_b)
 	int pos = 0;
 
 	prefix = MIN(a->prefix, b->prefix);	/* MIN() like IPv4 */
-	prefix = MIN(prefix, 128);			/* sanitize, max prefix is 128 */
+	prefix = MIN(prefix, 128);		/* sanitize, max prefix is 128 */
 
 	while (prefix >= 8) {
 		gint byte_a = (gint) (a->addr.bytes[pos]);
@@ -228,31 +228,15 @@ ftype_register_ipv6(void)
 		"FT_IPv6",			/* name */
 		"IPv6 address",			/* pretty_name */
 		FT_IPv6_LEN,			/* wire_size */
-		NULL,		/* new_value */
-		NULL,		/* free_value */
+		NULL,				/* new_value */
+		NULL,				/* free_value */
 		ipv6_from_unparsed,		/* val_from_unparsed */
 		NULL,				/* val_from_string */
 		ipv6_to_repr,			/* val_to_string_repr */
 		ipv6_repr_len,			/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		ipv6_fvalue_set,		/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_bytes = ipv6_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },		/* union get_value */
 
 		cmp_eq,
 		cmp_ne,

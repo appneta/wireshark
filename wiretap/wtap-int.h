@@ -97,11 +97,11 @@ typedef gboolean (*subtype_finish_func)(struct wtap_dumper*, int*);
 
 struct wtap_dumper {
     WFILE_T                 fh;
-    gboolean                is_stdout;      /* TRUE if we're writing to the standard output */
     int                     file_type_subtype;
     int                     snaplen;
     int                     encap;
     gboolean                compressed;
+    gboolean                needs_reload;   /* TRUE if the file requires re-loading after saving with wtap */
     gint64                  bytes_dumped;
 
     void                    *priv;          /* this one holds per-file state and is free'd automatically by wtap_dump_close() */
@@ -110,9 +110,6 @@ struct wtap_dumper {
     subtype_write_func      subtype_write;  /* write out a record */
     subtype_finish_func     subtype_finish; /* write out information to finish writing file */
 
-    int                     tsprecision;    /**< timestamp precision of the lower 32bits
-                                             * e.g. WTAP_TSPREC_USEC
-                                             */
     addrinfo_lists_t        *addrinfo_lists; /**< Struct containing lists of resolved addresses */
     GArray                  *shb_hdrs;
     GArray                  *nrb_hdrs;        /**< name resolution comment/custom_opt, or NULL */
@@ -212,11 +209,27 @@ extern gint wtap_num_file_types;
     }
 #endif
 
+#ifndef phtole8
+#define phtole8(p, v) \
+    {                 \
+        (p)[0] = (guint8)((v) >> 0);    \
+    }
+#endif
+
 #ifndef phtoles
 #define phtoles(p, v) \
     {                 \
         (p)[0] = (guint8)((v) >> 0);    \
         (p)[1] = (guint8)((v) >> 8);    \
+    }
+#endif
+
+#ifndef phtole24
+#define phtole24(p, v) \
+    {                 \
+        (p)[0] = (guint8)((v) >> 0);     \
+        (p)[1] = (guint8)((v) >> 8);     \
+        (p)[2] = (guint8)((v) >> 16);    \
     }
 #endif
 
@@ -256,7 +269,8 @@ extern gint wtap_num_file_types;
 extern const char *compressed_file_extension_table[];
 
 /*
- * Read a given number of bytes from a file.
+ * Read a given number of bytes from a file into a buffer or, if
+ * buf is NULL, just discard them.
  *
  * If we succeed, return TRUE.
  *
@@ -276,7 +290,8 @@ wtap_read_bytes_or_eof(FILE_T fh, void *buf, unsigned int count, int *err,
     gchar **err_info);
 
 /*
- * Read a given number of bytes from a file.
+ * Read a given number of bytes from a file into a buffer or, if
+ * buf is NULL, just discard them.
  *
  * If we succeed, return TRUE.
  *

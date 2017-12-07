@@ -166,7 +166,7 @@ dissect_turbocell(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
             network_tree = proto_item_add_subtree(name_item, ett_network);
 
             str_name=tvb_get_stringz_enc(wmem_packet_scope(), tvb, 0x14, &str_len, ENC_ASCII);
-            col_append_fstr(pinfo->cinfo, COL_INFO, ", Network=\"%s\"",format_text(str_name, str_len-1));
+            col_append_fstr(pinfo->cinfo, COL_INFO, ", Network=\"%s\"", format_text(wmem_packet_scope(), str_name, str_len-1));
 
             while(tvb_get_guint8(tvb, 0x34 + 8*i)==0x00 && (tvb_reported_length_remaining(tvb,0x34 + 8*i) > 6) && (i<32)) {
                 proto_tree_add_item(network_tree, hf_turbocell_station, tvb, 0x34+8*i, 6, ENC_NA);
@@ -189,7 +189,7 @@ dissect_turbocell(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
             proto_tree *mpdu_tree;
             proto_tree *subframe_tree;
 
-            next_tvb = tvb_new_subset(tvb, 0x14, -1, tvb_get_ntohs(tvb, 0x14));
+            next_tvb = tvb_new_subset_length_caplen(tvb, 0x14, -1, tvb_get_ntohs(tvb, 0x14));
             parent_item = proto_tree_add_protocol_format(tree, proto_aggregate, next_tvb, 0,
                                                          tvb_reported_length_remaining(next_tvb, 0), "Turbocell Aggregate Frames");
             mpdu_tree = proto_item_add_subtree(parent_item, ett_msdu_aggregation_parent_tree);
@@ -212,7 +212,7 @@ dissect_turbocell(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
 
                 msdu_offset += 0x02;
                 remaining_length -= 0x02;
-                msdu_tvb = tvb_new_subset(next_tvb, msdu_offset, (msdu_length>remaining_length)?remaining_length:msdu_length, msdu_length);
+                msdu_tvb = tvb_new_subset_length_caplen(next_tvb, msdu_offset, (msdu_length>remaining_length)?remaining_length:msdu_length, msdu_length);
                 call_dissector(eth_handle, msdu_tvb, pinfo, subframe_tree);
                 msdu_offset += msdu_length;
                 remaining_length -= msdu_length;

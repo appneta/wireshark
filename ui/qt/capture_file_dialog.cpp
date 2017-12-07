@@ -26,66 +26,35 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
-#include "epan/packet-range.h"
+#include "ui/packet_range.h"
 #include "ui/win32/file_dlg_win32.h"
 #else // Q_OS_WIN
 
 #include <errno.h>
 #include "file.h"
-#include "epan/addr_resolv.h"
 #include "wsutil/filesystem.h"
 #include "wsutil/nstime.h"
+#include "wsutil/str_util.h"
+#include "wsutil/utf8_entities.h"
+
 #include "ui/all_files_wildcard.h"
 
-#include <QGridLayout>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
-#include <QLabel>
-#include <QLineEdit>
 #include <QCheckBox>
 #include <QFileInfo>
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
+#include <QSortFilterProxyModel>
 #include <QSpacerItem>
-#endif // Q_OS_WIN
+#include <QVBoxLayout>
+#endif // ! Q_OS_WIN
 
 #include <QPushButton>
 #include "epan/prefs.h"
+#include "qt_ui_utils.h"
 #include <wireshark_application.h>
-
-#ifdef Q_OS_WIN
-// All of these routines are required by file_dlg_win32.c.
-// We don't yet have a good place for them so we'll add them as stubs here.
-
-extern "C" {
-
-// From gtk/capture_dlg.[ch]
-/* capture start confirmed by "Save unsaved capture", so do it now */
-extern void capture_start_confirmed(void) {
-}
-
-// From gtk/drag_and_drop.[ch]
-/** Open a new file coming from drag and drop.
- * @param cf_names_freeme the selection data reported from GTK
- */
-extern void dnd_open_file_cmd(gchar *) {
-}
-
-// From gtk/menus.h & main_menubar.c
-/** User pushed a recent file submenu item.
- *
- * @param widget parent widget
- */
-extern void menu_open_recent_file_cmd(gpointer){
-}
-
-/** One of the name resolution menu items changed. */
-extern void menu_name_resolution_changed(void) {
-
-}
-
-} // extern "C"
-// End stub routines
-#endif // Q_OS_WIN
 
 CaptureFileDialog::CaptureFileDialog(QWidget *parent, capture_file *cf, QString &display_filter) :
     QFileDialog(parent),
@@ -125,13 +94,14 @@ CaptureFileDialog::CaptureFileDialog(QWidget *parent, capture_file *cf, QString 
     // Add extra widgets
     // https://wiki.qt.io/Qt_project_org_faq#How_can_I_add_widgets_to_my_QFileDialog_instance.3F
     setOption(QFileDialog::DontUseNativeDialog, true);
+    setOption(QFileDialog::HideNameFilterDetails, true);
     QGridLayout *fd_grid = qobject_cast<QGridLayout*>(layout());
     QHBoxLayout *h_box = new QHBoxLayout();
 
     last_row_ = fd_grid->rowCount();
 
     fd_grid->addItem(new QSpacerItem(1, 1), last_row_, 0);
-    fd_grid->addLayout(h_box, last_row_, 1);
+    fd_grid->addLayout(h_box, last_row_, 0, 1, 2);
     last_row_++;
 
     // Left and right boxes for controls and preview
@@ -196,6 +166,9 @@ check_savability_t CaptureFileDialog::checkSaveAsWithComments(QWidget *
         discard_button = msg_dialog.addButton(tr("Discard comments and save"), QMessageBox::DestructiveRole);
         msg_dialog.setDefaultButton(QMessageBox::Cancel);
     }
+
+    discard_button->setAutoDefault(false);
+    discard_button->setFocus();
 
     msg_dialog.exec();
     /* According to the Qt doc:
@@ -321,32 +294,38 @@ int CaptureFileDialog::mergeType() {
 // We use the Qt dialogs here
 QString CaptureFileDialog::fileExtensionType(int et, bool extension_globs)
 {
-    QString filter;
+    QString extension_type_name;
+    QStringList all_wildcards;
+    QStringList nogz_wildcards;
     GSList *extensions_list;
     GSList *extension;
 
-    filter = wtap_get_file_extension_type_name(et);
+    extension_type_name = wtap_get_file_extension_type_name(et);
 
     if (!extension_globs) {
-        return filter;
+        return extension_type_name;
     }
-
-    filter += " (";
 
     extensions_list = wtap_get_file_extension_type_extensions(et);
 
     /* Construct the list of patterns. */
     for (extension = extensions_list; extension != NULL;
          extension = g_slist_next(extension)) {
-        if (!filter.endsWith('('))
-            filter += ' ';
-        filter += "*.";
-        filter += (char *)extension->data;
+        QString bare_wc = QString("*.%1").arg((char *)extension->data);
+        all_wildcards << bare_wc;
+        if (!bare_wc.endsWith(".gz")) {
+            nogz_wildcards << bare_wc;
+        }
     }
     wtap_free_extensions_list(extensions_list);
-    filter += ')';
-    return filter;
-    /* XXX - does QStringList's destructor destroy the strings in the list? */
+
+    // We set HideNameFilterDetails so that "All Files" and "All Capture
+    // Files" don't show a wildcard list. We want to show the associated
+    // wildcards for individual file types so we add them twice.
+    return QString("%1 (%2) (%3)")
+            .arg(extension_type_name)
+            .arg(nogz_wildcards.join(" "))
+            .arg(all_wildcards.join(" "));
 }
 
 QString CaptureFileDialog::fileType(int ft, bool extension_globs)
@@ -412,16 +391,15 @@ QStringList CaptureFileDialog::buildFileOpenTypeList() {
     filters << QString(tr("All Files (" ALL_FILES_WILDCARD ")"));
 
     /*
-     * Add an "All Capture Files" entry, with all the extensions we
-     * know about.
+     * Add an "All Capture Files" entry, with all the capture file
+     * extensions we know about.
      */
     filter = tr("All Capture Files");
 
     /*
-     * Construct its list of patterns from a list of all extensions
-     * we support.
+     * Construct its list of patterns.
      */
-    extensions_list = wtap_get_all_file_extensions_list();
+    extensions_list = wtap_get_all_capture_file_extensions_list();
     sep = " (";
     for (extension = extensions_list; extension != NULL;
          extension = g_slist_next(extension)) {
@@ -430,6 +408,7 @@ QStringList CaptureFileDialog::buildFileOpenTypeList() {
         filter += (char *)extension->data;
         sep = " ";
     }
+    wtap_free_extensions_list(extensions_list);
     filter += ")";
     filters << filter;
 
@@ -461,20 +440,10 @@ void CaptureFileDialog::addPreview(QVBoxLayout &v_box) {
     preview_grid->addWidget(&preview_size_, 1, 1);
     preview_labels_ << lbl << &preview_size_;
 
-    lbl = new QLabel(tr("Packets:"));
-    preview_grid->addWidget(lbl, 2, 0);
-    preview_grid->addWidget(&preview_packets_, 2, 1);
-    preview_labels_ << lbl << &preview_packets_;
-
-    lbl = new QLabel(tr("First Packet:"));
+    lbl = new QLabel(tr("Start / elapsed:"));
     preview_grid->addWidget(lbl, 3, 0);
-    preview_grid->addWidget(&preview_first_, 3, 1);
-    preview_labels_ << lbl << &preview_first_;
-
-    lbl = new QLabel(tr("Elapsed Time:"));
-    preview_grid->addWidget(lbl, 4, 0);
-    preview_grid->addWidget(&preview_elapsed_, 4, 1);
-    preview_labels_ << lbl << &preview_elapsed_;
+    preview_grid->addWidget(&preview_first_elapsed_, 3, 1);
+    preview_labels_ << lbl << &preview_first_elapsed_;
 
     connect(this, SIGNAL(currentChanged(const QString &)), this, SLOT(preview(const QString &)));
 
@@ -517,30 +486,12 @@ void CaptureFileDialog::addDisplayFilterEdit() {
 }
 
 void CaptureFileDialog::addFormatTypeSelector(QVBoxLayout &v_box) {
-    format_type_.addItem(tr("Automatic"));
+    format_type_.addItem(tr("Automatically detect file type"));
     for (int i = 0; open_routines[i].name != NULL; i += 1) {
         format_type_.addItem(open_routines[i].name);
     }
 
     v_box.addWidget(&format_type_, 0, Qt::AlignTop);
-}
-
-void CaptureFileDialog::addResolutionControls(QVBoxLayout &v_box) {
-    mac_res_.setText(tr("&MAC name resolution"));
-    mac_res_.setChecked(gbl_resolv_flags.mac_name);
-    v_box.addWidget(&mac_res_, 0, Qt::AlignTop);
-
-    transport_res_.setText(tr("&Transport name resolution"));
-    transport_res_.setChecked(gbl_resolv_flags.transport_name);
-    v_box.addWidget(&transport_res_, 0, Qt::AlignTop);
-
-    network_res_.setText(tr("&Network name resolution"));
-    network_res_.setChecked(gbl_resolv_flags.network_name);
-    v_box.addWidget(&network_res_, 0, Qt::AlignTop);
-
-    external_res_.setText(tr("&External name resolver"));
-    external_res_.setChecked(gbl_resolv_flags.use_external_net_name_resolver);
-    v_box.addWidget(&external_res_, 0, Qt::AlignTop);
 }
 
 void CaptureFileDialog::addGzipControls(QVBoxLayout &v_box) {
@@ -581,7 +532,6 @@ int CaptureFileDialog::open(QString &file_name, unsigned int &type) {
 
     addFormatTypeSelector(left_v_box_);
     addDisplayFilterEdit();
-    addResolutionControls(left_v_box_);
     addPreview(right_v_box_);
     addHelpButton(HELP_OPEN_DIALOG);
 
@@ -598,11 +548,6 @@ int CaptureFileDialog::open(QString &file_name, unsigned int &type) {
         file_name = selectedFiles()[0];
         type = format_type_.currentIndex();
         display_filter_.append(display_filter_edit_->text());
-
-        gbl_resolv_flags.mac_name = mac_res_.isChecked();
-        gbl_resolv_flags.transport_name = transport_res_.isChecked();
-        gbl_resolv_flags.network_name = network_res_.isChecked();
-        gbl_resolv_flags.use_external_net_name_resolver = external_res_.isChecked();
 
         return QDialog::Accepted;
     } else {
@@ -718,6 +663,7 @@ QStringList CaptureFileDialog::buildFileSaveAsTypeList(bool must_support_all_com
 
     if (savable_file_types_subtypes != NULL) {
         QString file_type;
+        QString hash_file_type;
         int ft;
         /* OK, we have at least one file type we can save this file as.
            (If we didn't, we shouldn't have gotten here in the first
@@ -727,8 +673,9 @@ QStringList CaptureFileDialog::buildFileSaveAsTypeList(bool must_support_all_com
             if (default_ft_ < 1)
                 default_ft_ = ft; /* first file type is the default */
             file_type = fileType(ft);
+            hash_file_type = fileType(ft, false);
             filters << file_type;
-            type_hash_[file_type] = ft;
+            type_hash_[hash_file_type] = ft;
         }
         g_array_free(savable_file_types_subtypes, TRUE);
     }
@@ -774,11 +721,9 @@ void CaptureFileDialog::preview(const QString & path)
         lbl->setEnabled(false);
     }
 
-    preview_format_.setText(tr("-"));
-    preview_size_.setText(tr("-"));
-    preview_packets_.setText(tr("-"));
-    preview_first_.setText(tr("-"));
-    preview_elapsed_.setText(tr("-"));
+    preview_format_.setText(tr(UTF8_EM_DASH));
+    preview_size_.setText(tr(UTF8_EM_DASH));
+    preview_first_elapsed_.setText(tr(UTF8_EM_DASH));
 
     if (path.length() < 1) {
         return;
@@ -808,7 +753,9 @@ void CaptureFileDialog::preview(const QString & path)
     preview_format_.setText(QString::fromUtf8(wtap_file_type_subtype_string(wtap_file_type_subtype(wth))));
 
     // Size
-    preview_size_.setText(QString(tr("%1 bytes")).arg(wtap_file_size(wth, &err)));
+    gint64 filesize = wtap_file_size(wth, &err);
+    // Finder and Windows Explorer use IEC. What do the various Linux file managers use?
+    QString size_str(gchar_free_to_qstring(format_size(filesize, format_size_unit_bytes|format_size_prefix_iec)));
 
     time(&time_preview);
     while ((wtap_read(wth, &err, &err_info, &data_offset))) {
@@ -837,22 +784,26 @@ void CaptureFileDialog::preview(const QString & path)
     }
 
     if(err != 0) {
-        preview_packets_.setText(QString(tr("error after reading %1 packets")).arg(packets));
+        preview_size_.setText(tr("%1, error after %Ln packet(s)", "", packets)
+                              .arg(size_str));
         return;
     }
 
     // Packet count
     if(timed_out) {
-        preview_packets_.setText(QString(tr("more than %1 (preview timeout)")).arg(packets));
+        preview_size_.setText(tr("%1, timed out at %Ln packet(s)", "", packets)
+                              .arg(size_str));
     } else {
-        preview_packets_.setText(QString("%1").arg(packets));
+        preview_size_.setText(tr("%1, %Ln packet(s)", "", packets)
+                              .arg(size_str));
     }
 
-    // First packet
+    // First packet + elapsed time
     ti_time = (long)start_time;
     ti_tm = localtime(&ti_time);
+    QString first_elapsed = "?";
     if(ti_tm) {
-        preview_first_.setText(QString().sprintf(
+        first_elapsed = QString().sprintf(
                  "%04d-%02d-%02d %02d:%02d:%02d",
                  ti_tm->tm_year + 1900,
                  ti_tm->tm_mon + 1,
@@ -860,22 +811,22 @@ void CaptureFileDialog::preview(const QString & path)
                  ti_tm->tm_hour,
                  ti_tm->tm_min,
                  ti_tm->tm_sec
-                 ));
-    } else {
-        preview_first_.setText(tr("?"));
+                 );
     }
 
     // Elapsed time
+    first_elapsed += " / ";
     elapsed_time = (unsigned int)(stop_time-start_time);
     if(timed_out) {
-        preview_elapsed_.setText(tr("unknown"));
+        first_elapsed += tr("unknown");
     } else if(elapsed_time/86400) {
-        preview_elapsed_.setText(QString().sprintf("%02u days %02u:%02u:%02u",
-                elapsed_time/86400, elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60));
+        first_elapsed += QString().sprintf("%02u days %02u:%02u:%02u",
+                elapsed_time/86400, elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60);
     } else {
-        preview_elapsed_.setText(QString().sprintf("%02u:%02u:%02u",
-                elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60));
+        first_elapsed += QString().sprintf("%02u:%02u:%02u",
+                elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60);
     }
+    preview_first_elapsed_.setText(first_elapsed);
 
     wtap_close(wth);
 }

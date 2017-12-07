@@ -59,6 +59,7 @@ static int hf_gre_flags_reserved_ppp = -1;
 static int hf_gre_flags_reserved = -1;
 static int hf_gre_flags_version = -1;
 static int hf_gre_checksum = -1;
+static int hf_gre_checksum_status = -1;
 static int hf_gre_offset = -1;
 static int hf_gre_key = -1;
 static int hf_gre_key_payload_length = -1;
@@ -125,6 +126,7 @@ const value_string gre_typevals[] = {
     { ETHERTYPE_ARP,       "ARP" },
     { SAP_OSINL5,          "OSI"},
     { GRE_WCCP,            "WCCP"},
+    { GRE_CISCO_CDP,       "CDP (Cisco)"},
     { GRE_NHRP,            "NHRP"},
     { GRE_ERSPAN_88BE,     "ERSPAN"},
     { GRE_ERSPAN_22EB,     "ERSPAN"},
@@ -138,6 +140,7 @@ const value_string gre_typevals[] = {
     { ETHERTYPE_NSH,       "Network Service Header" },
     { ETHERTYPE_CDMA2000_A10_UBS,"CDMA2000 A10 Unstructured byte stream" },
     { ETHERTYPE_3GPP2,     "CDMA2000 A10 3GPP2 Packet" },
+    { ETHERTYPE_CMD,       "CiscoMetaData" },
     { GRE_ARUBA_8200,      "ARUBA WLAN" },
     { GRE_ARUBA_8210,      "ARUBA WLAN" },
     { GRE_ARUBA_8220,      "ARUBA WLAN" },
@@ -419,10 +422,10 @@ dissect_gre(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
                fragmented datagram and isn't truncated, so we can checksum it. */
             if ((flags_and_ver & GRE_CHECKSUM) && !pinfo->fragmented && length >= reported_length) {
                 SET_CKSUM_VEC_TVB(cksum_vec[0], tvb, 0, reported_length);
-                proto_tree_add_checksum(gre_tree, tvb, offset, hf_gre_checksum, -1, &ei_gre_checksum_incorrect, pinfo, in_cksum(cksum_vec, 1),
+                proto_tree_add_checksum(gre_tree, tvb, offset, hf_gre_checksum, hf_gre_checksum_status, &ei_gre_checksum_incorrect, pinfo, in_cksum(cksum_vec, 1),
                                 ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
             } else {
-                proto_tree_add_checksum(gre_tree, tvb, offset, hf_gre_checksum, -1, &ei_gre_checksum_incorrect, pinfo, 0,
+                proto_tree_add_checksum(gre_tree, tvb, offset, hf_gre_checksum, hf_gre_checksum_status, &ei_gre_checksum_incorrect, pinfo, 0,
                                 ENC_BIG_ENDIAN, PROTO_CHECKSUM_NO_FLAGS);
             }
             offset += 2;
@@ -582,6 +585,11 @@ proto_register_gre(void)
           { "Checksum", "gre.checksum",
             FT_UINT16, BASE_HEX, NULL, 0x0,
             "The Checksum field contains the IP (one's complement) checksum of the GRE header and the payload packet", HFILL }
+        },
+        { &hf_gre_checksum_status,
+          { "Checksum Status", "gre.checksum.status",
+            FT_UINT8, BASE_NONE, VALS(proto_checksum_vals), 0x0,
+            NULL, HFILL }
         },
         { &hf_gre_offset,
           { "Offset", "gre.offset",
@@ -747,11 +755,12 @@ void
 proto_reg_handoff_gre(void)
 {
     dissector_handle_t gre_handle;
+    capture_dissector_handle_t gre_cap_handle;
 
     gre_handle = create_dissector_handle(dissect_gre, proto_gre);
     dissector_add_uint("ip.proto", IP_PROTO_GRE, gre_handle);
-    register_capture_dissector("ip.proto", IP_PROTO_GRE, capture_gre, proto_gre);
-    register_capture_dissector("ipv6.nxt", IP_PROTO_GRE, capture_gre, proto_gre);
+    gre_cap_handle = create_capture_dissector_handle(capture_gre, proto_gre);
+    capture_dissector_add_uint("ip.proto", IP_PROTO_GRE, gre_cap_handle);
 }
 
 /*

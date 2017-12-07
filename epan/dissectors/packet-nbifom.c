@@ -1,6 +1,6 @@
 /* packet-nbifom.c
  * Routines for Network-Based IP Flow Mobility (NBIFOM) dissection
- * 3GPP TS 24.161 V13.1.0 (2016-06) Release 13
+ * 3GPP TS 24.161 V13.3.0 (2016-12) Release 13
  * Copyright 2016, Pascal Quantin <pascal.quantin@gmail.com>
  *
  * Wireshark - Network traffic analyzer
@@ -92,7 +92,7 @@ static const value_string nbifom_param_id_ue_to_nw_vals[] = {
     { 0x04, "NBIFOM routing rules" },
     { 0x05, "NBIFOM IP flow mapping" },
     { 0x06, "Not assigned" },
-    { 0x07, "NBIFOM RAN rules status" },
+    { 0x07, "NBIFOM access stratum status" },
     { 0x08, "NBIFOM access usability indication" },
     { 0, NULL }
 };
@@ -326,6 +326,7 @@ dissect_nbifom(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
             if (pinfo->link_dir == P2P_DIR_DL) {
                 break;
             } /* else fall through case 4 */
+            /* FALL THROUGH */
         case 4:
             dissect_nbifom_routing_rules(tvb, pinfo, subtree, offset, param_contents_len);
             offset += param_contents_len;
@@ -471,7 +472,7 @@ proto_register_nbifom(void)
             { "End source port range", "nbifom.routing_rule.flags.end_src_port_range", FT_BOOLEAN, 32,
               TFS(&tfs_present_not_present), 0x00020000, NULL, HFILL }},
         { &hf_nbifom_routing_rule_flags_start_src_port_range,
-            { "Start source port range", "nbifom.routing_rule.flags.start_src_port_rang", FT_BOOLEAN, 32,
+            { "Start source port range", "nbifom.routing_rule.flags.start_src_port_range", FT_BOOLEAN, 32,
               TFS(&tfs_present_not_present), 0x00010000, NULL, HFILL }},
         { &hf_nbifom_routing_rule_flags_spare_bits0xffff,
             { "Spare", "nbifom.routing_rule.flags.spare", FT_UINT32, BASE_HEX,

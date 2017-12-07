@@ -31,7 +31,7 @@
 void proto_register_gift(void);
 void proto_reg_handoff_gift(void);
 
-#define TCP_PORT_GIFT 1213
+#define TCP_PORT_GIFT 1213 /* Not IANA registered */
 
 static int proto_gift = -1;
 static int hf_gift_response = -1;
@@ -72,7 +72,7 @@ dissect_gift(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 	/* set "Info" column text */
 	col_add_fstr(pinfo->cinfo, COL_INFO, "%s: %s",
 			     is_request ? "Request" : "Response",
-			     format_text(line, linelen));
+			     format_text(wmem_packet_scope(), line, linelen));
 
 	/* if tree != NULL, build protocol tree */
 	if (tree) {
@@ -93,10 +93,10 @@ dissect_gift(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 		if (tokenlen != 0) {
 			if (is_request) {
 				proto_tree_add_string(cmd_tree, hf_gift_request_cmd, tvb, offset,
-						    tokenlen, format_text(line, tokenlen));
+						    tokenlen, format_text(wmem_packet_scope(), line, tokenlen));
 			} else {
 				proto_tree_add_string(cmd_tree, hf_gift_response_cmd, tvb, offset,
-						    tokenlen, format_text(line, tokenlen));
+						    tokenlen, format_text(wmem_packet_scope(), line, tokenlen));
 			}
 			offset += (gint) (next_token - line);
 			linelen -= (int) (next_token - line);
@@ -106,10 +106,10 @@ dissect_gift(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 		if (linelen != 0) {
 			if (is_request) {
 				proto_tree_add_string(cmd_tree, hf_gift_request_arg, tvb, offset,
-						    linelen, format_text(line, linelen));
+						    linelen, format_text(wmem_packet_scope(), line, linelen));
 			} else {
 				proto_tree_add_string(cmd_tree, hf_gift_response_arg, tvb, offset,
-						    linelen, format_text(line, linelen));
+						    linelen, format_text(wmem_packet_scope(), line, linelen));
 			}
 		}
 	}
@@ -158,7 +158,7 @@ proto_reg_handoff_gift(void)
 	dissector_handle_t gift_handle;
 
 	gift_handle = create_dissector_handle(dissect_gift, proto_gift);
-	dissector_add_uint("tcp.port", TCP_PORT_GIFT, gift_handle);
+	dissector_add_uint_with_preference("tcp.port", TCP_PORT_GIFT, gift_handle);
 }
 
 /*

@@ -647,8 +647,10 @@ dissect_80211n_mac(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int 
 
     flags = tvb_get_letohl(tvb, ptvcursor_current_offset(csr));
     *n_mac_flags = flags;
+    phdr->phy_info.info_11n.has_bandwidth = TRUE;
     phdr->phy_info.info_11n.has_short_gi = TRUE;
     phdr->phy_info.info_11n.has_greenfield = TRUE;
+    phdr->phy_info.info_11n.bandwidth = ((flags & DOT11N_FLAG_HT40) != 0);
     phdr->phy_info.info_11n.short_gi = ((flags & DOT11N_FLAG_SHORT_GI) != 0);
     phdr->phy_info.info_11n.greenfield = ((flags & DOT11N_FLAG_GREENFIELD) != 0);
     if (DOT11N_IS_AGGREGATE(flags)) {
@@ -942,7 +944,7 @@ dissect_ppi(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
             else /* we found a suitable dissector */
             {
                 /* skip over the ppi_fieldheader, and pass it off to the dedicated GPS dissetor */
-                next_tvb = tvb_new_subset(tvb, offset + 4, data_len - 4 , -1);
+                next_tvb = tvb_new_subset_length_caplen(tvb, offset + 4, data_len - 4 , -1);
                 call_dissector(ppi_gps_handle, next_tvb, pinfo, ppi_tree);
             }
             break;
@@ -955,7 +957,7 @@ dissect_ppi(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
             else /* we found a suitable dissector */
             {
                 /* skip over the ppi_fieldheader, and pass it off to the dedicated VECTOR dissetor */
-                next_tvb = tvb_new_subset(tvb, offset + 4, data_len - 4 , -1);
+                next_tvb = tvb_new_subset_length_caplen(tvb, offset + 4, data_len - 4 , -1);
                 call_dissector(ppi_vector_handle, next_tvb, pinfo, ppi_tree);
             }
             break;
@@ -968,7 +970,7 @@ dissect_ppi(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
             else /* we found a suitable dissector */
             {
                 /* skip over the ppi_fieldheader, and pass it off to the dedicated SENSOR dissetor */
-                next_tvb = tvb_new_subset(tvb, offset + 4, data_len - 4 , -1);
+                next_tvb = tvb_new_subset_length_caplen(tvb, offset + 4, data_len - 4 , -1);
                 call_dissector(ppi_sensor_handle, next_tvb, pinfo, ppi_tree);
             }
             break;
@@ -981,7 +983,7 @@ dissect_ppi(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
             else /* we found a suitable dissector */
             {
                 /* skip over the ppi_fieldheader, and pass it off to the dedicated ANTENNA dissetor */
-                next_tvb = tvb_new_subset(tvb, offset + 4, data_len - 4 , -1);
+                next_tvb = tvb_new_subset_length_caplen(tvb, offset + 4, data_len - 4 , -1);
                 call_dissector(ppi_antenna_handle, next_tvb, pinfo, ppi_tree);
             }
             break;
@@ -994,7 +996,7 @@ dissect_ppi(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
             else /* we found a suitable dissector */
             {
                 /* skip over the ppi_fieldheader, and pass it off to the dedicated FNET dissetor */
-                next_tvb = tvb_new_subset(tvb, offset + 4, data_len - 4 , -1);
+                next_tvb = tvb_new_subset_length_caplen(tvb, offset + 4, data_len - 4 , -1);
                 call_dissector(ppi_fnet_handle, next_tvb, pinfo, ppi_tree);
             }
             break;
@@ -1127,19 +1129,6 @@ dissect_ppi(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 }
 
 /* Establish our beachead */
-
-static void
-ampdu_reassemble_init(void)
-{
-    reassembly_table_init(&ampdu_reassembly_table,
-                          &addresses_reassembly_table_functions);
-}
-
-static void
-ampdu_reassemble_cleanup(void)
-{
-    reassembly_table_destroy(&ampdu_reassembly_table);
-}
 
 void
 proto_register_ppi(void)
@@ -1483,8 +1472,8 @@ proto_register_ppi(void)
     ppi_handle = register_dissector("ppi", dissect_ppi, proto_ppi);
     register_capture_dissector_table("ppi", "PPI");
 
-    register_init_routine(ampdu_reassemble_init);
-    register_cleanup_routine(ampdu_reassemble_cleanup);
+    reassembly_table_register(&ampdu_reassembly_table,
+                          &addresses_reassembly_table_functions);
 
     /* Configuration options */
     ppi_module = prefs_register_protocol(proto_ppi, NULL);
@@ -1497,6 +1486,8 @@ proto_register_ppi(void)
 void
 proto_reg_handoff_ppi(void)
 {
+    capture_dissector_handle_t ppi_cap_handle;
+
     ieee80211_radio_handle = find_dissector_add_dependency("wlan_radio", proto_ppi);
     pcap_pktdata_handle = find_dissector_add_dependency("pcap_pktdata", proto_ppi);
     ppi_gps_handle = find_dissector_add_dependency("ppi_gps", proto_ppi);
@@ -1506,7 +1497,8 @@ proto_reg_handoff_ppi(void)
     ppi_fnet_handle = find_dissector_add_dependency("ppi_fnet", proto_ppi);
 
     dissector_add_uint("wtap_encap", WTAP_ENCAP_PPI, ppi_handle);
-    register_capture_dissector("wtap_encap", WTAP_ENCAP_PPI, capture_ppi, proto_ppi);
+    ppi_cap_handle = create_capture_dissector_handle(capture_ppi, proto_ppi);
+    capture_dissector_add_uint("wtap_encap", WTAP_ENCAP_PPI, ppi_cap_handle);
 }
 
 /*

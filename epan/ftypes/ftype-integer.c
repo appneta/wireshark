@@ -62,46 +62,195 @@ get_sinteger(fvalue_t *fv)
 
 
 static gboolean
+parse_charconst(const char *s, unsigned long *valuep, gchar **err_msg)
+{
+	const char *cp;
+	unsigned long value;
+
+	cp = s + 1;	/* skip the leading ' */
+	if (*cp == '\\') {
+		/*
+		 * Escape.
+		 */
+		cp++;
+		switch (*cp) {
+
+		case '\0':
+			if (err_msg != NULL)
+				*err_msg = g_strdup_printf("\"%s\" isn't a valid character constant.", s);
+			return FALSE;
+
+		case 'a':
+			value = '\a';
+			break;
+
+		case 'b':
+			value = '\b';
+			break;
+
+		case 'f':
+			value = '\f';
+			break;
+
+		case 'n':
+			value = '\n';
+			break;
+
+		case 'r':
+			value = '\r';
+			break;
+
+		case 't':
+			value = '\t';
+			break;
+
+		case 'v':
+			value = '\v';
+			break;
+
+		case '\'':
+			value = '\'';
+			break;
+
+		case '\\':
+			value = '\\';
+			break;
+
+		case '"':
+			value = '"';
+			break;
+
+		case 'x':
+			cp++;
+			if (*cp >= '0' && *cp <= '9')
+				value = *cp - '0';
+			else if (*cp >= 'A' && *cp <= 'F')
+				value = 10 + (*cp - 'A');
+			else if (*cp >= 'a' && *cp <= 'f')
+				value = 10 + (*cp - 'a');
+			else {
+				if (err_msg != NULL)
+					*err_msg = g_strdup_printf("\"%s\" isn't a valid character constant.", s);
+				return FALSE;
+			}
+			cp++;
+			if (*cp != '\'') {
+				value <<= 4;
+				if (*cp >= '0' && *cp <= '9')
+					value |= *cp - '0';
+				else if (*cp >= 'A' && *cp <= 'F')
+					value |= 10 + (*cp - 'A');
+				else if (*cp >= 'a' && *cp <= 'f')
+					value |= 10 + (*cp - 'a');
+				else {
+					if (err_msg != NULL)
+						*err_msg = g_strdup_printf("\"%s\" isn't a valid character constant.", s);
+					return FALSE;
+				}
+			}
+			break;
+
+		default:
+			if (*cp >= '0' && *cp <= '7')
+				value = *cp - '0';
+			else {
+				if (err_msg != NULL)
+					*err_msg = g_strdup_printf("\"%s\" isn't a valid character constant.", s);
+				return FALSE;
+			}
+			cp++;
+			if (*cp != '\'') {
+				value <<= 3;
+				if (*cp >= '0' && *cp <= '7')
+					value |= *cp - '0';
+				else {
+					if (err_msg != NULL)
+						*err_msg = g_strdup_printf("\"%s\" isn't a valid character constant.", s);
+					return FALSE;
+				}
+				cp++;
+				if (*cp != '\'') {
+					value <<= 3;
+					if (*cp >= '0' && *cp <= '7')
+						value |= *cp - '0';
+					else {
+						if (err_msg != NULL)
+							*err_msg = g_strdup_printf("\"%s\" isn't a valid character constant.", s);
+						return FALSE;
+					}
+				}
+			}
+			if (value > 0xFF) {
+				if (err_msg != NULL)
+					*err_msg = g_strdup_printf("\"%s\" is too large to be a valid character constant.", s);
+				return FALSE;
+			}
+		}
+	} else {
+		value = *cp;
+		cp++;
+		if (!g_ascii_isprint(value)) {
+			if (err_msg != NULL)
+				*err_msg = g_strdup_printf("Non-printable character '\\x%02lx' in character constant.", value);
+			return FALSE;
+		}
+	}
+	*valuep = value;
+	return TRUE;
+}
+
+static gboolean
 uint_from_unparsed(fvalue_t *fv, const char *s, gboolean allow_partial_value _U_, gchar **err_msg,
 		   guint32 max)
 {
 	unsigned long value;
 	char	*endptr;
 
-	if (strchr (s, '-') && strtol(s, NULL, 0) < 0) {
+	if (s[0] == '\'') {
 		/*
-		 * Probably a negative integer, but will be
-		 * "converted in the obvious manner" by strtoul().
+		 * Represented as a C-style character constant.
 		 */
-		if (err_msg != NULL)
-			*err_msg = g_strdup_printf("\"%s\" too small for this field, minimum 0.", s);
-		return FALSE;
-	}
-
-	errno = 0;
-	value = strtoul(s, &endptr, 0);
-
-	if (errno == EINVAL || endptr == s || *endptr != '\0') {
-		/* This isn't a valid number. */
-		if (err_msg != NULL)
-			*err_msg = g_strdup_printf("\"%s\" is not a valid number.", s);
-		return FALSE;
-	}
-	if (errno == ERANGE) {
-		if (err_msg != NULL) {
-			if (value == ULONG_MAX) {
-				*err_msg = g_strdup_printf("\"%s\" causes an integer overflow.",
-				    s);
-			}
-			else {
-				/*
-				 * XXX - can "strtoul()" set errno to
-				 * ERANGE without returning ULONG_MAX?
-				 */
-				*err_msg = g_strdup_printf("\"%s\" is not an integer.", s);
-			}
+		if (!parse_charconst(s, &value, err_msg))
+			return FALSE;
+	} else {
+		/*
+		 * Try to parse it as a number.
+		 */
+		if (strchr (s, '-') && strtol(s, NULL, 0) < 0) {
+			/*
+			 * Probably a negative integer, but will be
+			 * "converted in the obvious manner" by strtoul().
+			 */
+			if (err_msg != NULL)
+				*err_msg = g_strdup_printf("\"%s\" too small for this field, minimum 0.", s);
+			return FALSE;
 		}
-		return FALSE;
+
+		errno = 0;
+		value = strtoul(s, &endptr, 0);
+
+		if (errno == EINVAL || endptr == s || *endptr != '\0') {
+			/* This isn't a valid number. */
+			if (err_msg != NULL)
+				*err_msg = g_strdup_printf("\"%s\" is not a valid number.", s);
+			return FALSE;
+		}
+		if (errno == ERANGE) {
+			if (err_msg != NULL) {
+				if (value == ULONG_MAX) {
+					*err_msg = g_strdup_printf("\"%s\" causes an integer overflow.",
+					    s);
+				}
+				else {
+					/*
+					 * XXX - can "strtoul()" set errno to
+					 * ERANGE without returning ULONG_MAX?
+					 */
+					*err_msg = g_strdup_printf("\"%s\" is not an integer.", s);
+				}
+			}
+			return FALSE;
+		}
 	}
 
 	if (value > max) {
@@ -145,42 +294,54 @@ sint_from_unparsed(fvalue_t *fv, const char *s, gboolean allow_partial_value _U_
 	long value;
 	char *endptr;
 
-	if (!strchr (s, '-') && strtoul(s, NULL, 0) > G_MAXINT32) {
+	if (s[0] == '\'') {
 		/*
-		 * Probably a positive integer > G_MAXINT32, but will be
-		 * "converted in the obvious manner" by strtol().
+		 * Represented as a C-style character constant.
 		 */
-		if (err_msg != NULL)
-			*err_msg = g_strdup_printf("\"%s\" causes an integer overflow.", s);
-		return FALSE;
-	}
-
-	errno = 0;
-	value = strtol(s, &endptr, 0);
-
-	if (errno == EINVAL || endptr == s || *endptr != '\0') {
-		/* This isn't a valid number. */
-		if (err_msg != NULL)
-			*err_msg = g_strdup_printf("\"%s\" is not a valid number.", s);
-		return FALSE;
-	}
-	if (errno == ERANGE) {
-		if (err_msg != NULL) {
-			if (value == LONG_MAX) {
+		if (!parse_charconst(s, &value, err_msg))
+			return FALSE;
+	} else {
+		/*
+		 * Try to parse it as a number.
+		 */
+		if (!strchr (s, '-') && strtoul(s, NULL, 0) > G_MAXINT32) {
+			/*
+			 * Probably a positive integer > G_MAXINT32, but
+			 * will be "converted in the obvious manner" by
+			 * strtol().
+			 */
+			if (err_msg != NULL)
 				*err_msg = g_strdup_printf("\"%s\" causes an integer overflow.", s);
-			}
-			else if (value == LONG_MIN) {
-				*err_msg = g_strdup_printf("\"%s\" causes an integer underflow.", s);
-			}
-			else {
-				/*
-				 * XXX - can "strtol()" set errno to
-				 * ERANGE without returning ULONG_MAX?
-				 */
-				*err_msg = g_strdup_printf("\"%s\" is not an integer.", s);
-			}
+			return FALSE;
 		}
-		return FALSE;
+
+		errno = 0;
+		value = strtol(s, &endptr, 0);
+
+		if (errno == EINVAL || endptr == s || *endptr != '\0') {
+			/* This isn't a valid number. */
+			if (err_msg != NULL)
+				*err_msg = g_strdup_printf("\"%s\" is not a valid number.", s);
+			return FALSE;
+		}
+		if (errno == ERANGE) {
+			if (err_msg != NULL) {
+				if (value == LONG_MAX) {
+					*err_msg = g_strdup_printf("\"%s\" causes an integer overflow.", s);
+				}
+				else if (value == LONG_MIN) {
+					*err_msg = g_strdup_printf("\"%s\" causes an integer underflow.", s);
+				}
+				else {
+					/*
+					 * XXX - can "strtol()" set errno to
+					 * ERANGE without returning ULONG_MAX?
+					 */
+					*err_msg = g_strdup_printf("\"%s\" is not an integer.", s);
+				}
+			}
+			return FALSE;
+		}
 	}
 
 	if (value > max) {
@@ -249,6 +410,12 @@ uinteger_repr_len(fvalue_t *fv _U_, ftrepr_t rtype _U_, int field_display _U_)
 	return 10;	/* enough for 2^32-1, in decimal or 0xXXXXXXXX */
 }
 
+static int
+char_repr_len(fvalue_t *fv _U_, ftrepr_t rtype _U_, int field_display _U_)
+{
+	return 7;	/* enough for '\OOO' or '\xXX' */
+}
+
 static void
 uinteger_to_repr(fvalue_t *fv, ftrepr_t rtype _U_, int field_display, char *buf, unsigned int size)
 {
@@ -265,6 +432,73 @@ uinteger_to_repr(fvalue_t *fv, ftrepr_t rtype _U_, int field_display, char *buf,
 	{
 		guint32_to_str_buf(fv->value.uinteger, buf, size);
 	}
+}
+
+static void
+char_to_repr(fvalue_t *fv, ftrepr_t rtype _U_, int field_display, char *buf, unsigned int size _U_)
+{
+	/*
+	 * The longest possible strings are "'\OOO'" and "'\xXX'", which
+	 * take 7 bytes, including the terminating '\0'.
+	 */
+	*buf++ = '\'';
+	if (g_ascii_isprint(fv->value.uinteger)) {
+		/* This perfectly fits into 4 or 5 bytes. */
+		if (fv->value.uinteger == '\\' || fv->value.uinteger == '\'')
+			*buf++ = '\\';
+		*buf++ = (char)fv->value.uinteger;
+	} else {
+		*buf++ = '\\';
+		switch (fv->value.uinteger) {
+
+		case '\0':
+			*buf++ = '0';
+			break;
+
+		case '\a':
+			*buf++ = 'a';
+			break;
+
+		case '\b':
+			*buf++ = 'b';
+			break;
+
+		case '\f':
+			*buf++ = 'f';
+			break;
+
+		case '\n':
+			*buf++ = 'n';
+			break;
+
+		case '\r':
+			*buf++ = 'r';
+			break;
+
+		case '\t':
+			*buf++ = 't';
+			break;
+
+		case '\v':
+			*buf++ = 'v';
+			break;
+
+		default:
+			if (field_display == BASE_HEX) {
+				*buf++ = 'x';
+				buf = guint8_to_hex(buf, fv->value.uinteger);
+			}
+			else
+			{
+				*buf++ = ((fv->value.uinteger >> 6) & 0x7) + '0';
+				*buf++ = ((fv->value.uinteger >> 3) & 0x7) + '0';
+				*buf++ = ((fv->value.uinteger >> 0) & 0x7) + '0';
+			}
+			break;
+		}
+	}
+	*buf++ = '\'';
+	*buf++ = '\0';
 }
 
 static gboolean
@@ -780,7 +1014,34 @@ eui64_to_repr(fvalue_t *fv, ftrepr_t rtype _U_, int field_display _U_, char *buf
 void
 ftype_register_integers(void)
 {
+	static ftype_t char_type = {
+		FT_CHAR,			/* ftype */
+		"FT_CHAR",			/* name */
+		"Character, 1 byte",		/* pretty name */
+		1,				/* wire_size */
+		int_fvalue_new,			/* new_value */
+		NULL,				/* free_value */
+		uint8_from_unparsed,		/* val_from_unparsed */
+		NULL,				/* val_from_string */
+		char_to_repr,			/* val_to_string_repr */
+		char_repr_len,			/* len_string_repr */
 
+		{ .set_value_uinteger = set_uinteger },	/* union set_value */
+		{ .get_value_uinteger = get_uinteger },	/* union get_value */
+
+		cmp_eq,
+		cmp_ne,
+		u_cmp_gt,
+		u_cmp_ge,
+		u_cmp_lt,
+		u_cmp_le,
+		cmp_bitwise_and,
+		NULL,				/* cmp_contains */
+		NULL,				/* cmp_matches */
+
+		NULL,				/* len */
+		NULL,				/* slice */
+	};
 	static ftype_t uint8_type = {
 		FT_UINT8,			/* ftype */
 		"FT_UINT8",			/* name */
@@ -793,24 +1054,8 @@ ftype_register_integers(void)
 		uinteger_to_repr,		/* val_to_string_repr */
 		uinteger_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		set_uinteger,		/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		get_uinteger,		/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger = set_uinteger },	/* union set_value */
+		{ .get_value_uinteger = get_uinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -837,24 +1082,8 @@ ftype_register_integers(void)
 		uinteger_to_repr,		/* val_to_string_repr */
 		uinteger_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		set_uinteger,			/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		get_uinteger,			/* get_value_integer */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger = set_uinteger },	/* union set_value */
+		{ .get_value_uinteger = get_uinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -881,24 +1110,8 @@ ftype_register_integers(void)
 		uinteger_to_repr,		/* val_to_string_repr */
 		uinteger_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		set_uinteger,			/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		get_uinteger,			/* get_value_integer */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger = set_uinteger },	/* union set_value */
+		{ .get_value_uinteger = get_uinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -925,24 +1138,8 @@ ftype_register_integers(void)
 		uinteger_to_repr,		/* val_to_string_repr */
 		uinteger_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		set_uinteger,			/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		get_uinteger,			/* get_value_integer */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger = set_uinteger },	/* union set_value */
+		{ .get_value_uinteger = get_uinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -969,24 +1166,8 @@ ftype_register_integers(void)
 		uinteger64_to_repr,		/* val_to_string_repr */
 		uinteger64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		set_uinteger64,			/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		get_uinteger64,			/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger64 = set_uinteger64 },	/* union set_value */
+		{ .get_value_uinteger64 = get_uinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1013,24 +1194,8 @@ ftype_register_integers(void)
 		uinteger64_to_repr,		/* val_to_string_repr */
 		uinteger64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		set_uinteger64,			/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		get_uinteger64,			/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger64 = set_uinteger64 },	/* union set_value */
+		{ .get_value_uinteger64 = get_uinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1057,24 +1222,8 @@ ftype_register_integers(void)
 		uinteger64_to_repr,		/* val_to_string_repr */
 		uinteger64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		set_uinteger64,			/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		get_uinteger64,			/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger64 = set_uinteger64 },	/* union set_value */
+		{ .get_value_uinteger64 = get_uinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1101,24 +1250,8 @@ ftype_register_integers(void)
 		uinteger64_to_repr,		/* val_to_string_repr */
 		uinteger64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		set_uinteger64,			/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		get_uinteger64,			/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger64 = set_uinteger64 },	/* union set_value */
+		{ .get_value_uinteger64 = get_uinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1145,24 +1278,8 @@ ftype_register_integers(void)
 		integer_to_repr,		/* val_to_string_repr */
 		integer_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		set_sinteger,			/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		get_sinteger,			/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger = set_sinteger },	/* union set_value */
+		{ .get_value_sinteger = get_sinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1189,24 +1306,8 @@ ftype_register_integers(void)
 		integer_to_repr,		/* val_to_string_repr */
 		integer_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		set_sinteger,			/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		get_sinteger,			/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger = set_sinteger },	/* union set_value */
+		{ .get_value_sinteger = get_sinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1233,24 +1334,8 @@ ftype_register_integers(void)
 		integer_to_repr,		/* val_to_string_repr */
 		integer_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		set_sinteger,			/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		get_sinteger,			/* get_value_integer */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger = set_sinteger },	/* union set_value */
+		{ .get_value_sinteger = get_sinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1277,24 +1362,8 @@ ftype_register_integers(void)
 		integer_to_repr,		/* val_to_string_repr */
 		integer_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		set_sinteger,			/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		get_sinteger,			/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger = set_sinteger },	/* union set_value */
+		{ .get_value_sinteger = get_sinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1321,24 +1390,8 @@ ftype_register_integers(void)
 		integer64_to_repr,		/* val_to_string_repr */
 		integer64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		set_sinteger64,			/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		get_sinteger64,			/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger64 = set_sinteger64 },	/* union set_value */
+		{ .get_value_sinteger64 = get_sinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1365,24 +1418,8 @@ ftype_register_integers(void)
 		integer64_to_repr,		/* val_to_string_repr */
 		integer64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		set_sinteger64,			/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		get_sinteger64,			/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger64 = set_sinteger64 },	/* union set_value */
+		{ .get_value_sinteger64 = get_sinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1409,24 +1446,8 @@ ftype_register_integers(void)
 		integer64_to_repr,		/* val_to_string_repr */
 		integer64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		set_sinteger64,			/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		get_sinteger64,			/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger64 = set_sinteger64 },	/* union set_value */
+		{ .get_value_sinteger64 = get_sinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1453,24 +1474,8 @@ ftype_register_integers(void)
 		integer64_to_repr,		/* val_to_string_repr */
 		integer64_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		set_sinteger64,			/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		get_sinteger64,			/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_sinteger64 = set_sinteger64 },	/* union set_value */
+		{ .get_value_sinteger64 = get_sinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1497,24 +1502,8 @@ ftype_register_integers(void)
 		boolean_to_repr,		/* val_to_string_repr */
 		boolean_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		set_uinteger64,			/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		get_uinteger64,			/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger64 = set_uinteger64 },	/* union set_value */
+		{ .get_value_uinteger64 = get_uinteger64 },	/* union get_value */
 
 		bool_eq,			/* cmp_eq */
 		bool_ne,			/* cmp_ne */
@@ -1542,24 +1531,8 @@ ftype_register_integers(void)
 		ipxnet_to_repr,			/* val_to_string_repr */
 		ipxnet_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		set_uinteger,			/* set_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		get_uinteger,			/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger = set_uinteger },	/* union set_value */
+		{ .get_value_uinteger = get_uinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1587,24 +1560,8 @@ ftype_register_integers(void)
 		uinteger_to_repr,		/* val_to_string_repr */
 		uinteger_repr_len,		/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		set_uinteger,			/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		get_uinteger,			/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger = set_uinteger },	/* union set_value */
+		{ .get_value_uinteger = get_uinteger },	/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1632,24 +1589,8 @@ ftype_register_integers(void)
 		eui64_to_repr,			/* val_to_string_repr */
 		eui64_repr_len,			/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		set_uinteger64,			/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		NULL,				/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		get_uinteger64,			/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_uinteger64 = set_uinteger64 },	/* union set_value */
+		{ .get_value_uinteger64 = get_uinteger64 },	/* union get_value */
 
 		cmp_eq64,
 		cmp_ne64,
@@ -1665,6 +1606,7 @@ ftype_register_integers(void)
 		NULL,
 	};
 
+	ftype_register(FT_CHAR, &char_type);
 	ftype_register(FT_UINT8, &uint8_type);
 	ftype_register(FT_UINT16, &uint16_type);
 	ftype_register(FT_UINT24, &uint24_type);

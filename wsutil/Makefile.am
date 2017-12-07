@@ -25,12 +25,13 @@ AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) -DWS_BUILD_DLL \
 	-DDATAFILE_DIR=\"$(pkgdatadir)\" 	\
 	-DEXTCAP_DIR=\"$(extcapdir)\" 		\
 	-DPLUGIN_INSTALL_DIR=\"$(plugindir)\"	\
+	-DJSMN_STRICT				\
 	$(GLIB_CFLAGS) $(LIBGCRYPT_CFLAGS)
 
 # Optional headers for ABI checking
 wsutil_optional_abi_includes =
 
-if HAVE_OS_X_FRAMEWORKS
+if HAVE_MACOS_FRAMEWORKS
 wsutil_optional_abi_includes += cfutils.h
 endif
 
@@ -38,7 +39,7 @@ endif
 # present in the APIs/ABIs of some, but not all, targets.
 libwsutil_nonrepl_INCLUDES = \
 	adler32.h		\
-	aes.h			\
+	base32.h		\
 	base64.h		\
 	bits_count_ones.h	\
 	bits_ctz.h		\
@@ -46,7 +47,9 @@ libwsutil_nonrepl_INCLUDES = \
 	buffer.h		\
 	clopts_common.h		\
 	cmdarg_err.h		\
+	color.h			\
 	copyright_info.h	\
+	cpu_info.h		\
 	crash_info.h		\
 	crc6.h			\
 	crc7.h			\
@@ -56,17 +59,15 @@ libwsutil_nonrepl_INCLUDES = \
 	crc16.h			\
 	crc16-plain.h		\
 	crc32.h			\
-	des.h			\
 	eax.h			\
 	filesystem.h		\
 	frequency-utils.h	\
 	g711.h			\
+	glib-compat.h		\
 	inet_addr.h		\
 	inet_ipv6.h		\
 	interface.h		\
 	jsmn.h			\
-	md4.h			\
-	md5.h			\
 	mpeg-audio.h		\
 	nstime.h		\
 	os_version_info.h	\
@@ -74,14 +75,13 @@ libwsutil_nonrepl_INCLUDES = \
 	plugins.h		\
 	privileges.h		\
 	processes.h		\
-	rc4.h			\
-	report_err.h		\
-	sha1.h			\
-	sha2.h			\
+	report_message.h	\
 	sign_ext.h		\
 	sober128.h		\
+	socket.h		\
 	str_util.h		\
 	strnatcmp.h		\
+	strtoi.h		\
 	tempfile.h		\
 	time_util.h		\
 	type_util.h		\
@@ -90,7 +90,8 @@ libwsutil_nonrepl_INCLUDES = \
 	ws_cpuid.h		\
 	ws_mempbrk.h		\
 	ws_mempbrk_int.h	\
-	ws_printf.h
+	ws_printf.h		\
+	wsjsmn.h
 
 # Header files for functions in libwsutil's ABI on this platform.
 libwsutil_abi_INCLUDES = \
@@ -112,14 +113,15 @@ lib_LTLIBRARIES = libwsutil.la
 libwsutil_la_SOURCES = \
 	$(libwsutil_nonrepl_INCLUDES)	\
 	adler32.c		\
-	aes.c			\
 	airpdcap_wep.c		\
+	base32.c		\
 	base64.c		\
 	bitswap.c		\
 	buffer.c		\
 	clopts_common.c		\
 	cmdarg_err.c		\
 	copyright_info.c	\
+	cpu_info.c		\
 	crash_info.c		\
 	crc6.c			\
 	crc7.c			\
@@ -129,35 +131,33 @@ libwsutil_la_SOURCES = \
 	crc16.c			\
 	crc16-plain.c		\
 	crc32.c			\
-	des.c			\
 	eax.c			\
 	filesystem.c		\
 	frequency-utils.c	\
 	g711.c			\
+	glib-compat.c		\
 	inet_addr.c		\
 	interface.c		\
 	jsmn.c			\
-	md4.c			\
-	md5.c			\
 	mpeg-audio.c		\
 	nstime.c		\
 	os_version_info.c	\
 	plugins.c		\
 	privileges.c		\
-	rc4.c			\
-	report_err.c		\
-	sha1.c			\
-	sha2.c			\
+	report_message.c	\
 	sober128.c		\
 	str_util.c		\
+	strtoi.c		\
 	strnatcmp.c		\
 	tempfile.c		\
 	time_util.c		\
 	type_util.c		\
 	unicode-utils.c		\
-	ws_mempbrk.c
+	ws_mempbrk.c		\
+	wsgcrypt.c		\
+	wsjsmn.c
 
-if HAVE_OS_X_FRAMEWORKS
+if HAVE_MACOS_FRAMEWORKS
 libwsutil_la_SOURCES += cfutils.c cfutils.h
 endif
 
@@ -167,7 +167,11 @@ libwsutil_sse42_la_SOURCES = \
 libwsutil_sse42_la_CFLAGS = $(AM_CFLAGS) $(CFLAGS_SSE42)
 
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
+<<<<<<< HEAD
 libwsutil_la_LDFLAGS = -version-info 7:0:0 @LDFLAGS_SHAREDLIB@
+=======
+libwsutil_la_LDFLAGS = -version-info 8:0:0 @LDFLAGS_SHAREDLIB@
+>>>>>>> upstream/master-2.4
 
 libwsutil_la_LIBADD = \
 	$(LTLIBOBJS)			\
@@ -201,7 +205,8 @@ EXTRA_DIST = \
 	win32-utils.h		\
 	ws_mempbrk_sse42.c	\
 	wsgcrypt.h		\
-	wsgetopt.h
+	wsgetopt.h		\
+	wspcap.h
 
 CLEANFILES = \
 	libwsutil.a	\
@@ -220,7 +225,7 @@ dumpabi-libwsutil: all abi-descriptor.xml
 	cp ../config.h ../ws_symbol_export.h $(libwsutil_abi_INCLUDES) abi-check-headers/
 	abi-compliance-checker -log-path abi_logs/log.txt -l libwsutil -v1 `readlink .libs/libwsutil.so | sed 's/.*\.so\.//'` \
 		-relpath $(abs_srcdir) -dump-abi abi-descriptor.xml || \
-		cat logs/libwsutil/[0-9]*/log.txt
+		cat abi_logs/log.txt
 	cp -f abi_dumps/libwsutil/libwsutil_* .libs/
 	cd .libs && ln -sf libwsutil_*.abi.tar.gz libwsutil.abi.tar.gz
 

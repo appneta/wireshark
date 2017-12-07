@@ -58,7 +58,9 @@ EXTRA_DIST = \
 	indexcap.py					\
 	install_rpms_for_devel.sh			\
 	lex.py						\
+	licensecheck.pl					\
 	list_protos_in_cap.sh				\
+	macos-setup-brew.sh				\
 	make-dissector-reg.py				\
 	make-manuf					\
 	make-sminmpec.pl				\
@@ -81,8 +83,8 @@ EXTRA_DIST = \
 	process-x11-xcb.pl				\
 	randpkt-test.sh					\
 	rdps.py						\
+	rpm_setup.sh 					\
 	runa2x.sh					\
-	runlex.sh					\
 	setuid-root.pl.in				\
 	test-common.sh					\
 	test-captures.sh				\
@@ -91,6 +93,7 @@ EXTRA_DIST = \
 	usb-ptp-extract-models.pl			\
 	usb-ptp-extract-models.txt			\
 	valgrind-wireshark.sh				\
+	validate-diameter-xml.sh			\
 	vg-suppressions					\
 	win-setup.ps1					\
 	wireshark_be.py					\

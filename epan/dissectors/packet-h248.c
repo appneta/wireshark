@@ -1310,9 +1310,8 @@ void gcp_analyze_msg(proto_tree* gcp_tree, packet_info* pinfo, tvbuff_t* gcp_tvb
 
 /* END Gateway Control Protocol -- Context Tracking */
 
+#define H248_PORT 2945
 static gboolean keep_persistent_data = FALSE;
-static guint    global_udp_port = 2945;
-static guint    global_tcp_port = 2945;
 static gboolean h248_desegment = TRUE;
 
 
@@ -1910,14 +1909,15 @@ static guint8 wild_card = 0xFF; /* place to store wildcardField */
 static void
 export_h248_pdu(packet_info *pinfo, tvbuff_t *tvb)
 {
-    exp_pdu_data_t *exp_pdu_data = export_pdu_create_common_tags(pinfo, "h248", EXP_PDU_TAG_PROTO_NAME);
+    if (have_tap_listener(exported_pdu_tap)) {
+        exp_pdu_data_t *exp_pdu_data = export_pdu_create_common_tags(pinfo, "h248", EXP_PDU_TAG_PROTO_NAME);
 
-    exp_pdu_data->tvb_captured_length = tvb_captured_length(tvb);
-    exp_pdu_data->tvb_reported_length = tvb_reported_length(tvb);
-    exp_pdu_data->pdu_tvb = tvb;
+        exp_pdu_data->tvb_captured_length = tvb_captured_length(tvb);
+        exp_pdu_data->tvb_reported_length = tvb_reported_length(tvb);
+        exp_pdu_data->pdu_tvb = tvb;
 
-    tap_queue_packet(exported_pdu_tap, pinfo, exp_pdu_data);
-
+        tap_queue_packet(exported_pdu_tap, pinfo, exp_pdu_data);
+    }
 }
 
 extern void h248_param_ber_integer(proto_tree* tree, tvbuff_t* tvb, packet_info* pinfo, int hfid, h248_curr_info_t* u _U_, void* implicit) {
@@ -1969,7 +1969,7 @@ static const h248_pkg_param_t no_param = { 0, &hf_h248_param, h248_param_uint_it
 static const h248_pkg_evt_t no_event = { 0, &hf_h248_no_evt, &ett_h248_no_evt, NULL, NULL };
 
 const h248_package_t *find_package_id(guint16 pkgid);
-static GTree* packages = NULL;
+static wmem_tree_t* packages = NULL;
 
 extern void h248_param_PkgdName(proto_tree* tree, tvbuff_t* tvb, packet_info* pinfo , int hfid _U_, h248_curr_info_t* u1 _U_, void* u2 _U_) {
     tvbuff_t *new_tvb = NULL;
@@ -2103,7 +2103,7 @@ static int dissect_h248_ctx_id(gboolean implicit_tag, packet_info *pinfo, proto_
 
 static s_h248_package_t *s_find_package_id(guint16 pkgid) {
     s_h248_package_t *s_pkg = NULL;
-    s_pkg = (s_h248_package_t *)g_tree_lookup(packages, GUINT_TO_POINTER((guint32)(pkgid)));
+    s_pkg = (s_h248_package_t *)wmem_tree_lookup32(packages, (guint32)(pkgid));
     return s_pkg;
 }
 
@@ -2114,13 +2114,9 @@ const h248_package_t *find_package_id(guint16 pkgid) {
     return s_pkg->pkg;
 }
 
-static gint32 comparePkgID(gconstpointer a, gconstpointer b) {
-    return GPOINTER_TO_UINT(b) - GPOINTER_TO_UINT(a);
-}
-
 static gboolean is_pkg_default(guint16 pkgid) {
     s_h248_package_t *s_pkg = NULL;
-    s_pkg = (s_h248_package_t *)g_tree_lookup(packages, GUINT_TO_POINTER((guint32)(pkgid)));
+    s_pkg = (s_h248_package_t *)wmem_tree_lookup32(packages, (guint32)(pkgid));
     if(! s_pkg ) return TRUE;
     return s_pkg->is_default;
 }
@@ -2134,7 +2130,7 @@ void h248_register_package(h248_package_t* pkg, pkg_reg_action reg_action) {
     if (! packages) {
         /* no packaegs are yet registerd so create tree and add default packages to tree
          */
-        packages = g_tree_new(comparePkgID); /* init tree if no entries */
+        packages = wmem_tree_new(wmem_epan_scope()); /* init tree if no entries */
         while (base_package_name_vals[i].strptr != NULL) {
             pkg_found = wmem_new0(wmem_epan_scope(), h248_package_t); /* create a h248 package structure */
             pkg_found->id = base_package_name_vals[i].value;
@@ -2179,7 +2175,7 @@ void h248_register_package(h248_package_t* pkg, pkg_reg_action reg_action) {
             s_pkg = wmem_new0(wmem_epan_scope(), s_h248_package_t);
             s_pkg->is_default = TRUE;
             s_pkg->pkg = pkg_found;
-            g_tree_insert(packages, GINT_TO_POINTER(pkg_found->id), (gpointer)s_pkg);
+            wmem_tree_insert32(packages, pkg_found->id, s_pkg);
             i++;
         };
         pkg_found = NULL; /* reset pointer */
@@ -2190,7 +2186,7 @@ void h248_register_package(h248_package_t* pkg, pkg_reg_action reg_action) {
         s_pkg = wmem_new0(wmem_epan_scope(), s_h248_package_t);
         s_pkg->is_default = FALSE;
         s_pkg->pkg = (h248_package_t *)pkg;
-        g_tree_replace(packages, GINT_TO_POINTER(pkg->id), (gpointer)s_pkg);
+        wmem_tree_insert32(packages, pkg->id, s_pkg);
         return;
     };
     if(pkg_default) reg_action = MERGE_PKG_HIGH; /* always make new package overide default */
@@ -2199,7 +2195,7 @@ void h248_register_package(h248_package_t* pkg, pkg_reg_action reg_action) {
         s_pkg = wmem_new0(wmem_epan_scope(), s_h248_package_t);
         s_pkg->is_default = FALSE;
         s_pkg->pkg = (h248_package_t *)pkg;
-        g_tree_insert(packages, GINT_TO_POINTER(pkg->id), (gpointer)s_pkg);
+        wmem_tree_insert32(packages, pkg->id, s_pkg);
         return;
     }
     pkg_found = s_pkg->pkg;
@@ -6087,7 +6083,7 @@ dissect_h248_SigParameterV1(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int of
 
 
 /*--- End of included file: packet-h248-fn.c ---*/
-#line 2165 "./asn1/h248/packet-h248-template.c"
+#line 2161 "./asn1/h248/packet-h248-template.c"
 
 static int dissect_h248_tpkt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_) {
     dissect_tpkt_encap(tvb, pinfo, tree, h248_desegment, h248_handle);
@@ -7512,7 +7508,7 @@ void proto_register_h248(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-h248-hfarr.c ---*/
-#line 2333 "./asn1/h248/packet-h248-template.c"
+#line 2329 "./asn1/h248/packet-h248-template.c"
 
         GCP_HF_ARR_ELEMS("h248",h248_arrel)
 
@@ -7678,7 +7674,7 @@ void proto_register_h248(void) {
     &ett_h248_SigParameterV1,
 
 /*--- End of included file: packet-h248-ettarr.c ---*/
-#line 2351 "./asn1/h248/packet-h248-template.c"
+#line 2347 "./asn1/h248/packet-h248-template.c"
     };
 
     static ei_register_info ei[] = {
@@ -7704,21 +7700,11 @@ void proto_register_h248(void) {
 
     subdissector_table = register_dissector_table("h248.magic_num", "H248 Magic Num", proto_h248, FT_UINT32, BASE_HEX);
 
-    h248_module = prefs_register_protocol(proto_h248, proto_reg_handoff_h248);
+    h248_module = prefs_register_protocol(proto_h248, NULL);
     prefs_register_bool_preference(h248_module, "ctx_info",
                                    "Track Context",
                                    "Maintain relationships between transactions and contexts and display an extra tree showing context data",
                                    &keep_persistent_data);
-    prefs_register_uint_preference(h248_module, "udp_port",
-                                   "UDP port",
-                                   "Port to be decoded as h248",
-                                   10,
-                                   &global_udp_port);
-    prefs_register_uint_preference(h248_module, "tcp_port",
-                                   "TCP port",
-                                   "Port to be decoded as h248",
-                                   10,
-                                   &global_tcp_port);
     prefs_register_bool_preference(h248_module, "desegment",
                                    "Desegment H.248 over TCP",
                                    "Desegment H.248 messages that span more TCP segments",
@@ -7735,32 +7721,10 @@ void proto_register_h248(void) {
 /*--- proto_reg_handoff_h248 -------------------------------------------*/
 void proto_reg_handoff_h248(void) {
 
-    static gboolean initialized = FALSE;
-    static guint32 udp_port;
-    static guint32 tcp_port;
-
-    if (!initialized) {
-        dissector_add_uint("mtp3.service_indicator", MTP_SI_GCP, h248_handle);
-        h248_term_handle = find_dissector_add_dependency("h248term", proto_h248);
-        initialized = TRUE;
-    } else {
-        if (udp_port != 0)
-            dissector_delete_uint("udp.port", udp_port, h248_handle);
-
-        if (tcp_port != 0)
-            dissector_delete_uint("tcp.port", tcp_port, h248_tpkt_handle);
-    }
-
-    udp_port = global_udp_port;
-    tcp_port = global_tcp_port;
-
-    if (udp_port != 0) {
-        dissector_add_uint("udp.port", udp_port, h248_handle);
-    }
-
-    if (tcp_port != 0) {
-        dissector_add_uint("tcp.port", tcp_port, h248_tpkt_handle);
-    }
+    dissector_add_uint("mtp3.service_indicator", MTP_SI_GCP, h248_handle);
+    h248_term_handle = find_dissector_add_dependency("h248term", proto_h248);
+    dissector_add_uint_with_preference("tcp.port", H248_PORT, h248_tpkt_handle);
+    dissector_add_uint_with_preference("udp.port", H248_PORT, h248_handle);
 
     ss7pc_address_type = address_type_get_by_name("AT_SS7PC");
     exported_pdu_tap = find_tap_id(EXPORT_PDU_TAP_NAME_LAYER_7);

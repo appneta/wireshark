@@ -42,6 +42,8 @@ void proto_reg_handoff_bittorrent(void);
  * http://bitconjurer.org/BitTorrent/protocol.html
  */
 
+#define DEFAULT_TCP_PORT_RANGE  "6881-6889" /* Not IANA registered */
+
 #define BITTORRENT_MESSAGE_CHOKE            0
 #define BITTORRENT_MESSAGE_UNCHOKE          1
 #define BITTORRENT_MESSAGE_INTERESTED       2
@@ -516,7 +518,7 @@ dissect_bittorrent_welcome (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
             version = tvb_get_string_enc(wmem_packet_scope(), tvb, offset + (int)strlen(peer_id[i].id),
                                      peer_id[i].ver_len, ENC_ASCII);
             proto_tree_add_string_format(tree, hf_bittorrent_version, tvb, offset, 20, version, "Client is %s v%s",
-                                peer_id[i].name, format_text((guchar*)version, peer_id[i].ver_len));
+                                peer_id[i].name, format_text(wmem_packet_scope(), (guchar*)version, peer_id[i].ver_len));
             break;
          }
       }
@@ -676,7 +678,7 @@ proto_register_bittorrent(void)
    proto_register_field_array(proto_bittorrent, hf, array_length(hf));
    proto_register_subtree_array(ett, array_length(ett));
 
-   register_dissector("bittorrent.tcp", dissect_bittorrent, proto_bittorrent);
+   dissector_handle = register_dissector("bittorrent.tcp", dissect_bittorrent, proto_bittorrent);
 
    bittorrent_module = prefs_register_protocol(proto_bittorrent, NULL);
    prefs_register_bool_preference(bittorrent_module, "desegment",
@@ -696,18 +698,8 @@ proto_reg_handoff_bittorrent(void)
 {
    bencode_handle = find_dissector_add_dependency("bencode", proto_bittorrent);
 
-   dissector_handle = find_dissector("bittorrent.tcp");
-#if 0
-   dissector_add_uint("tcp.port", 6881, dissector_handle);
-   dissector_add_uint("tcp.port", 6882, dissector_handle);
-   dissector_add_uint("tcp.port", 6883, dissector_handle);
-   dissector_add_uint("tcp.port", 6884, dissector_handle);
-   dissector_add_uint("tcp.port", 6885, dissector_handle);
-   dissector_add_uint("tcp.port", 6886, dissector_handle);
-   dissector_add_uint("tcp.port", 6887, dissector_handle);
-   dissector_add_uint("tcp.port", 6888, dissector_handle);
-   dissector_add_uint("tcp.port", 6889, dissector_handle);
-#endif
+   dissector_add_uint_range_with_preference("tcp.port", DEFAULT_TCP_PORT_RANGE, dissector_handle);
+
    heur_dissector_add("tcp", test_bittorrent_packet, "BitTorrent over TCP", "bittorrent_tcp", proto_bittorrent, HEURISTIC_ENABLE);
 }
 

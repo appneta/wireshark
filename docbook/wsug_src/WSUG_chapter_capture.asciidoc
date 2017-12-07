@@ -38,9 +38,9 @@ The capture engine still lacks the following features:
 
 === Prerequisites
 
-Setting up Wireshark to capture packets for the first time can be tricky. A
-comprehensive guide ``How To setup a Capture'' is available at
-link:wireshark-wiki-site:[]CaptureSetup[wireshark-wiki-site:[]CaptureSetup].
+Setting up Wireshark to capture packets for the first time can be
+tricky. A comprehensive guide ``How To setup a Capture'' is available at
+{wireshark-wiki-url}CaptureSetup.
 
 Here are some common pitfalls:
 
@@ -114,12 +114,12 @@ simultaneously.
 [[ChCapCaptureInterfacesDialogWin32]]
 
 .The ``Capture Interfaces'' dialog box on Microsoft Windows
-image::wsug_graphics/ws-capture-interfaces-win32.png[]
+image::wsug_graphics/ws-capture-interfaces-win32.png[{screenshot-attrs}]
 
 [[ChCapCaptureInterfacesDialog]]
 
 .The ``Capture Interfaces'' dialog box on Unix/Linux
-image::wsug_graphics/ws-capture-interfaces.png[]
+image::wsug_graphics/ws-capture-interfaces.png[{screenshot-attrs}]
 
 _Device (Unix/Linux only)_::
 The interface device name.
@@ -173,7 +173,7 @@ main toolbar), Wireshark pops up the ``Capture Options'' dialog box as shown in
 
 [[ChCapCaptureOptionsDialog]]
 .The ``Capture Options'' dialog box
-image::wsug_graphics/ws-capture-options.png[]
+image::wsug_graphics/ws-capture-options.png[{screenshot-attrs}]
 
 [TIP]
 ====
@@ -199,7 +199,7 @@ Loopback interfaces are not available on Windows platforms.
 * The information whether promicuous mode is enabled or disabled.
 
 * The maximum amount of data that will be captured for each packet. The default
-  value is set to the 65535 bytes.
+  value is set to the 262144 bytes.
 
 * The size of the kernel buffer that is reserved to keep the captured packets.
 
@@ -247,7 +247,7 @@ $ echo 1 >/proc/sys/net/core/bpf_jit_enable
 ----
 
 if it is not enabled already. To make the change persistent you can use
-link:sysfs-web-site:[][sysfsutils].
+link:{sysfs-main-url}[sysfsutils].
 ====
 
 _Manage Interfaces_::
@@ -272,11 +272,11 @@ _Use multiple files_::
 Instead of using a single file Wireshark will automatically switch to a new
 one if a specific trigger condition is reached.
 
-_Use pcap-ng format_::
-This checkbox allows you to specify that Wireshark saves the captured packets in
-pcap-ng format. This next generation capture file format is currently in
-development. If more than one interface is chosen for capturing, this checkbox
-is set by default. See link:wireshark-wiki-site:[]Development/PcapNg[wireshark-wiki-site:[]Development/PcapNg] for more details on
+_Use pcap-ng format_:: This checkbox allows you to specify that
+Wireshark saves the captured packets in pcap-ng format. This next
+generation capture file format is currently in development. If more than
+one interface is chosen for capturing, this checkbox is set by default.
+See {wireshark-wiki-url}Development/PcapNg for more details on
 pcap-ng.
 
 _Next file every n megabyte(s)_::
@@ -324,8 +324,9 @@ you do not specify this Wireshark simply adds new packets onto the end of the
 list but does not scroll the packet list pane. This option is greyed out if
 ``Update list of packets in real time'' is disabled.
 
-_Hide capture info dialog_::
-If this option is checked, the capture info dialog described in  <<ChCapRunningSection>> will be hidden.
+// XXX ChCapRunningSection currently disabled
+//_Hide capture info dialog_::
+//If this option is checked, the capture info dialog described in  <<ChCapRunningSection>> will be hidden.
 
 ==== Name Resolution frame
 
@@ -347,8 +348,9 @@ Once you have set the values you desire and have selected the options you need,
 simply click on button:[Start] to commence the capture or button:[Cancel] to
 cancel the capture.
 
-If you start a capture, Wireshark allows you to stop capturing when you have
-enough packets captured, for details see <<ChCapRunningSection>>.
+// XXX ChCapRunningSection currently disabled
+//If you start a capture, Wireshark allows you to stop capturing when you have
+//enough packets captured, for details see <<ChCapRunningSection>>.
 
 [[ChCapEditInterfaceSettingsSection]]
 
@@ -358,7 +360,7 @@ If you double-click on an interface in <<ChCapCaptureOptionsDialog>> the followi
 
 [[ChCapEditInterfacesSettingsDialog]]
 .The ``Edit Interface Settings'' dialog box
-image::wsug_graphics/ws-capture-options-settings.png[]
+image::wsug_graphics/ws-capture-options-settings.png[{screenshot-attrs}]
 
 You can set the following fields in this dialog box:
 
@@ -390,7 +392,7 @@ If some other process has put the interface in promiscuous mode you may be
 capturing in promiscuous mode even if you turn off this option.
 
 Even in promiscuous mode you still won't necessarily see all packets on your LAN
-segment. See link:wireshark-faq-url:[]#promiscsniff[the Wireshark FAQ] for more information.
+segment. See link:{wireshark-faq-url}#promiscsniff[the Wireshark FAQ] for more information.
 ====
 
 _Limit each packet to n bytes_::
@@ -451,7 +453,7 @@ This figure shows the compile results of the selected interfaces.
 
 [[ChCapCompileSelectedBpfsDialog]]
 .The ``Compile Results'' dialog box
-image::wsug_graphics/ws-capture-options-compile-selected-bpfs.png[]
+image::wsug_graphics/ws-capture-options-compile-selected-bpfs.png[{screenshot-attrs}]
 
 In the left window the interface names are listed. The results of an individual
 interface are shown in the right window when it is selected.
@@ -465,13 +467,13 @@ to add or remove interfaces.
 
 [[ChCapManageInterfacesDialog]]
 .The ``Add New Interfaces'' dialog box
-image::wsug_graphics/ws-capture-options-manage-interfaces.png[]
+image::wsug_graphics/ws-capture-options-manage-interfaces.png[{screenshot-attrs}]
 
 ==== Add or remove pipes
 
 [[ChCapManageInterfacesPipesDialog]]
 .The ``Add New Interfaces - Pipes'' dialog box
-image::wsug_graphics/ws-capture-options-manage-interfaces-pipes.png[]
+image::wsug_graphics/ws-capture-options-manage-interfaces-pipes.png[{screenshot-attrs}]
 
 To successfully add a pipe, this pipe must have already been created. Click the
 button:[New] button and type the name of the pipe including its path.
@@ -486,7 +488,7 @@ click the button:[Delete] button.
 
 [[ChCapManageInterfacesLocalDialog]]
 .The ``Add New Interfaces - Local Interfaces'' dialog box
-image::wsug_graphics/ws-capture-options-manage-interfaces-local.png[]
+image::wsug_graphics/ws-capture-options-manage-interfaces-local.png[{screenshot-attrs}]
 
 The tab ``Local Interfaces'' contains a list of available local interfaces,
 including the hidden ones, which are not shown in the other lists.
@@ -505,7 +507,7 @@ changes are also saved in the `preferences` file.
 
 [[ChCapManageInterfacesRemoteDialog]]
 .The ``Add New Interfaces - Remote Interfaces'' dialog box
-image::wsug_graphics/ws-capture-options-manage-interfaces-remote.png[]
+image::wsug_graphics/ws-capture-options-manage-interfaces-remote.png[{screenshot-attrs}]
 
 In this tab interfaces on remote hosts can be added. One or more of these
 interfaces can be hidden. In contrast to the local interfaces they are not saved
@@ -531,11 +533,11 @@ This dialog and capability is only available on Microsoft Windows. On Linux/Unix
 you can achieve the same effect (securely) through an SSH tunnel.
 ====
 
-The Remote Packet Capture Protocol service must first be running on the target
-platform before Wireshark can connect to it. The easiest way is to install
-WinPcap from link:winpcap-download-page:[][winpcap-download-page:[]] on the target. Once
-installation is completed go to the Services control panel, find the Remote
-Packet Capture Protocol service and start it.
+The Remote Packet Capture Protocol service must first be running on the
+target platform before Wireshark can connect to it. The easiest way is
+to install WinPcap from {winpcap-download-url} on the target. Once
+installation is completed go to the Services control panel, find the
+Remote Packet Capture Protocol service and start it.
 
 [NOTE]
 ====
@@ -551,7 +553,7 @@ Remote'' dialog. See <<ChCapManageInterfacesRemoteDialog>> and select button:[Ad
 
 [[ChCapInterfaceRemoteDialog]]
 .The ``Remote Capture Interfaces'' dialog box
-image::wsug_graphics/ws-capture-options-manage-interfaces-remote-plus.png[]
+image::wsug_graphics/ws-capture-options-manage-interfaces-remote-plus.png[{screenshot-attrs}]
 
 You have to set the following parameters in this dialog:
 
@@ -583,7 +585,7 @@ you this option. It pops up the dialog shown in
 
 [[ChCapInterfaceRemoteSettingsDialog]]
 .The ``Remote Capture Settings'' dialog box
-image::wsug_graphics/ws-capture-options-remote-settings.png[]
+image::wsug_graphics/ws-capture-options-remote-settings.png[{screenshot-attrs}]
 
 You can set the following parameters in this dialog:
 
@@ -632,7 +634,7 @@ This dialog is only available on Microsoft Windows
 
 [[ChCapInterfaceDetailsDialog]]
 .The ``Interface Details'' dialog box
-image::wsug_graphics/ws-capture-interface-details.png[]
+image::wsug_graphics/ws-capture-interface-details.png[{screenshot-attrs}]
 
 [[ChCapCaptureFiles]]
 
@@ -640,11 +642,17 @@ image::wsug_graphics/ws-capture-interface-details.png[]
 
 While capturing the underlying libpcap capturing engine will grab the packets
 from the network card and keep the packet data in a (relatively) small kernel
-buffer. This data is read by Wireshark and saved into the capture file(s) the
-user specified.
+buffer. This data is read by Wireshark and saved into a capture file.
 
-Different modes of operation are available when saving this packet data to the
-capture file(s).
+By default Wireshark saves packets to a temporary file. You can also tell
+Wireshark to save to a specific (``permanent'') file and switch to a
+different file after a given time has elapsed or a given number of packets
+have been captured. These options are controlled in the ``Output'' tab in
+the ``Capture Options'' dialog.
+
+[[ChCapCaptureOptionsOutputDialog]]
+.Capture output options
+image::wsug_graphics/ws-capture-options-output.png[{screenshot-attrs}]
 
 [TIP]
 ====
@@ -668,9 +676,9 @@ Information about the folders used for capture files can be found in
 
 [[ChCapTabCaptureFiles]]
 .Capture file mode selected by capture options
-[options="header"]
+[options="header",cols="2,2,2,3,5"]
 |===============
-|``File'' option|``Use multiple files'' option|``Ring buffer with n files'' option|Mode|Resulting filename(s) used
+|File Name|``Create a new file...''|``Use a ring buffer...''|Mode|Resulting filename(s) used
 |-|-|-|_Single temporary file_|wiresharkXXXXXX (where XXXXXX is a unique number)
 |foo.cap|-|-|_Single named file_|foo.cap
 |foo.cap|x|-|_Multiple files, continuous_|foo_00001_20100205110102.cap, foo_00002_20100205110318.cap, ...
@@ -678,27 +686,27 @@ Information about the folders used for capture files can be found in
 |===============
 
 _Single temporary file_::
-A temporary file will be created and used (this is the default). After capturing
-is stopped this file can be saved later under a user specified name.
+  A temporary file will be created and used (this is the default). After capturing
+  is stopped this file can be saved later under a user specified name.
 
 _Single named file_::
-A single capture file will be used. If you want to place the new capture file in
-a specific folder choose this mode.
+  A single capture file will be used. If you want to place the new capture file in
+  a specific folder choose this mode.
 
 _Multiple files, continuous_::
-Like the ``Single named file'' mode, but a new file is created and used after
-reaching one of the multiple file switch conditions (one of the ``Next file every
-...'' values).
+  Like the ``Single named file'' mode, but a new file is created and used after
+  reaching one of the multiple file switch conditions (one of the ``Next file every
+  ...'' values).
 
 _Multiple files, ring buffer_::
-Much like ``Multiple files continuous'', reaching one of the multiple files switch
-conditions (one of the ``Next file every ...'' values) will switch to the next
-file. This will be a newly created file if value of ``Ring buffer with n files''
-is not reached, otherwise it will replace the oldest of the formerly used files
-(thus forming a ``ring'').
-+
-This mode will limit the maximum disk usage, even for an unlimited amount of
-capture input data, only keeping the latest captured data.
+  Much like ``Multiple files continuous'', reaching one of the multiple files switch
+  conditions (one of the ``Next file every ...'' values) will switch to the next
+  file. This will be a newly created file if value of ``Ring buffer with n files''
+  is not reached, otherwise it will replace the oldest of the formerly used files
+  (thus forming a ``ring'').
+  +
+  This mode will limit the maximum disk usage, even for an unlimited amount of
+  capture input data, only keeping the latest captured data.
 
 [[ChCapLinkLayerHeader]]
 
@@ -734,11 +742,10 @@ to be read by an application that doesn't support SunATM headers, select ``RFC
 
 === Filtering while capturing
 
-Wireshark uses the libpcap filter language for capture filters. A brief overview
-of the syntax follows. Complete documentation can be found in the
-link:pcap-filter-man-page-url:[][pcap-filter man page]. You can find a lot of
-Capture Filter examples at
-link:wireshark-wiki-site:[]CaptureFilters[wireshark-wiki-site:[]CaptureFilters].
+Wireshark uses the libpcap filter language for capture filters. A brief
+overview of the syntax follows. Complete documentation can be found in
+the link:{pcap-filter-man-page-url}[pcap-filter man page]. You can find
+a lot of Capture Filter examples at {wireshark-wiki-url}CaptureFilters.
 
 You enter the capture filter into the ``Filter'' field of the Wireshark
 ``Capture Options'' dialog box, as shown in <<ChCapCaptureOptionsDialog>>.
@@ -831,10 +838,10 @@ _ether|ip broadcast|multicast_::
 This primitive allows you to filter on either Ethernet or IP broadcasts or
 multicasts.
 
-_&lt;expr&gt; relop &lt;expr&gt;_::
-This primitive allows you to create complex filter expressions that select bytes
-or ranges of bytes in packets. Please see the pcap-filter man page at
-link:pcap-filter-man-page-url:[][pcap-filter-man-page-url:[]] for more details.
+_&lt;expr&gt; relop &lt;expr&gt;_:: This primitive allows you to create
+complex filter expressions that select bytes or ranges of bytes in
+packets. Please see the pcap-filter man page at
+{pcap-filter-man-page-url} for more details.
 
 
 [[ChCapCaptureAutoFilterSection]]
@@ -872,6 +879,11 @@ _SESSIONNAME_ (terminal server)::
 
 On Windows it asks the operating system if it's running in a Remote Desktop Services environment.
 
+////
+
+// XXX Capture Info is currently disabled, but might be resurrected. See
+// capture_info.[ch] and their git logs for details.
+
 [[ChCapRunningSection]]
 
 === While a Capture is running ...
@@ -880,7 +892,7 @@ While a capture is running, the following dialog box is shown:
 
 [[ChCapCaptureInfoDialog]]
 .The ``Capture Info'' dialog box
-image::wsug_graphics/ws-capture-info.png[]
+image::wsug_graphics/ws-capture-info.png[{screenshot-attrs}]
 
 This dialog box will inform you about the number of captured packets and the
 time since the capture was started. The selection of which protocols are counted
@@ -891,6 +903,7 @@ cannot be changed.
 This ``Capture Info'' dialog box can be hidden using the ``Hide capture info
 dialog'' option in the Capture Options dialog box.
 ====
+////
 
 [[ChCapStopSection]]
 
@@ -898,7 +911,7 @@ dialog'' option in the Capture Options dialog box.
 
 A running capture session will be stopped in one of the following ways:
 
-. Using the button:[Stop[ button from the ``Capture Info'' dialog box.
+. Using the button:[Stop] button from the ``Capture Info'' dialog box.
 
 [NOTE]
 ====

@@ -64,11 +64,6 @@ void proto_register_sflow(void);
 static dissector_handle_t sflow_handle;
 
 /*
- *  global_sflow_ports : holds the configured range of ports for sflow
- */
-static range_t *global_sflow_ports = NULL;
-
-/*
  *  sflow_245_ports : holds the currently used range of ports for sflow
  */
 static gboolean global_dissect_samp_headers = TRUE;
@@ -634,6 +629,8 @@ static expert_field ei_sflow_invalid_address_type = EI_INIT;
 
 static dissector_table_t   header_subdissector_table;
 
+static const unit_name_string units_total_packets = { " total packet", " total packets" };
+
 void proto_reg_handoff_sflow_245(void);
 
 /* dissect a sampled header - layer 2 protocols */
@@ -676,7 +673,7 @@ dissect_sflow_245_sampled_header(tvbuff_t *tvb, packet_info *pinfo,
 
     /* hand the header off to the appropriate dissector.  It's probably
      * a short frame, so ignore any exceptions. */
-    next_tvb = tvb_new_subset(tvb, offset, header_length, frame_length);
+    next_tvb = tvb_new_subset_length_caplen(tvb, offset, header_length, frame_length);
 
     /* save some state */
     save_writable = col_get_writable(pinfo->cinfo, -1);
@@ -1441,7 +1438,7 @@ dissect_sflow_5_extended_80211_aggregation(tvbuff_t *tvb _U_, proto_tree *tree _
 static gint
 dissect_sflow_24_flow_sample(tvbuff_t *tvb, packet_info *pinfo,
         proto_tree *tree, gint offset, proto_item *parent) {
-    guint32     sequence_number, sampling_rate, sample_pool, output;
+    guint32     sequence_number, sampling_rate, output;
 
     proto_tree *extended_data_tree;
     proto_item *ti;
@@ -1456,10 +1453,8 @@ dissect_sflow_24_flow_sample(tvbuff_t *tvb, packet_info *pinfo,
     proto_tree_add_uint_format_value(tree, hf_sflow_flow_sample_sampling_rate, tvb, offset + 8, 4,
             sampling_rate, "1 out of %u packets",
             sampling_rate);
-    sample_pool = tvb_get_ntohl(tvb, offset + 12);
-    proto_tree_add_uint_format_value(tree, hf_sflow_flow_sample_sample_pool, tvb, offset + 12, 4,
-            sample_pool, "%u total packets",
-            sample_pool);
+
+    proto_tree_add_item(tree, hf_sflow_flow_sample_sample_pool, tvb, offset + 12, 4, ENC_BIG_ENDIAN);
     proto_tree_add_item(tree, hf_sflow_flow_sample_dropped_packets, tvb, offset + 16, 4, ENC_BIG_ENDIAN);
     proto_tree_add_item(tree, hf_sflow_flow_sample_input_interface, tvb, offset + 20, 4, ENC_BIG_ENDIAN);
     output = tvb_get_ntohl(tvb, offset + 24);
@@ -1958,7 +1953,7 @@ static void
 dissect_sflow_5_flow_sample(tvbuff_t *tvb, packet_info *pinfo,
         proto_tree *tree, gint offset, proto_item *parent) {
 
-    guint32 sequence_number, sampling_rate, sample_pool,
+    guint32 sequence_number, sampling_rate,
             output, records, i;
 
     sequence_number = tvb_get_ntohl(tvb, offset);
@@ -1973,9 +1968,7 @@ dissect_sflow_5_flow_sample(tvbuff_t *tvb, packet_info *pinfo,
     proto_tree_add_uint_format_value(tree, hf_sflow_flow_sample_sampling_rate, tvb, offset, 4,
             sampling_rate, "1 out of %u packets", sampling_rate);
     offset += 4;
-    sample_pool = tvb_get_ntohl(tvb, offset);
-    proto_tree_add_uint_format_value(tree, hf_sflow_flow_sample_sample_pool, tvb, offset, 4,
-            sample_pool, "%u total packets", sample_pool);
+    proto_tree_add_item(tree, hf_sflow_flow_sample_sample_pool, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset += 4;
     proto_tree_add_item(tree, hf_sflow_flow_sample_dropped_packets, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset += 4;
@@ -2010,7 +2003,7 @@ static void
 dissect_sflow_5_expanded_flow_sample(tvbuff_t *tvb, packet_info *pinfo,
         proto_tree *tree, gint offset, proto_item *parent) {
 
-    guint32 sequence_number, sampling_rate, sample_pool, records, i;
+    guint32 sequence_number, sampling_rate, records, i;
 
     sequence_number = tvb_get_ntohl(tvb, offset);
     proto_tree_add_item(tree, hf_sflow_flow_sample_sequence_number, tvb, offset, 4, ENC_BIG_ENDIAN);
@@ -2024,9 +2017,7 @@ dissect_sflow_5_expanded_flow_sample(tvbuff_t *tvb, packet_info *pinfo,
     proto_tree_add_uint_format_value(tree, hf_sflow_flow_sample_sampling_rate, tvb, offset, 4,
             sampling_rate, "1 out of %u packets", sampling_rate);
     offset += 4;
-    sample_pool = tvb_get_ntohl(tvb, offset);
-    proto_tree_add_uint_format_value(tree, hf_sflow_flow_sample_sample_pool, tvb, offset, 4,
-            sample_pool, "%u total packets", sample_pool);
+    proto_tree_add_item(tree, hf_sflow_flow_sample_sample_pool, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset += 4;
     proto_tree_add_item(tree, hf_sflow_flow_sample_dropped_packets, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset += 4;
@@ -3326,7 +3317,7 @@ proto_register_sflow(void) {
       },
       { &hf_sflow_flow_sample_sample_pool,
         { "Sample pool", "sflow.flow_sample.sample_pool",
-          FT_UINT32, BASE_DEC, NULL, 0x0,
+          FT_UINT32, BASE_DEC|BASE_UNIT_STRING, &units_total_packets, 0x0,
           NULL, HFILL }
       },
       { &hf_sflow_flow_sample_dropped_packets,
@@ -3621,11 +3612,7 @@ proto_register_sflow(void) {
     expert_module_t* expert_sflow;
 
     /* Register the protocol name and description */
-    proto_sflow = proto_register_protocol(
-            "InMon sFlow", /* name       */
-            "sFlow", /* short name */
-            "sflow" /* abbrev     */
-            );
+    proto_sflow = proto_register_protocol("InMon sFlow", "sFlow", "sflow");
 
     /* Required function calls to register the header fields and subtrees used */
     proto_register_field_array(proto_sflow, hf, array_length(hf));
@@ -3636,18 +3623,7 @@ proto_register_sflow(void) {
     header_subdissector_table  = register_dissector_table("sflow_245.header_protocol", "SFLOW header protocol", proto_sflow, FT_UINT32, BASE_DEC);
 
     /* Register our configuration options for sFlow */
-    sflow_245_module = prefs_register_protocol(proto_sflow, proto_reg_handoff_sflow_245);
-
-    /* Set default Neflow port(s) */
-    range_convert_str(&global_sflow_ports, SFLOW_UDP_PORTS, MAX_UDP_PORT);
-
-    prefs_register_obsolete_preference(sflow_245_module, "udp.port");
-
-    prefs_register_range_preference(sflow_245_module, "ports",
-            "sFlow UDP Port(s)",
-            "Set the port(s) for sFlow messages"
-            " (default: " SFLOW_UDP_PORTS ")",
-            &global_sflow_ports, MAX_UDP_PORT);
+    sflow_245_module = prefs_register_protocol(proto_sflow, NULL);
 
     /*
        If I use a filter like "ip.src == 10.1.1.1" this will, in
@@ -3679,19 +3655,9 @@ proto_register_sflow(void) {
 
 void
 proto_reg_handoff_sflow_245(void) {
-    static range_t  *sflow_ports;
-    static gboolean  sflow_245_prefs_initialized = FALSE;
 
-    if (!sflow_245_prefs_initialized) {
-        sflow_handle = create_dissector_handle(dissect_sflow_245, proto_sflow);
-        sflow_245_prefs_initialized = TRUE;
-    } else {
-        dissector_delete_uint_range("udp.port", sflow_ports, sflow_handle);
-        g_free(sflow_ports);
-    }
-
-    sflow_ports = range_copy(global_sflow_ports);
-    dissector_add_uint_range("udp.port", sflow_ports, sflow_handle);
+    sflow_handle = create_dissector_handle(dissect_sflow_245, proto_sflow);
+    dissector_add_uint_range_with_preference("udp.port", SFLOW_UDP_PORTS, sflow_handle);
 }
 
 /*

@@ -32,7 +32,7 @@
 #include <epan/epan_dissect.h>
 #include <epan/to_str.h>
 #include <epan/expert.h>
-#include <epan/packet-range.h>
+#include <epan/column-info.h>
 #include <epan/prefs.h>
 #include <epan/print.h>
 #include <epan/charsets.h>
@@ -60,6 +60,7 @@ typedef struct {
     FILE           *fh;
     GSList         *src_list;
     gchar         **filter;
+    pf_flags        filter_flags;
 } write_pdml_data;
 
 typedef struct {
@@ -67,7 +68,9 @@ typedef struct {
     FILE           *fh;
     GSList         *src_list;
     gchar         **filter;
+    pf_flags        filter_flags;
     gboolean        print_hex;
+    gboolean        print_text;
 } write_json_data;
 
 typedef struct {
@@ -106,7 +109,7 @@ static void print_escaped_xml(FILE *fh, const char *unescaped_string);
 static void print_escaped_json(FILE *fh, const char *unescaped_string);
 static void print_escaped_ek(FILE *fh, const char *unescaped_string);
 
-static void print_pdml_geninfo(proto_tree *tree, FILE *fh);
+static void print_pdml_geninfo(epan_dissect_t *edt, FILE *fh);
 
 static void proto_tree_get_node_field_values(proto_node *node, gpointer data);
 
@@ -132,8 +135,9 @@ void print_cache_field_handles(void)
 }
 
 gboolean
-proto_tree_print(print_args_t *print_args, epan_dissect_t *edt,
-                 GHashTable *output_only_tables, print_stream_t *stream)
+proto_tree_print(print_dissections_e print_dissections, gboolean print_hex,
+                 epan_dissect_t *edt, GHashTable *output_only_tables,
+                 print_stream_t *stream)
 {
     print_data data;
 
@@ -143,10 +147,10 @@ proto_tree_print(print_args_t *print_args, epan_dissect_t *edt,
     data.success            = TRUE;
     data.src_list           = edt->pi.data_src;
     data.encoding           = (packet_char_enc)edt->pi.fd->flags.encoding;
-    data.print_dissections  = print_args->print_dissections;
+    data.print_dissections  = print_dissections;
     /* If we're printing the entire packet in hex, don't
        print uninterpreted data fields in hex as well. */
-    data.print_hex_for_data = !print_args->print_hex;
+    data.print_hex_for_data = !print_hex;
     data.output_only_tables = output_only_tables;
 
     proto_tree_children_foreach(edt->tree, proto_tree_print_node, &data);
@@ -262,11 +266,15 @@ write_pdml_preamble(FILE *fh, const gchar *filename)
     } else
         ts = "Not representable";
 
-    fputs("<?xml version=\"1.0\"?>\n", fh);
-    fputs("<?xml-stylesheet type=\"text/xsl\" href=\"" PDML2HTML_XSL "\"?>\n", fh);
+    fprintf(fh, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+    fprintf(fh, "<?xml-stylesheet type=\"text/xsl\" href=\"" PDML2HTML_XSL "\"?>\n");
     fprintf(fh, "<!-- You can find " PDML2HTML_XSL " in %s or at https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=" PDML2HTML_XSL ". -->\n", get_datafile_dir());
-    fputs("<pdml version=\"" PDML_VERSION "\" ", fh);
-    fprintf(fh, "creator=\"%s/%s\" time=\"%s\" capture_file=\"%s\">\n", PACKAGE, VERSION, ts, filename ? filename : "");
+    fprintf(fh, "<pdml version=\"" PDML_VERSION "\" creator=\"%s/%s\" time=\"%s\" capture_file=\"", PACKAGE, VERSION, ts);
+    if (filename) {
+        /* \todo filename should be converted to UTF-8. */
+        print_escaped_xml(fh, filename);
+    }
+    fprintf(fh, "\">\n");
 }
 
 void
@@ -298,7 +306,7 @@ static gboolean check_protocolfilter(gchar **protocolfilter, const char *str)
 }
 
 void
-write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, epan_dissect_t *edt, FILE *fh)
+write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, pf_flags protocolfilter_flags, epan_dissect_t *edt, FILE *fh)
 {
     write_pdml_data data;
 
@@ -309,7 +317,7 @@ write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, epan_diss
     fprintf(fh, "<packet>\n");
 
     /* Print a "geninfo" protocol as required by PDML */
-    print_pdml_geninfo(edt->tree, fh);
+    print_pdml_geninfo(edt, fh);
 
     if (fields == NULL || fields->fields == NULL) {
         /* Write out all fields */
@@ -317,6 +325,7 @@ write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, epan_diss
         data.fh       = fh;
         data.src_list = edt->pi.data_src;
         data.filter   = protocolfilter;
+        data.filter_flags   = protocolfilter_flags;
 
         proto_tree_children_foreach(edt->tree, proto_tree_write_node_pdml,
                                     &data);
@@ -329,7 +338,11 @@ write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, epan_diss
 }
 
 void
-write_json_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar **protocolfilter, epan_dissect_t *edt, FILE *fh)
+write_json_proto_tree(output_fields_t* fields,
+                      print_dissections_e print_dissections,
+                      gboolean print_hex, gchar **protocolfilter,
+                      pf_flags protocolfilter_flags, epan_dissect_t *edt,
+                      FILE *fh)
 {
     write_json_data data;
     char ts[30];
@@ -364,7 +377,12 @@ write_json_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar *
         data.fh       = fh;
         data.src_list = edt->pi.data_src;
         data.filter   = protocolfilter;
-        data.print_hex = print_args->print_hex;
+        data.filter_flags = protocolfilter_flags;
+        data.print_hex = print_hex;
+        data.print_text = TRUE;
+        if (print_dissections == print_dissections_none) {
+            data.print_text = FALSE;
+        }
 
         proto_tree_children_foreach(edt->tree, proto_tree_write_node_json,
                                     &data);
@@ -380,14 +398,15 @@ write_json_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar *
 }
 
 void
-write_ek_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar **protocolfilter, epan_dissect_t *edt, FILE *fh)
+write_ek_proto_tree(output_fields_t* fields,
+                    gboolean print_hex, gchar **protocolfilter,
+                    pf_flags protocolfilter_flags, epan_dissect_t *edt,
+                    FILE *fh)
 {
     write_json_data data;
     char ts[30];
     time_t t = time(NULL);
     struct tm  *timeinfo;
-    nstime_t   *timestamp;
-    GPtrArray  *finfo_array;
 
     g_assert(edt);
     g_assert(fh);
@@ -399,22 +418,9 @@ write_ek_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar **p
     else
         g_strlcpy(ts, "XXXX-XX-XX", sizeof ts); /* XXX - better way of saying "Not representable"? */
 
-    /* Get frame protocol's finfo. */
-    finfo_array = proto_find_finfo(edt->tree, proto_frame);
-    if (g_ptr_array_len(finfo_array) < 1) {
-        return;
-    }
-    /* frame.time --> geninfo.timestamp */
-    finfo_array = proto_find_finfo(edt->tree, hf_frame_arrival_time);
-    if (g_ptr_array_len(finfo_array) < 1) {
-        return;
-    }
-    timestamp = (nstime_t *)fvalue_get(&((field_info*)finfo_array->pdata[0])->value);
-    g_ptr_array_free(finfo_array, TRUE);
-
     fprintf(fh, "{\"index\" : {\"_index\": \"packets-%s\", \"_type\": \"pcap_file\", \"_score\": null}}\n", ts);
     /* Timestamp added for time indexing in Elasticsearch */
-    fprintf(fh, "{\"timestamp\" : \"%" G_GUINT64_FORMAT "%03d\", \"layers\" : {", (guint64)timestamp->secs, timestamp->nsecs/1000000);
+    fprintf(fh, "{\"timestamp\" : \"%" G_GUINT64_FORMAT "%03d\", \"layers\" : {", (guint64)edt->pi.abs_ts.secs, edt->pi.abs_ts.nsecs/1000000);
 
     if (fields == NULL || fields->fields == NULL) {
         /* Write out all fields */
@@ -422,7 +428,8 @@ write_ek_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar **p
         data.fh       = fh;
         data.src_list = edt->pi.data_src;
         data.filter   = protocolfilter;
-        data.print_hex = print_args->print_hex;
+        data.filter_flags = protocolfilter_flags;
+        data.print_hex = print_hex;
 
         proto_tree_children_foreach(edt->tree, proto_tree_write_node_ek,
                                     &data);
@@ -444,6 +451,18 @@ write_fields_proto_tree(output_fields_t* fields, epan_dissect_t *edt, column_inf
     write_specified_fields(FORMAT_CSV, fields, edt, cinfo, fh);
 }
 
+/* Indent to the correct level */
+static void print_indent(int level, FILE *fh)
+{
+    int i;
+    if (fh == NULL) {
+        return;
+    }
+    for (i = 0; i < level; i++) {
+        fputs("  ", fh);
+    }
+}
+
 /* Write out a tree's data, and any child nodes, as PDML */
 static void
 proto_tree_write_node_pdml(proto_node *node, gpointer data)
@@ -453,7 +472,6 @@ proto_tree_write_node_pdml(proto_node *node, gpointer data)
     const gchar     *label_ptr;
     gchar            label_str[ITEM_LABEL_LENGTH];
     char            *dfilter_string;
-    int              i;
     gboolean         wrap_in_fake_protocol;
 
     /* dissection with an invisible proto tree? */
@@ -466,20 +484,14 @@ proto_tree_write_node_pdml(proto_node *node, gpointer data)
           (fi->hfinfo->id == proto_data)) &&
          (pdata->level == 0));
 
-    /* Indent to the correct level */
-    for (i = -1; i < pdata->level; i++) {
-        fputs("  ", pdata->fh);
-    }
+    print_indent(pdata->level + 1, pdata->fh);
 
     if (wrap_in_fake_protocol) {
         /* Open fake protocol wrapper */
         fputs("<proto name=\"fake-field-wrapper\">\n", pdata->fh);
-
-        /* Indent to increased level before writing out field */
         pdata->level++;
-        for (i = -1; i < pdata->level; i++) {
-            fputs("  ", pdata->fh);
-        }
+
+        print_indent(pdata->level + 1, pdata->fh);
     }
 
     /* Text label. It's printed as a field with no name. */
@@ -655,15 +667,25 @@ proto_tree_write_node_pdml(proto_node *node, gpointer data)
     /* We print some levels for PDML. Recurse here. */
     if (node->first_child != NULL) {
         if (pdata->filter == NULL || check_protocolfilter(pdata->filter, fi->hfinfo->abbrev)) {
+            gchar **_filter = NULL;
+            /* Remove protocol filter for children, if children should be included */
+            if ((pdata->filter_flags&PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                _filter = pdata->filter;
+                pdata->filter = NULL;
+            }
+
             pdata->level++;
             proto_tree_children_foreach(node,
                                         proto_tree_write_node_pdml, pdata);
             pdata->level--;
-        } else {
-            /* Indent to the correct level */
-            for (i = -2; i < pdata->level; i++) {
-                fputs("  ", pdata->fh);
+
+            /* Put protocol filter back */
+            if ((pdata->filter_flags&PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                pdata->filter = _filter;
             }
+        } else {
+            print_indent(pdata->level + 2, pdata->fh);
+
             /* print dummy field */
             fputs("<field name=\"filtered\" value=\"", pdata->fh);
             print_escaped_xml(pdata->fh, fi->hfinfo->abbrev);
@@ -677,10 +699,8 @@ proto_tree_write_node_pdml(proto_node *node, gpointer data)
     }
 
     if (node->first_child != NULL) {
-        /* Indent to correct level */
-        for (i = -1; i < pdata->level; i++) {
-            fputs("  ", pdata->fh);
-        }
+        print_indent(pdata->level + 1, pdata->fh);
+
         /* Close off current element */
         /* Data and expert "protocols" use simple tags */
         if ((fi->hfinfo->id != proto_data) && (fi->hfinfo->id != proto_expert)) {
@@ -697,6 +717,7 @@ proto_tree_write_node_pdml(proto_node *node, gpointer data)
 
     /* Close off fake wrapper protocol */
     if (wrap_in_fake_protocol) {
+        print_indent(pdata->level + 1, pdata->fh);
         fputs("</proto>\n", pdata->fh);
     }
 }
@@ -711,18 +732,14 @@ proto_tree_write_node_json(proto_node *node, gpointer data)
     const gchar     *label_ptr;
     gchar            label_str[ITEM_LABEL_LENGTH];
     char            *dfilter_string;
-    int              i;
 
     /* dissection with an invisible proto tree? */
     g_assert(fi);
 
-    /* Indent to the correct level */
-    for (i = -3; i < pdata->level; i++) {
-        fputs("  ", pdata->fh);
-    }
-
     /* Text label. It's printed as a field with no name. */
     if (fi->hfinfo->id == hf_text_only) {
+        print_indent(pdata->level + 3, pdata->fh);
+
         /* Get the text */
         if (fi->rep) {
             label_ptr = fi->rep->representation;
@@ -752,11 +769,13 @@ proto_tree_write_node_json(proto_node *node, gpointer data)
         /*
          * Hex dump -x
          */
-        if (pdata->print_hex && fi->length > 0) {
+        if (pdata->print_hex && (!pdata->print_text || fi->length > 0)) {
+            print_indent(pdata->level + 3, pdata->fh);
+
             fputs("\"", pdata->fh);
             print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
             fputs("_raw", pdata->fh);
-            fputs("\": \"", pdata->fh);
+            fputs("\": [\"", pdata->fh);
 
             if (fi->hfinfo->bitmask!=0) {
                 switch (fi->value.ftype->ftype) {
@@ -788,31 +807,47 @@ proto_tree_write_node_json(proto_node *node, gpointer data)
                     default:
                         g_assert_not_reached();
                 }
-                fputs("\",\n", pdata->fh);
             }
             else {
                 json_write_field_hex_value(pdata, fi);
-                fputs("\",\n", pdata->fh);
             }
 
-            /* Indent to the correct level */
-            for (i = -3; i < pdata->level; i++) {
-                fputs("  ", pdata->fh);
+            /* Dump raw hex-encoded dissected information including position, length, bitmask, type */
+            fprintf(pdata->fh, "\", %" G_GINT32_MODIFIER "d", fi->start);
+            fprintf(pdata->fh, ", %" G_GINT32_MODIFIER "d", fi->length);
+            fprintf(pdata->fh, ", %" G_GUINT64_FORMAT, fi->hfinfo->bitmask);
+            fprintf(pdata->fh, ", %" G_GINT32_MODIFIER "d", (gint32)fi->value.ftype->ftype);
+
+            if (pdata->print_text) {
+                fputs("],\n", pdata->fh);
+            } else {
+                if (node->next == NULL && node->first_child == NULL) {
+                    fputs("]\n", pdata->fh);
+                } else {
+                    fputs("],\n", pdata->fh);
+                }
             }
+
         }
 
-
-        fputs("\"", pdata->fh);
-
-        print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
 
         /* show, value, and unmaskedvalue attributes */
         switch (fi->hfinfo->type)
         {
         case FT_PROTOCOL:
             if (node->first_child != NULL) {
+                print_indent(pdata->level + 3, pdata->fh);
+
+                fputs("\"", pdata->fh);
+                print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
+
                 fputs("\": {\n", pdata->fh);
-            } else {
+            } else if (pdata->print_text) {
+                print_indent(pdata->level + 3, pdata->fh);
+
+                fputs("\"", pdata->fh);
+                print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
+
                 fputs("\": \"", pdata->fh);
                 if (fi->rep) {
                     print_escaped_json(pdata->fh, fi->rep->representation);
@@ -831,8 +866,18 @@ proto_tree_write_node_json(proto_node *node, gpointer data)
             break;
         case FT_NONE:
             if (node->first_child != NULL) {
+                print_indent(pdata->level + 3, pdata->fh);
+
+                fputs("\"", pdata->fh);
+                print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
+
                 fputs("\": {\n", pdata->fh);
-            } else {
+            } else if (pdata->print_text) {
+                print_indent(pdata->level + 3, pdata->fh);
+
+                fputs("\"", pdata->fh);
+                print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
+
                 if (node->next == NULL) {
                   fputs("\": \"\"\n",  pdata->fh);
                 } else {
@@ -841,29 +886,39 @@ proto_tree_write_node_json(proto_node *node, gpointer data)
             }
             break;
         default:
-            dfilter_string = fvalue_to_string_repr(NULL, &fi->value, FTREPR_DISPLAY, fi->hfinfo->display);
-            if (dfilter_string != NULL) {
-                fputs("\": \"", pdata->fh);
-                print_escaped_json(pdata->fh, dfilter_string);
-                if (node->first_child != NULL) {
-                    fputs("\",\n", pdata->fh);
-                    /* Indent to the correct level */
-                    for (i = -3; i < pdata->level; i++) {
-                        fputs("  ", pdata->fh);
+            if (pdata->print_text) {
+                print_indent(pdata->level + 3, pdata->fh);
+
+                fputs("\"", pdata->fh);
+                print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
+
+                dfilter_string = fvalue_to_string_repr(NULL, &fi->value, FTREPR_DISPLAY, fi->hfinfo->display);
+                if (dfilter_string != NULL) {
+                    if (pdata->print_text) {
+                      fputs("\": \"", pdata->fh);
+                      print_escaped_json(pdata->fh, dfilter_string);
+                      if (node->first_child != NULL) {
+                        fputs("\",\n", pdata->fh);
+                      }
                     }
-                    fputs("\"", pdata->fh);
-                    print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
-                    fputs("_tree\": {\n", pdata->fh);
+                }
+                wmem_free(NULL, dfilter_string);
+
+                if (node->first_child == NULL) {
+                    if (node->next == NULL) {
+                        fputs("\"\n", pdata->fh);
+                    } else {
+                        fputs("\",\n", pdata->fh);
+                    }
                 }
             }
-            wmem_free(NULL, dfilter_string);
 
-            if (node->first_child == NULL) {
-                if (node->next == NULL) {
-                    fputs("\"\n", pdata->fh);
-                } else {
-                    fputs("\",\n", pdata->fh);
-                }
+            if (node->first_child != NULL) {
+                print_indent(pdata->level + 3, pdata->fh);
+
+                fputs("\"", pdata->fh);
+                print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
+                fputs("_tree\": {\n", pdata->fh);
             }
         }
 
@@ -872,14 +927,24 @@ proto_tree_write_node_json(proto_node *node, gpointer data)
     /* We print some levels for JSON. Recurse here. */
     if (node->first_child != NULL) {
         if (pdata->filter == NULL || check_protocolfilter(pdata->filter, fi->hfinfo->abbrev)) {
+            gchar **_filter = NULL;
+            /* Remove protocol filter for children, if children should be included */
+            if ((pdata->filter_flags&PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                _filter = pdata->filter;
+                pdata->filter = NULL;
+            }
+
             pdata->level++;
             proto_tree_children_foreach(node, proto_tree_write_node_json, pdata);
             pdata->level--;
-        } else {
-            /* Indent to the correct level */
-            for (i = -4; i < pdata->level; i++) {
-                fputs("  ", pdata->fh);
+
+            /* Put protocol filter back */
+            if ((pdata->filter_flags&PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                pdata->filter = _filter;
             }
+        } else {
+            print_indent(pdata->level + 4, pdata->fh);
+
             /* print dummy field */
             fputs("\"filtered\": \"", pdata->fh);
             print_escaped_json(pdata->fh, fi->hfinfo->abbrev);
@@ -888,10 +953,8 @@ proto_tree_write_node_json(proto_node *node, gpointer data)
     }
 
     if (node->first_child != NULL) {
-        /* Indent to correct level */
-        for (i = -3; i < pdata->level; i++) {
-            fputs("  ", pdata->fh);
-        }
+        print_indent(pdata->level + 3, pdata->fh);
+
         /* Close off current element */
         if (node->next == NULL) {
             fputs("}\n", pdata->fh);
@@ -1089,9 +1152,21 @@ proto_tree_write_node_ek(proto_node *node, gpointer data)
             }
 
             if(check_protocolfilter(pdata->filter, fi->hfinfo->abbrev) || check_protocolfilter(pdata->filter, abbrev_escaped)) {
+                gchar **_filter = NULL;
+                /* Remove protocol filter for children, if children should be included */
+                if ((pdata->filter_flags&PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                    _filter = pdata->filter;
+                    pdata->filter = NULL;
+                }
+
                 pdata->level++;
                 proto_tree_children_foreach(node, proto_tree_write_node_ek, pdata);
                 pdata->level--;
+
+                /* Put protocol filter back */
+                if ((pdata->filter_flags&PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                    pdata->filter = _filter;
+                }
             } else {
                 /* print dummy field */
                 fputs("\"filtered\": \"", pdata->fh);
@@ -1133,53 +1208,29 @@ proto_tree_write_node_ek(proto_node *node, gpointer data)
  * but we produce a 'geninfo' protocol in the PDML to conform to spec.
  * The 'frame' protocol follows the 'geninfo' protocol in the PDML. */
 static void
-print_pdml_geninfo(proto_tree *tree, FILE *fh)
+print_pdml_geninfo(epan_dissect_t *edt, FILE *fh)
 {
     guint32     num, len, caplen;
-    nstime_t   *timestamp;
     GPtrArray  *finfo_array;
     field_info *frame_finfo;
     gchar      *tmp;
 
     /* Get frame protocol's finfo. */
-    finfo_array = proto_find_finfo(tree, proto_frame);
+    finfo_array = proto_find_first_finfo(edt->tree, proto_frame);
     if (g_ptr_array_len(finfo_array) < 1) {
         return;
     }
     frame_finfo = (field_info *)finfo_array->pdata[0];
     g_ptr_array_free(finfo_array, TRUE);
 
-    /* frame.number --> geninfo.num */
-    finfo_array = proto_find_finfo(tree, hf_frame_number);
-    if (g_ptr_array_len(finfo_array) < 1) {
-        return;
-    }
-    num = fvalue_get_uinteger(&((field_info*)finfo_array->pdata[0])->value);
-    g_ptr_array_free(finfo_array, TRUE);
+    /* frame.number, packet_info.num */
+    num = edt->pi.num;
 
-    /* frame.frame_len --> geninfo.len */
-    finfo_array = proto_find_finfo(tree, hf_frame_len);
-    if (g_ptr_array_len(finfo_array) < 1) {
-        return;
-    }
-    len = fvalue_get_uinteger(&((field_info*)finfo_array->pdata[0])->value);
-    g_ptr_array_free(finfo_array, TRUE);
+    /* frame.frame_len, packet_info.frame_data->pkt_len */
+    len = edt->pi.fd->pkt_len;
 
-    /* frame.cap_len --> geninfo.caplen */
-    finfo_array = proto_find_finfo(tree, hf_frame_capture_len);
-    if (g_ptr_array_len(finfo_array) < 1) {
-        return;
-    }
-    caplen = fvalue_get_uinteger(&((field_info*)finfo_array->pdata[0])->value);
-    g_ptr_array_free(finfo_array, TRUE);
-
-    /* frame.time --> geninfo.timestamp */
-    finfo_array = proto_find_finfo(tree, hf_frame_arrival_time);
-    if (g_ptr_array_len(finfo_array) < 1) {
-        return;
-    }
-    timestamp = (nstime_t *)fvalue_get(&((field_info*)finfo_array->pdata[0])->value);
-    g_ptr_array_free(finfo_array, TRUE);
+    /* frame.cap_len --> packet_info.frame_data->cap_len */
+    caplen = edt->pi.fd->cap_len;
 
     /* Print geninfo start */
     fprintf(fh,
@@ -1201,12 +1252,12 @@ print_pdml_geninfo(proto_tree *tree, FILE *fh)
             "    <field name=\"caplen\" pos=\"0\" show=\"%u\" showname=\"Captured Length\" value=\"%x\" size=\"%d\"/>\n",
             caplen, caplen, frame_finfo->length);
 
-    tmp = abs_time_to_str(NULL, timestamp, ABSOLUTE_TIME_LOCAL, TRUE);
+    tmp = abs_time_to_str(NULL, &edt->pi.abs_ts, ABSOLUTE_TIME_LOCAL, TRUE);
 
     /* Print geninfo.timestamp */
     fprintf(fh,
             "    <field name=\"timestamp\" pos=\"0\" show=\"%s\" showname=\"Captured Time\" value=\"%d.%09d\" size=\"%d\"/>\n",
-            tmp, (int) timestamp->secs, timestamp->nsecs, frame_finfo->length);
+            tmp, (int)edt->pi.abs_ts.secs, edt->pi.abs_ts.nsecs, frame_finfo->length);
 
     wmem_free(NULL, tmp);
 
@@ -1232,9 +1283,8 @@ write_psml_preamble(column_info *cinfo, FILE *fh)
 {
     gint i;
 
-    fputs("<?xml version=\"1.0\"?>\n", fh);
-    fputs("<psml version=\"" PSML_VERSION "\" ", fh);
-    fprintf(fh, "creator=\"%s/%s\">\n", PACKAGE, VERSION);
+    fprintf(fh, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+    fprintf(fh, "<psml version=\"" PSML_VERSION "\" creator=\"%s/%s\">\n", PACKAGE, VERSION);
     fprintf(fh, "<structure>\n");
 
     for (i = 0; i < cinfo->num_cols; i++) {

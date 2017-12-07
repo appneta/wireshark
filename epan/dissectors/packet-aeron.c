@@ -2861,11 +2861,6 @@ static gboolean test_aeron_packet(tvbuff_t * tvb, packet_info * pinfo, proto_tre
     return (TRUE);
 }
 
-static void aeron_init(void)
-{
-    aeron_channel_id_init();
-}
-
 /* Register all the bits needed with the filtering engine */
 void proto_register_aeron(void)
 {
@@ -3101,7 +3096,7 @@ void proto_register_aeron(void)
     proto_register_subtree_array(ett, array_length(ett));
     expert_aeron = expert_register_protocol(proto_aeron);
     expert_register_field_array(expert_aeron, ei, array_length(ei));
-    aeron_module = prefs_register_protocol(proto_aeron, proto_reg_handoff_aeron);
+    aeron_module = prefs_register_protocol(proto_aeron, NULL);
     aeron_heuristic_subdissector_list = register_heur_dissector_list("aeron_msg_payload", proto_aeron);
 
     prefs_register_bool_preference(aeron_module,
@@ -3124,7 +3119,7 @@ void proto_register_aeron(void)
         "Use heuristic sub-dissectors",
         "Use a registered heuristic sub-dissector to decode the payload data. Requires \"Analyze transport sequencing\", \"Analyze stream sequencing\", and \"Reassemble fragmented data\".",
         &aeron_use_heuristic_subdissectors);
-    register_init_routine(aeron_init);
+    register_init_routine(aeron_channel_id_init);
     aeron_frame_info_tree = wmem_tree_new_autoreset(wmem_epan_scope(), wmem_file_scope());
 }
 
@@ -3132,7 +3127,7 @@ void proto_register_aeron(void)
 void proto_reg_handoff_aeron(void)
 {
     aeron_dissector_handle = create_dissector_handle(dissect_aeron, proto_aeron);
-    dissector_add_for_decode_as("udp.port", aeron_dissector_handle);
+    dissector_add_for_decode_as_with_preference("udp.port", aeron_dissector_handle);
     heur_dissector_add("udp", test_aeron_packet, "Aeron over UDP", "aeron_udp", proto_aeron, HEURISTIC_DISABLE);
 }
 

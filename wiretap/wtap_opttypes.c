@@ -86,7 +86,7 @@ static void wtap_opttype_block_register(wtap_block_type_t block_type, wtap_block
     static const wtap_opttype_t opt_comment = {
         "opt_comment",
         "Comment",
-        WTAP_OPTTYPE_STRING, 
+        WTAP_OPTTYPE_STRING,
         WTAP_OPTTYPE_FLAG_MULTIPLE_ALLOWED,
         NULL,
         NULL
@@ -1230,4 +1230,17 @@ void wtap_opttypes_initialize(void)
     wtap_opttype_option_register(&isb_block, OPT_ISB_FILTERACCEPT, &isb_filteraccept);
     wtap_opttype_option_register(&isb_block, OPT_ISB_OSDROP, &isb_osdrop);
     wtap_opttype_option_register(&isb_block, OPT_ISB_USRDELIV, &isb_usrdeliv);
+}
+
+void wtap_opttypes_cleanup(void)
+{
+    guint block_type;
+
+    for (block_type = 0; block_type < (WTAP_BLOCK_END_OF_LIST+num_custom_blocks); block_type++) {
+        if (blocktype_list[block_type]) {
+            if (blocktype_list[block_type]->options)
+                g_array_free(blocktype_list[block_type]->options, TRUE);
+            blocktype_list[block_type] = NULL;
+        }
+    }
 }

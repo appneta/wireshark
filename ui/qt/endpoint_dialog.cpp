@@ -71,7 +71,7 @@ EndpointDialog::EndpointDialog(QWidget &parent, CaptureFile &cf, int cli_proto_i
     }
 
     // Bring the command-line specified type to the front.
-    if (get_conversation_by_proto_id(cli_proto_id)) {
+    if ((cli_proto_id > 0) && (get_conversation_by_proto_id(cli_proto_id))) {
         endp_protos.removeAll(cli_proto_id);
         endp_protos.prepend(cli_proto_id);
     }
@@ -270,10 +270,9 @@ public:
 
     // Column text raw representation.
     // Return a string, qulonglong, double, or invalid QVariant representing the raw column data.
-#ifdef HAVE_GEOIP
     QVariant colData(int col, bool resolve_names, bool strings_only) const {
-#else
-    QVariant colData(int col, bool resolve_names, bool strings_only _U_) const {
+#ifndef HAVE_GEOIP
+        Q_UNUSED(strings_only)
 #endif
         hostlist_talker_t *endp_item = &g_array_index(conv_array_, hostlist_talker_t, conv_idx_);
 

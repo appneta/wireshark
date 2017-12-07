@@ -157,6 +157,13 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
+        <widget class="QLineEdit" name="searchAuthors">
+         <property name="placeholderText">
+          <string>Search Authors</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QPlainTextEdit" name="pte_Authors">
          <property name="readOnly">
           <bool>true</bool>

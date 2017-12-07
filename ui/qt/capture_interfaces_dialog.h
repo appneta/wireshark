@@ -27,12 +27,14 @@
 
 #ifdef HAVE_LIBPCAP
 
+#include "ui/qt/interface_tree_model.h"
+
 #include "geometry_state_dialog.h"
 #include <QPushButton>
+#include <QTreeWidget>
 
 typedef struct if_stat_cache_s if_stat_cache_t;
 
-#include "interface_tree.h"
 #include "preferences_dialog.h"
 
 namespace Ui {
@@ -51,7 +53,7 @@ public:
     InterfaceTreeDelegate(QObject *parent = 0);
     ~InterfaceTreeDelegate();
 
-    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const;
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &idx) const;
     void setTree(QTreeWidget* tree) { tree_ = tree; }
     bool eventFilter(QObject *object, QEvent *event);
 
@@ -72,7 +74,7 @@ public:
     explicit CaptureInterfacesDialog(QWidget *parent = 0);
     ~CaptureInterfacesDialog();
 
-    void setTab(int index);
+    void setTab(int idx);
     void updateInterfaces();
 
 protected:
@@ -124,6 +126,9 @@ private:
     interface_t *getDeviceByName(const QString device_name);
     bool saveOptionsToPreferences();
     void updateSelectedFilter();
+
+    void updateGlobalDeviceSelections();
+    void updateFromGlobalDeviceSelections();
 };
 
 #endif /* HAVE_LIBPCAP */

@@ -26,6 +26,8 @@
 
 #include <epan/packet.h>
 #include <stdlib.h>
+#include <wsutil/strtoi.h>
+#include <epan/expert.h>
 
 #include "packet-s7comm.h"
 #include "packet-s7comm_szl_ids.h"
@@ -1180,6 +1182,9 @@ static const int *s7comm_diagdata_registerflag_fields[] = {
     NULL
 };
 
+static expert_field ei_s7comm_data_blockcontrol_block_num_invalid = EI_INIT;
+static expert_field ei_s7comm_ud_blockinfo_block_num_ascii_invalid = EI_INIT;
+
 /* PI service name IDs. Index represents the index in pi_service_names */
 typedef enum
 {
@@ -1291,7 +1296,7 @@ static const string_string pi_service_names[] = {
     { "_N_CHKDNO",                          "PI-Service _N_CHKDNO (Check whether the tools have unique D numbers)" },
     { "_N_CONFIG",                          "PI-Service _N_CONFIG (Reconfigures machine data)" },
     { "_N_CRCEDN",                          "PI-Service _N_CRCEDN (Creates a cutting edge by specifying an edge no.)" },
-    { "_N_DELECE",                          "PI-Service _N_DELECE (Deletes a cutting egde)" },
+    { "_N_DELECE",                          "PI-Service _N_DELECE (Deletes a cutting edge)" },
     { "_N_CREACE",                          "PI-Service _N_CREACE (Creates a cutting edge)" },
     { "_N_CREATO",                          "PI-Service _N_CREATO (Creates a tool)" },
     { "_N_DELETO",                          "PI-Service _N_DELETO (Deletes tool)" },
@@ -2807,6 +2812,9 @@ s7comm_decode_pi_service(tvbuff_t *tvb,
     proto_tree *param_tree = NULL;
     proto_tree *file_tree = NULL;
 
+    gint32 num = -1;
+    gboolean num_valid;
+
     startoffset = offset;
 
     /* The first byte is checked and inserted to tree outside, so skip it here */
@@ -2864,20 +2872,27 @@ s7comm_decode_pi_service(tvbuff_t *tvb,
                 paramoffset += 2;
                 proto_tree_add_item_ret_string(file_tree, hf_s7comm_data_blockcontrol_block_num, tvb, paramoffset, 5, ENC_ASCII|ENC_NA, wmem_packet_scope(), &str);
                 paramoffset += 5;
-                proto_item_append_text(file_tree, " [%s %d]",
-                    val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"),
-                    atoi(str));
-                col_append_fstr(pinfo->cinfo, COL_INFO, "%s%d",
-                    val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"),
-                    atoi(str));
+                num_valid = ws_strtoi32(str, NULL, &num);
+                proto_item_append_text(file_tree, " [%s ",
+                    val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"));
+                col_append_str(pinfo->cinfo, COL_INFO,
+                    val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"));
+                if (num_valid) {
+                    proto_item_append_text(file_tree, "%d]", num);
+                    col_append_fstr(pinfo->cinfo, COL_INFO, "%d", num);
+                } else {
+                    expert_add_info(pinfo, file_tree, &ei_s7comm_data_blockcontrol_block_num_invalid);
+                    proto_item_append_text(file_tree, "NaN]");
+                    col_append_str(pinfo->cinfo, COL_INFO, "NaN");
+                }
                 if (i+1 < count) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", ");
+                    col_append_str(pinfo->cinfo, COL_INFO, ", ");
                 }
                 itemadd = proto_tree_add_item(file_tree, hf_s7comm_data_blockcontrol_dest_filesys, tvb, paramoffset, 1, ENC_ASCII|ENC_NA);
                 proto_item_append_text(itemadd, " (%s)", val_to_str(tvb_get_guint8(tvb, paramoffset), blocktype_attribute2_names, "Unknown filesys: %c"));
                 paramoffset += 1;
             }
-            col_append_fstr(pinfo->cinfo, COL_INFO, ")");
+            col_append_str(pinfo->cinfo, COL_INFO, ")");
             break;
         case S7COMM_PIP_PROGRAM:
         case S7COMM_PI_MODU:
@@ -3206,6 +3221,8 @@ s7comm_decode_plc_controls_filename(tvbuff_t *tvb,
     if (len == 9) {
         blocktype = tvb_get_ntohs(tvb, offset + 1);
         if ((tvb_get_guint8(tvb, offset) == '_') && (blocktype >= S7COMM_BLOCKTYPE_OB) && (blocktype <= S7COMM_BLOCKTYPE_SFB)) {
+            gint32 num = 1;
+            gboolean num_valid;
             is_plcfilename = TRUE;
             file_tree = proto_item_add_subtree(item, ett_s7comm_plcfilename);
             itemadd = proto_tree_add_item(file_tree, hf_s7comm_data_blockcontrol_file_ident, tvb, offset, 1, ENC_ASCII|ENC_NA);
@@ -3216,12 +3233,19 @@ s7comm_decode_plc_controls_filename(tvbuff_t *tvb,
             offset += 2;
             proto_tree_add_item_ret_string(file_tree, hf_s7comm_data_blockcontrol_block_num, tvb, offset, 5, ENC_ASCII|ENC_NA, wmem_packet_scope(), &str);
             offset += 5;
-            proto_item_append_text(file_tree, " [%s %d]",
-                val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"),
-                atoi(str));
-            col_append_fstr(pinfo->cinfo, COL_INFO, " -> Block:[%s %d]",
-                val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"),
-                atoi(str));
+            num_valid = ws_strtoi32(str, NULL, &num);
+            proto_item_append_text(file_tree, " [%s",
+                val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"));
+            col_append_fstr(pinfo->cinfo, COL_INFO, " -> Block:[%s",
+                val_to_str(blocktype, blocktype_names, "Unknown Block type: 0x%04x"));
+            if (num_valid) {
+                proto_item_append_text(file_tree, "%d]", num);
+                col_append_fstr(pinfo->cinfo, COL_INFO, "%d]", num);
+            } else {
+                expert_add_info(pinfo, file_tree, &ei_s7comm_data_blockcontrol_block_num_invalid);
+                proto_item_append_text(file_tree, "NaN]");
+                col_append_str(pinfo->cinfo, COL_INFO, "NaN]");
+            }
             itemadd = proto_tree_add_item(file_tree, hf_s7comm_data_blockcontrol_dest_filesys, tvb, offset, 1, ENC_ASCII|ENC_NA);
             proto_item_append_text(itemadd, " (%s)", val_to_str(tvb_get_guint8(tvb, offset), blocktype_attribute2_names, "Unknown filesys: %c"));
             offset += 1;
@@ -3308,7 +3332,7 @@ s7comm_decode_plc_controls_updownload(tvbuff_t *tvb,
             } else if (rosctr == S7COMM_ROSCTR_ACK_DATA) {
                 if (plength > 8) {
                     /* If uploading from a PLC, the response has a string with the length
-                     * of the complete module in bytes, which maybe transferred/splitted into many PDUs.
+                     * of the complete module in bytes, which maybe transferred/split into many PDUs.
                      * On a NC file upload, there are no such fields.
                      */
                     len = tvb_get_guint8(tvb, offset);
@@ -3384,7 +3408,7 @@ s7comm_decode_plc_controls_updownload(tvbuff_t *tvb,
             }
             break;
     }
-    /* if an error occured show in info column */
+    /* if an error occurred show in info column */
     if (errorcode > 0) {
         col_append_fstr(pinfo->cinfo, COL_INFO, " -> Errorcode:[0x%04x]", errorcode);
     }
@@ -3907,7 +3931,7 @@ s7comm_decode_ud_cpu_alarm_main(tvbuff_t *tvb,
                         offset += 1;
                         /* show SIG with True values for a quick overview in info-column */
                         if (signalstate > 0) {
-                            col_append_fstr(pinfo->cinfo, COL_INFO, " On=[");
+                            col_append_str(pinfo->cinfo, COL_INFO, " On=[");
                             for (sig_nr = 0; sig_nr < 8; sig_nr++) {
                                 if (signalstate & 0x01) {
                                     signalstate >>= 1;
@@ -3920,7 +3944,7 @@ s7comm_decode_ud_cpu_alarm_main(tvbuff_t *tvb,
                                     signalstate >>= 1;
                                 }
                             }
-                            col_append_fstr(pinfo->cinfo, COL_INFO, "]");
+                            col_append_str(pinfo->cinfo, COL_INFO, "]");
                         }
                         proto_tree_add_bitmask(msg_obj_item_tree, tvb, offset, hf_s7comm_cpu_alarm_message_state,
                             ett_s7comm_cpu_alarm_message_signal, s7comm_cpu_alarm_message_signal_fields, ENC_BIG_ENDIAN);
@@ -4043,13 +4067,13 @@ s7comm_decode_ud_cpu_alarm_query_response(tvbuff_t *tvb,
         proto_tree_add_item(msg_item_tree, hf_s7comm_cpu_alarm_message_nr_objects, tvb, offset, 1, ENC_BIG_ENDIAN);
         offset += 1;
         if (n_blocks == 0) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, " [Last]");
+            col_append_str(pinfo->cinfo, COL_INFO, " [Last]");
             proto_item_set_len(msg_item_tree, offset - start_offset);
             return offset;
         }
     }
     if (func > 0) {
-        col_append_fstr(pinfo->cinfo, COL_INFO, " [Continuation]");
+        col_append_str(pinfo->cinfo, COL_INFO, " [Continuation]");
         complete_length = func;
         remaining_length = (gint32)complete_length;
         returncode = S7COMM_ITEM_RETVAL_DATA_OK;
@@ -4060,7 +4084,7 @@ s7comm_decode_ud_cpu_alarm_query_response(tvbuff_t *tvb,
         proto_tree_add_item(msg_item_tree, hf_s7comm_data_transport_size, tvb, offset, 1, ENC_BIG_ENDIAN);
         offset += 1;
         /* As with ALARM_S it's only possible to send one alarm description in a single response telegram,
-         * they are splitted into many telegrams. Therefore the complete length field is set to 0xffff.
+         * they are split into many telegrams. Therefore the complete length field is set to 0xffff.
          * To reuse the following dissect-loop, the remaining length is set to zero.
          */
         complete_length = tvb_get_ntohs(tvb, offset);
@@ -4357,18 +4381,27 @@ s7comm_decode_ud_block_subfunc(tvbuff_t *tvb,
         case S7COMM_UD_SUBF_BLOCK_BLOCKINFO:
             if (type == S7COMM_UD_TYPE_REQ) {                       /*** Request ***/
                 if (tsize != S7COMM_DATA_TRANSPORT_SIZE_NULL) {
+                    gint32 num = -1;
+                    gboolean num_valid;
                     /* 8 Bytes of Data follow, 1./ 2. type, 3-7 blocknumber as ascii number */
                     blocktype16 = tvb_get_ntohs(tvb, offset);
                     itemadd = proto_tree_add_item(data_tree, hf_s7comm_ud_blockinfo_block_type, tvb, offset, 2, ENC_ASCII|ENC_NA);
                     proto_item_append_text(itemadd, " (%s)", val_to_str(blocktype16, blocktype_names, "Unknown Block type: 0x%04x"));
                     offset += 2;
                     proto_tree_add_item_ret_string(data_tree, hf_s7comm_ud_blockinfo_block_num_ascii, tvb, offset, 5, ENC_ASCII|ENC_NA, wmem_packet_scope(), &pBlocknumber);
-                    proto_item_append_text(data_tree, " [%s %d]",
-                        val_to_str(blocktype16, blocktype_names, "Unknown Block type: 0x%04x"),
-                        atoi(pBlocknumber));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " -> Block:[%s %d]",
-                        val_to_str(blocktype16, blocktype_names, "Unknown Block type: 0x%04x"),
-                        atoi(pBlocknumber));
+                    num_valid = ws_strtoi32(pBlocknumber, NULL, &num);
+                    proto_item_append_text(data_tree, " [%s ",
+                        val_to_str(blocktype16, blocktype_names, "Unknown Block type: 0x%04x"));
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " -> Block:[%s ",
+                        val_to_str(blocktype16, blocktype_names, "Unknown Block type: 0x%04x"));
+                    if (num_valid) {
+                        proto_item_append_text(data_tree, "%d]", num);
+                        col_append_fstr(pinfo->cinfo, COL_INFO, "%d]", num);
+                    } else {
+                        expert_add_info(pinfo, data_tree, &ei_s7comm_ud_blockinfo_block_num_ascii_invalid);
+                        proto_item_append_text(data_tree, "NaN]");
+                        col_append_str(pinfo->cinfo, COL_INFO, "NaN]");
+                    }
                     offset += 5;
                     itemadd = proto_tree_add_item(data_tree, hf_s7comm_ud_blockinfo_filesys, tvb, offset, 1, ENC_ASCII|ENC_NA);
                     proto_item_append_text(itemadd, " (%s)", val_to_str(tvb_get_guint8(tvb, offset), blocktype_attribute2_names, "Unknown filesys: %c"));
@@ -5095,6 +5128,8 @@ dissect_s7comm(tvbuff_t *tvb,
 void
 proto_register_s7comm (void)
 {
+    expert_module_t* expert_s7comm;
+
     /* format:
      * {&(field id), {name, abbrev, type, display, strings, bitmask, blurb, HFILL}}.
      */
@@ -5789,7 +5824,7 @@ proto_register_s7comm (void)
           "Length following blocklength string in bytes", HFILL }},
         { &hf_s7comm_data_blockcontrol_upl_lenstring,
         { "Blocklength", "s7comm.param.blockcontrol.upl_lenstring", FT_STRING, BASE_NONE, NULL, 0x0,
-          "Length of the complete uploadblock in bytes, maybe splitted into many PDUs", HFILL }},
+          "Length of the complete uploadblock in bytes, may be split into many PDUs", HFILL }},
         { &hf_s7comm_data_blockcontrol_functionstatus,
         { "Function Status", "s7comm.param.blockcontrol.functionstatus", FT_UINT8, BASE_HEX, NULL, 0x0,
           "0=no error, 1=more data, 2=error", HFILL }},
@@ -5798,7 +5833,7 @@ proto_register_s7comm (void)
           "More data of the block/file can be retrieved with another request", HFILL }},
         { &hf_s7comm_data_blockcontrol_functionstatus_error,
         { "Error", "s7comm.param.blockcontrol.functionstatus.error", FT_BOOLEAN, 8, NULL, 0x02,
-          "An error occured", HFILL }},
+          "An error occurred", HFILL }},
 
         /* NC programming functions */
         { &hf_s7comm_data_ncprg_unackcount,
@@ -5938,7 +5973,7 @@ proto_register_s7comm (void)
           NULL, HFILL }},
         { &hf_s7comm_cpu_alarm_query_completelen,
         { "Complete data length", "s7comm.alarm.query.complete_length", FT_UINT32, BASE_DEC, NULL, 0x0,
-          "Complete data length (with ALARM_S this is 0xffff, as they might be splitted into many telegrams)", HFILL }},
+          "Complete data length (with ALARM_S this is 0xffff, as they might be split into many telegrams)", HFILL }},
         { &hf_s7comm_cpu_alarm_query_datasetlen,
         { "Length of dataset", "s7comm.alarm.query.dataset_length", FT_UINT8, BASE_DEC, NULL, 0x0,
           NULL, HFILL }},
@@ -6059,6 +6094,13 @@ proto_register_s7comm (void)
           NULL, HFILL }},
     };
 
+    static ei_register_info ei[] = {
+        { &ei_s7comm_data_blockcontrol_block_num_invalid, { "s7comm.data.blockcontrol.block_number.invalid", PI_MALFORMED, PI_ERROR,
+            "Block number must be a string containing an integer", EXPFILL }},
+        { &ei_s7comm_ud_blockinfo_block_num_ascii_invalid, { "s7comm.data.blockinfo.block_number.invalid", PI_MALFORMED, PI_ERROR,
+            "Block info must be a string containing an integer", EXPFILL }}
+    };
+
     static gint *ett[] = {
         &ett_s7comm,
         &ett_s7comm_header,
@@ -6094,6 +6136,9 @@ proto_register_s7comm (void)
     s7comm_register_szl_types(proto_s7comm);
 
     proto_register_subtree_array(ett, array_length (ett));
+
+    expert_s7comm = expert_register_protocol(proto_s7comm);
+    expert_register_field_array(expert_s7comm, ei, array_length(ei));
 }
 
 /* Register this protocol */

@@ -131,8 +131,6 @@ AC_DEFUN([AC_WIRESHARK_PCAP_BREAKLOOP_TRY_LINK],
 #
 AC_DEFUN([AC_WIRESHARK_PCAP_CHECK],
 [
-	AC_WIRESHARK_PUSH_FLAGS
-
 	if test -z "$pcap_dir"
 	then
 	  # Pcap header checks
@@ -184,7 +182,8 @@ AC_DEFUN([AC_WIRESHARK_PCAP_CHECK],
 	    # but we may have to look for the header in a "pcap"
 	    # subdirectory of "/usr/include" or "/usr/local/include",
 	    # as some systems apparently put "pcap.h" in a "pcap"
-	    # subdirectory, and we also check "$prefix/include" - and
+	    # subdirectory without also providing a "pcap.h" in the top-level
+	    # include directory, and we also check "$prefix/include" - and
 	    # "$prefix/include/pcap", in case $prefix is set to
 	    # "/usr/include" or "/usr/local/include".
 	    #
@@ -376,7 +375,7 @@ install a newer version of the header file.])
 		AC_LANG_SOURCE(
 		  [[
 		    #include <pcap.h>
-		    main()
+		    int main()
 		    {
 		      pcap_if_t *devpointer;
 		      char errbuf[1];
@@ -415,7 +414,6 @@ install a newer version of the header file.])
 	  AC_CHECK_FUNCS(bpf_image pcap_set_tstamp_precision)
 	fi
 
-	AC_WIRESHARK_POP_FLAGS
 	LIBS="$ac_save_LIBS"
 ])
 
@@ -423,12 +421,10 @@ AC_DEFUN([AC_WIRESHARK_PCAP_REMOTE_CHECK],
 [
     ac_save_LIBS="$LIBS"
     LIBS="$PCAP_LIBS $LIBS"
-    AC_DEFINE(HAVE_REMOTE, 1, [Define to 1 to enable remote
-              capturing feature in WinPcap library])
     AC_CHECK_FUNCS(pcap_open)
     if test $ac_cv_func_pcap_open = "yes" ; then
         AC_DEFINE(HAVE_PCAP_REMOTE, 1,
-            [Define to 1 if you have WinPcap remote capturing support and prefer to use these new API features.])
+            [Define to 1 if you have libpcap/WinPcap remote capturing support and prefer to use these new API features.])
     fi
     AC_CHECK_FUNCS(pcap_setsampling)
     LIBS="$ac_save_LIBS"
@@ -497,17 +493,37 @@ AC_DEFUN([AC_WIRESHARK_ZLIB_CHECK],
 	then
 		#
 		# Well, we at least have the zlib header file.
+		#
 		# We link with zlib to support uncompression of
 		# gzipped network traffic, e.g. in an HTTP request
 		# or response body.
+		#
+		# Check for inflate() in zlib, to make sure the
+		# zlib library is usable.  For example, on at
+		# least some versions of Fedora, if you have a
+		# 64-bit machine, have both the 32-bit and 64-bit
+		# versions of the run-time zlib package installed,
+		# and have only the *32-bit* version of the zlib
+		# development package installed, it'll find the
+		# header, and think it can use zlib, and will use
+		# it in subsequent tests, but it'll try and link
+		# 64-bit test programs with the 32-bit library,
+		# causing those tests to falsely fail.  Hilarity
+		# ensues.
 		#
 		if test "x$zlib_dir" != "x"
 		then
 		  WS_CPPFLAGS="$WS_CPPFLAGS -I$zlib_dir/include"
 		  AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, $zlib_dir/lib)
 		fi
-		LIBS="-lz $LIBS"
 		AC_DEFINE(HAVE_ZLIB, 1, [Define to use zlib library])
+		#
+		# Check for "inflate()" in zlib to make sure we can
+		# link with it.
+		#
+		AC_CHECK_LIB(z, inflate,,
+		    AC_MSG_ERROR([zlib.h found but linking with -lz failed to find inflate(); do you have the right developer package installed (32-bit vs. 64-bit)?]))
+
 		#
 		# Check for "inflatePrime()" in zlib, which we need
 		# in order to read compressed capture files.
@@ -979,9 +995,10 @@ AC_DEFUN([AC_WIRESHARK_KRB5_CHECK],
 		    fi
 		    AC_TRY_LINK(
 			[
+#	include <krb5.h>
 			],
 			[
-			    krb5_kt_resolve();
+			    krb5_kt_resolve(0, 0, 0);
 			],
 			[
 			    #
@@ -1043,7 +1060,7 @@ AC_DEFUN([AC_WIRESHARK_KRB5_CHECK],
 			    #include <krb5.h>
 			    #include <stdio.h>
 
-			    main()
+			    int main()
 			    {
 			      printf("%u\n", KEYTYPE_ARCFOUR_56);
 			    }
@@ -1121,6 +1138,11 @@ AC_DEFUN([AC_WIRESHARK_GEOIP_CHECK],
 				AC_DEFINE(HAVE_GEOIP_V6, 1, [Define if GeoIP supports IPv6 (GeoIP 1.4.5 and later)])
 			  ],,
 			)
+			AC_CHECK_LIB(GeoIP, GeoIP_free,
+			  [
+				AC_DEFINE(HAVE_GEOIP_FREE, 1, [Define if GeoIP has GeoIP_free (not available upstream with 1.6.10 or earlier)])
+			  ],,
+			)
 		fi
 	else
 		AC_MSG_RESULT(not required)
@@ -1170,6 +1192,34 @@ AC_DEFUN([AC_WIRESHARK_LIBSSH_CHECK],
 	fi
 ])
 
+#
+# AC_WIRESHARK_NGHTTP2_CHECK
+#
+AC_DEFUN([AC_WIRESHARK_NGHTTP2_CHECK],
+[
+	want_nghttp2=defaultyes
+
+	if test "x$want_nghttp2" = "xdefaultyes"; then
+		want_nghttp2=yes
+	fi
+
+	if test "x$want_nghttp2" = "xyes"; then
+		AC_CHECK_LIB(nghttp2, nghttp2_hd_inflate_new,
+			[
+				AC_CHECK_HEADERS(nghttp2/nghttp2.h,
+					[
+						NGHTTP2_LIBS=-lnghttp2
+						AC_DEFINE(HAVE_NGHTTP2, 1, [Define to use nghttp2 library])
+						have_good_nghttp2=yes
+					],,
+				)
+			],,
+		)
+	else
+		AC_MSG_RESULT(not required)
+	fi
+])
+
 #AC_WIRESHARK_LDFLAGS_CHECK
 #
 # $1 : ldflag(s) to test
@@ -1185,7 +1235,7 @@ LDFLAGS="$LDFLAGS $LD_OPTION"
 can_add_to_ldflags=""
 AC_LINK_IFELSE(
   [
-    AC_LANG_SOURCE([[main() { return; }]])
+    AC_LANG_SOURCE([[int main() { return 0; }]])
   ],
   [
     AC_MSG_RESULT(yes)
@@ -1801,7 +1851,7 @@ AC_DEFUN([AC_WIRESHARK_QT_CHECK],
 
 		#
 		# While we're at it, look for QtMacExtras.  (Presumably
-		# if we're not building for OS X, it won't be present.)
+		# if we're not building for macOS, it won't be present.)
 		#
 		# XXX - is there anything in QtX11Extras or QtWinExtras
 		# that we should be using?
@@ -1891,4 +1941,164 @@ AC_DEFUN([AC_WIRESHARK_QT_TOOL_CHECK_LRELEASE],
       AC_MSG_ERROR([$LRELEASE -version returned non-zero exit status])
     ])
   AC_MSG_RESULT([ok, $lrelease_version])
+])
+
+#
+# AC_WIRESHARK_LZ4_CHECK
+#
+AC_DEFUN([AC_WIRESHARK_LZ4_CHECK],
+[
+	AC_WIRESHARK_PUSH_FLAGS
+
+	if test "x$lz4_dir" != "x"
+	then
+	  #
+	  # The user specified a directory in which lz4 resides,
+	  # so add the "include" subdirectory of that directory to
+	  # the include file search path and the "lib" subdirectory
+	  # of that directory to the library search path.
+	  #
+	  # XXX - if there's also a lz4 in a directory that's
+	  # already in CPPFLAGS or LDFLAGS, this won't make us find
+	  # the version in the specified directory, as the compiler
+	  # and/or linker will search that other directory before it
+	  # searches the specified directory.
+	  #
+	  LZ4_CFLAGS="-I$lz4_dir/include"
+	fi
+
+	#
+	# Make sure we have "lz4.h".  If we don't, it means we probably
+	# don't have lz4, so don't use it.
+	#
+	AC_CHECK_HEADER(lz4.h,,
+	  [
+	    if test "x$lz4_dir" != "x"
+	    then
+	      #
+	      # The user used "--with-lz4=" to specify a directory
+	      # containing lz4, but we didn't find the header file
+	      # there; that either means they didn't specify the
+	      # right directory or are confused about whether lz4
+	      # is, in fact, installed.  Report the error and give up.
+	      #
+	      AC_MSG_ERROR([lz4 header not found in directory specified in --with-lz4])
+	    else
+	      if test "x$want_lz4" = "xyes"
+	      then
+		#
+		# The user tried to force us to use the library, but we
+		# couldn't find the header file; report an error.
+		#
+		AC_MSG_ERROR(Header file lz4.h not found.)
+	      else
+		#
+		# We couldn't find the header file; don't use the
+		# library, as it's probably not present.
+		#
+		want_lz4=no
+	      fi
+	    fi
+	  ])
+
+	if test "x$want_lz4" != "xno"
+	then
+		#
+		# Well, we at least have the lz4 header file.
+		# We link with lz4 to support uncompression of
+		# CQL traffic.
+		#
+		LZ4_LIBS="-llz4"
+		ac_save_LIBS="$LIBS"
+		LIBS="$LZ4_LIBS $LIBS"
+		AC_DEFINE(HAVE_LZ4, 1, [Define to use lz4 library])
+		#
+		# Check for "LZ4_decompress_safe()" in lz4, which we need
+		# in order to read compressed capture files.
+		#
+		AC_CHECK_FUNCS(LZ4_decompress_safe)
+		LIBS="$ac_save_LIBS"
+	fi
+
+	AC_WIRESHARK_POP_FLAGS
+])
+
+#
+# AC_WIRESHARK_SNAPPY_CHECK
+#
+AC_DEFUN([AC_WIRESHARK_SNAPPY_CHECK],
+[
+	AC_WIRESHARK_PUSH_FLAGS
+
+	if test "x$snappy_dir" != "x"
+	then
+	  #
+	  # The user specified a directory in which snappy resides,
+	  # so add the "include" subdirectory of that directory to
+	  # the include file search path and the "lib" subdirectory
+	  # of that directory to the library search path.
+	  #
+	  # XXX - if there's also a snappy in a directory that's
+	  # already in CPPFLAGS or LDFLAGS, this won't make us find
+	  # the version in the specified directory, as the compiler
+	  # and/or linker will search that other directory before it
+	  # searches the specified directory.
+	  #
+	  SNAPPY_CFLAGS="-I$snappy_dir/include"
+	fi
+
+	#
+	# Make sure we have "snappy-c.h".  If we don't, it means we probably
+	# don't have snappy, so don't use it.
+	#
+	AC_CHECK_HEADER(snappy-c.h,,
+	  [
+	    if test "x$snappy_dir" != "x"
+	    then
+	      #
+	      # The user used "--with-snappy=" to specify a directory
+	      # containing snappy, but we didn't find the header file
+	      # there; that either means they didn't specify the
+	      # right directory or are confused about whether snappy
+	      # is, in fact, installed.  Report the error and give up.
+	      #
+	      AC_MSG_ERROR([snappy-c.header not found in directory specified in --with-snappy])
+	    else
+	      if test "x$want_snappy" = "xyes"
+	      then
+		#
+		# The user tried to force us to use the library, but we
+		# couldn't find the header file; report an error.
+		#
+		AC_MSG_ERROR(Header file snappy-c.h not found.)
+	      else
+		#
+		# We couldn't find the header file; don't use the
+		# library, as it's probably not present.
+		#
+		want_snappy=no
+	      fi
+	    fi
+	  ])
+
+	if test "x$want_snappy" != "xno"
+	then
+		#
+		# Well, we at least have the snappy-c.header file.
+		# We link with snappy to support uncompression of
+		# compressed CQL traffic.
+		#
+		SNAPPY_LIBS=-lsnappy
+		ac_save_LIBS="$LIBS"
+		LIBS="$SNAPPY_LIBS $LIBS"
+		AC_DEFINE(HAVE_SNAPPY, 1, [Define to use snappy library])
+		#
+		# Check for "snappy_uncompress()" in snappy, which we need
+		# in order to read compressed capture files.
+		#
+		AC_CHECK_FUNCS(snappy_uncompress)
+		LIBS="$ac_save_LIBS"
+	fi
+
+	AC_WIRESHARK_POP_FLAGS
 ])

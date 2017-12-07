@@ -84,12 +84,14 @@
 #define VENDOR_COLUMBIA_UNIVERSITY  11862
 #define VENDOR_THE3GPP              10415
 #define VENDOR_GEMTEK_SYSTEMS       10529
+#define VENDOR_DACOM                11665
 #define VENDOR_FORTINET             12356
 #define VENDOR_VERIZON              12951
 #define VENDOR_PLIXER               13745
 #define VENDOR_WIFI_ALLIANCE        14122
 #define VENDOR_T_SYSTEMS_NOVA       16787
 #define VENDOR_CHINATELECOM_GUANZHOU 20942
+#define VENDOR_GIGAMON              26866
 #define VENDOR_CACE                 32622
 /* Greater than 32,767 need to be tagged unsigned. */
 #define VENDOR_NTOP                 35632u

@@ -278,7 +278,7 @@ proto_register_vxlan(void)
     proto_vxlan = proto_register_protocol("Virtual eXtensible Local Area Network", "VXLAN", "vxlan");
 
     /* Protocol registered just for Decode As */
-    proto_vxlan_gpe = proto_register_protocol("Virtual eXtensible Local Area Network (GPE)", "VXLAN (GPE)", "vxlan_gpe");
+    proto_vxlan_gpe = proto_register_protocol_in_name_only("Virtual eXtensible Local Area Network (GPE)", "VXLAN (GPE)", "vxlan_gpe", proto_vxlan, FT_PROTOCOL);
 
     /* Required function calls to register the header fields and subtrees used */
     proto_register_field_array(proto_vxlan, hf, array_length(hf));
@@ -306,8 +306,8 @@ proto_reg_handoff_vxlan(void)
 
     vxlan_handle = create_dissector_handle(dissect_vxlan, proto_vxlan);
     vxlan_gpe_handle = create_dissector_handle(dissect_vxlan_gpe, proto_vxlan_gpe);
-    dissector_add_uint("udp.port", UDP_PORT_VXLAN, vxlan_handle);
-    dissector_add_uint("udp.port", UDP_PORT_VXLAN_GPE, vxlan_gpe_handle);
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_VXLAN, vxlan_handle);
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_VXLAN_GPE, vxlan_gpe_handle);
 }
 
 /*

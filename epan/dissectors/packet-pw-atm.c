@@ -291,8 +291,8 @@ number_of_cells(const pwatm_mode_t mode
 		}
 		/*fallthrough*/
 	default:
-		DISSECTOR_ASSERT_NOT_REACHED();
 		*remainder_size = payload_size;
+		DISSECTOR_ASSERT_NOT_REACHED();
 		return 0;
 	}
 
@@ -428,7 +428,7 @@ dissect_payload_and_padding(
 				bytes_to_dissect = SIZEOF_ATM_CELL_PAYLOAD;
 			else
 				bytes_to_dissect = (payload_size - dissected);
-			tvb_3 = tvb_new_subset(tvb_2, 0, bytes_to_dissect, -1);
+			tvb_3 = tvb_new_subset_length_caplen(tvb_2, 0, bytes_to_dissect, -1);
 			/*aal5_sdu: disable filling columns after 1st (valid) oam cell*/
 			if (pd->mode == PWATM_MODE_AAL5_SDU && (pd->pw_cell_number > 0))
 			{
@@ -872,7 +872,7 @@ dissect_aal5_sdu(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* d
 			if (padding_size != 0)
 			{
 				tvbuff_t* tvb_3;
-				tvb_3 = tvb_new_subset(tvb_2, payload_size, padding_size, -1);
+				tvb_3 = tvb_new_subset_length_caplen(tvb_2, payload_size, padding_size, -1);
 				call_dissector(dh_padding, tvb_3, pinfo, tree);
 			}
 		}
@@ -1383,6 +1383,7 @@ dissect_cell_header(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void
 		case PWATM_MODE_AAL5_SDU:
 			DISSECTOR_ASSERT(pd->submode == PWATM_SUBMODE_ADMIN_CELL);
 			/*fallthrough for ATM admin cell submode only*/
+			/* FALL THROUGH */
 		case PWATM_MODE_N1_CW:
 		case PWATM_MODE_N1_NOCW:
 			pd->vpi		= (tvb_get_ntohs (tvb, 0) >> 4);
@@ -1613,7 +1614,7 @@ dissect_cell(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void * data
 		proto_tree* tree2;
 		tvbuff_t* tvb_d;
 		tree2 = proto_item_add_subtree(item, ett_cell);
-		tvb_d = tvb_new_subset(tvb, 0, dissect_size, -1);
+		tvb_d = tvb_new_subset_length_caplen(tvb, 0, dissect_size, -1);
 		call_data_dissector(tvb_d, pinfo, tree2);
 		item = proto_tree_add_int(tree2, hf_cell_payload_len, tvb, 0, 0, dissect_size);
 		PROTO_ITEM_SET_HIDDEN(item);
@@ -1902,9 +1903,13 @@ proto_register_pw_atm_ata(void)
 
 	proto_register_subtree_array(ett_array, array_length(ett_array));
 
-	register_dissector("mpls_pw_atm_control_word"	,dissect_control_word	,proto_control_word);
-	register_dissector("mpls_pw_atm_cell"	,dissect_cell		,proto_cell);
-	register_dissector("mpls_pw_atm_cell_header",dissect_cell_header	,proto_cell_header);
+	dh_control_word = register_dissector("mpls_pw_atm_control_word"	,dissect_control_word	,proto_control_word);
+	dh_cell = register_dissector("mpls_pw_atm_cell"	,dissect_cell		,proto_cell);
+	dh_cell_header = register_dissector("mpls_pw_atm_cell_header",dissect_cell_header	,proto_cell_header);
+	register_dissector("mpls_pw_atm_aal5_sdu"	,dissect_aal5_sdu	,proto_aal5_sdu);
+	register_dissector("mpls_pw_atm_11_or_aal5_pdu"	,dissect_11_or_aal5_pdu	,proto_11_or_aal5_pdu);
+	register_dissector("mpls_pw_atm_n1_cw"		,dissect_n1_cw		,proto_n1_cw);
+	register_dissector("mpls_pw_atm_n1_nocw"	,dissect_n1_nocw	,proto_n1_nocw);
 	{
 		static const char description_allow_cw_length_nonzero[] =
 			"Enable to allow non-zero Length in Control Word."
@@ -1955,18 +1960,15 @@ void
 proto_reg_handoff_pw_atm_ata(void)
 {
 	dissector_handle_t h;
-	h = create_dissector_handle( dissect_n1_cw, proto_n1_cw );
+	h = find_dissector("mpls_pw_atm_n1_cw");
 	dissector_add_for_decode_as( "mpls.label", h );
-	h = create_dissector_handle( dissect_n1_nocw, proto_n1_nocw );
+	h = find_dissector("mpls_pw_atm_n1_nocw");
 	dissector_add_for_decode_as( "mpls.label", h );
-	h = create_dissector_handle( dissect_11_or_aal5_pdu, proto_11_or_aal5_pdu );
+	h = find_dissector("mpls_pw_atm_11_or_aal5_pdu");
 	dissector_add_for_decode_as( "mpls.label", h );
-	h = create_dissector_handle( dissect_aal5_sdu, proto_aal5_sdu );
+	h = find_dissector("mpls_pw_atm_aal5_sdu");
 	dissector_add_for_decode_as( "mpls.label", h );
 
-	dh_cell		   = find_dissector("mpls_pw_atm_cell");
-	dh_cell_header	   = find_dissector("mpls_pw_atm_cell_header");
-	dh_control_word	   = find_dissector("mpls_pw_atm_control_word");
 	dh_atm_truncated   = find_dissector("atm_pw_truncated");
 	dh_atm_untruncated = find_dissector("atm_pw_untruncated");
 	dh_atm_oam_cell	   = find_dissector("atm_pw_oam_cell");

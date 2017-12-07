@@ -31,6 +31,7 @@
 #include "wsutil/str_util.h"
 
 #include "qt_ui_utils.h"
+#include "timeline_delegate.h"
 #include "wireshark_application.h"
 
 #include <QCheckBox>
@@ -91,7 +92,7 @@ ConversationDialog::ConversationDialog(QWidget &parent, CaptureFile &cf, int cli
     }
 
     // Bring the command-line specified type to the front.
-    if (get_conversation_by_proto_id(cli_proto_id)) {
+    if ((cli_proto_id > 0) && (get_conversation_by_proto_id(cli_proto_id))) {
         conv_protos.removeAll(cli_proto_id);
         conv_protos.prepend(cli_proto_id);
     }
@@ -164,6 +165,12 @@ bool ConversationDialog::addTrafficTable(register_ct_t* table)
 
     trafficTableTabWidget()->addTab(conv_tree, table_name);
 
+<<<<<<< HEAD
+=======
+    conv_tree->setItemDelegateForColumn(CONV_COLUMN_START, new TimelineDelegate(conv_tree));
+    conv_tree->setItemDelegateForColumn(CONV_COLUMN_DURATION, new TimelineDelegate(conv_tree));
+
+>>>>>>> upstream/master-2.4
     connect(conv_tree, SIGNAL(itemSelectionChanged()),
             this, SLOT(conversationSelectionChanged()));
     connect(conv_tree, SIGNAL(titleChanged(QWidget*,QString)),
@@ -335,17 +342,22 @@ public:
         conv_array_(conv_array),
         conv_idx_(conv_idx),
         resolve_names_ptr_(resolve_names_ptr)
-    {}
+    {
+        QString timeline_tt = QObject::tr("Bars show the relative timeline for each conversation.");
+        setToolTip(CONV_COLUMN_START, timeline_tt);
+        setToolTip(CONV_COLUMN_DURATION, timeline_tt);
+    }
 
     conv_item_t *convItem() {
         return &g_array_index(conv_array_, conv_item_t, conv_idx_);
     }
 
     virtual QVariant data(int column, int role) const {
-        if (role == Qt::DisplayRole) {
+        switch (role) {
+        case Qt::DisplayRole:
+        {
             // Column text cooked representation.
             conv_item_t *conv_item = &g_array_index(conv_array_, conv_item_t, conv_idx_);
-            if (!conv_item) return QVariant();
 
             bool resolve_names = false;
             if (resolve_names_ptr_ && *resolve_names_ptr_) resolve_names = true;
@@ -404,6 +416,37 @@ public:
             default:
                 return colData(column, resolve_names).toString();
             }
+            break;
+        }
+        case Qt::UserRole:
+        {
+            if (column != CONV_COLUMN_START && column != CONV_COLUMN_DURATION) break;
+
+            ConversationTreeWidget *ctw = qobject_cast<ConversationTreeWidget *>(treeWidget());
+            if (!ctw) break;
+
+            conv_item_t *conv_item = &g_array_index(conv_array_, conv_item_t, conv_idx_);
+            double start_time = nstime_to_sec(&conv_item->start_time);
+            double stop_time = nstime_to_sec(&conv_item->stop_time);
+
+            double span_s = ctw->maxRelStopTime() - ctw->minRelStartTime();
+            if (span_s <= 0) break;
+            int start_px = ctw->columnWidth(CONV_COLUMN_START);
+            int column_px = start_px + ctw->columnWidth(CONV_COLUMN_DURATION);
+
+            struct timeline_span span_px;
+            span_px.start = ((start_time - ctw->minRelStartTime()) * column_px) / span_s;
+            span_px.width = ((stop_time - start_time) * column_px) / span_s;
+
+            if (column == CONV_COLUMN_DURATION) {
+                span_px.start -= start_px;
+            }
+            return qVariantFromValue(span_px);
+
+            break;
+        }
+        default:
+            break;
         }
         return QTreeWidgetItem::data(column, role);
     }
@@ -412,10 +455,6 @@ public:
     // Return a QString, qulonglong, double, or invalid QVariant representing the raw column data.
     QVariant colData(int col, bool resolve_names) const {
         conv_item_t *conv_item = &g_array_index(conv_array_, conv_item_t, conv_idx_);
-
-        if (!conv_item) {
-            return QVariant();
-        }
 
         double duration = nstime_to_sec(&conv_item->stop_time) - nstime_to_sec(&conv_item->start_time);
         double bps_ab = 0, bps_ba = 0;
@@ -488,10 +527,6 @@ public:
         conv_item_t *conv_item = &g_array_index(conv_array_, conv_item_t, conv_idx_);
         conv_item_t *other_item = &g_array_index(other_row->conv_array_, conv_item_t, other_row->conv_idx_);
 
-        if (!conv_item || !other_item) {
-            return false;
-        }
-
         int sort_col = treeWidget()->sortColumn();
         double conv_duration = nstime_to_sec(&conv_item->stop_time) - nstime_to_sec(&conv_item->start_time);
         double other_duration = nstime_to_sec(&other_item->stop_time) - nstime_to_sec(&other_item->start_time);
@@ -551,7 +586,9 @@ conv_item_t *ConversationDialog::currentConversation()
 // TrafficTableTreeWidget / QTreeWidget subclass that allows tapping
 
 ConversationTreeWidget::ConversationTreeWidget(QWidget *parent, register_ct_t* table) :
-    TrafficTableTreeWidget(parent, table)
+    TrafficTableTreeWidget(parent, table),
+    min_rel_start_time_(0),
+    max_rel_stop_time_(0)
 {
     setColumnCount(CONV_NUM_COLUMNS);
     setUniformRowHeights(true);
@@ -662,6 +699,8 @@ void ConversationTreeWidget::tapReset(void *conv_hash_ptr)
 
     conv_tree->clear();
     reset_conversation_table_data(&conv_tree->hash_);
+    conv_tree->min_rel_start_time_ = 0;
+    conv_tree->max_rel_stop_time_ = 0;
 }
 
 void ConversationTreeWidget::tapDraw(void *conv_hash_ptr)
@@ -725,6 +764,11 @@ void ConversationTreeWidget::updateItems() {
         ConversationTreeWidgetItem *ctwi = new ConversationTreeWidgetItem(hash_.conv_array, i, &resolve_names_);
         new_items << ctwi;
 
+        if (i == 0) {
+            min_rel_start_time_ = nstime_to_sec(&(ctwi->convItem()->start_time));
+            max_rel_stop_time_ = nstime_to_sec(&(ctwi->convItem()->stop_time));
+        }
+
         for (int col = 0; col < columnCount(); col++) {
             switch (col) {
             case CONV_COLUMN_SRC_ADDR:
@@ -737,6 +781,20 @@ void ConversationTreeWidget::updateItems() {
         }
     }
     addTopLevelItems(new_items);
+
+    for (int i = 0; i < topLevelItemCount(); i++) {
+        ConversationTreeWidgetItem *ctwi = dynamic_cast<ConversationTreeWidgetItem *>(topLevelItem(i));
+
+        double item_rel_start = nstime_to_sec(&(ctwi->convItem()->start_time));
+        if (item_rel_start < min_rel_start_time_) {
+            min_rel_start_time_ = item_rel_start;
+        }
+
+        double item_rel_stop = nstime_to_sec(&(ctwi->convItem()->stop_time));
+        if (item_rel_stop > max_rel_stop_time_) {
+            max_rel_stop_time_ = item_rel_stop;
+        }
+    }
 
     setSortingEnabled(true);
 

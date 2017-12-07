@@ -46,6 +46,8 @@
 #include <epan/expert.h>
 #include <epan/tap.h>
 #include <epan/to_str.h>
+#include <epan/decode_as.h>
+#include <epan/proto_data.h>
 #include <wiretap/wtap.h>
 #include <wsutil/str_util.h>
 #include "packet-mtp3.h"
@@ -771,6 +773,7 @@ typedef struct _sccp_user_t {
 static sccp_user_t *sccp_users;
 static guint        num_sccp_users;
 
+static dissector_handle_t sccp_handle;
 static dissector_handle_t data_handle;
 static dissector_handle_t tcap_handle;
 static dissector_handle_t ranap_handle;
@@ -825,6 +828,18 @@ static const value_string assoc_protos[] = {
     /*g_warning("Frame %d not protocol %d @ line %d", frame_num, my_mtp3_standard, __LINE__);*/ \
     return FALSE; \
   } while (0)
+
+
+static void sccp_prompt(packet_info *pinfo _U_, gchar* result)
+{
+  g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Dissect SSN %d as",
+     GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, proto_sccp, 0)));
+}
+
+static gpointer sccp_value(packet_info *pinfo)
+{
+  return p_get_proto_data(pinfo->pool, pinfo, proto_sccp, 0);
+}
 
 static gboolean
 sccp_called_calling_looks_valid(guint32 frame_num _U_, tvbuff_t *tvb, guint8 my_mtp3_standard, gboolean is_co)
@@ -2346,6 +2361,9 @@ dissect_sccp_data_param(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, scc
 
   }
 
+  /* Save SSN for Decode As */
+  p_add_proto_data(pinfo->pool, pinfo, proto_sccp, 0, GUINT_TO_POINTER((guint)ssn));
+
   if ((ssn != INVALID_SSN) && dissector_try_uint_new(sccp_ssn_dissector_table, ssn, tvb, pinfo, tree, TRUE, sccp_info)) {
     return;
   }
@@ -3434,17 +3452,20 @@ sccp_users_update_cb(void *r, char **err)
   struct _sccp_ul *c;
   range_t *empty;
 
-  empty = range_empty();
+  empty = range_empty(NULL);
   if (ranges_are_equal(u->called_pc, empty)) {
           *err = g_strdup("Must specify a PC");
+          wmem_free(NULL, empty);
           return FALSE;
   }
 
   if (ranges_are_equal(u->called_ssn, empty)) {
           *err = g_strdup("Must specify an SSN");
+          wmem_free(NULL, empty);
           return FALSE;
   }
 
+  wmem_free(NULL, empty);
   for (c=user_list; c->handlep; c++) {
     if (c->id == u->user) {
       u->uses_tcap = c->uses_tcap;
@@ -3470,9 +3491,9 @@ sccp_users_copy_cb(void *n, const void *o, size_t siz _U_)
   un->handlep   = u->handlep;
 
   if (u->called_pc)
-    un->called_pc  = range_copy(u->called_pc);
+    un->called_pc  = range_copy(NULL, u->called_pc);
   if (u->called_ssn)
-    un->called_ssn = range_copy(u->called_ssn);
+    un->called_ssn = range_copy(NULL, u->called_ssn);
 
   return n;
 }
@@ -3481,8 +3502,8 @@ static void
 sccp_users_free_cb(void *r)
 {
   sccp_user_t *u = (sccp_user_t *)r;
-  if (u->called_pc) g_free(u->called_pc);
-  if (u->called_ssn) g_free(u->called_ssn);
+  if (u->called_pc) wmem_free(NULL, u->called_pc);
+  if (u->called_ssn) wmem_free(NULL, u->called_ssn);
 }
 
 
@@ -3498,14 +3519,6 @@ static void
 init_sccp(void)
 {
   next_assoc_id = 1;
-  reassembly_table_init (&sccp_xudt_msg_reassembly_table,
-                         &addresses_reassembly_table_functions);
-}
-
-static void
-cleanup_sccp(void)
-{
-  reassembly_table_destroy(&sccp_xudt_msg_reassembly_table);
 }
 
 /* Register the protocol with Wireshark */
@@ -4059,6 +4072,12 @@ proto_register_sccp(void)
      { &ei_sccp_gt_digits_missing, { "sccp.gt_digits_missing", PI_MALFORMED, PI_ERROR, "Address digits missing", EXPFILL }},
   };
 
+  /* Decode As handling */
+  static build_valid_func sccp_da_build_value[1] = {sccp_value};
+  static decode_as_value_t sccp_da_values = {sccp_prompt, 1, sccp_da_build_value};
+  static decode_as_t sccp_da = {"sccp", "SCCP SSN", "sccp.ssn", 1, 0, &sccp_da_values, NULL, NULL,
+                                    decode_as_default_populate_list, decode_as_default_reset, decode_as_default_change, NULL};
+
   module_t *sccp_module;
   expert_module_t* expert_sccp;
 
@@ -4076,13 +4095,12 @@ proto_register_sccp(void)
                              &num_sccp_users, UAT_AFFECTS_DISSECTION,
                              "ChSccpUsers", sccp_users_copy_cb,
                              sccp_users_update_cb, sccp_users_free_cb,
-                             NULL, users_flds );
+                             NULL, NULL, users_flds );
 
   /* Register the protocol name and description */
-  proto_sccp = proto_register_protocol("Signalling Connection Control Part",
-                                       "SCCP", "sccp");
+  proto_sccp = proto_register_protocol("Signalling Connection Control Part", "SCCP", "sccp");
 
-  register_dissector("sccp", dissect_sccp, proto_sccp);
+  sccp_handle = register_dissector("sccp", dissect_sccp, proto_sccp);
 
   /* Required function calls to register the header fields and subtrees used */
   proto_register_field_array(proto_sccp, hf, array_length(hf));
@@ -4136,24 +4154,22 @@ proto_register_sccp(void)
                                    &default_payload);
 
   register_init_routine(&init_sccp);
-  register_cleanup_routine(&cleanup_sccp);
+  reassembly_table_register(&sccp_xudt_msg_reassembly_table,
+                         &addresses_reassembly_table_functions);
 
   assocs = wmem_tree_new_autoreset(wmem_epan_scope(), wmem_file_scope());
 
   sccp_tap = register_tap("sccp");
 
+  register_decode_as(&sccp_da);
 }
 
 void
 proto_reg_handoff_sccp(void)
 {
-  dissector_handle_t sccp_handle;
-
   static gboolean initialised = FALSE;
 
   if (!initialised) {
-    sccp_handle = find_dissector("sccp");
-
     dissector_add_uint("wtap_encap", WTAP_ENCAP_SCCP, sccp_handle);
     dissector_add_uint("mtp3.service_indicator", MTP_SI_SCCP, sccp_handle);
     dissector_add_string("tali.opcode", "sccp", sccp_handle);

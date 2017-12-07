@@ -61,7 +61,7 @@ sub field2name($)
 
 	$field =~ s/^(_)*//g;		# Remove any starting underscores
 	$field =~ s/_/ /g;		# Replace underscores with spaces
-	$field =~ s/(\w+)/\u\L$1/g;	# Capitalise each word
+	$field =~ s/(\w+)/\u$1/g;	# Capitalise each word
 
 	return $field;
 }
@@ -420,7 +420,7 @@ sub ElementLevel($$$$$$$$)
 		# continue to dissect handmarshalled stuff with pidl
 		$self->pidl_code("di->call_data->flags &= ~DCERPC_IS_NDR64;");
 
-		$self->pidl_code("subtvb = tvb_new_subset(tvb, offset, (const gint)size, -1);");
+		$self->pidl_code("subtvb = tvb_new_subset_length_caplen(tvb, offset, (const gint)size, -1);");
 		if ($param ne 0) {
 			$self->pidl_code("$myname\_(subtvb, 0, pinfo, tree, di, drep, $param);");
 		} else {
@@ -596,7 +596,7 @@ sub Function($$$)
 	$self->pidl_code("{");
 	$self->indent;
 	if ( not defined($fn->{RETURN_TYPE})) {
-	} elsif ($fn->{RETURN_TYPE} eq "NTSTATUS" or $fn->{RETURN_TYPE} eq "WERROR")
+	} elsif ($fn->{RETURN_TYPE} eq "NTSTATUS" or $fn->{RETURN_TYPE} eq "WERROR" or $fn->{RETURN_TYPE} eq "HRESULT")
 	{
 		$self->pidl_code("guint32 status;\n");
 	} elsif (my $type = getType($fn->{RETURN_TYPE})) {
@@ -632,6 +632,11 @@ sub Function($$$)
 		$self->pidl_code("\tcol_append_fstr(pinfo->cinfo, COL_INFO, \", Error: %s\", val_to_str(status, WERR_errors, \"Unknown DOS error 0x%08x\"));\n");
 
 		$return_types{$ifname}->{"werror"} = ["WERROR", "Windows Error"];
+	} elsif ($fn->{RETURN_TYPE} eq "HRESULT") {
+		$self->pidl_code("offset = dissect_ndr_uint32(tvb, offset, pinfo, tree, di, drep, hf\_$ifname\_hresult, &status);\n");
+		$self->pidl_code("if (status != 0)");
+		$self->pidl_code("\tcol_append_fstr(pinfo->cinfo, COL_INFO, \", Error: %s\", val_to_str(status, HRES_errors, \"Unknown HRES error 0x%08x\"));\n");
+		$return_types{$ifname}->{"hresult"} = ["HRESULT", "HRES Windows Error"];
 	} elsif (my $type = getType($fn->{RETURN_TYPE})) {
 		if ($type->{DATA}->{TYPE} eq "ENUM") {
 			my $return_type = "g".Parse::Pidl::Typelist::enum_type_fn($type->{DATA});
@@ -1125,6 +1130,8 @@ sub Initialize($$)
 		"offset = PIDL_dissect_uint32(tvb, offset, pinfo, tree, di, drep, \@HF\@, \@PARAM\@);","FT_UINT32", "BASE_DEC", 0, "VALS(WERR_errors)", 4);
 	$self->register_type("NTSTATUS",
 		"offset = PIDL_dissect_uint32(tvb, offset, pinfo, tree, di, drep, \@HF\@, \@PARAM\@);","FT_UINT32", "BASE_DEC", 0, "VALS(NT_errors)", 4);
+	$self->register_type("HRESULT",
+		"offset = PIDL_dissect_uint32(tvb, offset, pinfo, tree, di, drep, \@HF\@, \@PARAM\@);","FT_UINT32", "BASE_DEC", 0, "VALS(HRES_errors)", 4);
 	$self->register_type("ipv6address", "proto_tree_add_item(tree, \@HF\@, tvb, offset, 16, ENC_NA); offset += 16;", "FT_IPv6", "BASE_NONE", 0, "NULL", 16);
 	$self->register_type("ipv4address", "proto_tree_add_item(tree, \@HF\@, tvb, offset, 4, ENC_BIG_ENDIAN); offset += 4;", "FT_IPv4", "BASE_NONE", 0, "NULL", 4);
 
@@ -1322,9 +1329,8 @@ sub DumpHfList($)
 
 	foreach (sort {$a->{INDEX} cmp $b->{INDEX}} values %{$self->{conformance}->{header_fields}})
 	{
-		$res .= "\t{ &$_->{INDEX},
-		{ ".make_str($_->{NAME}).", ".make_str($_->{FILTER}).", $_->{FT_TYPE}, $_->{BASE_TYPE}, $_->{VALSSTRING}, $_->{MASK}, ".make_str_or_null($_->{BLURB}).", HFILL }},
-";
+		$res .= "\t{ &$_->{INDEX},\n".
+		"\t  { ".make_str($_->{NAME}).", ".make_str($_->{FILTER}).", $_->{FT_TYPE}, $_->{BASE_TYPE}, $_->{VALSSTRING}, $_->{MASK}, ".make_str_or_null($_->{BLURB}).", HFILL }},\n";
 	}
 
 	return $res."\t};\n";

@@ -424,7 +424,8 @@ wtap_open_return_val lanalyzer_open(wtap *wth, int *err, gchar **err_info)
                   return WTAP_OPEN_MINE;
 
             default:
-                  if (file_seek(wth->fh, record_length, SEEK_CUR, err) == -1) {
+                  /* Unknown record type - skip it */
+                  if (!wtap_read_bytes(wth->fh, NULL, record_length, err, err_info)) {
                         return WTAP_OPEN_ERROR;
                   }
                   break;
@@ -487,7 +488,7 @@ static gboolean lanalyzer_read_trace_record(wtap *wth, FILE_T fh,
       packet_size = pletoh16(&descriptor[6]);
       /*
        * The maximum value of packet_size is 65535, which is less than
-       * WTAP_MAX_PACKET_SIZE will ever be, so we don't need to check
+       * WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't need to check
        * it.
        */
 

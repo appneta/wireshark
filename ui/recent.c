@@ -40,6 +40,7 @@
 #include "ui/simple_dialog.h"
 
 #include <wsutil/file_util.h>
+#include <wsutil/glib-compat.h>
 
 #define RECENT_KEY_MAIN_TOOLBAR_SHOW          "gui.toolbar_main_show"
 #define RECENT_KEY_FILTER_TOOLBAR_SHOW        "gui.filter_toolbar_show"
@@ -73,6 +74,8 @@
 #define RECENT_GUI_ENDPOINT_TABS              "gui.endpoint_tabs"
 #define RECENT_GUI_RLC_PDUS_FROM_MAC_FRAMES   "gui.rlc_pdus_from_mac_frames"
 #define RECENT_GUI_CUSTOM_COLORS              "gui.custom_colors"
+#define RECENT_GUI_TOOLBAR_SHOW               "gui.additional_toolbar_show"
+#define RECENT_GUI_INTERFACE_TOOLBAR_SHOW     "gui.interface_toolbar_show"
 
 #define RECENT_GUI_GEOMETRY                   "gui.geom."
 
@@ -384,6 +387,10 @@ static GHashTable *remote_host_list=NULL;
 
 int recent_get_remote_host_list_size(void)
 {
+  if (remote_host_list == NULL) {
+    /* No entries exist. */
+    return 0;
+  }
   return g_hash_table_size (remote_host_list);
 }
 
@@ -398,7 +405,7 @@ void recent_add_remote_host(gchar *host, struct remote_host *rh)
 static gboolean
 free_remote_host (gpointer key _U_, gpointer value, gpointer user _U_)
 {
-  struct remote_host *rh = value;
+  struct remote_host *rh = (struct remote_host *) value;
 
   g_free (rh->r_host);
   g_free (rh->remote_port);
@@ -408,16 +415,18 @@ free_remote_host (gpointer key _U_, gpointer value, gpointer user _U_)
   return TRUE;
 }
 
-GHashTable *get_remote_host_list(void)
+void
+recent_remote_host_list_foreach(GHFunc func, gpointer user_data)
 {
-  return remote_host_list;
+  if (remote_host_list != NULL)
+    g_hash_table_foreach(remote_host_list, func, user_data);
 }
 
 static void
 recent_print_remote_host (gpointer key _U_, gpointer value, gpointer user)
 {
-  FILE *rf = user;
-  struct remote_host_info *ri = value;
+  FILE *rf = (FILE *)user;
+  struct remote_host_info *ri = (struct remote_host_info *)value;
 
   fprintf (rf, RECENT_KEY_REMOTE_HOST ": %s,%s,%d\n", ri->remote_host, ri->remote_port, ri->auth_type);
 }
@@ -432,7 +441,7 @@ capture_remote_combo_recent_write_all(FILE *rf)
 }
 
 
-void free_remote_host_list(void)
+void recent_free_remote_host_list(void)
 {
   g_hash_table_foreach_remove(remote_host_list, free_remote_host, NULL);
 }
@@ -454,7 +463,7 @@ capture_remote_combo_add_recent(const gchar *s)
 {
   GList *vals = prefs_get_string_list (s);
   GList *valp = vals;
-  gint   auth_type;
+  capture_auth auth_type;
   char  *p;
   struct remote_host *rh;
 
@@ -465,10 +474,10 @@ capture_remote_combo_add_recent(const gchar *s)
     remote_host_list = g_hash_table_new (g_str_hash, g_str_equal);
   }
 
-  rh = g_malloc (sizeof (*rh));
+  rh =(struct remote_host *) g_malloc (sizeof (*rh));
 
   /* First value is the host */
-  rh->r_host = g_strdup (valp->data);
+  rh->r_host = (gchar *)g_strdup ((const gchar *)valp->data);
   if (strlen(rh->r_host) == 0) {
     /* Empty remote host */
     g_free(rh->r_host);
@@ -480,7 +489,7 @@ capture_remote_combo_add_recent(const gchar *s)
 
   if (valp) {
     /* Found value 2, this is the port number */
-    rh->remote_port = g_strdup (valp->data);
+    rh->remote_port = (gchar *)g_strdup ((const gchar *)valp->data);
     valp = valp->next;
   } else {
     /* Did not find a port number */
@@ -489,7 +498,7 @@ capture_remote_combo_add_recent(const gchar *s)
 
   if (valp) {
     /* Found value 3, this is the authentication type */
-    auth_type = strtol(valp->data, &p, 0);
+    auth_type = (capture_auth)strtol((const gchar *)valp->data, &p, 0);
     if (p != valp->data && *p == '\0') {
       rh->auth_type = auth_type;
     }
@@ -852,6 +861,18 @@ write_profile_recent(void)
     fprintf(rf, RECENT_GUI_FILEOPEN_REMEMBERED_DIR ": %s\n", get_last_open_dir());
   }
 
+  fprintf(rf, "\n# Additional Toolbars shown\n");
+  fprintf(rf, "# List of additional toolbars to show.\n");
+  string_list = join_string_list(recent.gui_additional_toolbars);
+  fprintf(rf, RECENT_GUI_TOOLBAR_SHOW ": %s\n", string_list);
+  g_free(string_list);
+
+  fprintf(rf, "\n# Interface Toolbars show.\n");
+  fprintf(rf, "# List of interface toolbars to show.\n");
+  string_list = join_string_list(recent.interface_toolbars);
+  fprintf(rf, RECENT_GUI_INTERFACE_TOOLBAR_SHOW ": %s\n", string_list);
+  g_free(string_list);
+
   fclose(rf);
 
   /* XXX - catch I/O errors (e.g. "ran out of disk space") and return
@@ -1105,6 +1126,10 @@ read_set_recent_pair_static(gchar *key, const gchar *value,
       g_free (recent.gui_fileopen_remembered_dir);
     }
     recent.gui_fileopen_remembered_dir = g_strdup(value);
+  } else if (strcmp(key, RECENT_GUI_TOOLBAR_SHOW) == 0) {
+      recent.gui_additional_toolbars = prefs_get_string_list(value);
+  } else if (strcmp(key, RECENT_GUI_INTERFACE_TOOLBAR_SHOW) == 0) {
+      recent.interface_toolbars = prefs_get_string_list(value);
   }
 
   return PREFS_SET_OK;
@@ -1271,6 +1296,16 @@ recent_read_profile_static(char **rf_path_return, int *rf_errno_return)
   if (recent.gui_fileopen_remembered_dir) {
     g_free (recent.gui_fileopen_remembered_dir);
     recent.gui_fileopen_remembered_dir = NULL;
+  }
+
+  if (recent.gui_additional_toolbars) {
+      g_list_free_full (recent.gui_additional_toolbars, g_free);
+      recent.gui_additional_toolbars = NULL;
+  }
+
+  if (recent.interface_toolbars) {
+      g_list_free_full (recent.interface_toolbars, g_free);
+      recent.interface_toolbars = NULL;
   }
 
   /* Construct the pathname of the user's profile recent file. */

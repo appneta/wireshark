@@ -35,6 +35,7 @@
 #include <epan/dfilter/dfilter.h>
 #include <epan/column.h>
 #include <epan/packet.h>
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 
 /* Given a format number (as defined in column-utils.h), returns its equivalent
    string */
@@ -183,10 +184,10 @@ column_dump_column_formats(void)
   gint fmt;
 
   for (fmt = 0; fmt < NUM_COL_FMTS; fmt++) {
-    printf("%s\t%s\n", col_format_to_string(fmt), col_format_desc(fmt));
+    ws_debug_printf("%s\t%s\n", col_format_to_string(fmt), col_format_desc(fmt));
   }
 
-  printf("\nFor example, to print Wireshark's default columns with tshark:\n\n"
+  ws_debug_printf("\nFor example, to print Wireshark's default columns with tshark:\n\n"
 #ifdef _WIN32
   "tshark.exe -o \"gui.column.format:"
     "\\\"No.\\\",\\\"%%m\\\","
@@ -761,7 +762,7 @@ get_custom_field_tooltip (gchar *custom_field, gint occurrence)
         return g_strdup_printf("%s\n%s (%s)", proto_get_protocol_name(hfi->parent), hfi->name, hfi->abbrev);
     }
 
-    /* One given occurence */
+    /* One given occurrence */
     return g_strdup_printf("%s\n%s (%s#%d)", proto_get_protocol_name(hfi->parent), hfi->name, hfi->abbrev, occurrence);
 }
 

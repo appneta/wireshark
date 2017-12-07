@@ -721,7 +721,7 @@ status_capture_comment_update(void)
 
     status_capture_comment_hide(FALSE);
 
-    comment_str = cf_read_shb_comment(&cfile);
+    comment_str = cf_read_section_comment(&cfile);
 
     /* *comment_str==0x0 -> comment exists, but it's empty */
     if(comment_str!=NULL && *comment_str!=0x0){
@@ -1037,6 +1037,10 @@ statusbar_cf_callback(gint event, gpointer data, gpointer user_data _U_)
     case(cf_cb_file_retap_started):
         break;
     case(cf_cb_file_retap_finished):
+        break;
+    case(cf_cb_file_merge_started):
+        break;
+    case(cf_cb_file_merge_finished):
         break;
     case(cf_cb_file_fast_save_finished):
         break;

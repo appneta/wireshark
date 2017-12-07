@@ -620,7 +620,7 @@ dissect_dsmcc_un_session(tvbuff_t *tvb, packet_info *pinfo,
     sub_tree = proto_tree_add_subtree_format(tree, tvb, offset, -1,
             ett_dsmcc_payload, &pi, "User Network Message (Session) - %s",
             val_to_str(msg_id, dsmcc_un_sess_message_id_vals, "0x%x"));
-    col_append_sep_fstr(pinfo->cinfo, COL_INFO, NULL, "%s",
+    col_append_sep_str(pinfo->cinfo, COL_INFO, NULL,
             val_to_str(msg_id, dsmcc_un_sess_message_id_vals, "0x%x"));
 
     switch (msg_id) {
@@ -1230,7 +1230,7 @@ proto_reg_handoff_dsmcc(void)
     dissector_add_uint("mpeg_sect.tid", DSMCC_TID_DESC_LIST, dsmcc_ts_handle);
     dissector_add_uint("mpeg_sect.tid", DSMCC_TID_PRIVATE, dsmcc_ts_handle);
 
-    dissector_add_uint("tcp.port", DSMCC_TCP_PORT, dsmcc_tcp_handle);
+    dissector_add_uint_with_preference("tcp.port", DSMCC_TCP_PORT, dsmcc_tcp_handle);
 }
 
 /*

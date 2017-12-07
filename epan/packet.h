@@ -25,12 +25,14 @@
 
 #include "proto.h"
 #include "tvbuff.h"
+#include "epan.h"
 #include "value_string.h"
 #include "frame_data.h"
 #include "packet_info.h"
 #include "column-utils.h"
 #include "guid-utils.h"
 #include "tfs.h"
+#include "unit_strings.h"
 #include "ws_symbol_export.h"
 
 #ifdef __cplusplus
@@ -55,10 +57,6 @@ struct epan_range;
 #define	BYTES_ARE_IN_FRAME(offset, captured_len, len) \
 	((guint)(offset) + (guint)(len) > (guint)(offset) && \
 	 (guint)(offset) + (guint)(len) <= (guint)(captured_len))
-
-typedef struct _capture_packet_info {
-    GHashTable *counts;
-} capture_packet_info_t;
 
 extern void packet_init(void);
 extern void packet_cache_proto_handles(void);
@@ -215,8 +213,16 @@ WS_DLL_PUBLIC void dissector_dump_dissector_tables(void);
 WS_DLL_PUBLIC void dissector_add_uint(const char *name, const guint32 pattern,
     dissector_handle_t handle);
 
+/* Add an entry to a uint dissector table with "preference" automatically added. */
+WS_DLL_PUBLIC void dissector_add_uint_with_preference(const char *name, const guint32 pattern,
+    dissector_handle_t handle);
+
 /* Add an range of entries to a uint dissector table. */
 WS_DLL_PUBLIC void dissector_add_uint_range(const char *abbrev, struct epan_range *range,
+    dissector_handle_t handle);
+
+/* Add an range of entries to a uint dissector table with "preference" automatically added. */
+WS_DLL_PUBLIC void dissector_add_uint_range_with_preference(const char *abbrev, const char* range_str,
     dissector_handle_t handle);
 
 /* Delete the entry for a dissector in a uint dissector table
@@ -366,9 +372,17 @@ WS_DLL_PUBLIC dissector_handle_t dissector_get_guid_handle(
 WS_DLL_PUBLIC void dissector_add_for_decode_as(const char *name,
     dissector_handle_t handle);
 
+/* Same as dissector_add_for_decode_as, but adds preference for dissector table value */
+WS_DLL_PUBLIC void dissector_add_for_decode_as_with_preference(const char *name,
+    dissector_handle_t handle);
+
 /** Get the list of handles for a dissector table
  */
 WS_DLL_PUBLIC GSList *dissector_table_get_dissector_handles(dissector_table_t dissector_table);
+
+/** Get a handle to dissector out of a dissector table
+ */
+WS_DLL_PUBLIC dissector_handle_t dissector_table_get_dissector_handle(dissector_table_t dissector_table, gchar* short_name);
 
 /** Get a dissector table's type
  */
@@ -393,7 +407,7 @@ typedef struct heur_dtbl_entry {
 	protocol_t *protocol; /* this entry's protocol */
 	gchar *list_name;     /* the list name this entry is in the list of */
 	const gchar *display_name;     /* the string used to present heuristic to user */
-	const gchar *short_name;     /* string used for "internal" use to uniquely identify heuristic */
+	gchar *short_name;     /* string used for "internal" use to uniquely identify heuristic */
 	gboolean enabled;
 } heur_dtbl_entry_t;
 
@@ -630,6 +644,11 @@ WS_DLL_PUBLIC void register_init_routine(void (*func)(void));
  */
 WS_DLL_PUBLIC void register_cleanup_routine(void (*func)(void));
 
+/*
+ * Register a shutdown routine to call once just before program exit
+ */
+WS_DLL_PUBLIC void register_shutdown_routine(void (*func)(void));
+
 /* Initialize all data structures used for dissection. */
 void init_dissection(void);
 
@@ -668,13 +687,13 @@ WS_DLL_PUBLIC void add_new_data_source(packet_info *pinfo, tvbuff_t *tvb,
 /* Removes the last-added data source, if it turns out it wasn't needed */
 WS_DLL_PUBLIC void remove_last_data_source(packet_info *pinfo);
 
-
 /*
  * Return the data source name, tvb.
  */
 struct data_source;
 WS_DLL_PUBLIC char *get_data_source_name(const struct data_source *src);
 WS_DLL_PUBLIC tvbuff_t *get_data_source_tvb(const struct data_source *src);
+WS_DLL_PUBLIC tvbuff_t *get_data_source_tvb_by_name(packet_info *pinfo, const char *name);
 
 /*
  * Free up a frame's list of data sources.
@@ -743,14 +762,53 @@ WS_DLL_PUBLIC void dissector_dump_decodes(void);
 WS_DLL_PUBLIC void dissector_dump_heur_decodes(void);
 
 /*
- * post dissectors are to be called by packet-frame.c after every other
+ * postdissectors are to be called by packet-frame.c after every other
  * dissector has been called.
  */
-WS_DLL_PUBLIC void register_postdissector(dissector_handle_t);
+
+/*
+ * Register a postdissector; the argument is the dissector handle for it.
+ */
+WS_DLL_PUBLIC void register_postdissector(dissector_handle_t handle);
+
+/*
+ * Specify a set of hfids that the postdissector will need.
+ * The GArray is an array of hfids.
+ */
+WS_DLL_PUBLIC void set_postdissector_wanted_hfids(dissector_handle_t handle,
+    GArray *wanted_hfids);
+
+/*
+ * Deregister a postdissector.  Not for use in (post)dissectors or
+ * applications; only to be used by libwireshark itself.
+ */
 void deregister_postdissector(dissector_handle_t handle);
 
+/*
+ * Return TRUE if we have at least one postdissector, FALSE if not.
+ * Not for use in (post)dissectors or applications; only to be used
+ * by libwireshark itself.
+ */
 extern gboolean have_postdissector(void);
+
+/*
+ * Call all postdissectors, handing them the supplied arguments.
+ * Not for use in (post)dissectors or applications; only to be used
+ * by libwireshark itself.
+ */
 extern void call_all_postdissectors(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree);
+
+/*
+ * Return TRUE if at least one postdissector needs at least one hfid,
+ * FALSE otherwise.
+ */
+WS_DLL_PUBLIC gboolean postdissectors_want_hfids(void);
+
+/*
+ * Prime an epan_dissect_t with all the hfids wanted by postdissectors.
+ */
+WS_DLL_PUBLIC void
+prime_epan_dissect_with_postdissector_wanted_hfids(epan_dissect_t *edt);
 
 /** @} */
 

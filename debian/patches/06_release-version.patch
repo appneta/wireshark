@@ -4,7 +4,7 @@ Author: Balint Reczey <balint@balintreczey.hu>
 
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -770,7 +770,7 @@
+@@ -776,7 +776,7 @@
  # FORCE is the portable version of .PHONY
  FORCE:
  

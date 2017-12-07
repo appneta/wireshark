@@ -32,8 +32,6 @@
 
 #include <epan/print_stream.h>
 
-#include <epan/packet-range.h>
-
 #include "ws_symbol_export.h"
 
 #ifdef __cplusplus
@@ -46,14 +44,6 @@ typedef enum {
   PR_FMT_PS       /* postscript */
 } print_format_e;
 
-/* print_range, enum which frames should be printed */
-typedef enum {
-  print_range_selected_only,    /* selected frame(s) only (currently only one) */
-  print_range_marked_only,      /* marked frames only */
-  print_range_all_displayed,    /* all frames currently displayed */
-  print_range_all_captured      /* all frames in capture */
-} print_range_e;
-
 /* print_dissections, enum how the dissections should be printed */
 typedef enum {
   print_dissections_none,         /* no dissections at all */
@@ -62,29 +52,18 @@ typedef enum {
   print_dissections_expanded      /* all dissection details */
 } print_dissections_e;
 
-typedef struct {
-  print_stream_t *stream;       /* the stream to which we're printing */
-  print_format_e format;        /* plain text or PostScript */
-  gboolean to_file;             /* TRUE if we're printing to a file */
-  char *file;                   /* file output pathname */
-  char *cmd;                    /* print command string (not win32) */
-  packet_range_t range;
-
-  gboolean print_summary;       /* TRUE if we should print summary line. */
-  gboolean print_col_headings;  /* TRUE if we should print column headings */
-  print_dissections_e print_dissections;
-  gboolean print_hex;           /* TRUE if we should print hex data;
-                                 * FALSE if we should print only if not dissected. */
-  gboolean print_formfeed;      /* TRUE if a formfeed should be printed before
-                                 * each new packet */
-} print_args_t;
 
 typedef enum {
   FORMAT_CSV,     /* CSV */
   FORMAT_JSON,    /* JSON */
   FORMAT_EK,      /* JSON bulk insert to Elasticsearch */
-  FORMAT_XML,      /* PDML output */
+  FORMAT_XML      /* PDML output */
 } fields_format;
+
+typedef enum {
+  PF_NONE = 0x00,
+  PF_INCLUDE_CHILDREN = 0x01
+} pf_flags;
 
 /*
  * Print user selected list of fields
@@ -105,21 +84,31 @@ WS_DLL_PUBLIC gboolean output_fields_has_cols(output_fields_t* info);
  * Higher-level packet-printing code.
  */
 
-WS_DLL_PUBLIC gboolean proto_tree_print(print_args_t *print_args,
+WS_DLL_PUBLIC gboolean proto_tree_print(print_dissections_e print_dissections,
+                                        gboolean print_hex_data,
                                         epan_dissect_t *edt,
                                         GHashTable *output_only_tables,
                                         print_stream_t *stream);
 WS_DLL_PUBLIC gboolean print_hex_data(print_stream_t *stream, epan_dissect_t *edt);
 
 WS_DLL_PUBLIC void write_pdml_preamble(FILE *fh, const gchar* filename);
-WS_DLL_PUBLIC void write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, epan_dissect_t *edt, FILE *fh);
+WS_DLL_PUBLIC void write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, pf_flags protocolfilter_flags, epan_dissect_t *edt, FILE *fh);
 WS_DLL_PUBLIC void write_pdml_finale(FILE *fh);
 
 WS_DLL_PUBLIC void write_json_preamble(FILE *fh);
-WS_DLL_PUBLIC void write_json_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar **protocolfilter, epan_dissect_t *edt, FILE *fh);
+WS_DLL_PUBLIC void write_json_proto_tree(output_fields_t* fields,
+                                         print_dissections_e print_dissections,
+                                         gboolean print_hex_data,
+                                         gchar **protocolfilter,
+                                         pf_flags protocolfilter_flags,
+                                         epan_dissect_t *edt, FILE *fh);
 WS_DLL_PUBLIC void write_json_finale(FILE *fh);
 
-WS_DLL_PUBLIC void write_ek_proto_tree(output_fields_t* fields, print_args_t *print_args, gchar **protocolfilter, epan_dissect_t *edt, FILE *fh);
+WS_DLL_PUBLIC void write_ek_proto_tree(output_fields_t* fields,
+                                       gboolean print_hex_data,
+                                       gchar **protocolfilter,
+                                       pf_flags protocolfilter_flags,
+                                       epan_dissect_t *edt, FILE *fh);
 
 WS_DLL_PUBLIC void write_psml_preamble(column_info *cinfo, FILE *fh);
 WS_DLL_PUBLIC void write_psml_columns(epan_dissect_t *edt, FILE *fh);

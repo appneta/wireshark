@@ -151,7 +151,7 @@ static int hf_me = -1;
 static int hf_countdown_value = -1;
 static int hf_ul_data_si = -1;
 
-
+static int hf_dl_data_spare = -1;
 static int hf_ul_data_spare = -1;
 static int hf_pfi = -1;
 
@@ -523,6 +523,52 @@ static int hf_ms_radio_access_capability_exist = -1;
 static int hf_packet_resource_request_change_mark_exist = -1;
 static int hf_packet_resource_request_sign_var_exist = -1;
 static int hf_additionsr99_exist = -1;
+static int hf_egprs_prr_additionsr5_g_rnti_exist = -1;
+static int hf_egprs_prr_additionsr5_g_rnti_extension = -1;
+static int hf_egprs_prr_additionsr5_rb_id = -1;
+static int hf_egprs_prr_additionsr5_radio_priority = -1;
+static int hf_egprs_prr_additionsr5_rlc_block_count_exist = -1;
+static int hf_egprs_prr_additionsr5_rlc_block_count = -1;
+static int hf_iu_mode_chrequest_exist = -1;
+static int hf_egprs_prr_additionsr6_lcc_pdu_exist = -1;
+static int hf_egprs_prr_additionsr6_lcc_pdu = -1;
+static int hf_Ext_Channel_Request_desc_exist = -1;
+static int hf_egprs_prr_additionsr7_gmsk_mean_bep_exist = -1;
+static int hf_egprs_prr_additionsr7_gmsk_mean_bep = -1;
+static int hf_egprs_prr_additionsr7_gmsk_cv_bep = -1;
+static int hf_egprs_prr_additionsr7_8psk_mean_bep_exist = -1;
+static int hf_egprs_prr_additionsr7_8psk_mean_bep = -1;
+static int hf_egprs_prr_additionsr7_8psk_cv_bep = -1;
+static int hf_egprs_prr_additionsr7_qpsk_mean_bep_exist = -1;
+static int hf_egprs_prr_additionsr7_qpsk_mean_bep = -1;
+static int hf_egprs_prr_additionsr7_qpsk_cv_bep = -1;
+static int hf_egprs_prr_additionsr7_16qam_nsr_mean_bep_exist = -1;
+static int hf_egprs_prr_additionsr7_16qam_nsr_mean_bep = -1;
+static int hf_egprs_prr_additionsr7_16qam_nsr_cv_bep = -1;
+static int hf_egprs_prr_additionsr7_32qam_nsr_mean_bep_exist = -1;
+static int hf_egprs_prr_additionsr7_32qam_nsr_mean_bep = -1;
+static int hf_egprs_prr_additionsr7_32qam_nsr_cv_bep = -1;
+static int hf_egprs_prr_additionsr7_16qam_hsr_mean_bep_exist = -1;
+static int hf_egprs_prr_additionsr7_16qam_hsr_mean_bep = -1;
+static int hf_egprs_prr_additionsr7_16qam_hsr_cv_bep = -1;
+static int hf_egprs_prr_additionsr7_32qam_hsr_mean_bep_exist = -1;
+static int hf_egprs_prr_additionsr7_32qam_hsr_mean_bep = -1;
+static int hf_egprs_prr_additionsr7_32qam_hsr_cv_bep = -1;
+static int hf_bep_measurementreport_reported_modulation = -1;
+static int hf_bep_measurementreport_mean_bep_tn = -1;
+static int hf_prr_additionsr99_additionsr5_exist = -1;
+static int hf_egprs_prr_additionsr5_hfn_lsb_exist = -1;
+static int hf_egprs_prr_additionsr5_hfn_lsb = -1;
+static int hf_prr_additionsr5_additionsr6_exist = -1;
+static int hf_prr_additionsr6_additionsr7_exist = -1;
+static int hf_prr_additionsr7_early_tbf_establishment = -1;
+static int hf_egprs_bep_measurements_type2_exist = -1;
+static int hf_egprs_timeslotlinkquality_measurements_type2_exist = -1;
+static int hf_prr_additionsr7_additionsr10_exist = -1;
+static int hf_prr_additionsr10_low_access_priority_signalling = -1;
+static int hf_prr_additionsr10_additionsr12_exist = -1;
+static int hf_egprs_downlink_etfi_exist = -1;
+static int hf_prr_additionsr12_downlink_etfi = -1;
 
 /* < Packet Mobile TBF Status message content > */
 static int hf_packet_mobile_tbf_status_tbf_cause = -1;
@@ -1271,6 +1317,14 @@ static int hf_ec_number_of_ul_data_blocks = -1;
 static int hf_ec_channel_quality_report_exist = -1;
 static int hf_ec_qual_gmsk_exist = -1;
 static int hf_ec_qual_8psk_exist = -1;
+
+static int hf_ecs_p = -1;
+static int hf_cc = -1;
+static int hf_ec_cps3 = -1;
+static int hf_ul_foi = -1;
+static int hf_ul_ri = -1;
+static int hf_rtlli = -1;
+
 /* XXX - "exist" fields generated from perl script.  If humans think changes are necessary, feel free */
 static int hf_packet_downlink_ack_nack_channel_request_description_exist = -1;
 static int hf_egprs_pd_acknack_egprs_channelqualityreport_exist = -1;
@@ -1673,6 +1727,7 @@ static expert_field ei_gsm_rlcmac_stream_not_supported = EI_INIT;
 #define GPRS_CS_OFFSET(cS) ((cS)- RLCMAC_CS1)
 #define EGPRS_HEADER_TYPE_OFFSET(hT) ((hT)- RLCMAC_HDR_TYPE_1)
 
+/* Coding and Puncturing Scheme indicator field for Header type 1 in EGPRS TBF or EC TBF or downlink EGPRS2 TBF */
 static const guint8 egprs_Header_type1_coding_puncturing_scheme_to_mcs[] = {
    9 /* 0x00, "(MCS-9/P1 ; MCS-9/P1)" */,
    9 /* 0x01, "(MCS-9/P1 ; MCS-9/P2)" */,
@@ -1708,6 +1763,7 @@ static const guint8 egprs_Header_type1_coding_puncturing_scheme_to_mcs[] = {
    MCS_INVALID /* 0x1F, "reserved" */
 };
 
+/* Coding and Puncturing Scheme indicator field for Header type 2 in (EC-)EGPRS TBF or uplink EGPRS2-A TBF */
 static const guint8 egprs_Header_type2_coding_puncturing_scheme_to_mcs[] = {
    6 /* {0x00, "MCS-6/P1"} */,
    6 /* {0x01, "MCS-6/P2"} */,
@@ -1736,6 +1792,17 @@ static const guint8 egprs_Header_type3_coding_puncturing_scheme_to_mcs[] = {
    2 /* {0x0D, "MCS-2/P1 with padding"} */,
    2 /* {0x0E, "MCS-2/P2 with padding"} */,
    0 /* {0x0F, "MCS-0"} */
+};
+
+static const guint8 ec_egprs_Header_type3_coding_puncturing_scheme_to_mcs[] = {
+   4 /* {0x00, "MCS-4/P1"} */,
+   4 /* {0x01, "MCS-4/P2"} */,
+   3 /* {0x02, "MCS-3/P1"} */,
+   3 /* {0x03, "MCS-3/P2"} */,
+   3 /* {0x04, "MCS-3/P1 with padding"} */,
+   3 /* {0x05, "MCS-3/P2 with padding"} */,
+   2 /* {0x06, "MCS-2/P1"} */,
+   1 /* {0x07, "MCS-1/P1"} */
 };
 
 static crumb_spec_t bits_spec_ul_bsn1[] = {
@@ -1792,9 +1859,27 @@ static crumb_spec_t bits_spec_dl_type3_bsn[] = {
     {0,  0}
 };
 
+static crumb_spec_t bits_spec_dl_ec_type3_bsn[] = {
+    {13, 3},
+    {0,  2},
+    {0,  0}
+};
+
+static crumb_spec_t bits_spec_dl_ec_type3_rrbp[] = {
+    {25, 2},
+    {0,  1},
+    {0,  0}
+};
+
 static crumb_spec_t bits_spec_dl_tfi[] = {
     {12, 4},
     {0,  1},
+    {0,  0}
+};
+
+static crumb_spec_t bits_spec_ul_ec_type3_dl_cc_est[] = {
+    {15, 1},
+    {0,  3},
     {0,  0}
 };
 
@@ -2934,6 +3019,158 @@ CSN_DESCR_BEGIN(EGPRS_BEP_LinkQualityMeasurements_t)
 CSN_DESCR_END  (EGPRS_BEP_LinkQualityMeasurements_t)
 
 static const
+CSN_DESCR_BEGIN(IU_Mode_Channel_Request_Desk_t)
+
+  M_UINT       (IU_Mode_Channel_Request_Desk_t,  RB_ID,  5, &hf_egprs_prr_additionsr5_rb_id),
+  M_UINT       (IU_Mode_Channel_Request_Desk_t,  RADIO_PRIORITY,  2, &hf_egprs_prr_additionsr5_radio_priority),
+
+  M_NEXT_EXIST (IU_Mode_Channel_Request_Desk_t, Exist_RLC_BLOCK_COUNT, 1, &hf_egprs_prr_additionsr5_rlc_block_count_exist),
+  M_UINT       (IU_Mode_Channel_Request_Desk_t,  RLC_BLOCK_COUNT,  8, &hf_egprs_prr_additionsr5_rlc_block_count),
+
+  /* Don't use M_REC_TARRAY as we don't support multiple TBFs
+  M_NEXT_EXIST (IU_Mode_Channel_Request_Desk_t, Exist_Iu_Mode_ChRequestDesk, 1, &hf_iu_mode_chrequest_exist),
+  M_TYPE       (IU_Mode_Channel_Request_Desk1, IU_Mode_Channel_Request_Desk_t),*/
+  M_UINT       (IU_Mode_Channel_Request_Desk_t, Exist_Iu_Mode_ChRequestDesk, 1, &hf_iu_mode_chrequest_exist),
+
+CSN_DESCR_END  (IU_Mode_Channel_Request_Desk_t)
+
+static const
+CSN_DESCR_BEGIN(IU_Mode_Channel_Request_Desk_RNTI_t)
+
+  M_NEXT_EXIST (IU_Mode_Channel_Request_Desk_RNTI_t, Exist_G_RNTI_Extension, 1, &hf_egprs_prr_additionsr5_g_rnti_exist),
+  M_UINT       (IU_Mode_Channel_Request_Desk_RNTI_t,  G_RNTI_Extension,  4, &hf_egprs_prr_additionsr5_g_rnti_extension),
+
+  M_TYPE       (IU_Mode_Channel_Request_Desk_RNTI_t, IU_Mode_Channel_Request_Desk, IU_Mode_Channel_Request_Desk_t),
+
+CSN_DESCR_END  (IU_Mode_Channel_Request_Desk_RNTI_t)
+
+
+static const
+CSN_DESCR_BEGIN(Ext_Channel_Request_desc_t)
+
+  M_UINT       (Ext_Channel_Request_desc_t,  PFI, 7, &hf_pfi),
+  M_UINT       (Ext_Channel_Request_desc_t,  RADIO_PRIORITY,  2, &hf_egprs_prr_additionsr5_radio_priority),
+  M_UINT       (Ext_Channel_Request_desc_t,  RLC_Mode, 1, &hf_rlc_mode),
+
+  M_NEXT_EXIST (Ext_Channel_Request_desc_t, Exist_LCC_PDU, 1, &hf_egprs_prr_additionsr6_lcc_pdu_exist),
+  M_UINT       (Ext_Channel_Request_desc_t,  LCC_PDU,  1, &hf_egprs_prr_additionsr6_lcc_pdu),
+
+ /* Don't use M_REC_TARRAY as we don't support multiple TBFs
+  M_NEXT_EXIST (Ext_Channel_Request_desc_t, Exist_Ext_Channel_Request_desc, 1, &hf_Ext_Channel_Request_desc_exist),
+  M_TYPE       (Ext_Channel_Request_desc_t, Ext_Channel_Request_desc, Ext_Channel_Request_desc_t),*/
+  M_UINT       (Ext_Channel_Request_desc_t, Exist_Ext_Channel_Request_desc, 1, &hf_Ext_Channel_Request_desc_exist),
+
+CSN_DESCR_END  (Ext_Channel_Request_desc_t)
+
+static const
+CSN_DESCR_BEGIN(EGPRS_BEP_LinkQualityMeasurements_type2_t)
+
+  M_NEXT_EXIST (EGPRS_BEP_LinkQualityMeasurements_type2_t, Exist_GMSK_MEAN_BEP, 1, &hf_egprs_prr_additionsr7_gmsk_mean_bep_exist),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  GMSK_MEAN_BEP,  5, &hf_egprs_prr_additionsr7_gmsk_mean_bep),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  GMSK_CV_BEP, 3, &hf_egprs_prr_additionsr7_gmsk_cv_bep),
+
+  M_NEXT_EXIST (EGPRS_BEP_LinkQualityMeasurements_type2_t, Exist_8PSK_MEAN_BEP, 1, &hf_egprs_prr_additionsr7_8psk_mean_bep_exist),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p8PSK_MEAN_BEP,  5, &hf_egprs_prr_additionsr7_8psk_mean_bep),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p8PSK_CV_BEP, 3, &hf_egprs_prr_additionsr7_8psk_cv_bep),
+
+  M_NEXT_EXIST (EGPRS_BEP_LinkQualityMeasurements_type2_t, Exist_QPSK_MEAN_BEP, 1, &hf_egprs_prr_additionsr7_qpsk_mean_bep_exist),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  QPSK_MEAN_BEP,  5, &hf_egprs_prr_additionsr7_qpsk_mean_bep),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  QPSK_CV_BEP, 3, &hf_egprs_prr_additionsr7_qpsk_cv_bep),
+
+  M_NEXT_EXIST (EGPRS_BEP_LinkQualityMeasurements_type2_t, Exist_16QAM_NSR_MEAN_BEP, 1, &hf_egprs_prr_additionsr7_16qam_nsr_mean_bep_exist),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p16QAM_NSR_MEAN_BEP,  5, &hf_egprs_prr_additionsr7_16qam_nsr_mean_bep),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p16QAM_NSR_CV_BEP, 3, &hf_egprs_prr_additionsr7_16qam_nsr_cv_bep),
+
+  M_NEXT_EXIST (EGPRS_BEP_LinkQualityMeasurements_type2_t, Exist_32QAM_NSR_MEAN_BEP, 1, &hf_egprs_prr_additionsr7_32qam_nsr_mean_bep_exist),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p32QAM_NSR_MEAN_BEP,  5, &hf_egprs_prr_additionsr7_32qam_nsr_mean_bep),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p32QAM_NSR_CV_BEP, 3, &hf_egprs_prr_additionsr7_32qam_nsr_cv_bep),
+
+  M_NEXT_EXIST (EGPRS_BEP_LinkQualityMeasurements_type2_t, Exist_16QAM_HSR_MEAN_BEP, 1, &hf_egprs_prr_additionsr7_16qam_hsr_mean_bep_exist),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p16QAM_HSR_MEAN_BEP,  5, &hf_egprs_prr_additionsr7_16qam_hsr_mean_bep),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p16QAM_HSR_CV_BEP, 3, &hf_egprs_prr_additionsr7_16qam_hsr_cv_bep),
+
+  M_NEXT_EXIST (EGPRS_BEP_LinkQualityMeasurements_type2_t, Exist_32QAM_HSR_MEAN_BEP, 1, &hf_egprs_prr_additionsr7_32qam_hsr_mean_bep_exist),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p32QAM_HSR_MEAN_BEP,  5, &hf_egprs_prr_additionsr7_32qam_hsr_mean_bep),
+  M_UINT       (EGPRS_BEP_LinkQualityMeasurements_type2_t,  p32QAM_HSR_CV_BEP, 3, &hf_egprs_prr_additionsr7_32qam_hsr_cv_bep),
+
+CSN_DESCR_END  (EGPRS_BEP_LinkQualityMeasurements_type2_t)
+
+static const
+CSN_DESCR_BEGIN(BEP_MeasurementReport_type2_t)
+  M_NEXT_EXIST (BEP_MeasurementReport_type2_t, Exist, 1, &hf_bep_measurementreport_mean_bep_exist),
+  M_UINT       (BEP_MeasurementReport_type2_t,  REPORTED_MODULATION,  2, &hf_bep_measurementreport_reported_modulation),
+  M_UINT       (BEP_MeasurementReport_type2_t,  MEAN_BEP_TN,  4, &hf_bep_measurementreport_mean_bep_tn),
+CSN_DESCR_END  (BEP_MeasurementReport_type2_t)
+
+static const
+CSN_DESCR_BEGIN(InterferenceMeasurementReport_type2_t)
+  M_NEXT_EXIST (InterferenceMeasurementReport_type2_t, Exist, 1, &hf_interferencemeasurementreport_i_level_exist),
+  M_UINT       (InterferenceMeasurementReport_type2_t,  I_LEVEL,  4, &hf_interferencemeasurementreport_i_level),
+CSN_DESCR_END  (InterferenceMeasurementReport_type2_t)
+static const
+CSN_DESCR_BEGIN(EGPRS_TimeslotLinkQualityMeasurements_type2_t)
+  M_NEXT_EXIST (EGPRS_TimeslotLinkQualityMeasurements_type2_t, Exist_BEP_MEASUREMENTS, 1, &hf_bep_measurements_exist),
+  M_TYPE_ARRAY (EGPRS_TimeslotLinkQualityMeasurements_type2_t, BEP_MEASUREMENTS, BEP_MeasurementReport_type2_t, 8),
+
+  M_NEXT_EXIST (EGPRS_TimeslotLinkQualityMeasurements_type2_t, Exist_INTERFERENCE_MEASUREMENTS, 1, &hf_interference_measurements_exist),
+  M_TYPE_ARRAY (EGPRS_TimeslotLinkQualityMeasurements_type2_t, INTERFERENCE_MEASUREMENTS, InterferenceMeasurementReport_type2_t, 8),
+CSN_DESCR_END  (EGPRS_TimeslotLinkQualityMeasurements_type2_t)
+
+static const
+CSN_DESCR_BEGIN(PRR_AdditionsR12_t)
+
+  M_NEXT_EXIST (PRR_AdditionsR12_t, Exist_Downlink_eTFI, 1, &hf_egprs_downlink_etfi_exist),
+  M_UINT       (PRR_AdditionsR12_t,  DOWNLINK_ETFI,  3, &hf_prr_additionsr12_downlink_etfi),
+
+CSN_DESCR_END  (PRR_AdditionsR12_t)
+
+static const
+CSN_DESCR_BEGIN(PRR_AdditionsR10_t)
+  M_UINT       (PRR_AdditionsR10_t,  LOW_ACCESS_PRIORITY_SIGNALLING,  1, &hf_prr_additionsr10_low_access_priority_signalling),
+
+  M_NEXT_EXIST_OR_NULL(PRR_AdditionsR10_t, Exist_AdditionsR12, 1, &hf_prr_additionsr10_additionsr12_exist),
+  M_TYPE       (PRR_AdditionsR10_t, AdditionsR12, PRR_AdditionsR12_t),
+
+CSN_DESCR_END  (PRR_AdditionsR10_t)
+
+static const
+CSN_DESCR_BEGIN(PRR_AdditionsR7_t)
+  M_UINT       (PRR_AdditionsR7_t,  EARLY_TBF_ESTABLISHMENT,  1, &hf_prr_additionsr7_early_tbf_establishment),
+
+  M_NEXT_EXIST (PRR_AdditionsR7_t, Exist_EGPRS_BEP_LinkQualityMeasurements_type2, 1, &hf_egprs_bep_measurements_type2_exist),
+  M_TYPE       (PRR_AdditionsR7_t, EGPRS_BEP_LinkQualityMeasurements_type2, EGPRS_BEP_LinkQualityMeasurements_type2_t),
+
+  M_NEXT_EXIST (PRR_AdditionsR7_t, Exist_EGPRS_TimeslotLinkQualityMeasurements_type2, 1, &hf_egprs_timeslotlinkquality_measurements_type2_exist),
+  M_TYPE       (PRR_AdditionsR7_t, EGPRS_TimeslotLinkQualityMeasurements_type2, EGPRS_TimeslotLinkQualityMeasurements_type2_t),
+
+  M_NEXT_EXIST_OR_NULL(PRR_AdditionsR7_t, Exist_AdditionsR10, 1, &hf_prr_additionsr7_additionsr10_exist),
+  M_TYPE       (PRR_AdditionsR7_t, AdditionsR10, PRR_AdditionsR10_t),
+
+CSN_DESCR_END  (PRR_AdditionsR7_t)
+
+static const
+CSN_DESCR_BEGIN(PRR_AdditionsR6_t)
+  M_NEXT_EXIST (PRR_AdditionsR6_t, Exist_Ext_Channel_Request_desc, 1, &hf_Ext_Channel_Request_desc_exist),
+  M_TYPE       (PRR_AdditionsR6_t, Ext_Channel_Request_desc, Ext_Channel_Request_desc_t),
+
+  M_NEXT_EXIST_OR_NULL(PRR_AdditionsR6_t, Exist_AdditionsR7, 1, &hf_prr_additionsr6_additionsr7_exist),
+  M_TYPE       (PRR_AdditionsR6_t, AdditionsR7, PRR_AdditionsR7_t),
+
+CSN_DESCR_END  (PRR_AdditionsR6_t)
+
+static const
+CSN_DESCR_BEGIN(PRR_AdditionsR5_t)
+  M_NEXT_EXIST (PRR_AdditionsR5_t, Exist_Iu_Mode_ChRequestDesk, 1, &hf_iu_mode_chrequest_exist),
+  M_TYPE       (PRR_AdditionsR5_t, IU_Mode_Channel_Request_Desk_RNTI, IU_Mode_Channel_Request_Desk_RNTI_t),
+
+  M_NEXT_EXIST (PRR_AdditionsR5_t, Exist_HFN_LSB, 1, &hf_egprs_prr_additionsr5_hfn_lsb_exist),
+  M_UINT       (PRR_AdditionsR5_t,  HFN_LSb, 7, &hf_egprs_prr_additionsr5_hfn_lsb),
+
+  M_NEXT_EXIST_OR_NULL(PRR_AdditionsR5_t, Exist_AdditionsR6, 1, &hf_prr_additionsr5_additionsr6_exist),
+  M_TYPE       (PRR_AdditionsR5_t, AdditionsR6, PRR_AdditionsR6_t),
+CSN_DESCR_END  (PRR_AdditionsR5_t)
+
+static const
 CSN_DESCR_BEGIN(PRR_AdditionsR99_t)
   M_NEXT_EXIST (PRR_AdditionsR99_t, Exist_EGPRS_BEP_LinkQualityMeasurements, 1, &hf_egprs_bep_measurements_exist),
   M_TYPE       (PRR_AdditionsR99_t, EGPRS_BEP_LinkQualityMeasurements, EGPRS_BEP_LinkQualityMeasurements_t),
@@ -2946,6 +3183,10 @@ CSN_DESCR_BEGIN(PRR_AdditionsR99_t)
 
   M_UINT       (PRR_AdditionsR99_t,  MS_RAC_AdditionalInformationAvailable,  1, &hf_prr_additionsr99_ms_rac_additionalinformationavailable),
   M_UINT       (PRR_AdditionsR99_t,  RetransmissionOfPRR,  1, &hf_prr_additionsr99_retransmissionofprr),
+
+  M_NEXT_EXIST_OR_NULL(PRR_AdditionsR99_t, Exist_AdditionsR5, 1, &hf_prr_additionsr99_additionsr5_exist),
+  M_TYPE       (PRR_AdditionsR99_t, AdditionsR5, PRR_AdditionsR5_t),
+
 CSN_DESCR_END  (PRR_AdditionsR99_t)
 
 static const
@@ -7402,6 +7643,24 @@ CSN_DESCR_BEGIN  (UL_Data_Block_EGPRS_Header_Type3_t)
   M_BITS_CRUMB   (UL_Data_Block_EGPRS_Header_Type3_t, CPS, bits_spec_ul_type3_cps, 0, &hf_cps3),
 CSN_DESCR_END    (UL_Data_Block_EGPRS_Header_Type3_t)
 
+CSN_DESCR_BEGIN  (UL_Data_Block_EC_EGPRS_Header_Type3_t)
+  M_SPLIT_BITS   (UL_Data_Block_EC_EGPRS_Header_Type3_t, TFI, bits_spec_ul_tfi, 5, &hf_uplink_tfi),
+  M_BITS_CRUMB   (UL_Data_Block_EC_EGPRS_Header_Type3_t, TFI, bits_spec_ul_tfi, 1, &hf_uplink_tfi),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, Countdown_Value, 4, &hf_countdown_value),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, FOI, 1, &hf_ul_foi),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, RI, 1, &hf_ul_ri),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, BSN1, 5, &hf_bsn),
+  M_BITS_CRUMB   (UL_Data_Block_EC_EGPRS_Header_Type3_t, TFI, bits_spec_ul_tfi, 0, &hf_uplink_tfi),
+  M_SPLIT_BITS   (UL_Data_Block_EC_EGPRS_Header_Type3_t, DL_CC_EST, bits_spec_ul_ec_type3_dl_cc_est, 4, &hf_ec_dl_cc_est),
+  M_BITS_CRUMB   (UL_Data_Block_EC_EGPRS_Header_Type3_t, DL_CC_EST, bits_spec_ul_ec_type3_dl_cc_est, 1, &hf_ec_dl_cc_est),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, SPB, 2, &hf_ul_spb),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, CPS, 3, &hf_ec_cps3),
+  M_NULL         (UL_Data_Block_EGPRS_Header_Type1_t,    dummy, 1),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, SPARE1, 2, &hf_ul_data_spare),
+  M_UINT         (UL_Data_Block_EC_EGPRS_Header_Type3_t, RTLLI, 4, &hf_rtlli),
+  M_BITS_CRUMB   (UL_Data_Block_EC_EGPRS_Header_Type3_t, DL_CC_EST, bits_spec_ul_ec_type3_dl_cc_est, 0, &hf_ec_dl_cc_est),
+CSN_DESCR_END    (UL_Data_Block_EC_EGPRS_Header_Type3_t)
+
 CSN_DESCR_BEGIN  (UL_Packet_Control_Ack_11_t)
   M_UINT         (UL_Packet_Control_Ack_11_t,  MESSAGE_TYPE, 9, &hf_prach11_message_type_9),
   M_UINT         (UL_Packet_Control_Ack_11_t,  CTRL_ACK, 2, &hf_packet_control_acknowledgement_ctrl_ack),
@@ -7491,6 +7750,28 @@ CSN_DESCR_BEGIN  (DL_Data_Block_EGPRS_Header_Type3_t)
   M_UINT         (DL_Data_Block_EGPRS_Header_Type3_t, CPS, 4, &hf_cps3),
   M_BITS_CRUMB   (DL_Data_Block_EGPRS_Header_Type3_t, BSN1, bits_spec_dl_type3_bsn, 0, &hf_bsn),
 CSN_DESCR_END    (DL_Data_Block_EGPRS_Header_Type3_t)
+
+CSN_DESCR_BEGIN  (DL_Data_Block_EC_EGPRS_Header_Type3_t)
+  M_SPLIT_BITS   (DL_Data_Block_EC_EGPRS_Header_Type3_t, TFI, bits_spec_dl_tfi, 5, &hf_downlink_tfi),
+  M_BITS_CRUMB   (DL_Data_Block_EC_EGPRS_Header_Type3_t, TFI, bits_spec_dl_tfi, 1, &hf_downlink_tfi),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, SPARE1, 1, &hf_dl_data_spare),
+  M_SPLIT_BITS   (DL_Data_Block_EC_EGPRS_Header_Type3_t, RRBP, bits_spec_dl_ec_type3_rrbp, 3, &hf_rrbp),
+  M_BITS_CRUMB   (DL_Data_Block_EC_EGPRS_Header_Type3_t, RRBP, bits_spec_dl_ec_type3_rrbp, 1, &hf_rrbp),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, ECS_P, 2, &hf_ecs_p),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, USF, 3, &hf_usf),
+  M_SPLIT_BITS   (DL_Data_Block_EC_EGPRS_Header_Type3_t, BSN1, bits_spec_dl_ec_type3_bsn, 5, &hf_bsn),
+  M_BITS_CRUMB   (DL_Data_Block_EC_EGPRS_Header_Type3_t, BSN1, bits_spec_dl_ec_type3_bsn, 1, &hf_bsn),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, Power_Reduction, 2, &hf_dl_ctrl_pr),
+  M_BITS_CRUMB   (DL_Data_Block_EC_EGPRS_Header_Type3_t, TFI, bits_spec_dl_tfi, 0, &hf_downlink_tfi),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, SPARE2, 1, &hf_dl_data_spare),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, CC, 2, &hf_cc),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, SPB, 2, &hf_dl_spb),
+  M_BITS_CRUMB   (DL_Data_Block_EC_EGPRS_Header_Type3_t, BSN1, bits_spec_dl_ec_type3_bsn, 0, &hf_bsn),
+  M_NULL         (UL_Data_Block_EGPRS_Header_Type1_t,    dummy, 1),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, SPARE3, 2, &hf_dl_data_spare),
+  M_BITS_CRUMB   (DL_Data_Block_EC_EGPRS_Header_Type3_t, RRBP, bits_spec_dl_ec_type3_rrbp, 0, &hf_rrbp),
+  M_UINT         (DL_Data_Block_EC_EGPRS_Header_Type3_t, CPS, 3, &hf_ec_cps3),
+CSN_DESCR_END    (DL_Data_Block_EC_EGPRS_Header_Type3_t)
 
 static const value_string dl_rlc_message_type_vals[] = {
   /* {0x00,  "Invalid Message Type"},                  */
@@ -7615,7 +7896,7 @@ static const true_false_string retry_vals = {
 };
 
 static const value_string ctrl_ack_vals[] = {
-  {0x00, "In case the message is sent in access burst format, the MS received two RLC/MAC blocks with the same RTI value, one with RBSN = 0 and the other with RBSN = 1 and the mobile station is requesting new TBF. Otherwise the bit value '00' is reserved and shall not be sent. If received it shall be intepreted as the MS received an RLC/MAC control block addressed to itself and with RBSN = 1, and did not receive an RLC/MAC control block with the same RTI value and RBSN = 0"},
+  {0x00, "In case the message is sent in access burst format, the MS received two RLC/MAC blocks with the same RTI value, one with RBSN = 0 and the other with RBSN = 1 and the mobile station is requesting new TBF. Otherwise the bit value '00' is reserved and shall not be sent. If received it shall be interpreted as the MS received an RLC/MAC control block addressed to itself and with RBSN = 1, and did not receive an RLC/MAC control block with the same RTI value and RBSN = 0"},
   {0x01, "The MS received an RLC/MAC control block addressed to itself and with RBSN = 1, and did not receive an RLC/MAC control block with the same RTI value and RBSN = 0"},
   {0x02, "The MS received an RLC/MAC control block addressed to itself and with RBSN = 0, and did not receive an RLC/MAC control block with the same RTI value and RBSN = 1. This value is sent irrespective of the value of the FS bit"},
   {0x03, "The MS received two RLC/MAC blocks with the same RTI value, one with RBSN = 0 and the other with RBSN = 1"},
@@ -7657,6 +7938,32 @@ static const value_string ec_cc_vals[] = {
   {0x01, "Coverage Class 2"},
   {0x02, "Coverage Class 3"},
   {0x03, "Coverage Class 4"},
+  {0, NULL }
+};
+
+static const value_string ecs_p_vals[] = {
+  {0x00, "RRBP field is not valid (no Polling)"},
+  {0x01, "RRBP field is valid, Ack/Nack report to be included"},
+  {0x02, "RRBP field is valid, Ack/Nack report to be included. If there is enough room in the RLC/MAC block, a channel quality report shall also be included."},
+  {0x03, "Reserved"},
+  {0, NULL }
+};
+
+static const value_string foi_vals[] = {
+  {0x00, "Countdown Value not present"},
+  {0x01, "Countdown Value present"},
+  {0, NULL }
+};
+
+static const value_string ri_vals[] = {
+  {0x00, "rTLLI field is not valid"},
+  {0x01, "rTLLI field is valid"},
+  {0, NULL }
+};
+
+static const value_string rtlli_vals[] = {
+  {0x00, "rTLLI field is not valid"},
+  {0x01, "rTLLI field is valid"},
   {0, NULL }
 };
 
@@ -7994,6 +8301,19 @@ static const value_string egprs_Header_type3_coding_puncturing_scheme_vals[] = {
   {0, NULL }
 };
 static value_string_ext egprs_Header_type3_coding_puncturing_scheme_vals_ext = VALUE_STRING_EXT_INIT(egprs_Header_type3_coding_puncturing_scheme_vals);
+
+static const value_string ec_egprs_Header_type3_coding_puncturing_scheme_vals[] = {
+  {0x00, "MCS-4/P1"},
+  {0x01, "MCS-4/P2"},
+  {0x02, "MCS-3/P1"},
+  {0x03, "MCS-3/P2"},
+  {0x04, "MCS-3/P1 with padding"},
+  {0x05, "MCS-3/P2 with padding"},
+  {0x06, "MCS-2/P1"},
+  {0x07, "MCS-1/P1"},
+  {0, NULL }
+};
+static value_string_ext ec_egprs_Header_type3_coding_puncturing_scheme_vals_ext = VALUE_STRING_EXT_INIT(ec_egprs_Header_type3_coding_puncturing_scheme_vals);
 
 static const value_string gsm_rlcmac_psi_change_field_vals[] = {
   { 0, "Update of unspecified PSI message(s)"},
@@ -8783,6 +9103,50 @@ dissect_egprs_dl_header_block(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 }
 
 static void
+dissect_ec_egprs_dl_header_block(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, RlcMacDownlink_t *data, RlcMacPrivateData_t *rlc_mac)
+{
+  if (data->flags & GSM_RLC_MAC_EGPRS_FANR_FLAG)
+  {
+    proto_tree_add_expert(tree, pinfo, &ei_gsm_rlcmac_gprs_fanr_header_dissection_not_supported, tvb, 0, -1);
+  }
+  else
+  {
+    proto_item  *ti;
+    proto_tree  *rlcmac_tree;
+    csnStream_t  ar;
+
+    guint16      bit_length = tvb_reported_length(tvb) * 8;
+
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "GSM RLC/MAC");
+    col_append_sep_str(pinfo->cinfo, COL_INFO, ":", "EC-GSM-IoT DL:HEADER");
+    /* Dissect the MAC header */
+    ti = proto_tree_add_protocol_format(tree, proto_gsm_rlcmac, tvb, 0, -1,
+                                        "GSM RLC/MAC: EC-GSM-IoT DL HEADER");
+    rlcmac_tree = proto_item_add_subtree(ti, ett_gsm_rlcmac);
+
+    rlc_mac->mcs = MCS_INVALID;
+
+    csnStreamInit(&ar, 0, bit_length, pinfo);
+    switch (data->block_format)
+    {
+      case RLCMAC_HDR_TYPE_3_EC:
+        csnStreamDissector(rlcmac_tree, &ar, CSNDESCR(DL_Data_Block_EC_EGPRS_Header_Type3_t), tvb, &data->u.DL_Data_Block_EGPRS_Header, ett_gsm_rlcmac);
+        rlc_mac->mcs = ec_egprs_Header_type3_coding_puncturing_scheme_to_mcs[data->u.DL_Data_Block_EGPRS_Header.CPS];
+        break;
+
+      case RLCMAC_HDR_TYPE_1_EC:
+      case RLCMAC_HDR_TYPE_2_EC:
+      default:
+        proto_tree_add_expert(tree, pinfo, &ei_gsm_rlcmac_egprs_header_type_not_handled, tvb, 0, -1);
+        break;
+    }
+    rlc_mac->u.egprs_dl_header_info.bsn1 = data->u.DL_Data_Block_EGPRS_Header.BSN1;
+    rlc_mac->u.egprs_dl_header_info.bsn2 =
+      (data->u.DL_Data_Block_EGPRS_Header.BSN1 + data->u.DL_Data_Block_EGPRS_Header.BSN2_offset) % 2048;
+  }
+}
+
+static void
 dissect_ul_rlc_ec_control_message(tvbuff_t *tvb, packet_info* pinfo, proto_tree *tree, RlcMacUplink_t *data)
 {
   csnStream_t  ar;
@@ -8792,7 +9156,7 @@ dissect_ul_rlc_ec_control_message(tvbuff_t *tvb, packet_info* pinfo, proto_tree 
   csnStreamInit(&ar, 0, tvb_reported_length(tvb) << 3, pinfo);
   data->u.MESSAGE_TYPE = tvb_get_bits8(tvb, 0, 5);
 
-  col_append_sep_fstr(pinfo->cinfo, COL_INFO, ":", "GPRS UL:%s", val_to_str_ext(data->u.MESSAGE_TYPE, &ec_ul_rlc_message_type_vals_ext, "Unknown Message Type"));
+  col_append_sep_fstr(pinfo->cinfo, COL_INFO, ":", "EC-GSM-IoT UL:%s", val_to_str_ext(data->u.MESSAGE_TYPE, &ec_ul_rlc_message_type_vals_ext, "Unknown Message Type"));
   ti = proto_tree_add_protocol_format(tree, proto_gsm_rlcmac, tvb, 0, -1,
                                       "%s (%d) (uplink)",
                                       val_to_str_ext(data->u.MESSAGE_TYPE, &ec_ul_rlc_message_type_vals_ext, "Unknown Message Type... "),
@@ -8834,7 +9198,7 @@ dissect_dl_rlc_ec_control_message(tvbuff_t *tvb, packet_info* pinfo, proto_tree 
   csnStreamInit(&ar, header_bit_offset, (tvb_reported_length(tvb) << 3) - header_bit_offset, pinfo);
   data->u.MESSAGE_TYPE = tvb_get_bits8(tvb, header_bit_offset, 5);
 
-  col_append_sep_fstr(pinfo->cinfo, COL_INFO, ":", "GPRS DL:%s", val_to_str_ext(data->u.MESSAGE_TYPE, &ec_dl_rlc_message_type_vals_ext, "Unknown Message Type"));
+  col_append_sep_fstr(pinfo->cinfo, COL_INFO, ":", "EC-GSM-IoT DL:%s", val_to_str_ext(data->u.MESSAGE_TYPE, &ec_dl_rlc_message_type_vals_ext, "Unknown Message Type"));
   ti = proto_tree_add_protocol_format(tree, proto_gsm_rlcmac, tvb, 0, -1,
                                       "%s (%d) (downlink)",
                                       val_to_str_ext(data->u.MESSAGE_TYPE, &ec_dl_rlc_message_type_vals_ext, "Unknown Message Type... "),
@@ -8931,6 +9295,12 @@ dissect_ul_pacch_access_burst(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
                                       "GPRS UL PACCH ACCESS BURST");
   rlcmac_tree = proto_item_add_subtree(ti, ett_gsm_rlcmac);
 
+  /* Table 11.2.2.1: PACKET CONTROL ACKNOWLEDGEMENT */
+  /* < Packet Control Acknowledgement 11 bit message > ::=  -- 11-bit access burst format
+   *
+   * < MESSAGE_TYPE : bit (9) == 1111 1100 1 >
+   * |    {    < MESSAGE_TYPE : bit (6) == 110111 >
+   */
   if ((bit_length > 8) && (tvb_get_bits16(tvb, 0, 9, ENC_BIG_ENDIAN) == 0x1F9))
   {
     csnStreamInit(&ar, 0, bit_length, pinfo);
@@ -8941,6 +9311,10 @@ dissect_ul_pacch_access_burst(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     csnStreamInit(&ar, 0, bit_length, pinfo);
     csnStreamDissector(rlcmac_tree, &ar, CSNDESCR(UL_Packet_Control_Ack_TN_RRBP_11_t), tvb, &data->u.UL_Packet_Control_Ack_TN_RRBP_11, ett_gsm_rlcmac);
   }
+  /* < Packet Control Acknowledgement 8 bit message > ::=    -- 8-bit access burst format
+  * < MESSAGE_TYPE : bit (6) == 0111 11 >
+  * |    {    < MESSAGE_TYPE : bit (3) == 000>
+  */
   else if (tvb_get_bits8(tvb, 0, 6) == 0x1F)
   {
     csnStreamInit(&ar, 0, bit_length, pinfo);
@@ -9078,6 +9452,49 @@ dissect_egprs_ul_header_block(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
         rlc_mac->mcs = egprs_Header_type1_coding_puncturing_scheme_to_mcs[data->u.UL_Data_Block_EGPRS_Header.CPS];
         break;
 
+      default:
+        proto_tree_add_expert(tree, pinfo, &ei_gsm_rlcmac_egprs_header_type_not_handled, tvb, 0, -1);
+        break;
+    }
+
+    rlc_mac->u.egprs_ul_header_info.pi = data->u.UL_Data_Block_EGPRS_Header.PI;
+    rlc_mac->u.egprs_ul_header_info.bsn1 = data->u.UL_Data_Block_EGPRS_Header.BSN1;
+    rlc_mac->u.egprs_ul_header_info.bsn2 = (data->u.UL_Data_Block_EGPRS_Header.BSN1 + data->u.UL_Data_Block_EGPRS_Header.BSN2_offset) % 2048;
+  }
+}
+
+static void
+dissect_ec_egprs_ul_header_block(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, RlcMacUplink_t *data, RlcMacPrivateData_t *rlc_mac)
+{
+  if (data->flags & GSM_RLC_MAC_EGPRS_FANR_FLAG)
+  {
+    proto_tree_add_expert(tree, pinfo, &ei_gsm_rlcmac_gprs_fanr_header_dissection_not_supported, tvb, 0, -1);
+  }
+  else
+  {
+    proto_item  *ti;
+    proto_tree  *rlcmac_tree;
+    csnStream_t  ar;
+    guint16      bit_offset = 0;
+    guint16      bit_length = tvb_reported_length(tvb) * 8;
+
+    col_set_str(pinfo->cinfo, COL_PROTOCOL,  "GSM RLC/MAC");
+    col_append_sep_str(pinfo->cinfo, COL_INFO, ":",  "EC-GSM-IoT UL:HEADER");
+    ti = proto_tree_add_protocol_format(tree, proto_gsm_rlcmac, tvb, bit_offset >> 3, -1,
+                                        "GSM RLC/MAC: EC-GSM-IoT UL HEADER");
+    rlcmac_tree = proto_item_add_subtree(ti, ett_gsm_rlcmac);
+    data->u.UL_Data_Block_EGPRS_Header.PI = 0;
+    rlc_mac->mcs = MCS_INVALID;
+    csnStreamInit(&ar, 0, bit_length, pinfo);
+    switch (data->block_format)
+    {
+      case RLCMAC_HDR_TYPE_3_EC:
+        csnStreamDissector(rlcmac_tree, &ar, CSNDESCR(UL_Data_Block_EC_EGPRS_Header_Type3_t), tvb, &data->u.UL_Data_Block_EGPRS_Header, ett_gsm_rlcmac);
+        rlc_mac->mcs = ec_egprs_Header_type3_coding_puncturing_scheme_to_mcs[data->u.UL_Data_Block_EGPRS_Header.CPS];
+        break;
+
+      case RLCMAC_HDR_TYPE_1_EC:
+      case RLCMAC_HDR_TYPE_2_EC:
       default:
         proto_tree_add_expert(tree, pinfo, &ei_gsm_rlcmac_egprs_header_type_not_handled, tvb, 0, -1);
         break;
@@ -9237,11 +9654,26 @@ dissect_gsm_rlcmac_downlink(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         dissect_egprs_dl_header_block(tvb, pinfo, tree, rlc_dl, rlc_mac);
       }
       break;
+
     case RLCMAC_EC_CS1:
       {
         dissect_dl_rlc_ec_control_message(tvb, pinfo, tree, rlc_dl);
       }
       break;
+
+    case RLCMAC_HDR_TYPE_1_EC:
+    case RLCMAC_HDR_TYPE_2_EC:
+    case RLCMAC_HDR_TYPE_3_EC:
+      if (rlc_dl->flags & (GSM_RLC_MAC_EGPRS_BLOCK1 | GSM_RLC_MAC_EGPRS_BLOCK2))
+      {
+        dissect_egprs_dl_data_block(tvb, pinfo, tree, rlc_dl, &rlc_mac->u.egprs_dl_header_info);
+      }
+      else
+      {
+        dissect_ec_egprs_dl_header_block(tvb, pinfo, tree, rlc_dl, rlc_mac);
+      }
+      break;
+
     default:
       proto_tree_add_expert_format(tree, pinfo, &ei_gsm_rlcmac_coding_scheme_unknown, tvb, 0, -1, "GSM RLCMAC unknown coding scheme (%d)", rlc_dl->block_format);
       break;
@@ -9318,6 +9750,19 @@ dissect_gsm_rlcmac_uplink(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, v
         dissect_ul_rlc_ec_control_message(tvb, pinfo, tree, rlc_ul);
       }
     break;
+
+    case RLCMAC_HDR_TYPE_1_EC:
+    case RLCMAC_HDR_TYPE_2_EC:
+    case RLCMAC_HDR_TYPE_3_EC:
+        if (rlc_ul->flags & (GSM_RLC_MAC_EGPRS_BLOCK1 | GSM_RLC_MAC_EGPRS_BLOCK2))
+        {
+            dissect_egprs_ul_data_block(tvb, pinfo, tree, rlc_ul, &rlc_mac->u.egprs_ul_header_info);
+        }
+        else
+        {
+            dissect_ec_egprs_ul_header_block(tvb, pinfo, tree, rlc_ul, rlc_mac);
+        }
+        break;
 
     default:
       proto_tree_add_expert_format(tree, pinfo, &ei_gsm_rlcmac_coding_scheme_unknown, tvb, 0, -1, "GSM RLCMAC unknown coding scheme (%d)", rlc_ul->block_format);
@@ -9439,6 +9884,12 @@ proto_register_gsm_rlcmac(void)
          NULL, HFILL
        }
      },
+     { &hf_ec_cps3,
+       { "CPS",        "gsm_rlcmac.cps",
+         FT_UINT8, BASE_HEX|BASE_EXT_STRING, &ec_egprs_Header_type3_coding_puncturing_scheme_vals_ext, 0x0,
+         NULL, HFILL
+       }
+     },
      { &hf_me,
        { "ME",        "gsm_rlcmac.me",
          FT_UINT8, BASE_DEC, VALS(me_vals), 0x0,
@@ -9511,6 +9962,13 @@ proto_register_gsm_rlcmac(void)
      { &hf_downlink_tfi,
        { "DL TFI",
          "gsm_rlcmac.dl.tfi",
+         FT_UINT8, BASE_DEC, NULL, 0x0,
+         NULL, HFILL
+       }
+     },
+     { &hf_dl_data_spare,
+       { "DL SPARE",
+         "gsm_rlcmac.dl.data_spare",
          FT_UINT8, BASE_DEC, NULL, 0x0,
          NULL, HFILL
        }
@@ -11009,7 +11467,7 @@ proto_register_gsm_rlcmac(void)
         NULL, HFILL
       }
     },
-	{ &hf_additional_accessechnologies_struct_t_access_technology_type,
+    { &hf_additional_accessechnologies_struct_t_access_technology_type,
       { "Access_Technology_Type",        "gsm_rlcmac.ul.access_technology_type",
         FT_UINT8, BASE_DEC, NULL, 0x0,
         NULL, HFILL
@@ -11475,6 +11933,282 @@ proto_register_gsm_rlcmac(void)
     },
     { &hf_egprs_bep_linkqualitymeasurements_cv_bep_8psk,
       { "CV_BEP_8PSK",        "gsm_rlcmac.ul.prr_cv_bep_8psk",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_g_rnti_exist,
+      { "Exist_G_RNTI",        "gsm_rlcmac.ul.prr_g_rnti_exist",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_g_rnti_extension,
+      { "G_RNTI_Extension",        "gsm_rlcmac.ul.prr_g_rnti_extension",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_rb_id,
+      { "RB_ID",        "gsm_rlcmac.ul.prr_rb_id",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_radio_priority,
+      { "Radio_Priority",        "gsm_rlcmac.ul.prr_radio_priority",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_rlc_block_count_exist,
+      { "Exist_RLC_Block_Count",        "gsm_rlcmac.ul.prr_exist_rlc_block_count",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_rlc_block_count,
+      { "RLC_Block_Count",        "gsm_rlcmac.ul.prr_rlc_block_count",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_iu_mode_chrequest_exist,
+      { "Iu_Mode_ChRequestDesk",        "gsm_rlcmac.ul.prr_iu_mode_chrequestdesk",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr6_lcc_pdu_exist,
+      { "Exist_LCC_PDU",        "gsm_rlcmac.ul.prr_exist_lcc_pdu",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr6_lcc_pdu,
+      { "LCC_PDU",        "gsm_rlcmac.ul.prr_lcc_pdu",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_Ext_Channel_Request_desc_exist,
+      { "Exist_Channel_request_desc",        "gsm_rlcmac.ul.prr_channel_request_desc",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_gmsk_mean_bep_exist,
+      { "Exist_GMSK_MEAN_BEP",        "gsm_rlcmac.ul.prr_exist_gmsk_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_gmsk_mean_bep,
+      { "GMSK_MEAN_BEP",        "gsm_rlcmac.ul.prr_gmsk_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_gmsk_cv_bep,
+      { "GMSK_CV_BEP",        "gsm_rlcmac.ul.prr_gmsk_cv_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_8psk_mean_bep_exist,
+      { "Exist_8PSK_MEAN_BEP",        "gsm_rlcmac.ul.prr_exist_8psk_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_8psk_mean_bep,
+      { "p8PSK_MEAN_BEP",        "gsm_rlcmac.ul.prr_8psk_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_8psk_cv_bep,
+      { "p8PSK_CV_BEP",        "gsm_rlcmac.ul.prr_8psk_cv_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_qpsk_mean_bep_exist,
+      { "Exist_QPSK_MEAN_BEP",        "gsm_rlcmac.ul.prr_exist_qpsk_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_qpsk_mean_bep,
+      { "QPSK_MEAN_BEP",        "gsm_rlcmac.ul.prr_qpsk_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_qpsk_cv_bep,
+      { "QPSK_CV_BEP",        "gsm_rlcmac.ul.prr_qpsk_cv_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_16qam_nsr_mean_bep_exist,
+      { "Exist_16QAM_NSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_exist_16qam__nsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_16qam_nsr_mean_bep,
+      { "p16QAM_NSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_16qam_nsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_16qam_nsr_cv_bep,
+      { "p16QAM_NSR_CV_BEP",        "gsm_rlcmac.ul.prr_16qam_nsr_cv_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_32qam_nsr_mean_bep_exist,
+      { "Exist_32QAM_NSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_exist_32qam_nsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_32qam_nsr_mean_bep,
+      { "p32QAM_NSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_32qam_nsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_32qam_nsr_cv_bep,
+      { "p32QAM_NSR_CV_BEP",        "gsm_rlcmac.ul.prr_32qam_nsr_cv_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_16qam_hsr_mean_bep_exist,
+      { "Exist_16QAM_HSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_esixt_16qam_hsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_16qam_hsr_mean_bep,
+      { "p16QAM_HSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_16qam_hsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_16qam_hsr_cv_bep,
+      { "p16QAM_HSR_CV_BEP",        "gsm_rlcmac.ul.prr_16qam_hsr_cv_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_32qam_hsr_mean_bep_exist,
+      { "Exist_32QAM_HSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_exist_32qam_hsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_32qam_hsr_mean_bep,
+      { "p32QAM_HSR_MEAN_BEP",        "gsm_rlcmac.ul.prr_32qam_hsr_mean_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr7_32qam_hsr_cv_bep,
+      { "p32QAM_HSR_CV_BEP",        "gsm_rlcmac.ul.prr_32qam_hsr_cv_bep",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_bep_measurementreport_reported_modulation,
+      { "REPORTED_MODULATION",        "gsm_rlcmac.ul.prr_reported_modulation",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_bep_measurementreport_mean_bep_tn,
+      { "MEAN_BEP_TN",        "gsm_rlcmac.ul.prr_mean_bep_tn",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr99_additionsr5_exist,
+      { "Exist_AdditionsR5",        "gsm_rlcmac.ul.prr_exist_r5",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_hfn_lsb_exist,
+      { "Exist_HFN_LSB",        "gsm_rlcmac.ul.prr_exist_hfn_lsb",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_prr_additionsr5_hfn_lsb,
+      { "HFN_LSB",        "gsm_rlcmac.ul.prr_hfn_lsb",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr5_additionsr6_exist,
+      { "Exist_AdditionsR6",        "gsm_rlcmac.ul.prr_exist_r6",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr6_additionsr7_exist,
+      { "Exist_AdditionsR7",        "gsm_rlcmac.ul.prr_exsit_r7",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr7_early_tbf_establishment,
+      { "EARLY_TBF_ESTABLISHMENT",        "gsm_rlcmac.ul.prr_early_tbf_establishment",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_bep_measurements_type2_exist,
+      { "Exist_EGPRS_BEP_LinkQualityMeasurements_type2",        "gsm_rlcmac.ul.prr_exist_egprs_bep_measurements_type2",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_timeslotlinkquality_measurements_type2_exist,
+      { "Exist_EGPRS_TimeslotLinkQualityMeasurements_type2",        "gsm_rlcmac.ul.prr_exist_egprs_temeslotquality_meas_type2",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr7_additionsr10_exist,
+      { "Exist_AdditionsR10",        "gsm_rlcmac.ul.prr_exist_r10",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr10_low_access_priority_signalling,
+      { "LOW_ACCESS_PRIORITY_SIGNALLING",        "gsm_rlcmac.ul.prr_low_access_signalling",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr10_additionsr12_exist,
+      { "Exist_AdditionsR12",        "gsm_rlcmac.ul.prr_exist_r12",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_egprs_downlink_etfi_exist,
+      { "Exist_Downlink_eTFI",        "gsm_rlcmac.ul.prr_exist_downlink_etfi",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_prr_additionsr12_downlink_etfi,
+      { "DOWNLINK_ETFI",        "gsm_rlcmac.ul.prr_downlink_etfi",
         FT_UINT8, BASE_DEC, NULL, 0x0,
         NULL, HFILL
       }
@@ -17616,7 +18350,36 @@ proto_register_gsm_rlcmac(void)
         NULL, HFILL
       }
     },
-
+    { &hf_cc,
+      { "COVERAGE_CLASS", "gsm_rlcmac.dl.cc",
+        FT_UINT8, BASE_DEC, VALS(ec_cc_vals), 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_ecs_p,
+      { "ECS_P", "gsm_rlcmac.dl.ecs_p",
+        FT_UINT8, BASE_DEC, VALS(ecs_p_vals), 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_ul_foi,
+      { "FOI", "gsm_rlcmac.ul.foi",
+        FT_UINT8, BASE_DEC, VALS(foi_vals), 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_ul_ri,
+      { "RI", "gsm_rlcmac.ul.ri",
+        FT_UINT8, BASE_DEC, VALS(ri_vals), 0x0,
+        NULL, HFILL
+      }
+    },
+    { &hf_rtlli,
+      { "rTLLI", "gsm_rlcmac.ul.rtlli",
+        FT_UINT8, BASE_DEC, VALS(rtlli_vals), 0x0,
+        NULL, HFILL
+      }
+    },
     { &hf_ec_ul_message_type,
       { "MESSAGE_TYPE", "gsm_rlcmac.ul.ec_message_type",
         FT_UINT8, BASE_DEC, VALS(ec_ul_rlc_message_type_vals), 0x0,

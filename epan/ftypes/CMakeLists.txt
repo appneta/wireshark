@@ -41,13 +41,11 @@ set(FTYPE_FILES
 )
 source_group(ftype FILES ${FTYPE_FILES})
 
-if(WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${FTYPE_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${FTYPE_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 add_library(ftypes OBJECT
 	${FTYPE_FILES}
@@ -56,6 +54,7 @@ add_library(ftypes OBJECT
 set_target_properties(ftypes PROPERTIES
 	FOLDER "Libs/epan/ftypes"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 )
 
 CHECKAPI(

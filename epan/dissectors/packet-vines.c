@@ -414,7 +414,7 @@ proto_register_vines_frp(void)
 
 	proto_vines_frp = proto_register_protocol(
 	    "Banyan Vines Fragmentation Protocol", "Vines FRP", "vines_frp");
-	proto_register_field_array(proto_vines_ip, hf, array_length(hf));
+	proto_register_field_array(proto_vines_frp, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 }
 
@@ -429,7 +429,7 @@ proto_reg_handoff_vines_frp(void)
 
 	vines_frp_new_handle = create_dissector_handle(dissect_vines_frp_new,
 	    proto_vines_frp);
-	dissector_add_uint("udp.port", UDP_PORT_VINES, vines_frp_new_handle);
+	dissector_add_uint_with_preference("udp.port", UDP_PORT_VINES, vines_frp_new_handle);
 }
 
 static dissector_table_t vines_llc_dissector_table;
@@ -489,7 +489,7 @@ proto_register_vines_llc(void)
 
 	proto_vines_llc = proto_register_protocol(
 	    "Banyan Vines LLC", "Vines LLC", "vines_llc");
-	proto_register_field_array(proto_vines_ip, hf, array_length(hf));
+	proto_register_field_array(proto_vines_llc, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 
 	/* subdissector code */
@@ -1324,7 +1324,7 @@ proto_register_vines_arp(void)
 
 	proto_vines_arp = proto_register_protocol(
 	    "Banyan Vines ARP", "Vines ARP", "vines_arp");
-	proto_register_field_array(proto_vines_spp, hf, array_length(hf));
+	proto_register_field_array(proto_vines_arp, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 }
 
@@ -2042,17 +2042,20 @@ void
 proto_reg_handoff_vines_icp(void)
 {
 	dissector_handle_t vines_icp_handle;
+	capture_dissector_handle_t vines_echo_cap_handle;
+	capture_dissector_handle_t vines_ip_cap_handle;
 
-	vines_icp_handle = create_dissector_handle(dissect_vines_icp,
-	    proto_vines_icp);
+	vines_icp_handle = create_dissector_handle(dissect_vines_icp, proto_vines_icp);
 	dissector_add_uint("vines_ip.protocol", VIP_PROTO_ICP, vines_icp_handle);
-	register_capture_dissector("ethertype", ETHERTYPE_VINES_IP, capture_vines, proto_vines_ip);
-	register_capture_dissector("ethertype", ETHERTYPE_VINES_ECHO, capture_vines, proto_vines_echo);
-	register_capture_dissector("ppp_hdlc", PPP_VINES, capture_vines, proto_vines_echo);
-	register_capture_dissector("ip.proto", PPP_VINES, capture_vines, proto_vines_echo);
-	register_capture_dissector("ipv6.nxt", PPP_VINES, capture_vines, proto_vines_echo);
-	register_capture_dissector("llc.dsap", SAP_VINES1, capture_vines, proto_vines_echo);
-	register_capture_dissector("llc.dsap", SAP_VINES2, capture_vines, proto_vines_echo);
+
+	vines_ip_cap_handle = create_capture_dissector_handle(capture_vines, proto_vines_ip);
+	capture_dissector_add_uint("ethertype", ETHERTYPE_VINES_IP, vines_ip_cap_handle);
+	vines_echo_cap_handle = create_capture_dissector_handle(capture_vines, proto_vines_echo);
+	capture_dissector_add_uint("ethertype", ETHERTYPE_VINES_ECHO, vines_echo_cap_handle);
+	capture_dissector_add_uint("ppp_hdlc", PPP_VINES, vines_echo_cap_handle);
+	capture_dissector_add_uint("ip.proto", PPP_VINES, vines_echo_cap_handle);
+	capture_dissector_add_uint("llc.dsap", SAP_VINES1, vines_echo_cap_handle);
+	capture_dissector_add_uint("llc.dsap", SAP_VINES2, vines_echo_cap_handle);
 }
 
 /*

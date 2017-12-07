@@ -53,7 +53,7 @@
 #include <wsutil/filesystem.h>
 #include <wsutil/file_util.h>
 #include <wsutil/privileges.h>
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 #include <ws_version_info.h>
 
 #include <wiretap/merge.h>
@@ -62,6 +62,7 @@
 #include <epan/column.h>
 #include <epan/disabled_protos.h>
 #include <epan/epan.h>
+#include <epan/decode_as.h>
 #include <epan/proto.h>
 #include <epan/epan_dissect.h>
 #include <epan/dfilter/dfilter.h>
@@ -100,7 +101,7 @@
 #include "ui/alert_box.h"
 #include "ui/console.h"
 #include "ui/decode_as_utils.h"
-#include "filter_files.h"
+#include "ui/filter_files.h"
 #include "ui/main_statusbar.h"
 #include "ui/persfilepath_opt.h"
 #include "ui/preference_utils.h"
@@ -109,6 +110,7 @@
 #include "ui/software_update.h"
 #include "ui/ui_util.h"
 #include "ui/util.h"
+#include "ui/dissect_opts.h"
 #include "ui/commandline.h"
 
 #ifdef HAVE_LIBPCAP
@@ -176,7 +178,6 @@
 #include "ui/gtk/tap_param_dlg.h"
 #include "ui/gtk/prefs_column.h"
 #include "ui/gtk/prefs_dlg.h"
-#include "ui/gtk/proto_help.h"
 #include "ui/gtk/packet_list.h"
 #include "ui/gtk/filter_expression_save_dlg.h"
 #include "ui/gtk/conversations_table.h"
@@ -206,6 +207,11 @@
 #ifdef HAVE_GTKOSXAPPLICATION
 #include <gtkmacintegration/gtkosxapplication.h>
 #endif
+
+#define INVALID_OPTION 1
+#define INIT_FAILED 2
+#define INVALID_CAPABILITY 2
+#define INVALID_LINK_TYPE 2
 
 /*
  * Files under personal and global preferences directories in which
@@ -253,7 +259,7 @@ match_selected_cb_do(GtkWidget *filter_te, int action, gchar *text)
     char       *cur_filter, *new_filter;
 
     if ((!text) || (0 == strlen(text))) {
-        simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "Could not acquire information to build a filter!\nTry expanding or choosing another item.");
+        simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "Could not acquire information to build a filter.\nTry expanding or choosing another item.");
         return;
     }
 
@@ -351,7 +357,7 @@ colorize_selected_ptree_cb(GtkWidget *w _U_, gpointer data _U_, guint8 filt_nr)
                                                        cfile.edt);
         if ((!filter) || (0 == strlen(filter))) {
             simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
-                "Could not acquire information to build a filter!\n"
+                "Could not acquire information to build a filter.\n"
                 "Try expanding or choosing another item.");
             return;
         }
@@ -435,7 +441,7 @@ selected_ptree_info_cb(GtkWidget *widget _U_, gpointer data _U_)
                 "As everyone can edit the Wiki and add new content (or extend existing), "
                 "you are encouraged to add information if you can.\n"
                 "\n"
-                "Hint 1: If you are new to wiki editing, try out editing the Sandbox first!\n"
+                "Hint 1: If you are new to wiki editing, try out editing the Sandbox first.\n"
                 "\n"
                 "Hint 2: If you want to add a new protocol page, you should use the ProtocolTemplate, "
                 "which will save you a lot of editing and will give a consistent look over the pages.",
@@ -800,7 +806,6 @@ tree_view_selection_changed_cb(GtkTreeSelection *sel, gpointer user_data _U_)
         cf_unselect_field(&cfile);
         packet_hex_print(byte_view, byte_data,
                          cfile.current_frame, NULL, byte_len);
-        proto_help_menu_modify(sel, &cfile);
         return;
     }
     gtk_tree_model_get(model, &iter, 1, &finfo, -1);
@@ -861,7 +866,6 @@ tree_view_selection_changed_cb(GtkTreeSelection *sel, gpointer user_data _U_)
     }
     packet_hex_print(byte_view, byte_data, cfile.current_frame, finfo,
                      byte_len);
-    proto_help_menu_modify(sel, &cfile);
 }
 
 void collapse_all_cb(GtkWidget *widget _U_, gpointer data _U_)
@@ -924,7 +928,8 @@ void resolve_name_cb(GtkWidget *widget _U_, gpointer data _U_)
         TRUE,   /* dns_pkt_addr_resolution */
         TRUE,   /* use_external_net_name_resolver */
         FALSE,  /* load_hosts_file_from_profile_only */
-        FALSE   /* vlan_name */
+        FALSE,  /* vlan_name */
+        FALSE,  /* ss7pc_name */
     };
 
     if (cfile.edt->tree) {
@@ -1273,7 +1278,7 @@ main_cf_cb_file_closing(capture_file *cf)
      * rather than, say, a progress spinner, here! */
     if(cf->count > 10000) {
         close_dlg = (GtkWidget *)simple_dialog(ESD_TYPE_STOP, ESD_BTN_NONE,
-                                  "%sClosing file!%s\n\nPlease wait ...",
+                                  "%sClosing file.%s\n\nPlease wait ...",
                                   simple_dialog_primary_start(),
                                   simple_dialog_primary_end());
         gtk_window_set_position(GTK_WINDOW(close_dlg), GTK_WIN_POS_CENTER_ON_PARENT);
@@ -1875,6 +1880,8 @@ get_gui_compiled_info(GString *str)
 #else
     g_string_append(str, "without AirPcap");
 #endif
+
+    codec_get_compiled_version_info(str);
 }
 
 void
@@ -1896,50 +1903,12 @@ get_wireshark_runtime_info(GString *str)
 }
 
 static e_prefs *
-read_configuration_files(char **gdp_path, char **dp_path)
+read_configuration_files(void)
 {
-    int                  gpf_open_errno, gpf_read_errno;
-    int                  cf_open_errno, df_open_errno;
-    int                  gdp_open_errno, gdp_read_errno;
-    int                  dp_open_errno, dp_read_errno;
-    char                *gpf_path, *pf_path;
-    char                *cf_path, *df_path;
-    int                  pf_open_errno, pf_read_errno;
     e_prefs             *prefs_p;
 
-    /* load the decode as entries of this profile */
-    load_decode_as_entries();
-
-    /* Read the preference files. */
-    prefs_p = read_prefs(&gpf_open_errno, &gpf_read_errno, &gpf_path,
-                         &pf_open_errno, &pf_read_errno, &pf_path);
-
-    if (gpf_path != NULL) {
-        if (gpf_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open global preferences file\n\"%s\": %s.",
-                          gpf_path, g_strerror(gpf_open_errno));
-        }
-        if (gpf_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading global preferences file\n\"%s\": %s.",
-                          gpf_path, g_strerror(gpf_read_errno));
-        }
-    }
-    if (pf_path != NULL) {
-        if (pf_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open your preferences file\n\"%s\": %s.",
-                          pf_path, g_strerror(pf_open_errno));
-        }
-        if (pf_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading your preferences file\n\"%s\": %s.",
-                          pf_path, g_strerror(pf_read_errno));
-        }
-        g_free(pf_path);
-        pf_path = NULL;
-    }
+    /* Load libwireshark settings from the current profile. */
+    prefs_p = epan_load_settings();
 
 #ifdef _WIN32
     /* if the user wants a console to be always there, well, we should open one for him */
@@ -1949,56 +1918,10 @@ read_configuration_files(char **gdp_path, char **dp_path)
 #endif
 
     /* Read the capture filter file. */
-    read_filter_list(CFILTER_LIST, &cf_path, &cf_open_errno);
-    if (cf_path != NULL) {
-        simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                      "Could not open your capture filter file\n\"%s\": %s.",
-                      cf_path, g_strerror(cf_open_errno));
-        g_free(cf_path);
-    }
+    read_filter_list(CFILTER_LIST);
 
     /* Read the display filter file. */
-    read_filter_list(DFILTER_LIST, &df_path, &df_open_errno);
-    if (df_path != NULL) {
-        simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                      "Could not open your display filter file\n\"%s\": %s.",
-                      df_path, g_strerror(df_open_errno));
-        g_free(df_path);
-    }
-
-    /* Read the disabled protocols file. */
-    read_disabled_protos_list(gdp_path, &gdp_open_errno, &gdp_read_errno,
-                              dp_path, &dp_open_errno, &dp_read_errno);
-    read_disabled_heur_dissector_list(gdp_path, &gdp_open_errno, &gdp_read_errno,
-                              dp_path, &dp_open_errno, &dp_read_errno);
-    if (*gdp_path != NULL) {
-        if (gdp_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open global disabled protocols file\n\"%s\": %s.",
-                          *gdp_path, g_strerror(gdp_open_errno));
-        }
-        if (gdp_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading global disabled protocols file\n\"%s\": %s.",
-                          *gdp_path, g_strerror(gdp_read_errno));
-        }
-        g_free(*gdp_path);
-        *gdp_path = NULL;
-    }
-    if (*dp_path != NULL) {
-        if (dp_open_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "Could not open your disabled protocols file\n\"%s\": %s.",
-                          *dp_path, g_strerror(dp_open_errno));
-        }
-        if (dp_read_errno != 0) {
-            simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
-                          "I/O error reading your disabled protocols file\n\"%s\": %s.",
-                          *dp_path, g_strerror(dp_read_errno));
-        }
-        g_free(*dp_path);
-        *dp_path = NULL;
-    }
+    read_filter_list(DFILTER_LIST);
 
     return prefs_p;
 }
@@ -2052,21 +1975,20 @@ main(int argc, char *argv[])
 {
     char                *init_progfile_dir_error;
     char                *s;
-
+    int                  ret = EXIT_SUCCESS;
     extern int           info_update_freq;  /* Found in about_dlg.c. */
     const gchar         *filter;
 
 #ifdef _WIN32
     WSADATA              wsaData;
+    int                  result;
 #endif  /* _WIN32 */
 
     char                *rf_path;
     int                  rf_open_errno;
-    char                *gdp_path, *dp_path;
     int                  err;
 #ifdef HAVE_LIBPCAP
     gchar               *err_str;
-    int                  status;
 #else
 #ifdef _WIN32
 #ifdef HAVE_AIRPCAP
@@ -2190,7 +2112,13 @@ main(int argc, char *argv[])
 
 #ifdef _WIN32
     /* Start windows sockets */
-    WSAStartup( MAKEWORD( 1, 1 ), &wsaData );
+    result = WSAStartup( MAKEWORD( 1, 1 ), &wsaData );
+    if (result != 0) {
+        simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
+                      "Error: WSAStartup failed with error: %d", result);
+        ret = INIT_FAILED;
+        goto clean_exit;
+    }
 #endif  /* _WIN32 */
 
     profile_store_persconffiles (TRUE);
@@ -2266,8 +2194,9 @@ main(int argc, char *argv[])
     capture_session_init(&global_capture_session, &cfile);
 #endif
 
-    init_report_err(vfailure_alert_box, open_failure_alert_box,
-                    read_failure_alert_box, write_failure_alert_box);
+    init_report_message(vfailure_alert_box, vwarning_alert_box,
+                        open_failure_alert_box, read_failure_alert_box,
+                        write_failure_alert_box);
 
     /* Non-blank filter means we're remote. Throttle splash screen and resolution updates. */
     filter = get_conn_cfilter();
@@ -2295,14 +2224,14 @@ main(int argc, char *argv[])
 
     /* Scan for plugins.  This does *not* call their registration routines;
        that's done later. */
-    scan_plugins();
+    scan_plugins(REPORT_LOAD_FAILURE);
 
     /* Register all libwiretap plugin modules. */
     register_all_wiretap_modules();
+#endif
 
     /* Register all audio codec plugins. */
     register_all_codecs();
-#endif
 
     splash_update(RA_DISSECTORS, NULL, (gpointer)splash_win);
 
@@ -2311,8 +2240,10 @@ main(int argc, char *argv[])
        dissectors, and we must do it before we read the preferences, in
        case any dissectors register preferences. */
     if (!epan_init(register_all_protocols,register_all_protocol_handoffs,
-                   splash_update, (gpointer) splash_win))
-      return 2;
+                   splash_update, (gpointer) splash_win)) {
+        ret = INIT_FAILED;
+        goto clean_exit;
+    }
 
     splash_update(RA_LISTENERS, NULL, (gpointer)splash_win);
 
@@ -2327,10 +2258,6 @@ main(int argc, char *argv[])
     register_all_plugin_tap_listeners();
 #endif
 
-#ifdef HAVE_EXTCAP
-    extcap_register_preferences();
-#endif
-
     register_all_tap_listeners();
     conversation_table_set_gui_info(init_conversation_table);
     hostlist_table_set_gui_info(init_hostlist_table);
@@ -2338,15 +2265,18 @@ main(int argc, char *argv[])
     rtd_table_iterate_tables(register_response_time_delay_tables, NULL);
     new_stat_tap_iterate_tables(register_simple_stat_tables, NULL);
 
+#ifdef HAVE_EXTCAP
+    splash_update(RA_EXTCAP, NULL, (gpointer)splash_win);
+    extcap_register_preferences();
+#endif
+
     splash_update(RA_PREFERENCES, NULL, (gpointer)splash_win);
 
-    global_commandline_info.prefs_p = read_configuration_files (&gdp_path, &dp_path);
+    global_commandline_info.prefs_p = read_configuration_files();
     /* Removed thread code:
      * https://code.wireshark.org/review/gitweb?p=wireshark.git;a=commit;h=9e277ae6154fd04bf6a0a34ec5655a73e5a736a3
      */
 
-    splash_update(RA_CONFIGURATION, NULL, (gpointer)splash_win);
-    proto_help_init();
     cap_file_init(&cfile);
 
     /* Fill in capture options with values from the preferences */
@@ -2368,10 +2298,10 @@ main(int argc, char *argv[])
         /* We're supposed to do a live capture or get a list of link-layer
            types for a live capture device; if the user didn't specify an
            interface to use, pick a default. */
-        status = capture_opts_default_iface_if_necessary(&global_capture_opts,
+        ret = capture_opts_default_iface_if_necessary(&global_capture_opts,
         ((global_commandline_info.prefs_p->capture_device) && (*global_commandline_info.prefs_p->capture_device != '\0')) ? get_if_name(global_commandline_info.prefs_p->capture_device) : NULL);
-        if (status != 0) {
-            exit(status);
+        if (ret != 0) {
+            goto clean_exit;
         }
     }
 
@@ -2400,30 +2330,33 @@ main(int argc, char *argv[])
                 if (caps == NULL) {
                     cmdarg_err("%s", err_str);
                     g_free(err_str);
-                    exit(2);
+                    ret = INVALID_CAPABILITY;
+                    goto clean_exit;
                 }
-            if (caps->data_link_types == NULL) {
-                cmdarg_err("The capture device \"%s\" has no data link types.", device.name);
-                exit(2);
-            }
+                if (caps->data_link_types == NULL) {
+                    cmdarg_err("The capture device \"%s\" has no data link types.", device.name);
+                    ret = INVALID_LINK_TYPE;
+                    goto clean_exit;
+                }
 #ifdef _WIN32
-            create_console();
+                create_console();
 #endif /* _WIN32 */
 #if defined(HAVE_PCAP_CREATE)
-            capture_opts_print_if_capabilities(caps, device.name, device.monitor_mode_supported);
+                capture_opts_print_if_capabilities(caps, device.name, device.monitor_mode_supported);
 #else
-            capture_opts_print_if_capabilities(caps, device.name, FALSE);
+                capture_opts_print_if_capabilities(caps, device.name, FALSE);
 #endif
 #ifdef _WIN32
-            destroy_console();
+                destroy_console();
 #endif /* _WIN32 */
-            free_if_capabilities(caps);
+                free_if_capabilities(caps);
             }
         }
-        exit(0);
+        ret = EXIT_SUCCESS;
+        goto clean_exit;
     }
-  capture_opts_trim_snaplen(&global_capture_opts, MIN_PACKET_SIZE);
-  capture_opts_trim_ring_num_files(&global_capture_opts);
+    capture_opts_trim_snaplen(&global_capture_opts, MIN_PACKET_SIZE);
+    capture_opts_trim_ring_num_files(&global_capture_opts);
 #endif /* HAVE_LIBPCAP */
 
     /* Notify all registered modules that have had any of their preferences
@@ -2458,34 +2391,13 @@ main(int argc, char *argv[])
     }
 #endif
 
-    /* disabled protocols as per configuration file */
-    if (gdp_path == NULL && dp_path == NULL) {
-        set_disabled_protos_list();
-        set_disabled_heur_dissector_list();
-    }
-
-    if(global_commandline_info.disable_protocol_slist) {
-        GSList *proto_disable;
-        for (proto_disable = global_commandline_info.disable_protocol_slist; proto_disable != NULL; proto_disable = g_slist_next(proto_disable))
-        {
-            proto_disable_proto_by_name((char*)proto_disable->data);
-        }
-    }
-
-    if(global_commandline_info.enable_heur_slist) {
-        GSList *heur_enable;
-        for (heur_enable = global_commandline_info.enable_heur_slist; heur_enable != NULL; heur_enable = g_slist_next(heur_enable))
-        {
-            proto_enable_heuristic_by_name((char*)heur_enable->data, TRUE);
-        }
-    }
-
-    if(global_commandline_info.disable_heur_slist) {
-        GSList *heur_disable;
-        for (heur_disable = global_commandline_info.disable_heur_slist; heur_disable != NULL; heur_disable = g_slist_next(heur_disable))
-        {
-            proto_enable_heuristic_by_name((char*)heur_disable->data, FALSE);
-        }
+    /*
+     * Enabled and disabled protocols and heuristic dissectors as per
+     * command-line options.
+     */
+    if (!setup_enabled_and_disabled_protocols()) {
+       ret = INVALID_OPTION;
+       goto clean_exit;
     }
 
     build_column_format_array(&cfile.cinfo, global_commandline_info.prefs_p->num_cols, TRUE);
@@ -2790,7 +2702,18 @@ main(int argc, char *argv[])
     main_unregister_resource();
 #endif
 
-    exit(0);
+clean_exit:
+#ifdef HAVE_LIBPCAP
+    capture_opts_cleanup(&global_capture_opts);
+#endif
+    col_cleanup(&cfile.cinfo);
+    free_filter_lists();
+    wtap_cleanup();
+    free_progdirs();
+#ifdef HAVE_PLUGINS
+    plugins_cleanup();
+#endif
+    return ret;
 }
 
 #ifdef _WIN32
@@ -3157,7 +3080,7 @@ create_main_window (gint pl_size, gint tv_size, gint bv_size, e_prefs *prefs_p
     menubar = main_menu_new(&accel);
 
 #if defined(HAVE_IGE_MAC_INTEGRATION) || defined (HAVE_GTKOSXAPPLICATION)
-    /* Mac OS X native menus are created and displayed by main_menu_new() */
+    /* macOS native menus are created and displayed by main_menu_new() */
     if(!prefs_p->gui_macosx_style) {
 #endif
     gtk_window_add_accel_group(GTK_WINDOW(top_level), accel);
@@ -3276,7 +3199,6 @@ static void copy_global_profile (const gchar *profile_name)
 /* Change configuration profile */
 void change_configuration_profile (const gchar *profile_name)
 {
-    char  *gdp_path, *dp_path;
     char  *rf_path;
     int    rf_open_errno;
     gchar* err_msg = NULL;
@@ -3309,11 +3231,18 @@ void change_configuration_profile (const gchar *profile_name)
     set_profile_name (profile_name);
     profile_bar_update ();
 
-    /* Reset current preferences and apply the new */
+    /*
+     * Reset current preferences and enabled/disabled protocols and
+     * heuristic dissectors.
+     */
     prefs_reset();
     menu_prefs_reset();
+    proto_reenable_all();
 
-    (void) read_configuration_files (&gdp_path, &dp_path);
+    /*
+     * Read the configuration files for the new profile.
+     */
+    (void) read_configuration_files();
 
     if (!recent_read_profile_static(&rf_path, &rf_open_errno)) {
         simple_dialog(ESD_TYPE_WARN, ESD_BTN_OK,
@@ -3340,13 +3269,6 @@ void change_configuration_profile (const gchar *profile_name)
     main_titlebar_update();
     filter_expression_reinit(FILTER_EXPRESSION_REINIT_CREATE);
     toolbar_redraw_all();
-
-    /* Enable all protocols and disable from the disabled list */
-    proto_enable_all();
-    if (gdp_path == NULL && dp_path == NULL) {
-        set_disabled_protos_list();
-        set_disabled_heur_dissector_list();
-    }
 
     /* Reload color filters */
     if (!color_filters_reload(&err_msg, color_filter_add_cb)) {
@@ -3412,6 +3334,22 @@ void redissect_packets(void)
     cf_redissect_packets(&cfile);
     status_expert_update();
 }
+
+#ifdef HAVE_SOFTWARE_UPDATE
+/** Check to see if Wireshark can shut down safely (e.g. offer to save the
+ *  current capture).
+ * Dummy.
+ */
+int software_update_can_shutdown_callback(void) {
+    return FALSE;
+}
+
+/** Shut down Wireshark in preparation for an upgrade.
+ * Dummy.
+ */
+void software_update_shutdown_request_callback(void) {
+}
+#endif
 
 /*
  * Editor modelines

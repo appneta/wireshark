@@ -69,6 +69,8 @@
 void proto_register_rpc(void);
 void proto_reg_handoff_rpc(void);
 
+#define RPC_TCP_PORT 111
+
 /* desegmentation of RPC over TCP */
 static gboolean rpc_desegment = TRUE;
 
@@ -682,7 +684,7 @@ dissect_rpc_uint64(tvbuff_t *tvb, proto_tree *tree,
 	header_field_info	*hfinfo;
 
 	hfinfo = proto_registrar_get_nth(hfindex);
-	DISSECTOR_ASSERT(hfinfo->type == FT_UINT64);
+	DISSECTOR_ASSERT_FIELD_TYPE(hfinfo, FT_UINT64);
 	proto_tree_add_item(tree, hfindex, tvb, offset, 8, ENC_BIG_ENDIAN);
 
 	return offset + 8;
@@ -777,7 +779,7 @@ dissect_rpc_opaque_data(tvbuff_t *tvb, int offset,
 	if (dissect_it) {
 		tvbuff_t *opaque_tvb;
 
-		opaque_tvb = tvb_new_subset(tvb, data_offset, string_length_copy,
+		opaque_tvb = tvb_new_subset_length_caplen(tvb, data_offset, string_length_copy,
 					    string_length);
 
 		return (*dissect_it)(opaque_tvb, offset, pinfo, tree, NULL);
@@ -796,7 +798,7 @@ dissect_rpc_opaque_data(tvbuff_t *tvb, int offset,
 			if (string_data) {
 				char *formatted;
 
-				formatted = format_text(string_buffer, strlen(string_buffer));
+				formatted = format_text(wmem_packet_scope(), string_buffer, strlen(string_buffer));
 				/* copy over the data and append <TRUNCATED> */
 				string_buffer_print=wmem_strdup_printf(wmem_packet_scope(), "%s%s", formatted, RPC_STRING_TRUNCATED);
 			} else {
@@ -804,8 +806,7 @@ dissect_rpc_opaque_data(tvbuff_t *tvb, int offset,
 			}
 		} else {
 			if (string_data) {
-				string_buffer_print =
-				    wmem_strdup(wmem_packet_scope(), format_text(string_buffer, strlen(string_buffer)));
+				string_buffer_print = format_text(wmem_packet_scope(), string_buffer, strlen(string_buffer));
 			} else {
 				string_buffer_print=RPC_STRING_DATA;
 			}
@@ -1360,7 +1361,7 @@ dissect_rpc_authgss_token(tvbuff_t* tvb, proto_tree* tree, int offset,
 			length = opaque_length;
 		if ((guint32)reported_length > opaque_length)
 			reported_length = opaque_length;
-		new_tvb = tvb_new_subset(tvb, offset, length, reported_length);
+		new_tvb = tvb_new_subset_length_caplen(tvb, offset, length, reported_length);
 		len_consumed = call_dissector(gssapi_handle, new_tvb, pinfo, gtree);
 		offset += len_consumed;
 	}
@@ -1657,7 +1658,7 @@ get_conversation_for_call(packet_info *pinfo)
 	 * there's no guarantee that the reply will come from the
 	 * address to which the call was sent.  We also don't
 	 * worry about the port *from* which the call was sent,
-	 * because some clients (*cough* OS X NFS client *cough*)
+	 * because some clients (*cough* macOS NFS client *cough*)
 	 * might send retransmissions from a different port from
 	 * the original request.
 	 */
@@ -1709,7 +1710,7 @@ find_conversation_for_reply(packet_info *pinfo)
 	 * because there's no guarantee that the call was sent
 	 * to the address from which the reply came.  We also
 	 * don't worry about the port *to* which the reply was
-	 * sent, because some clients (*cough* OS X NFS client
+	 * sent, because some clients (*cough* macOS NFS client
 	 * *cough*) might send call retransmissions from a
 	 * different port from the original request, so replies
 	 * to the original call and a retransmission of the call
@@ -2113,7 +2114,7 @@ looks_like_rpc_reply(tvbuff_t *tvb, packet_info *pinfo, int offset)
 	   because there's no guarantee that the call was sent
 	   to the address from which the reply came.  We also
 	   don't worry about the port *to* which the reply was
-	   sent, because some clients (*cough* OS X NFS client
+	   sent, because some clients (*cough* macOS NFS client
 	   *cough*) might send retransmissions from a
 	   different port from the original request, so replies
 	   to the original call and a retransmission of the call
@@ -3071,7 +3072,7 @@ static reassembly_table rpc_fragment_table;
  * so that they don't try to combine fragments from different TCP
  * connections.)
  */
-static GHashTable *rpc_reassembly_table = NULL;
+static wmem_map_t *rpc_reassembly_table = NULL;
 
 typedef struct _rpc_fragment_key {
 	guint32 conv_id;
@@ -3357,7 +3358,7 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 		tvb_len = len;
 	if (tvb_reported_len > (gint)len)
 		tvb_reported_len = len;
-	frag_tvb = tvb_new_subset(tvb, offset, tvb_len,
+	frag_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_len,
 	    tvb_reported_len);
 
 	/*
@@ -3407,7 +3408,7 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 	old_rfk.conv_id = conversation->conv_index;
 	old_rfk.seq = seq;
 	old_rfk.port = pinfo->srcport;
-	rfk = (rpc_fragment_key *)g_hash_table_lookup(rpc_reassembly_table, &old_rfk);
+	rfk = (rpc_fragment_key *)wmem_map_lookup(rpc_reassembly_table, &old_rfk);
 
 	if (rfk == NULL) {
 		/*
@@ -3450,7 +3451,7 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 			rfk->port = pinfo->srcport;
 			rfk->offset = 0;
 			rfk->start_seq = seq;
-			g_hash_table_insert(rpc_reassembly_table, rfk, rfk);
+			wmem_map_insert(rpc_reassembly_table, rfk, rfk);
 
 			/*
 			 * Start defragmentation.
@@ -3473,7 +3474,7 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 				new_rfk->port = pinfo->srcport;
 				new_rfk->offset = rfk->offset + len - 4;
 				new_rfk->start_seq = rfk->start_seq;
-				g_hash_table_insert(rpc_reassembly_table, new_rfk,
+				wmem_map_insert(rpc_reassembly_table, new_rfk,
 					new_rfk);
 
 				/*
@@ -3541,7 +3542,7 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 			new_rfk->port = pinfo->srcport;
 			new_rfk->offset = rfk->offset + len - 4;
 			new_rfk->start_seq = rfk->start_seq;
-			g_hash_table_insert(rpc_reassembly_table, new_rfk,
+			wmem_map_insert(rpc_reassembly_table, new_rfk,
 			    new_rfk);
 
 			/*
@@ -3910,23 +3911,6 @@ dissect_rpc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 	return tvb_reported_length(tvb);
 }
 
-/* Discard any state we've saved. */
-static void
-rpc_init_protocol(void)
-{
-	rpc_reassembly_table = g_hash_table_new(rpc_fragment_hash,
-	    rpc_fragment_equal);
-	reassembly_table_init(&rpc_fragment_table,
-	    &addresses_ports_reassembly_table_functions);
-}
-
-static void
-rpc_cleanup_protocol(void)
-{
-	reassembly_table_destroy(&rpc_fragment_table);
-	g_hash_table_destroy(rpc_reassembly_table);
-}
-
 /* Tap statistics */
 typedef enum
 {
@@ -4068,6 +4052,12 @@ rpc_prog_stat_free_table_item(stat_tap_table* table _U_, guint row _U_, guint co
 {
 	if (column != PROGRAM_NAME_COLUMN) return;
 	g_free((char*)field_data->value.string_value);
+}
+
+static void
+rpc_shutdown(void)
+{
+	g_hash_table_destroy(rpc_progs);
 }
 
 /* will be called once from register.c at startup time */
@@ -4366,12 +4356,14 @@ proto_register_rpc(void)
 	proto_register_subtree_array(ett, array_length(ett));
 	expert_rpc = expert_register_protocol(proto_rpc);
 	expert_register_field_array(expert_rpc, ei, array_length(ei));
-	register_init_routine(&rpc_init_protocol);
-	register_cleanup_routine(&rpc_cleanup_protocol);
+
+	rpc_reassembly_table = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), rpc_fragment_hash, rpc_fragment_equal);
+	reassembly_table_register(&rpc_fragment_table,
+	    &addresses_ports_reassembly_table_functions);
 
 	rpc_module = prefs_register_protocol(proto_rpc, NULL);
 	prefs_register_bool_preference(rpc_module, "desegment_rpc_over_tcp",
-	    "Reassemble RPC over TCP messages\nspanning multiple TCP segments",
+	    "Reassemble RPC over TCP messages spanning multiple TCP segments",
 	    "Whether the RPC dissector should reassemble messages spanning multiple TCP segments."
 	    " To use this option, you must also enable \"Allow subdissectors to reassemble TCP streams\" in the TCP protocol settings.",
 		&rpc_desegment);
@@ -4396,8 +4388,8 @@ proto_register_rpc(void)
 		"Whether the RPC dissector should attempt to locate RPC PDU boundaries when initial fragment alignment is not known.  This may cause false positives, or slow operation.",
 		&rpc_find_fragment_start);
 
-	register_dissector("rpc", dissect_rpc, proto_rpc);
-	register_dissector("rpc-tcp", dissect_rpc_tcp, proto_rpc);
+	rpc_handle = register_dissector("rpc", dissect_rpc, proto_rpc);
+	rpc_tcp_handle = register_dissector("rpc-tcp", dissect_rpc_tcp, proto_rpc);
 	rpc_tap = register_tap("rpc");
 
 	register_srt_table(proto_rpc, NULL, 1, rpcstat_packet, rpcstat_init, rpcstat_param);
@@ -4418,6 +4410,8 @@ proto_register_rpc(void)
 			NULL, rpc_prog_free_val);
 
 	authgss_contexts=wmem_tree_new_autoreset(wmem_epan_scope(), wmem_file_scope());
+
+	register_shutdown_routine(rpc_shutdown);
 }
 
 void
@@ -4431,10 +4425,8 @@ proto_reg_handoff_rpc(void)
 	   probably RPC traffic from some randomly-chosen port that happens
 	   to match some port for which we have a dissector)
 	*/
-	rpc_tcp_handle = find_dissector("rpc-tcp");
-	dissector_add_uint("tcp.port", 111, rpc_tcp_handle);
-	rpc_handle = find_dissector("rpc");
-	dissector_add_uint("udp.port", 111, rpc_handle);
+	dissector_add_uint_with_preference("tcp.port", RPC_TCP_PORT, rpc_tcp_handle);
+	dissector_add_uint_with_preference("udp.port", RPC_TCP_PORT, rpc_handle);
 
 	heur_dissector_add("tcp", dissect_rpc_tcp_heur, "RPC over TCP", "rpc_tcp", proto_rpc, HEURISTIC_ENABLE);
 	heur_dissector_add("udp", dissect_rpc_heur, "RPC over UDP", "rpc_udp", proto_rpc, HEURISTIC_ENABLE);

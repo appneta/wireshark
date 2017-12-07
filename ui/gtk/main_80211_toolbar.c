@@ -44,6 +44,7 @@
 #include <capchild/capture_sync.h>
 
 #include <wsutil/frequency-utils.h>
+#include <wsutil/strtoi.h>
 
 static GtkWidget *tb80211_tb, *tb80211_iface_list_box, *tb80211_freq_list_box, *tb80211_chan_type_box, *tb80211_info_label;
 
@@ -170,12 +171,13 @@ tb80211_do_set_channel(char *iface, int freq, int type)
 
     freq_s = g_strdup_printf("%d", freq);
     type_s = ws80211_chan_type_to_str(type);
-    ret = sync_interface_set_80211_chan(iface, freq_s, type_s, "-1", "-1",
+    ret = sync_interface_set_80211_chan(iface, freq_s, type_s, NULL, NULL,
                                         &data, &primary_msg, &secondary_msg, main_window_update);
 
     /* Parse the error msg */
     if (ret && primary_msg) {
-        return atoi(primary_msg);
+        ws_strtoi32(primary_msg, NULL, &ret);
+        return ret;
     }
     g_free(data);
     g_free(primary_msg);

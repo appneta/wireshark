@@ -41,6 +41,8 @@
 #include "ui/simple_dialog.h"
 #include <epan/stat_groups.h>
 
+#include <wsutil/strtoi.h>
+
 #include "ui/gtk/dlg_utils.h"
 #include "ui/gtk/gui_stat_menu.h"
 #include "ui/gtk/tap_param_dlg.h"
@@ -291,7 +293,7 @@ static void rlc_lte_stat_reset(void *phs)
         display_name = cf_get_display_name(&cfile);
         g_snprintf(title, sizeof(title), "Wireshark: LTE RLC Traffic Statistics: %s (filter=\"%s\")",
                    display_name,
-                   strlen(rlc_lte_stat->filter) ? rlc_lte_stat->filter : "none");
+                   ((rlc_lte_stat->filter != NULL) && (rlc_lte_stat->filter[0] != 0)) ? rlc_lte_stat->filter : "none");
         g_free(display_name);
         gtk_window_set_title(GTK_WINDOW(rlc_lte_stat->dlg_w), title);
     }
@@ -771,7 +773,7 @@ static void rlc_lte_stat_draw(void *phs)
                display_name,
                number_of_ues,
                hs->total_frames,
-               strlen(hs->filter) ? hs->filter : "none");
+               ((hs->filter != NULL) && (hs->filter[0] != 0)) ? hs->filter : "none");
     g_free(display_name);
     gtk_window_set_title(GTK_WINDOW(hs->dlg_w), title);
 
@@ -1155,7 +1157,7 @@ static void ul_filter_clicked(GtkWindow *win _U_, rlc_lte_stat_t* hs)
     /* Read SN to filter on (if present) */
     sn_string = gtk_entry_get_text(GTK_ENTRY(hs->sn_filter_te));
     if (strlen(sn_string) > 0) {
-        sn = atoi(sn_string);
+        ws_strtoi32(sn_string, NULL, &sn);
     }
 
     if (!get_channel_selection(hs, &ueid, &rlcMode, &channelType, &channelId)) {
@@ -1184,7 +1186,7 @@ static void dl_filter_clicked(GtkWindow *win _U_, rlc_lte_stat_t* hs)
     /* Read SN to filter on (if present) */
     sn_string = gtk_entry_get_text(GTK_ENTRY(hs->sn_filter_te));
     if (strlen(sn_string) > 0) {
-        sn = atoi(sn_string);
+        ws_strtoi32(sn_string, NULL, &sn);
     }
 
     if (!get_channel_selection(hs, &ueid, &rlcMode, &channelType, &channelId)) {
@@ -1213,7 +1215,7 @@ static void uldl_filter_clicked(GtkWindow *win _U_, rlc_lte_stat_t* hs)
     /* Read SN to filter on (if present) */
     sn_string = gtk_entry_get_text(GTK_ENTRY(hs->sn_filter_te));
     if (strlen(sn_string) > 0) {
-        sn = atoi(sn_string);
+        ws_strtoi32(sn_string, NULL, &sn);
     }
 
     if (!get_channel_selection(hs, &ueid, &rlcMode, &channelType, &channelId)) {

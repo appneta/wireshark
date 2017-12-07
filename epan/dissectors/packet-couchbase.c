@@ -47,6 +47,7 @@
 
 
 #include "packet-tcp.h"
+#include "packet-ssl.h"
 
 #define PNAME  "Couchbase Protocol"
 #define PSNAME "Couchbase"
@@ -272,6 +273,9 @@
 
  /* Data Types */
 #define DT_RAW_BYTES          0x00
+#define DT_JSON               0x01
+#define DT_SNAPPY             0x02
+#define DT_XATTR              0x04
 
 void proto_register_couchbase(void);
 void proto_reg_handoff_couchbase(void);
@@ -284,6 +288,9 @@ static int hf_extlength = -1;
 static int hf_keylength = -1;
 static int hf_value_length = -1;
 static int hf_datatype = -1;
+static int hf_datatype_json = -1;
+static int hf_datatype_snappy = -1;
+static int hf_datatype_xattr = -1;
 static int hf_vbucket = -1;
 static int hf_status = -1;
 static int hf_total_bodylength = -1;
@@ -308,8 +315,14 @@ static int hf_extras_flags_dcp_snapshot_marker_memory = -1;
 static int hf_extras_flags_dcp_snapshot_marker_disk = -1;
 static int hf_extras_flags_dcp_snapshot_marker_chk = -1;
 static int hf_extras_flags_dcp_snapshot_marker_ack = -1;
+static int hf_extras_flags_dcp_include_xattrs = -1;
+static int hf_extras_flags_dcp_no_value = -1;
 static int hf_subdoc_flags = -1;
 static int hf_subdoc_flags_mkdirp = -1;
+static int hf_subdoc_flags_mkdoc = -1;
+static int hf_subdoc_flags_xattrpath = -1;
+static int hf_subdoc_flags_accessdeleted = -1;
+static int hf_subdoc_flags_expandmacros = -1;
 static int hf_extras_seqno = -1;
 static int hf_extras_opaque = -1;
 static int hf_extras_reserved = -1;
@@ -357,12 +370,40 @@ static int hf_vbucket_states_size = -1;
 static int hf_vbucket_states_id = -1;
 static int hf_vbucket_states_seqno = -1;
 
+static int hf_bucket_type = -1;
+static int hf_bucket_config = -1;
+static int hf_config_key = -1;
+static int hf_config_value = -1;
+
 static int hf_multipath_opcode = -1;
 static int hf_multipath_index = -1;
 static int hf_multipath_pathlen = -1;
 static int hf_multipath_path = -1;
 static int hf_multipath_valuelen = -1;
 static int hf_multipath_value = -1;
+
+static int hf_meta_flags = -1;
+static int hf_meta_expiration = -1;
+static int hf_meta_revseqno = -1;
+static int hf_meta_cas = -1;
+static int hf_skip_conflict = -1;
+static int hf_force_accept = -1;
+static int hf_regenerate_cas = -1;
+static int hf_meta_options = -1;
+static int hf_metalen = -1;
+static int hf_meta_reqextmeta = -1;
+static int hf_meta_deleted = -1;
+static int hf_exptime = -1;
+static int hf_extras_meta_seqno = -1;
+static int hf_confres = -1;
+static int hf_hello_features = -1;
+static int hf_hello_features_feature = -1;
+
+static int hf_xattr_length = -1;
+static int hf_xattr_pair_length = -1;
+static int hf_xattr_key = -1;
+static int hf_xattr_value = -1;
+static int hf_xattrs = -1;
 
 static expert_field ef_warn_shall_not_have_value = EI_INIT;
 static expert_field ef_warn_shall_not_have_extras = EI_INIT;
@@ -376,6 +417,8 @@ static expert_field ef_warn_illegal_value_length = EI_INIT;
 static expert_field ef_warn_unknown_magic_byte = EI_INIT;
 static expert_field ef_warn_unknown_opcode = EI_INIT;
 static expert_field ef_note_status_code = EI_INIT;
+static expert_field ef_separator_not_found = EI_INIT;
+static expert_field ef_illegal_value = EI_INIT;
 
 static gint ett_couchbase = -1;
 static gint ett_extras = -1;
@@ -384,6 +427,12 @@ static gint ett_observe = -1;
 static gint ett_failover_log = -1;
 static gint ett_vbucket_states = -1;
 static gint ett_multipath = -1;
+static gint ett_config = -1;
+static gint ett_config_key = -1;
+static gint ett_hello_features = -1;
+static gint ett_datatype = -1;
+static gint ett_xattrs = -1;
+static gint ett_xattr_pair = -1;
 
 static const value_string magic_vals[] = {
   { MAGIC_REQUEST,     "Request"  },
@@ -610,25 +659,40 @@ const value_string vbucket_states_vals[] = {
   {0, NULL}
 };
 
-static const value_string datatype_vals[] = {
-  { DT_RAW_BYTES, "Raw bytes"},
-  { 0, NULL }
+static const int * datatype_vals[] = {
+  &hf_datatype_json,
+  &hf_datatype_snappy,
+  &hf_datatype_xattr,
+  NULL
 };
 
 static const int * subdoc_flags[] = {
   &hf_subdoc_flags_mkdirp,
+  &hf_subdoc_flags_mkdoc,
+  &hf_subdoc_flags_xattrpath,
+  &hf_subdoc_flags_accessdeleted,
+  &hf_subdoc_flags_expandmacros,
   NULL
 };
 
-static dissector_handle_t couchbase_tcp_handle;
+static const value_string feature_vals[] = {
+  {1, "Datatype"},
+  {2, "TLS"},
+  {3, "TCP Nodelay"},
+  {4, "Mutation Seqno"},
+  {5, "TCP Delay"},
+  {6, "XATTR"},
+  {7, "XERROR"},
+  {0, NULL}
+};
+
+static dissector_handle_t couchbase_handle;
 static dissector_handle_t json_handle;
-
-/* couchbase ports */
-static range_t *couchbase_tcp_port_range;
-
 
 /* desegmentation of COUCHBASE payload */
 static gboolean couchbase_desegment_body = TRUE;
+static guint couchbase_ssl_port = 11207;
+static guint couchbase_ssl_port_pref = 11207;
 
 
 static guint
@@ -661,6 +725,54 @@ has_json_value(guint8 opcode)
   default:
     return FALSE;
   }
+}
+
+static void dissect_dcp_xattrs(tvbuff_t *tvb, proto_tree *tree,
+                               guint32 value_len, gint offset,
+                               packet_info *pinfo) {
+  guint32 xattr_size, pair_len;
+  gint mark;
+  proto_tree *xattr_tree, *pair_tree;
+  proto_item *ti;
+
+  proto_tree_add_item_ret_uint(tree, hf_xattr_length, tvb, offset, 4, ENC_BIG_ENDIAN, &xattr_size);
+  value_len = value_len - (xattr_size + 4);
+  offset += 4;
+
+  ti = proto_tree_add_item(tree, hf_xattrs, tvb, offset, xattr_size, ENC_NA);
+  xattr_tree = proto_item_add_subtree(ti, ett_xattrs);
+
+  while (xattr_size > 0) {
+
+    ti = proto_tree_add_item_ret_uint(xattr_tree, hf_xattr_pair_length, tvb, offset, 4, ENC_BIG_ENDIAN, &pair_len);
+    pair_tree = proto_item_add_subtree(ti, ett_xattr_pair);
+    offset += 4;
+    xattr_size -= 4;
+
+    mark = tvb_find_guint8(tvb, offset, pair_len, 0x00);
+    if (mark == -1) {
+      expert_add_info_format(pinfo, ti, &ef_separator_not_found, "Null byte not found");
+      return;
+    }
+
+    ti = proto_tree_add_item(pair_tree, hf_xattr_key, tvb, offset, mark - offset, ENC_ASCII | ENC_NA);
+    xattr_size -= (mark - offset) + 1;
+    pair_len -= (mark - offset) + 1;
+    offset = mark + 1;
+
+    mark = tvb_find_guint8(tvb, offset, pair_len, 0x00);
+    if (mark == -1) {
+      expert_add_info_format(pinfo, ti, &ef_separator_not_found, "Null byte not found");
+      return;
+    }
+
+    proto_tree_add_item(pair_tree, hf_xattr_value, tvb, offset, mark - offset, ENC_ASCII | ENC_NA);
+    xattr_size -= (mark - offset) + 1;
+    offset = mark + 1;
+  }
+
+  //The regular value
+  proto_tree_add_item(tree, hf_value, tvb, offset, value_len, ENC_ASCII | ENC_NA);
 }
 
 /* Dissects the required extras for subdoc single-path packets */
@@ -871,6 +983,8 @@ dissect_extras(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
       if (request) {
         static const int * extra_flags[] = {
           &hf_extras_flags_dcp_connection_type,
+          &hf_extras_flags_dcp_include_xattrs,
+          &hf_extras_flags_dcp_no_value,
           NULL
         };
 
@@ -1064,6 +1178,63 @@ dissect_extras(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     }
     break;
 
+  case PROTOCOL_BINARY_CMD_DEL_WITH_META:
+  case PROTOCOL_BINARY_CMD_SET_WITH_META:
+    if (request) {
+      proto_tree_add_item(extras_tree, hf_meta_flags, tvb, offset, 4, ENC_BIG_ENDIAN);
+      offset += 4;
+      proto_tree_add_item(extras_tree, hf_meta_expiration, tvb, offset, 4, ENC_BIG_ENDIAN);
+      offset += 4;
+      proto_tree_add_item(extras_tree, hf_meta_revseqno, tvb, offset, 8, ENC_BIG_ENDIAN);
+      offset += 8;
+      proto_tree_add_item(extras_tree, hf_meta_cas, tvb, offset, 8, ENC_BIG_ENDIAN);
+      offset += 8;
+
+      /*The previous 24 bytes are required. The next two fields are optional,
+       * hence we are checking the extlen to see what fields we have. As they
+       * are different lengths we can do this by just checking the length.*/
+
+      // Options field (4 bytes)
+      if (extlen == 28 || extlen == 30) {
+        static const int *extra_flags[] = {
+          &hf_skip_conflict,
+          &hf_force_accept,
+          &hf_regenerate_cas,
+          NULL
+        };
+        proto_tree_add_bitmask(extras_tree, tvb, offset, hf_meta_options,
+                               ett_extras_flags, extra_flags, ENC_BIG_ENDIAN);
+        offset += 4;
+      }
+      // Meta Length field (2 bytes)
+      if (extlen == 26 || extlen == 30) {
+        proto_tree_add_item(extras_tree, hf_metalen, tvb, offset, 2, ENC_BIG_ENDIAN);
+        offset += 2;
+      }
+    }
+    break;
+
+  case PROTOCOL_BINARY_CMD_GET_META:
+    if (request) {
+      if(extlen) {
+        proto_tree_add_item(extras_tree, hf_meta_reqextmeta, tvb, offset, 1, ENC_BIG_ENDIAN);
+        offset += 1;
+      }
+    } else {
+      proto_tree_add_item(extras_tree, hf_meta_deleted, tvb, offset, 4, ENC_BIG_ENDIAN);
+      offset += 4;
+      proto_tree_add_item(extras_tree, hf_meta_flags, tvb, offset, 4, ENC_BIG_ENDIAN);
+      offset += 4;
+      proto_tree_add_item(extras_tree, hf_exptime, tvb, offset, 4, ENC_BIG_ENDIAN);
+      offset += 4;
+      proto_tree_add_item(extras_tree, hf_extras_meta_seqno, tvb, offset, 8, ENC_BIG_ENDIAN);
+      offset += 8;
+      if (extlen == 21) {
+        proto_tree_add_item(extras_tree, hf_confres, tvb, offset, 1, ENC_BIG_ENDIAN);
+        offset += 1;
+      }
+    }
+    break;
   default:
     if (extlen) {
       /* Decode as unknown extras */
@@ -1221,7 +1392,7 @@ dissect_multipath_lookup_response(tvbuff_t *tvb, packet_info *pinfo,
     proto_tree_add_item(multipath_tree, hf_value, tvb, offset, result_len,
                         ENC_ASCII | ENC_NA);
     if (result_len > 0) {
-        json_tvb = tvb_new_subset(tvb, offset, result_len, result_len);
+        json_tvb = tvb_new_subset_length_caplen(tvb, offset, result_len, result_len);
         call_dissector(json_handle, json_tvb, pinfo, multipath_tree);
     }
     offset += result_len;
@@ -1271,7 +1442,7 @@ dissect_multipath_mutation_response(tvbuff_t *tvb, packet_info *pinfo,
       proto_tree_add_item(multipath_tree, hf_value, tvb, offset, result_len,
                           ENC_ASCII | ENC_NA);
       if (result_len > 0) {
-        json_tvb = tvb_new_subset(tvb, offset, result_len, result_len);
+        json_tvb = tvb_new_subset_length_caplen(tvb, offset, result_len, result_len);
         call_dissector(json_handle, json_tvb, pinfo, multipath_tree);
       }
       offset += result_len;
@@ -1353,7 +1524,7 @@ dissect_multipath_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 static void
 dissect_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
               gint offset, guint32 value_len, guint16 path_len, guint8 opcode,
-              gboolean request)
+              gboolean request, guint8 datatype)
 {
   proto_item *ti = NULL;
   gboolean    illegal = FALSE;  /* Set when value shall not be present */
@@ -1435,7 +1606,7 @@ dissect_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
           proto_tree_add_item(tree, hf_observe_last_received_seqno, tvb, offset, 8, ENC_BIG_ENDIAN);
         }
       }
-    } else if (!request && opcode == PROTOCOL_BINARY_DCP_STREAM_REQUEST) {
+    } else if (!request && (opcode == PROTOCOL_BINARY_DCP_STREAM_REQUEST || opcode == PROTOCOL_BINARY_DCP_FAILOVER_LOG_REQUEST)) {
       if (value_len % 16 != 0) {
         expert_add_info_format(pinfo, ti, &ef_warn_illegal_value_length, "Response with bad failover log length");
       } else {
@@ -1477,7 +1648,7 @@ dissect_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     } else if (!request && has_json_value(opcode)) {
       tvbuff_t *json_tvb;
       ti = proto_tree_add_item(tree, hf_value, tvb, offset, value_len, ENC_ASCII | ENC_NA);
-      json_tvb = tvb_new_subset(tvb, offset, value_len, value_len);
+      json_tvb = tvb_new_subset_length_caplen(tvb, offset, value_len, value_len);
       call_dissector(json_handle, json_tvb, pinfo, tree);
 
     } else if (opcode == PROTOCOL_BINARY_CMD_SUBDOC_MULTI_LOOKUP ||
@@ -1486,6 +1657,15 @@ dissect_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                               (opcode == PROTOCOL_BINARY_CMD_SUBDOC_MULTI_MUTATION),
                               request);
 
+    } else if (opcode == PROTOCOL_BINARY_CMD_HELLO) {
+      gint curr = offset, end = offset + value_len;
+      proto_tree *hello_features_tree;
+      ti = proto_tree_add_item(tree, hf_hello_features, tvb, offset, value_len, ENC_ASCII|ENC_NA);
+      hello_features_tree = proto_item_add_subtree(ti, ett_hello_features);
+      while (curr < end) {
+        proto_tree_add_item(hello_features_tree, hf_hello_features_feature, tvb, curr, 2, ENC_BIG_ENDIAN);
+        curr += 2;
+      }
     } else if (path_len != 0) {
         ti = proto_tree_add_item(tree, hf_path, tvb, offset, path_len, ENC_ASCII | ENC_NA);
         value_len -= path_len;
@@ -1493,6 +1673,64 @@ dissect_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             ti = proto_tree_add_item(tree, hf_value, tvb, offset + path_len,
                                      value_len, ENC_ASCII | ENC_NA);
         }
+    } else if (request && opcode == PROTOCOL_BINARY_CMD_CREATE_BUCKET) {
+      gint sep, equals_pos, sep_pos, config_len;
+      proto_tree *key_tree, *config_tree;
+
+      /* There are 2 main items stored in the value. The bucket type (represented by a path to the engine) and the
+       * bucket config. These are separated by a NULL byte with the bucket type coming first.*/
+
+      sep = tvb_find_guint8(tvb, offset, value_len, 0x00);
+      if (sep == -1) {
+        ti = proto_tree_add_item(tree, hf_value, tvb, offset, value_len, ENC_ASCII|ENC_NA);
+        expert_add_info_format(pinfo, ti, &ef_separator_not_found, "Null byte not found");
+      } else {
+        proto_tree_add_item(tree, hf_bucket_type, tvb, offset, sep - offset, ENC_ASCII | ENC_NA);
+        config_len = value_len - (sep - offset) - 1; //Don't include NULL byte in length
+        if(config_len <= 0) {
+          expert_add_info_format(pinfo, ti, &ef_separator_not_found, "Separator not found in expected location");
+        } else {
+          offset = sep + 1;// Ignore NULL byte
+
+          ti = proto_tree_add_item(tree, hf_bucket_config, tvb, offset, config_len, ENC_ASCII | ENC_NA);
+          config_tree = proto_item_add_subtree(ti, ett_config);
+        }
+
+        /* The config is arranged as "key=value;key=value..."*/
+        while (config_len > 0) {
+          // Get the key
+          equals_pos = tvb_find_guint8(tvb, offset, config_len, 0x3d);
+          if (equals_pos == -1) {
+            expert_add_info_format(pinfo, ti, &ef_illegal_value, "Each key needs a value");
+            break; // Break out the while loop
+          }
+          ti = proto_tree_add_item(config_tree, hf_config_key, tvb, offset, equals_pos - offset, ENC_ASCII | ENC_NA);
+          key_tree = proto_item_add_subtree(ti, ett_config_key);
+          config_len -= (equals_pos - offset + 1);
+          offset = equals_pos + 1;
+          if (config_len <= 0) {
+            expert_add_info_format(pinfo, ti, &ef_illegal_value, "Corresponding value missing");
+            break;//Break out of while loop
+          }
+
+          // Get the value
+          sep_pos = tvb_find_guint8(tvb, offset, config_len, 0x3b);
+          if (sep_pos == -1) {
+            expert_add_info_format(pinfo, ti, &ef_separator_not_found, "Each key-value pair must be terminated by semi-colon");
+            break; // Break out the while loop
+          }
+          proto_tree_add_item(key_tree, hf_config_value, tvb, offset, sep_pos - offset, ENC_ASCII | ENC_NA);
+          config_len -= (sep_pos - offset + 1);
+          offset = sep_pos + 1;
+        }
+      }
+    } else if ((datatype & DT_XATTR) && (opcode == PROTOCOL_BINARY_CMD_SET_WITH_META ||
+      opcode == PROTOCOL_BINARY_DCP_MUTATION || opcode == PROTOCOL_BINARY_DCP_DELETION ||
+      opcode == PROTOCOL_BINARY_CMD_DEL_WITH_META || opcode == PROTOCOL_BINARY_CMD_ADD_WITH_META ||
+      opcode == PROTOCOL_BINARY_CMD_SETQ_WITH_META || opcode == PROTOCOL_BINARY_CMD_DELQ_WITH_META ||
+      opcode == PROTOCOL_BINARY_CMD_ADDQ_WITH_META )) {
+
+      dissect_dcp_xattrs(tvb, tree, value_len, offset, pinfo);
     } else {
       ti = proto_tree_add_item(tree, hf_value, tvb, offset, value_len, ENC_ASCII | ENC_NA);
     }
@@ -1579,7 +1817,7 @@ dissect_couchbase(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
   proto_tree *couchbase_tree;
   proto_item *couchbase_item, *ti;
   gint        offset = 0;
-  guint8      magic, opcode, extlen;
+  guint8      magic, opcode, extlen, datatype;
   guint16     keylen, status = 0, vbucket;
   guint32     bodylen, value_len;
   gboolean    request;
@@ -1624,7 +1862,8 @@ dissect_couchbase(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
   proto_tree_add_item(couchbase_tree, hf_extlength, tvb, offset, 1, ENC_BIG_ENDIAN);
   offset += 1;
 
-  proto_tree_add_item(couchbase_tree, hf_datatype, tvb, offset, 1, ENC_BIG_ENDIAN);
+  datatype = tvb_get_guint8(tvb, offset);
+  proto_tree_add_bitmask(couchbase_tree, tvb, offset, hf_datatype, ett_datatype, datatype_vals, ENC_BIG_ENDIAN);
   offset += 1;
 
   if (magic & 0x01) {    /* We suppose this is a response, even when unknown magic byte */
@@ -1681,13 +1920,13 @@ dissect_couchbase(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
     offset += keylen;
 
     dissect_value(tvb, pinfo, couchbase_tree, offset, value_len, path_len,
-                  opcode, request);
+                  opcode, request, datatype);
   } else if (bodylen) {
     proto_tree_add_item(couchbase_tree, hf_value, tvb, offset, bodylen,
                         ENC_ASCII | ENC_NA);
     if (status == PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET) {
       tvbuff_t *json_tvb;
-      json_tvb = tvb_new_subset(tvb, offset, bodylen, bodylen);
+      json_tvb = tvb_new_subset_length_caplen(tvb, offset, bodylen, bodylen);
       call_dissector(json_handle, json_tvb, pinfo, couchbase_tree);
 
     } else if (opcode == PROTOCOL_BINARY_CMD_SUBDOC_MULTI_LOOKUP) {
@@ -1761,7 +2000,10 @@ proto_register_couchbase(void)
     { &hf_extlength, { "Extras Length", "couchbase.extras.length", FT_UINT8, BASE_DEC, NULL, 0x0, "Length in bytes of the command extras", HFILL } },
     { &hf_keylength, { "Key Length", "couchbase.key.length", FT_UINT16, BASE_DEC, NULL, 0x0, "Length in bytes of the text key that follows the command extras", HFILL } },
     { &hf_value_length, { "Value Length", "couchbase.value.length", FT_UINT32, BASE_DEC, NULL, 0x0, "Length in bytes of the value that follows the key", HFILL } },
-    { &hf_datatype, { "Data Type", "couchbase.datatype", FT_UINT8, BASE_HEX, VALS(datatype_vals), 0x0, NULL, HFILL } },
+    { &hf_datatype, { "Data Type", "couchbase.datatype", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_datatype_json, { "JSON", "couchbase.datatype.json", FT_BOOLEAN, 8, TFS(&tfs_set_notset), DT_JSON, "JSON datatype", HFILL} },
+    { &hf_datatype_snappy, { "Snappy", "couchbase.datatype.snappy", FT_BOOLEAN, 8, TFS(&tfs_set_notset), DT_SNAPPY, "Snappy Compressed", HFILL} },
+    { &hf_datatype_xattr, { "XATTR", "couchbase.datatype.xattr", FT_BOOLEAN, 8, TFS(&tfs_set_notset), DT_XATTR, "Xattrs included", HFILL} },
     { &hf_vbucket, { "VBucket", "couchbase.vbucket", FT_UINT16, BASE_DEC_HEX, NULL, 0x0, "VBucket ID", HFILL } },
     { &hf_status, { "Status", "couchbase.status", FT_UINT16, BASE_HEX|BASE_EXT_STRING, &status_vals_ext, 0x0, "Status of the response", HFILL } },
     { &hf_total_bodylength, { "Total Body Length", "couchbase.total_bodylength", FT_UINT32, BASE_DEC, NULL, 0x0, "Length in bytes of extra + key + value", HFILL } },
@@ -1780,8 +2022,12 @@ proto_register_couchbase(void)
     { &hf_extras_flags_checkpoint, { "Checkpoint", "couchbase.extras.flags.checkpoint", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x40, NULL, HFILL } },
 
     /* Sub-document */
-    { &hf_subdoc_flags, {"Subdoc flags", "couchbase.extras.subdoc.flags", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL} },
-    { &hf_subdoc_flags_mkdirp, {"MKDIR_P", "couchbase.extras.subdoc.flags.mkdir_p", FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x01, "Create non-existent intermediate paths", HFILL} },
+    { &hf_subdoc_flags, { "Subdoc flags", "couchbase.extras.subdoc.flags", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_subdoc_flags_mkdirp, { "MKDIR_P", "couchbase.extras.subdoc.flags.mkdir_p", FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x01, "Create non-existent intermediate paths", HFILL} },
+    { &hf_subdoc_flags_mkdoc, { "MKDOC", "couchbase.extras.subdoc.flags.mkdoc", FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x02, "Create document if it does not exist, implies mkdir_p", HFILL} },
+    { &hf_subdoc_flags_xattrpath, { "XATTR_PATH", "couchbase.extras.subdoc.flags.xattr_path", FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x04, "If set path refers to extended attribute (XATTR)", HFILL} },
+    { &hf_subdoc_flags_accessdeleted, { "ACCESS_DELETED", "couchbase.extras.subdoc.flags.access_deleted", FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x08, "Allow access to XATTRs for deleted documents", HFILL} },
+    { &hf_subdoc_flags_expandmacros, { "EXPAND_MACROS", "couchbase.extras.subdoc.flags.expand_macros", FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x10, "Expand macro values inside XATTRs", HFILL} },
     { &hf_extras_pathlen, { "Path Length", "couchbase.extras.pathlen", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },
 
     /* DCP flags */
@@ -1793,6 +2039,8 @@ proto_register_couchbase(void)
     { &hf_extras_flags_dcp_snapshot_marker_disk, {"Disk", "couchbase.extras.flags.dcp_snapshot_marker_disk", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x02, NULL, HFILL } },
     { &hf_extras_flags_dcp_snapshot_marker_chk, {"Chk", "couchbase.extras.flags.dcp_snapshot_marker_chk", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x04, NULL, HFILL } },
     { &hf_extras_flags_dcp_snapshot_marker_ack, {"Ack", "couchbase.extras.flags.dcp_snapshot_marker_ack", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x08, NULL, HFILL } },
+    { &hf_extras_flags_dcp_include_xattrs, {"Include XATTRs", "couchbase.extras.flags.dcp_include_xattrs", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x04, "Indicates the server should include documents XATTRs", HFILL} },
+    { &hf_extras_flags_dcp_no_value, {"No Value", "couchbase.extras.flags.dcp_no_value", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x08, "Indicates the server should strip off values", HFILL} },
     { &hf_extras_seqno, { "Sequence number", "couchbase.extras.seqno", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
     { &hf_extras_opaque, { "Opaque (vBucket identifier)", "couchbase.extras.opaque", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
     { &hf_extras_reserved, { "Reserved", "couchbase.extras.reserved", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
@@ -1846,6 +2094,34 @@ proto_register_couchbase(void)
     { &hf_multipath_path, { "Path", "couchbase.multipath.path", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
     { &hf_multipath_valuelen, { "Value Length", "couchbase.multipath.value.length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
     { &hf_multipath_value, { "Value", "couchbase.multipath.value", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+
+    { &hf_meta_flags, {"Flags", "couchbase.extras.flags", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_meta_expiration, {"Expiration", "couchbase.extras.expiration", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_meta_revseqno, {"RevSeqno", "couchbase.extras.revseqno", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_meta_cas, {"CAS", "couchbase.extras.cas", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_meta_options, {"Options", "couchbase.extras.options", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_skip_conflict, {"SKIP_CONFLICT_RESOLUTION", "couchbase.extras.options.skip_conflict_resolution", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x01, NULL, HFILL} },
+    { &hf_force_accept, {"FORCE_ACCEPT_WITH_META_OPS", "couchbase.extras.options.force_accept_with_meta_ops", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x02, NULL, HFILL} },
+    { &hf_regenerate_cas, {"REGENERATE_CAS", "couchbase.extras.option.regenerate_cas", FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x04, NULL, HFILL} },
+    { &hf_metalen, {"Meta Length", "couchbase.extras.meta_length", FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_meta_reqextmeta, {"ReqExtMeta", "couchbase.extras.reqextmeta", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_meta_deleted, {"Deleted", "couchbase.extras.deleted", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_exptime, {"Expiry", "couchbase.extras.expiry", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_extras_meta_seqno, {"Seqno", "couchbase.extras.meta.seqno", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL} },
+    { &hf_confres, {"ConfRes", "couchbase.extras.confres", FT_UINT8, BASE_HEX, NULL, 0x0, "Conflict Resolution Mode", HFILL} },
+
+    { &hf_bucket_type, {"Bucket Type", "couchbase.bucket.type", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL} },
+    { &hf_bucket_config, {"Bucket Config", "couchbase.bucket.config", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL} },
+    { &hf_config_key, {"Key", "couchbase.bucket.config.key", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL} },
+    { &hf_config_value, {"Value", "couchbase.bucket.config.value", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL} },
+    { &hf_hello_features, {"Hello Features", "couchbase.hello.features", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL} },
+    { &hf_hello_features_feature, {"Feature", "couchbase.hello.features.feature", FT_UINT16, BASE_HEX, VALS(feature_vals), 0x0, NULL, HFILL} },
+
+    { &hf_xattrs, { "XATTRs", "couchbase.xattrs", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL} },
+    { &hf_xattr_length, {  "XATTR Length", "couchbase.xattrs.length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL} },
+    { &hf_xattr_pair_length, { "XATTR Pair Length", "couchbase.xattrs.pair.length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL} },
+    { &hf_xattr_key, { "Key", "couchbase.xattrs.pair.key", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL} },
+    { &hf_xattr_value, { "Value", "couchbase.xattrs.pair.value", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL} },
   };
 
   static ei_register_info ei[] = {
@@ -1859,7 +2135,9 @@ proto_register_couchbase(void)
     { &ef_warn_illegal_value_length, { "couchbase.warn.illegal_value_length", PI_UNDECODED, PI_WARN, "Illegal Value length", EXPFILL }},
     { &ef_warn_unknown_magic_byte, { "couchbase.warn.unknown_magic_byte", PI_UNDECODED, PI_WARN, "Unknown magic byte", EXPFILL }},
     { &ef_warn_unknown_opcode, { "couchbase.warn.unknown_opcode", PI_UNDECODED, PI_WARN, "Unknown opcode", EXPFILL }},
-    { &ef_note_status_code, { "couchbase.note.status_code", PI_RESPONSE_CODE, PI_NOTE, "Status", EXPFILL }}
+    { &ef_note_status_code, { "couchbase.note.status_code", PI_RESPONSE_CODE, PI_NOTE, "Status", EXPFILL }},
+    { &ef_separator_not_found, { "couchbase.warn.separator_not_found", PI_UNDECODED, PI_WARN, "Separator not found", EXPFILL }},
+    { &ef_illegal_value, { "couchbase.warn.illegal_value", PI_UNDECODED, PI_WARN, "Illegal value for command", EXPFILL }}
   };
 
   static gint *ett[] = {
@@ -1869,7 +2147,13 @@ proto_register_couchbase(void)
     &ett_observe,
     &ett_failover_log,
     &ett_vbucket_states,
-    &ett_multipath
+    &ett_multipath,
+    &ett_config,
+    &ett_config_key,
+    &ett_hello_features,
+    &ett_datatype,
+    &ett_xattrs,
+    &ett_xattr_pair
   };
 
   module_t *couchbase_module;
@@ -1883,11 +2167,10 @@ proto_register_couchbase(void)
   expert_couchbase = expert_register_protocol(proto_couchbase);
   expert_register_field_array(expert_couchbase, ei, array_length(ei));
 
-  /* Set default port range */
-  range_convert_str(&couchbase_tcp_port_range, COUCHBASE_DEFAULT_PORT, MAX_TCP_PORT);
-
   /* Register our configuration options */
-  couchbase_module = prefs_register_protocol(proto_couchbase, NULL);
+  couchbase_module = prefs_register_protocol(proto_couchbase, &proto_reg_handoff_couchbase);
+
+  couchbase_handle = register_dissector("couchbase", dissect_couchbase_tcp, proto_couchbase);
 
   prefs_register_bool_preference(couchbase_module, "desegment_pdus",
                                  "Reassemble PDUs spanning multiple TCP segments",
@@ -1897,32 +2180,28 @@ proto_register_couchbase(void)
                                  " to reassemble TCP streams\" in the TCP protocol settings.",
                                  &couchbase_desegment_body);
 
-  prefs_register_range_preference(couchbase_module, "tcp.ports", "Couchbase TCP ports",
-                                  "TCP ports to be decoded as Couchbase (default is "
-                                  COUCHBASE_DEFAULT_PORT ")",
-                                  &couchbase_tcp_port_range, MAX_TCP_PORT);
+  prefs_register_uint_preference(couchbase_module, "ssl_port", "SSL/TLS Data Port",
+                                 "The port used for communicating with the data service via ssl/tls",
+                                 10, &couchbase_ssl_port_pref);
+
+
 }
 
 /* Register the tcp couchbase dissector. */
 void
 proto_reg_handoff_couchbase(void)
 {
-  static range_t *tcp_port_range;
   static gboolean initialized = FALSE;
 
-  if (initialized == FALSE) {
-    couchbase_tcp_handle = create_dissector_handle(dissect_couchbase_tcp, proto_couchbase);
+  if (!initialized){
+    json_handle = find_dissector_add_dependency("json", proto_couchbase);
+    dissector_add_uint_range_with_preference("tcp.port", COUCHBASE_DEFAULT_PORT, couchbase_handle);
     initialized = TRUE;
+  } else {
+    ssl_dissector_delete(couchbase_ssl_port, couchbase_handle);
   }
-  else {
-    dissector_delete_uint_range("tcp.port", tcp_port_range, couchbase_tcp_handle);
-    g_free(tcp_port_range);
-  }
-
-  tcp_port_range = range_copy(couchbase_tcp_port_range);
-  dissector_add_uint_range("tcp.port", tcp_port_range, couchbase_tcp_handle);
-
-  json_handle = find_dissector_add_dependency("json", proto_couchbase);
+  couchbase_ssl_port = couchbase_ssl_port_pref;
+  ssl_dissector_add(couchbase_ssl_port, couchbase_handle);
 }
 
 /*

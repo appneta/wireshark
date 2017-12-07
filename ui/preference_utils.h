@@ -32,42 +32,6 @@ extern "C" {
  *  @ingroup prefs_group
  */
 
-/** "Stash" a preference.
- * Copy a preference to its stashed value. Can be called from prefs_pref_foreach().
- *
- * @param pref A preference.
- * @param unused unused
- */
-extern guint pref_stash(pref_t *pref, gpointer unused _U_);
-
-/** "Untash" a preference.
- * Set a preference to its stashed value. Can be called from prefs_pref_foreach().
- *
- * @param pref A preference.
- * @param changed_p A pointer to a gboolean. Set to TRUE if the preference differs
- * from its stashed value.
- *
- * @return Always returns 0.
- */
-extern guint pref_unstash(pref_t *pref, gpointer changed_p);
-
-/** Clean up a stashed preference.
- * Can be called from prefs_pref_foreach().
- *
- * @param pref A preference.
- * @param unused unused
- *
- * @return Always returns 0.
- */
-extern guint pref_clean_stash(pref_t *pref, gpointer unused _U_);
-
-/** Set a stashed preference to its default value.
- *
- *@param pref A preference.
- */
-extern void reset_stashed_pref(pref_t *pref);
-
-
 /** If autoscroll in live captures is active or not
  */
 extern gboolean auto_scroll_live;

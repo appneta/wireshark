@@ -241,6 +241,8 @@ static gint ett_iap_entry[MAX_IAP_ENTRIES];
 
 static int irda_address_type = -1;
 
+static dissector_handle_t irda_handle;
+
 static const xdlc_cf_items irlap_cf_items = {
     &hf_lap_c_nr,
     &hf_lap_c_ns,
@@ -1851,11 +1853,9 @@ static int dissect_irda(tvbuff_t* tvb, packet_info* pinfo, proto_tree* root, voi
 static int irda_addr_to_str(const address* addr, gchar *buf, int buf_len _U_)
 {
     const guint8 *addrdata = (const guint8 *)addr->data;
-    gchar *start_buf = buf;
 
-    buf = uint_to_str_back(buf, *addrdata);
-    *buf = '\0';
-    return (int)(buf-start_buf+1);
+    guint32_to_str_buf(*addrdata, buf, buf_len);
+    return (int)strlen(buf);
 }
 
 static int irda_addr_str_len(const address* addr _U_)
@@ -2206,7 +2206,7 @@ void proto_register_irda(void)
     proto_ttp   = proto_register_protocol("Tiny Transport Protocol", "TTP", "ttp");
 
     /* Register the dissector */
-    register_dissector("irda", dissect_irda, proto_irlap);
+    irda_handle = register_dissector("irda", dissect_irda, proto_irlap);
 
     /* Required function calls to register the header fields */
     proto_register_field_array(proto_irlap, hf_lap, array_length(hf_lap));
@@ -2241,9 +2241,6 @@ void proto_register_irda(void)
 
 void proto_reg_handoff_irda(void)
 {
-    dissector_handle_t irda_handle;
-
-    irda_handle = find_dissector("irda");
     dissector_add_uint("wtap_encap", WTAP_ENCAP_IRDA, irda_handle);
     dissector_add_uint("sll.ltype", LINUX_SLL_P_IRDA_LAP, irda_handle);
 }

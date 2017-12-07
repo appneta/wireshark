@@ -547,7 +547,8 @@ dissect_stun_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboole
     const char *msg_class_str;
     const char *msg_method_str;
     guint16     att_type;
-    guint16     att_length;
+    guint16     att_length, clear_port;
+    guint32     clear_ip;
     guint       i;
     guint       offset;
     guint       magic_cookie_first_word;
@@ -1048,8 +1049,8 @@ dissect_stun_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboole
                 /* Show the port 'in the clear'
                    XOR (host order) transid with (host order) xor-port.
                    Add host-order port into tree. */
-                ti = proto_tree_add_uint(att_tree, hf_stun_att_port, tvb, offset+2, 2,
-                                         tvb_get_ntohs(tvb, offset+2) ^ (magic_cookie_first_word >> 16));
+                clear_port = tvb_get_ntohs(tvb, offset+2) ^ (magic_cookie_first_word >> 16);
+                ti = proto_tree_add_uint(att_tree, hf_stun_att_port, tvb, offset+2, 2, clear_port);
                 PROTO_ITEM_SET_GENERATED(ti);
 
                 if (att_length < 8)
@@ -1061,8 +1062,8 @@ dissect_stun_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboole
                     /* Show the address 'in the clear'.
                        XOR (host order) transid with (host order) xor-address.
                        Add in network order tree. */
-                    ti = proto_tree_add_ipv4(att_tree, hf_stun_att_ipv4, tvb, offset+4, 4,
-                                             tvb_get_ipv4(tvb, offset+4) ^ g_htonl(magic_cookie_first_word));
+                    clear_ip = tvb_get_ipv4(tvb, offset+4) ^ g_htonl(magic_cookie_first_word);
+                    ti = proto_tree_add_ipv4(att_tree, hf_stun_att_ipv4, tvb, offset+4, 4, clear_ip);
                     PROTO_ITEM_SET_GENERATED(ti);
 
                     {
@@ -1728,12 +1729,8 @@ proto_reg_handoff_stun(void)
     stun_tcp_handle = create_dissector_handle(dissect_stun_tcp, proto_stun);
     stun_udp_handle = create_dissector_handle(dissect_stun_udp, proto_stun);
 
-    dissector_add_uint("tcp.port", TCP_PORT_STUN, stun_tcp_handle);
-    dissector_add_uint("udp.port", UDP_PORT_STUN, stun_udp_handle);
-
-    /* Used for "Decode As" in case STUN negotiation isn't captured */
-    dissector_add_for_decode_as("tcp.port", stun_tcp_handle);
-    dissector_add_for_decode_as("udp.port", stun_udp_handle);
+    dissector_add_uint_with_preference("tcp.port", TCP_PORT_STUN, stun_tcp_handle);
+    dissector_add_uint_with_preference("udp.port", UDP_PORT_STUN, stun_udp_handle);
 
     heur_dissector_add("udp", dissect_stun_heur, "STUN over UDP", "stun_udp", proto_stun, HEURISTIC_ENABLE);
 

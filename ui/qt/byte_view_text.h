@@ -44,6 +44,7 @@ class ByteViewText : public QAbstractScrollArea
 public:
     explicit ByteViewText(QWidget *parent = 0, tvbuff_t *tvb = NULL, proto_tree *tree = NULL, QTreeWidget *protoTree = NULL, packet_char_enc encoding = PACKET_CHAR_ENC_CHAR_ASCII);
     ~ByteViewText();
+    virtual QSize minimumSizeHint() const;
 
     bool hasDataSource(const tvbuff_t *ds_tvb = NULL);
     void setFormat(bytes_view_type format);
@@ -69,16 +70,18 @@ protected:
     virtual void contextMenuEvent(QContextMenuEvent *event);
 
 private:
+    // Text highlight modes.
     typedef enum {
-        StateNormal,
-        StateField,
-        StateProtocol,
-        StateOffsetNormal,
-        StateOffsetField
-    } highlight_state;
+        ModeNormal,
+        ModeField,
+        ModeProtocol,
+        ModeOffsetNormal,
+        ModeOffsetField,
+        ModeHover
+    } HighlightMode;
 
     void drawOffsetLine(QPainter &painter, const guint offset, const int row_y);
-    qreal flushOffsetFragment(QPainter &painter, qreal x, int y, highlight_state state, gboolean extra_highlight, QString &text);
+    qreal flushOffsetFragment(QPainter &painter, qreal x, int y, HighlightMode mode, QString &text);
     void scrollToByte(int byte);
     int offsetChars();
     int offsetPixels();
@@ -109,7 +112,8 @@ private:
     QMenu ctx_menu_;
 
     // Data highlight
-    guint hovered_byte_offset;
+    guint hovered_byte_offset_;
+    bool hovered_byte_lock_;
     QPair<guint,guint> p_bound_;
     QPair<guint,guint> f_bound_;
     QPair<guint,guint> fa_bound_;

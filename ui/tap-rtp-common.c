@@ -39,6 +39,7 @@
 #include <epan/addr_resolv.h>
 #include <epan/proto_data.h>
 #include <epan/dissectors/packet-rtp.h>
+#include <wsutil/pint.h>
 #include "rtp_stream.h"
 #include "tap-rtp-common.h"
 
@@ -446,10 +447,18 @@ rtp_packet_analyse(tap_rtp_stat_t *statinfo,
 		statinfo->lastnominaltime = 0;
 		statinfo->pt = rtpinfo->info_payload_type;
 		statinfo->reg_pt = rtpinfo->info_payload_type;
-		statinfo->bw_history[statinfo->bw_index].bytes = rtpinfo->info_data_len + 28;
+		if (pinfo->net_src.type == AT_IPv6) {
+			statinfo->bw_history[statinfo->bw_index].bytes = rtpinfo->info_data_len + 48;
+		} else {
+			statinfo->bw_history[statinfo->bw_index].bytes = rtpinfo->info_data_len + 28;
+		}
 		statinfo->bw_history[statinfo->bw_index].time = current_time;
 		statinfo->bw_index++;
-		statinfo->total_bytes += rtpinfo->info_data_len + 28;
+		if (pinfo->net_src.type == AT_IPv6) {
+			statinfo->total_bytes += rtpinfo->info_data_len + 48;
+		} else {
+			statinfo->total_bytes += rtpinfo->info_data_len + 28;
+		}
 		statinfo->bandwidth = (double)(statinfo->total_bytes*8)/1000;
 		/* Not needed ? initialised to zero? */
 		statinfo->delta = 0;
@@ -461,14 +470,19 @@ rtp_packet_analyse(tap_rtp_stat_t *statinfo,
 		if (rtpinfo->info_marker_set) {
 			statinfo->flags |= STAT_FLAG_MARKER;
 		}
+		statinfo->first_packet_num = pinfo->num;
 		statinfo->first_packet = FALSE;
 		return;
 	}
 
 	/* Reset flags */
 	statinfo->flags = 0;
-
-	/* Chek for duplicates (src mac differs from first_packet_mac_addr) */
+#if 0
+	/*According to bug https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=11478
+	 * this code causes problems. A better solution is needed if there is need for the functionality */
+	/* Try to detect duplicated packets due to mirroring/span ports by comparing src MAC addresses.
+	 * Chek for duplicates (src mac differs from first_packet_mac_addr) */
+	 */
 	if( pinfo->dl_src.type == AT_ETHER){
 		if(!addresses_equal(&(statinfo->first_packet_mac_addr), &(pinfo->dl_src))){
 			statinfo->flags |= STAT_FLAG_DUP_PKT;
@@ -476,7 +490,7 @@ rtp_packet_analyse(tap_rtp_stat_t *statinfo,
 			return;
 		}
 	}
-
+#endif
 	/* When calculating expected rtp packets the seq number can wrap around
 	 * so we have to count the number of cycles
 	 * Variable cycles counts the wraps around in forwarding connection and
@@ -582,12 +596,7 @@ rtp_packet_analyse(tap_rtp_stat_t *statinfo,
 		/* Handle wraparound ? */
 	arrivaltime = current_time - statinfo->start_time;
 
-	if (statinfo->first_timestamp > rtpinfo->info_timestamp){
-		/* Handle wraparound */
-		nominaltime = (double)(rtpinfo->info_timestamp + 0xffffffff - statinfo->first_timestamp + 1);
-	}else{
-		nominaltime = (double)(rtpinfo->info_timestamp - statinfo->first_timestamp);
-	}
+	nominaltime = (double)(guint32_wraparound_diff(rtpinfo->info_timestamp, statinfo->first_timestamp));
 
 	/* Can only analyze defined sampling rates */
 	if (clock_rate != 0) {
@@ -634,7 +643,11 @@ rtp_packet_analyse(tap_rtp_stat_t *statinfo,
 	}
 
 	/* Calculate the BW in Kbps adding the IP+UDP header to the RTP -> 20bytes(IP) + 8bytes(UDP) */
-	statinfo->bw_history[statinfo->bw_index].bytes = rtpinfo->info_data_len + 28;
+	if (pinfo->net_src.type == AT_IPv6) {
+		statinfo->bw_history[statinfo->bw_index].bytes = rtpinfo->info_data_len + 48;
+	} else {
+		statinfo->bw_history[statinfo->bw_index].bytes = rtpinfo->info_data_len + 28;
+	}
 	statinfo->bw_history[statinfo->bw_index].time = current_time;
 
 	/* Check if there are more than 1sec in the history buffer to calculate BW in bps. If so, remove those for the calculation */
@@ -644,21 +657,28 @@ rtp_packet_analyse(tap_rtp_stat_t *statinfo,
 		if (statinfo->bw_start_index == BUFF_BW) statinfo->bw_start_index=0;
 	};
 	/* IP hdr + UDP + RTP */
-	statinfo->total_bytes += rtpinfo->info_data_len + 28;
+	if (pinfo->net_src.type == AT_IPv6){
+		statinfo->total_bytes += rtpinfo->info_data_len + 48;
+	}else{
+		statinfo->total_bytes += rtpinfo->info_data_len + 28;
+	}
 	statinfo->bandwidth = (double)(statinfo->total_bytes*8)/1000;
 	statinfo->bw_index++;
 	if (statinfo->bw_index == BUFF_BW) statinfo->bw_index = 0;
 
 
+        /* Used by GTK code only */
+	statinfo->delta_timestamp = guint32_wraparound_diff(rtpinfo->info_timestamp, statinfo->timestamp);
+
 	/* Is it a packet with the mark bit set? */
 	if (rtpinfo->info_marker_set) {
-		statinfo->delta_timestamp = rtpinfo->info_timestamp - statinfo->timestamp;
-		if (rtpinfo->info_timestamp > statinfo->timestamp){
-			statinfo->flags |= STAT_FLAG_MARKER;
-		}
-		else{
-			statinfo->flags |= STAT_FLAG_WRONG_TIMESTAMP;
-		}
+		statinfo->flags |= STAT_FLAG_MARKER;
+	}
+
+	/* Difference can be negative. We don't expect difference bigger than 31 bits. Difference don't care about wrap around. */
+	gint32 tsdelta=rtpinfo->info_timestamp - statinfo->timestamp;
+	if (tsdelta < 0) {
+		statinfo->flags |= STAT_FLAG_WRONG_TIMESTAMP;
 	}
 	/* Is it a regular packet? */
 	if (!(statinfo->flags & STAT_FLAG_FIRST)
@@ -697,6 +717,7 @@ rtp_packet_analyse(tap_rtp_stat_t *statinfo,
 	statinfo->timestamp = rtpinfo->info_timestamp;
 	statinfo->stop_seq_nr = rtpinfo->info_seq_num;
 	statinfo->total_nr++;
+	statinfo->last_payload_len = rtpinfo->info_payload_len - rtpinfo->info_padding_count;
 
 	return;
 }

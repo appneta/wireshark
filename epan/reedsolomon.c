@@ -30,6 +30,7 @@
  */
 #include <stdio.h>
 #include "reedsolomon.h"
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 
 #ifdef CCSDS
 /* CCSDS field generator polynomial: 1+x+x^2+x^7+x^8 */
@@ -462,7 +463,7 @@ eras_dec_rs(dtype data[NN], int eras_pos[NN-KK], int no_eras)
   syn_error = 0;
   for(i=1;i<=NN-KK;i++){
     syn_error |= s[i];
-        /*printf("syndrome %d = %x\n",i,s[i]);*/
+        /*ws_debug_printf("syndrome %d = %x\n",i,s[i]);*/
     s[i] = Index_of[s[i]];
   }
 
@@ -510,15 +511,15 @@ eras_dec_rs(dtype data[NN], int eras_pos[NN-KK], int no_eras)
       count++;
     }
     if (count != no_eras) {
-      printf("\n lambda(x) is WRONG\n");
+      ws_debug_printf("\n lambda(x) is WRONG\n");
       count = -1;
       goto finish;
     }
 #if DEBUG >= 2
-    printf("\n Erasure positions as determined by roots of Eras Loc Poly:\n");
+    ws_debug_printf("\n Erasure positions as determined by roots of Eras Loc Poly:\n");
     for (i = 0; i < count; i++)
-      printf("%d ", loc[i]);
-    printf("\n");
+      ws_debug_printf("%d ", loc[i]);
+    ws_debug_printf("\n");
 #endif
 #endif
   }
@@ -648,7 +649,7 @@ eras_dec_rs(dtype data[NN], int eras_pos[NN-KK], int no_eras)
     }
     if (den == 0) {
 #if DEBUG >= 1
-      printf("\n ERROR: denominator = 0\n");
+      ws_debug_printf("\n ERROR: denominator = 0\n");
 #endif
       /* Convert to dual- basis */
       count = -1;

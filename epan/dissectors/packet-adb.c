@@ -438,16 +438,14 @@ dissect_adb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             data_length = command_data->data_length;
             crc32 = command_data->crc32;
 
-            if (direction == P2P_DIR_SENT)
+            if (direction == P2P_DIR_SENT) {
                 if (command_data->command == A_CLSE)
                     side_id = command_data->arg1; /* OUT: local id */
                 else
                     side_id = command_data->arg0; /* OUT: local id */
-            else
-                if (command_data->command == A_OKAY) {
+            } else {
                     side_id = command_data->arg1; /* IN: remote id */
-                } else
-                    side_id = command_data->arg1; /* IN: remote id */
+            }
 
             key[3].length = 1;
             key[3].key = &side_id;
@@ -720,7 +718,7 @@ dissect_adb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                         }
                     }
 
-                    next_tvb = tvb_new_subset(tvb, offset, tvb_captured_length_remaining(tvb, offset), tvb_captured_length_remaining(tvb, offset));
+                    next_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_captured_length_remaining(tvb, offset), tvb_captured_length_remaining(tvb, offset));
                     call_dissector_with_data(adb_service_handle, next_tvb, pinfo, tree, &adb_service_data);
 
                 } else {
@@ -900,7 +898,7 @@ proto_reg_handoff_adb(void)
 {
     adb_service_handle = find_dissector_add_dependency("adb_service", proto_adb);
 
-    dissector_add_for_decode_as("tcp.port",     adb_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port",     adb_handle);
     dissector_add_for_decode_as("usb.device",   adb_handle);
     dissector_add_for_decode_as("usb.product",  adb_handle);
     dissector_add_for_decode_as("usb.protocol", adb_handle);

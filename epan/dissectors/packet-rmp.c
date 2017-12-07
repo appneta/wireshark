@@ -45,6 +45,8 @@ static int hf_rmp_reserved = -1;
 
 static gint ett_rmp = -1;
 
+static dissector_handle_t rmp_handle;
+
 /*
  *  Possible values for "rmp_type" fields.
  */
@@ -91,7 +93,7 @@ const value_string rmp_error_vals[] = {
 	{ RMP_E_NODFLT,       "Default File Does Not Exist" },
 	{ RMP_E_OPENDFLT,     "Default File Open Failed" },
 	{ RMP_E_BADSID,       "Bad Session Id" },
-	{ RMP_E_OPENDFLT,     "Bad Packet Detected" },
+	{ RMP_E_BADPACKET,    "Bad Packet Detected" },
 	{ 0x00,               NULL }
 };
 
@@ -242,15 +244,12 @@ proto_register_rmp(void)
 	proto_register_field_array(proto_rmp, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 
-	register_dissector("rmp", dissect_rmp, proto_rmp);
+	rmp_handle = register_dissector("rmp", dissect_rmp, proto_rmp);
 }
 
 void
 proto_reg_handoff_rmp(void)
 {
-	dissector_handle_t rmp_handle;
-
-	rmp_handle = find_dissector("rmp");
 	dissector_add_uint("hpext.dxsap", HPEXT_DXSAP, rmp_handle);
 	dissector_add_uint("hpext.dxsap", HPEXT_SXSAP, rmp_handle);
 }

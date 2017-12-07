@@ -98,8 +98,6 @@
  *
  * Here are some of the (hefty) limitations of the current code
  *
- * . We currently do not handle netlib headers that cross packet boundaries.
- *   This should be an easy fix.
  * . I probably could have used the packet reassembly stuff, but I started
  *   this at version 0.8.20, so c'est la vie. It wouldn't have covered the
  *   netlib stuff anyway, so no big loss.
@@ -470,6 +468,8 @@ static const value_string tds_data_type_names[] = {
 
 void proto_reg_handoff_tds(void);
 void proto_register_tds(void);
+
+#define TDS_PORT_RANGE "1433,2433" /* Not IANA registered */
 
 /************************ Message definitions ***********************/
 
@@ -1146,6 +1146,8 @@ static const value_string prelogin_encryption_options[] = {
     {0, NULL}
 };
 
+static const unit_name_string units_characters = { " character", " characters" };
+
 #define TDS_MAX_COLUMNS 256
 
 /*
@@ -1189,7 +1191,7 @@ dissect_tds_nt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 {
     tvbuff_t *nt_tvb;
 
-    nt_tvb = tvb_new_subset(tvb, offset, -1, length);
+    nt_tvb = tvb_new_subset_length_caplen(tvb, offset, -1, length);
     if(tvb_strneql(tvb, offset, "NTLMSSP", 7) == 0)
         call_dissector(ntlmssp_handle, nt_tvb, pinfo, tree);
     else
@@ -2746,8 +2748,8 @@ static int
 dissect_tds_error_token(tvbuff_t *tvb, guint offset, proto_tree *tree, tds_conv_info_t *tds_info)
 {
     guint cur = offset;
-    guint16 msg_len;
-    guint8 srvr_len, proc_len;
+    guint32 msg_len;
+    guint32 srvr_len, proc_len;
     int encoding = tds_little_endian ? ENC_LITTLE_ENDIAN : ENC_BIG_ENDIAN;
 
     proto_tree_add_item(tree, hf_tds_error_length, tvb, cur, 2, ENC_LITTLE_ENDIAN);
@@ -2760,17 +2762,14 @@ dissect_tds_error_token(tvbuff_t *tvb, guint offset, proto_tree *tree, tds_conv_
     proto_tree_add_item(tree, hf_tds_error_class, tvb, cur, 1, ENC_NA);
     cur +=1;
 
-    msg_len = tvb_get_guint16(tvb, cur, encoding);
-    proto_tree_add_uint_format_value(tree, hf_tds_error_msgtext_length, tvb, cur, 2, msg_len, "%u characters", msg_len);
+    proto_tree_add_item_ret_uint(tree, hf_tds_error_msgtext_length, tvb, cur, 2, encoding, &msg_len);
     cur +=2;
 
     msg_len *= 2;
     proto_tree_add_item(tree, hf_tds_error_msgtext, tvb, cur, msg_len, ENC_UTF_16|ENC_LITTLE_ENDIAN);
     cur += msg_len;
 
-    srvr_len = tvb_get_guint8(tvb, cur);
-
-    proto_tree_add_uint_format_value(tree, hf_tds_error_servername_length, tvb, cur, 1, srvr_len, "%u characters", srvr_len);
+    proto_tree_add_item_ret_uint(tree, hf_tds_error_servername_length, tvb, cur, 1, ENC_NA, &srvr_len);
     cur +=1;
     if(srvr_len) {
         srvr_len *=2;
@@ -2778,9 +2777,7 @@ dissect_tds_error_token(tvbuff_t *tvb, guint offset, proto_tree *tree, tds_conv_
         cur += srvr_len;
     }
 
-    proc_len = tvb_get_guint8(tvb, cur);
-
-    proto_tree_add_uint_format_value(tree, hf_tds_error_procname_length, tvb, cur, 1, proc_len, "%u characters", proc_len);
+    proto_tree_add_item_ret_uint(tree, hf_tds_error_procname_length, tvb, cur, 1, ENC_NA, &proc_len);
     cur +=1;
     if(proc_len) {
         proc_len *=2;
@@ -2803,8 +2800,8 @@ static int
 dissect_tds_info_token(tvbuff_t *tvb, guint offset, proto_tree *tree, tds_conv_info_t *tds_info)
 {
     guint cur = offset;
-    guint16 msg_len;
-    guint8 srvr_len, proc_len;
+    guint32 msg_len;
+    guint32 srvr_len, proc_len;
     int encoding = tds_little_endian ? ENC_LITTLE_ENDIAN : ENC_BIG_ENDIAN;
 
     proto_tree_add_item(tree, hf_tds_info_length, tvb, cur, 2, ENC_LITTLE_ENDIAN);
@@ -2817,17 +2814,14 @@ dissect_tds_info_token(tvbuff_t *tvb, guint offset, proto_tree *tree, tds_conv_i
     proto_tree_add_item(tree, hf_tds_info_class, tvb, cur, 1, ENC_NA);
     cur +=1;
 
-    msg_len = tvb_get_guint16(tvb, cur, encoding);
-    proto_tree_add_uint_format_value(tree, hf_tds_info_msgtext_length, tvb, cur, 2, msg_len, "%u characters", msg_len);
+    proto_tree_add_item_ret_uint(tree, hf_tds_info_msgtext_length, tvb, cur, 2, encoding, &msg_len);
     cur +=2;
 
     msg_len *= 2;
     proto_tree_add_item(tree, hf_tds_info_msgtext, tvb, cur, msg_len, ENC_UTF_16|ENC_LITTLE_ENDIAN);
     cur += msg_len;
 
-    srvr_len = tvb_get_guint8(tvb, cur);
-
-    proto_tree_add_uint_format_value(tree, hf_tds_info_servername_length, tvb, cur, 1, srvr_len, "%u characters", srvr_len);
+    proto_tree_add_item_ret_uint(tree, hf_tds_info_servername_length, tvb, cur, 1, ENC_NA, &srvr_len);
     cur +=1;
     if(srvr_len) {
         srvr_len *=2;
@@ -2835,9 +2829,7 @@ dissect_tds_info_token(tvbuff_t *tvb, guint offset, proto_tree *tree, tds_conv_i
         cur += srvr_len;
     }
 
-    proc_len = tvb_get_guint8(tvb, cur);
-
-    proto_tree_add_uint_format_value(tree, hf_tds_info_procname_length, tvb, cur, 1, proc_len, "%u characters", proc_len);
+    proto_tree_add_item_ret_uint(tree, hf_tds_info_procname_length, tvb, cur, 1, ENC_NA, &proc_len);
     cur +=1;
     if(proc_len) {
         proc_len *=2;
@@ -3802,9 +3794,8 @@ static void
 dissect_netlib_buffer(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
     int offset = 0;
-    proto_item *tds_item = NULL;
-    proto_tree *tds_tree = NULL;
-    proto_tree *tds_status_tree = NULL;
+    proto_item *tds_item;
+    proto_tree *tds_tree;
     guint8 type;
     guint8 status;
     guint16 channel;
@@ -3815,6 +3806,15 @@ dissect_netlib_buffer(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     tvbuff_t *next_tvb;
     conversation_t *conv;
     tds_conv_info_t *tds_info;
+
+    static const int *status_flags[] = {
+        &hf_tds_status_eom,
+        &hf_tds_status_ignore,
+        &hf_tds_status_event_notif,
+        &hf_tds_status_reset_conn,
+        &hf_tds_status_reset_conn_skip_tran,
+        NULL
+    };
 
     if(detect_tls(tvb))
     {
@@ -3831,26 +3831,22 @@ dissect_netlib_buffer(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
         conversation_add_proto_data(conv, proto_tds, tds_info);
     }
 
-    type = tvb_get_guint8(tvb, offset);
-    status = tvb_get_guint8(tvb, offset + 1);
-    channel = tvb_get_ntohs(tvb, offset + 4);
-    packet_number = tvb_get_guint8(tvb, offset + 6);
-
     /* create display subtree for the protocol */
     tds_item = proto_tree_add_item(tree, proto_tds, tvb, offset, -1, ENC_NA);
     tds_tree = proto_item_add_subtree(tds_item, ett_tds);
+
+    type = tvb_get_guint8(tvb, offset);
     proto_tree_add_item(tds_tree, hf_tds_type, tvb, offset, 1, ENC_LITTLE_ENDIAN);
-    tds_item = proto_tree_add_item(tds_tree, hf_tds_status, tvb, offset + 1, 1, ENC_LITTLE_ENDIAN);
-    tds_status_tree = proto_item_add_subtree(tds_item, ett_tds_status);
-    proto_tree_add_item(tds_status_tree, hf_tds_status_eom, tvb, offset + 1, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(tds_status_tree, hf_tds_status_ignore, tvb, offset + 1, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(tds_status_tree, hf_tds_status_event_notif, tvb, offset + 1, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(tds_status_tree, hf_tds_status_reset_conn, tvb, offset + 1, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(tds_status_tree, hf_tds_status_reset_conn_skip_tran,tvb, offset + 1, 1, ENC_BIG_ENDIAN);
+
+    status = tvb_get_guint8(tvb, offset + 1);
+    proto_tree_add_bitmask(tds_tree, tvb, offset+1, hf_tds_status, ett_tds_status, status_flags, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(tds_tree, hf_tds_length, tvb, offset + 2, 2, ENC_BIG_ENDIAN);
+    channel = tvb_get_ntohs(tvb, offset + 4);
     proto_tree_add_item(tds_tree, hf_tds_channel, tvb, offset + 4, 2, ENC_BIG_ENDIAN);
+    packet_number = tvb_get_guint8(tvb, offset + 6);
     proto_tree_add_item(tds_tree, hf_tds_packet_number, tvb, offset + 6, 1, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(tds_tree, hf_tds_window, tvb, offset + 7, 1, ENC_LITTLE_ENDIAN);
+
     offset += 8;        /* skip Netlib header */
 
     /*
@@ -3951,165 +3947,45 @@ dissect_netlib_buffer(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 }
 
 static int
-dissect_tds_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void * data _U_)
+dissect_tds_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
-    volatile gboolean first_time = TRUE;
-    volatile int offset = 0;
-    guint length_remaining;
-    guint8 type;
-    volatile guint16 plen;
-    guint length;
-    tvbuff_t *volatile next_tvb;
-    proto_item *tds_item = NULL;
-    proto_tree *tds_tree = NULL;
+    guint32 type;
 
-    while ((length_remaining = tvb_reported_length_remaining(tvb, offset)) > 0) {
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "TDS");
+    col_clear(pinfo->cinfo, COL_INFO);
 
-        /*
-         * Can we do reassembly?
-         */
-        if (tds_desegment && pinfo->can_desegment) {
-            /*
-             * Yes - is the fixed-length part of the PDU
-             * split across segment boundaries?
-             */
-            if (length_remaining < 8) {
-                /*
-                 * Yes.  Tell the TCP dissector where the data for this message
-                 * starts in the data it handed us and that we need "some more
-                 * data."  Don't tell it exactly how many bytes we need because
-                 * if/when we ask for even more (after the header) that will
-                 * break reassembly.
-                 */
-                pinfo->desegment_offset = offset;
-                pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
-                return tvb_captured_length(tvb);
-            }
-        }
+    type = tvb_get_guint8(tvb, 0);
+    col_append_sep_fstr(pinfo->cinfo, COL_INFO, ",", "%s", val_to_str(type, packet_type_names, "Unknown Packet Type: %u"));
 
-        type = tvb_get_guint8(tvb, offset);
+    dissect_netlib_buffer(tvb, pinfo, tree);
 
-        /* Special test for TLS to that we don't have lots of incorrect reports of malformed packets */
-        if(type == TDS_TLS_PKT)
-        {
-            plen = tvb_get_ntohs(tvb, offset + 3) + 5;
-        } else
-            plen = tvb_get_ntohs(tvb, offset + 2);
-
-        if (plen < 8) {
-            /*
-             * The length is less than the header length.
-             * Put in the type, status, and length, and
-             * report the length as bogus.
-             */
-            if (tree) {
-                /* create display subtree for the protocol */
-                tds_item = proto_tree_add_item(tree, proto_tds,
-                                               tvb, offset, -1, ENC_NA);
-
-                tds_tree = proto_item_add_subtree(tds_item,
-                                                  ett_tds);
-                proto_tree_add_uint(tds_tree, hf_tds_type, tvb,
-                                    offset, 1, type);
-
-                if(type != TDS_TLS_PKT)
-                {
-                    proto_tree_add_item(tds_tree, hf_tds_status,
-                                    tvb, offset + 1, 1, ENC_BIG_ENDIAN);
-                    tds_item = proto_tree_add_uint(tds_tree, hf_tds_length, tvb, offset + 2, 2, plen);
-                    expert_add_info_format(pinfo, tds_item, &ei_tds_invalid_length, "bogus, should be >= 8");
-                }
-            }
-
-            /*
-             * Give up - we can't dissect any more of this
-             * data.
-             */
-            break;
-        }
-
-        /*
-         * Can we do reassembly?
-         */
-        if (tds_desegment && pinfo->can_desegment) {
-            /*
-             * Yes - is the PDU split across segment boundaries?
-             */
-            if (length_remaining < plen) {
-                /*
-                 * Yes.  Tell the TCP dissector where the
-                 * data for this message starts in the data
-                 * it handed us, and how many more bytes we
-                 * need, and return.
-                 */
-                pinfo->desegment_offset = offset;
-                pinfo->desegment_len = plen - length_remaining;
-                return tvb_captured_length(tvb);
-            }
-        }
-
-        if (first_time) {
-            col_set_str(pinfo->cinfo, COL_PROTOCOL, "TDS");
-
-            /*
-             * Set the packet description based on its TDS packet
-             * type.
-             */
-            col_add_str(pinfo->cinfo, COL_INFO,
-                        val_to_str(type, packet_type_names,
-                                   "Unknown Packet Type: %u"));
-            first_time = FALSE;
-        }
-
-        /*
-         * Construct a tvbuff containing the amount of the payload
-         * we have available.  Make its reported length the amount
-         * of data in the PDU.
-         *
-         * XXX - if reassembly isn't enabled. the subdissector will
-         * throw a BoundsError exception, rather than a
-         * ReportedBoundsError exception.  We really want a tvbuff
-         * where the length is "length", the reported length is
-         * "plen", and the "if the snapshot length were infinite"
-         * length is the minimum of the reported length of the tvbuff
-         * handed to us and "plen", with a new type of exception
-         * thrown if the offset is within the reported length but
-         * beyond that third length, with that exception getting the
-         * "Unreassembled Packet" error.
-         */
-        length = length_remaining;
-        if (length > plen)
-            length = plen;
-        next_tvb = tvb_new_subset(tvb, offset, length, plen);
-
-        /*
-         * Dissect the Netlib buffer.
-         *
-         * If it gets an error that means there's no point in
-         * dissecting any more Netlib buffers, rethrow the
-         * exception in question.
-         *
-         * If it gets any other error, report it and continue, as that
-         * means that Netlib buffer got an error, but that doesn't mean
-         * we should stop dissecting Netlib buffers within this frame
-         * or chunk of reassembled data.
-         */
-        TRY {
-            dissect_netlib_buffer(next_tvb, pinfo, tree);
-        }
-        CATCH_NONFATAL_ERRORS {
-
-            show_exception(tvb, pinfo, tree, EXCEPT_CODE, GET_MESSAGE);
-        }
-        ENDTRY;
-
-        /*
-         * Step to the next Netlib buffer.
-         */
-        offset += plen;
-    }
+    col_set_fence(pinfo->cinfo, COL_INFO);
 
     return tvb_captured_length(tvb);
+}
+
+static guint
+get_tds_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *data _U_)
+{
+    guint16 plen;
+    guint8 type;
+
+    type = tvb_get_guint8(tvb, offset);
+
+    /* Special test for TLS to that we don't have lots of incorrect reports of malformed packets */
+    if(type == TDS_TLS_PKT)
+        plen = tvb_get_ntohs(tvb, offset + 3) + 5;
+    else
+        plen = tvb_get_ntohs(tvb, offset + 2);
+
+   return plen;
+}
+
+static int
+dissect_tds(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void * data _U_)
+{
+   tcp_dissect_pdus(tvb, pinfo, tree, tds_desegment, 8, get_tds_pdu_len, dissect_tds_pdu, data);
+   return tvb_captured_length(tvb);
 }
 
 static gboolean
@@ -4119,98 +3995,54 @@ dissect_tds_tcp_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *
     guint8 type;
     guint8 status;
     guint16 plen;
-    conversation_t *conv;
 
     /*
      * If we don't have even enough data for a Netlib header,
      * just say it's not TDS.
      */
-    if (tvb_captured_length(tvb) < 8)
+    if (tvb_reported_length(tvb) < 8)
         return FALSE;
 
     /*
      * Quickly scan all the data we have in order to see if
      * everything in it looks like Netlib traffic.
      */
-    while (tvb_bytes_exist(tvb, offset, 1)) {
-        /*
-         * Check the type field.
-         */
-        type = tvb_get_guint8(tvb, offset);
-        if (!is_valid_tds_type(type))
-            return FALSE;
-
-        /*
-         * Check the status field, if it's present.
-         */
-        if (!tvb_bytes_exist(tvb, offset + 1, 1))
-            break;
-        status = tvb_get_guint8(tvb, offset + 1);
-        if (!is_valid_tds_status(status))
-            return FALSE;
-
-        /*
-         * Get the length of the PDU.
-         */
-        if (!tvb_bytes_exist(tvb, offset + 2, 2))
-            break;
-        plen = tvb_get_ntohs(tvb, offset + 2);
-        if (plen < 8) {
-            /*
-             * The length is less than the header length.
-             * That's bogus.
-             */
-            return FALSE;
-        }
-
-        /*
-         * If we're at the beginning of the segment, check the
-         * payload if it's a login packet.
-         */
-        if (offset == 0) {
-            if (!netlib_check_login_pkt(tvb, offset, pinfo, type))
-                return FALSE;
-        }
-
-        /*
-         * Step to the next Netlib buffer.
-         */
-        offset += plen;
-    }
 
     /*
-     * OK, it passes the test; assume the rest of this conversation
-     * is TDS.
+     * Check the type field.
      */
-    conv = find_or_create_conversation(pinfo);
-    conversation_set_dissector(conv, tds_tcp_handle);
+    type = tvb_get_guint8(tvb, offset);
+    if (!is_valid_tds_type(type))
+        return FALSE;
+
+    /*
+     * Check the status field
+     */
+    status = tvb_get_guint8(tvb, offset + 1);
+    if (!is_valid_tds_status(status))
+        return FALSE;
+
+    /*
+     * Get the length of the PDU.
+     */
+    plen = tvb_get_ntohs(tvb, offset + 2);
+    if (plen < 8) {
+        /*
+         * The length is less than the header length.
+         * That's bogus.
+         */
+        return FALSE;
+    }
+
+    if (!netlib_check_login_pkt(tvb, offset, pinfo, type))
+        return FALSE;
 
     /*
      * Now dissect it as TDS.
      */
-    dissect_tds_message(tvb, pinfo, tree, data);
+    dissect_tds(tvb, pinfo, tree, data);
 
     return TRUE;
-}
-
-static void
-tds_init(void)
-{
-    /*
-     * Initialize the reassembly table.
-     *
-     * XXX - should fragments be reassembled across multiple TCP
-     * connections?
-     */
-
-    reassembly_table_init(&tds_reassembly_table,
-                          &addresses_ports_reassembly_table_functions);
-}
-
-static void
-tds_cleanup(void)
-{
-    reassembly_table_destroy(&tds_reassembly_table);
 }
 
 static void
@@ -4218,6 +4050,11 @@ version_convert( gchar *result, guint32 hexver )
 {
     g_snprintf( result, ITEM_LABEL_LENGTH, "%d.%d.%d.%d",
         (hexver >> 24) & 0xFF, (hexver >> 16) & 0xFF, (hexver >> 8) & 0xFF, hexver & 0xFF);
+}
+
+static void
+apply_tds_prefs(void) {
+    tds_tcp_ports = prefs_get_range_value("tds", "tcp.port");
 }
 
 /* Register the protocol with Wireshark */
@@ -4637,7 +4474,7 @@ proto_register_tds(void)
         },
         { &hf_tds_error_msgtext_length,
           { "Error message length", "tds.error.msgtext_length",
-            FT_UINT16, BASE_DEC, NULL, 0x0,
+            FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_characters, 0x0,
             NULL, HFILL }
         },
         { &hf_tds_error_msgtext,
@@ -4647,7 +4484,7 @@ proto_register_tds(void)
         },
         { &hf_tds_error_servername_length,
           { "Server name length", "tds.error.servername_length",
-          FT_UINT8, BASE_DEC, NULL, 0x0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_characters, 0x0,
           NULL, HFILL }
         },
         { &hf_tds_error_servername,
@@ -4657,7 +4494,7 @@ proto_register_tds(void)
         },
         { &hf_tds_error_procname_length,
           { "Process name length", "tds.error.procname_length",
-          FT_UINT8, BASE_DEC, NULL, 0x0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_characters, 0x0,
           NULL, HFILL }
         },
         { &hf_tds_error_procname,
@@ -4733,7 +4570,7 @@ proto_register_tds(void)
         },
         { &hf_tds_info_msgtext_length,
           { "Error message length", "tds.info.msgtext_length",
-            FT_UINT16, BASE_DEC, NULL, 0x0,
+            FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_characters, 0x0,
             NULL, HFILL }
         },
         { &hf_tds_info_msgtext,
@@ -4743,7 +4580,7 @@ proto_register_tds(void)
         },
         { &hf_tds_info_servername_length,
           { "Server name length", "tds.info.servername_length",
-          FT_UINT8, BASE_DEC, NULL, 0x0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_characters, 0x0,
           NULL, HFILL }
         },
         { &hf_tds_info_servername,
@@ -4753,7 +4590,7 @@ proto_register_tds(void)
         },
         { &hf_tds_info_procname_length,
           { "Process name length", "tds.info.procname_length",
-          FT_UINT8, BASE_DEC, NULL, 0x0,
+          FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_characters, 0x0,
           NULL, HFILL }
         },
         { &hf_tds_info_procname,
@@ -5600,9 +5437,9 @@ proto_register_tds(void)
     expert_register_field_array(expert_tds, ei, array_length(ei));
 
 /* Allow dissector to be found by name. */
-    tds_tcp_handle = register_dissector("tds", dissect_tds_message, proto_tds);
+    tds_tcp_handle = register_dissector("tds", dissect_tds, proto_tds);
 
-    tds_module = prefs_register_protocol(proto_tds, NULL);
+    tds_module = prefs_register_protocol(proto_tds, apply_tds_prefs);
     prefs_register_bool_preference(tds_module, "desegment_buffers",
                                    "Reassemble TDS buffers spanning multiple TCP segments",
                                    "Whether the TDS dissector should reassemble TDS buffers spanning multiple TCP segments. "
@@ -5620,13 +5457,16 @@ proto_register_tds(void)
                                    "TDS decode as",
                                    "Hint as to whether to decode TDS protocol as little-endian or big-endian. (TDS7/8 always decoded as little-endian)",
                                    &tds_little_endian, tds_endian_type_options, FALSE);
-    prefs_register_range_preference(tds_module, "tcp_ports",
-                                    "TDS TCP ports",
-                                    "Additional TCP ports to decode as TDS",
-                                    &tds_tcp_ports, 0xFFFF);
 
-    register_init_routine(tds_init);
-    register_cleanup_routine(tds_cleanup);
+    /*
+     * Initialize the reassembly table.
+     *
+     * XXX - should fragments be reassembled across multiple TCP
+     * connections?
+     */
+
+    reassembly_table_register(&tds_reassembly_table,
+                          &addresses_ports_reassembly_table_functions);
 }
 
 /* If this dissector uses sub-dissector registration add a registration routine.
@@ -5637,9 +5477,7 @@ void
 proto_reg_handoff_tds(void)
 {
     /* Initial TDS ports: MS SQL default ports */
-    dissector_add_uint("tcp.port", 1433, tds_tcp_handle);
-    dissector_add_uint("tcp.port", 2433, tds_tcp_handle);
-
+    dissector_add_uint_range_with_preference("tcp.port", TDS_PORT_RANGE, tds_tcp_handle);
     heur_dissector_add("tcp", dissect_tds_tcp_heur, "Tabular Data Stream over TCP", "tds_tcp", proto_tds, HEURISTIC_ENABLE);
 
     ntlmssp_handle = find_dissector_add_dependency("ntlmssp", proto_tds);

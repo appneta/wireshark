@@ -737,24 +737,8 @@ ftype_register_bytes(void)
 		bytes_to_repr,			/* val_to_string_repr */
 		bytes_repr_len,			/* len_string_repr */
 
-		bytes_fvalue_set,		/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_byte_array = bytes_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -782,24 +766,8 @@ ftype_register_bytes(void)
 		bytes_to_repr,			/* val_to_string_repr */
 		bytes_repr_len,			/* len_string_repr */
 
-		bytes_fvalue_set,		/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_byte_array = bytes_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -827,24 +795,8 @@ ftype_register_bytes(void)
 		bytes_to_repr,			/* val_to_string_repr */
 		bytes_repr_len,			/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		ax25_fvalue_set,		/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_integer */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* get_value_integer */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_bytes = ax25_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -872,24 +824,8 @@ ftype_register_bytes(void)
 		bytes_to_repr,			/* val_to_string_repr */
 		bytes_repr_len,			/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		vines_fvalue_set,		/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_integer */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* get_value_integer */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_bytes = vines_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -917,24 +853,8 @@ ftype_register_bytes(void)
 		bytes_to_repr,			/* val_to_string_repr */
 		bytes_repr_len,			/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		ether_fvalue_set,		/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_bytes = ether_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -962,24 +882,8 @@ ftype_register_bytes(void)
 		oid_to_repr,			/* val_to_string_repr */
 		oid_repr_len,			/* len_string_repr */
 
-		oid_fvalue_set,		/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_byte_array = oid_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1007,24 +911,8 @@ ftype_register_bytes(void)
 		rel_oid_to_repr,		/* val_to_string_repr */
 		rel_oid_repr_len,		/* len_string_repr */
 
-		oid_fvalue_set,		/* set_value_byte_array (same as full oid) */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_byte_array = oid_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1052,24 +940,8 @@ ftype_register_bytes(void)
 		system_id_to_repr,		/* val_to_string_repr */
 		bytes_repr_len,			/* len_string_repr */
 
-		system_id_fvalue_set,	/* set_value_byte_array */
-		NULL,				/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_byte_array = system_id_fvalue_set }, /* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,
@@ -1097,24 +969,8 @@ ftype_register_bytes(void)
 		bytes_to_repr,			/* val_to_string_repr */
 		bytes_repr_len,			/* len_string_repr */
 
-		NULL,				/* set_value_byte_array */
-		fcwwn_fvalue_set,		/* set_value_bytes */
-		NULL,				/* set_value_guid */
-		NULL,				/* set_value_time */
-		NULL,				/* set_value_string */
-		NULL,				/* set_value_protocol */
-		NULL,				/* set_value_uinteger */
-		NULL,				/* set_value_sinteger */
-		NULL,				/* set_value_uinteger64 */
-		NULL,				/* set_value_sinteger64 */
-		NULL,				/* set_value_floating */
-
-		value_get,			/* get_value */
-		NULL,				/* get_value_uinteger */
-		NULL,				/* get_value_sinteger */
-		NULL,				/* get_value_uinteger64 */
-		NULL,				/* get_value_sinteger64 */
-		NULL,				/* get_value_floating */
+		{ .set_value_bytes = fcwwn_fvalue_set },	/* union set_value */
+		{ .get_value_ptr = value_get },			/* union get_value */
 
 		cmp_eq,
 		cmp_ne,

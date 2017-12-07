@@ -341,7 +341,7 @@ tvb_new_octet_aligned(tvbuff_t *tvb, guint32 bit_offset, gint32 no_of_bits)
 
 	/* already aligned -> shortcut */
 	if ((left == 0) && (remaining_bits == 0)) {
-		return tvb_new_subset(tvb, byte_offset, datalen, datalen);
+		return tvb_new_subset_length_caplen(tvb, byte_offset, datalen, datalen);
 	}
 
 	DISSECTOR_ASSERT(datalen>0);
@@ -1900,6 +1900,48 @@ tvb_find_guint8(tvbuff_t *tvb, const gint offset, const gint maxlength, const gu
 	return tvb_find_guint8_generic(tvb, offset, limit, needle);
 }
 
+/* Same as tvb_find_guint8() with 16bit needle. */
+gint
+tvb_find_guint16(tvbuff_t *tvb, const gint offset, const gint maxlength,
+		 const guint16 needle)
+{
+	const guint8 needle1 = ((needle & 0xFF00) >> 8);
+	const guint8 needle2 = ((needle & 0x00FF) >> 0);
+	gint searched_bytes = 0;
+	gint pos = offset;
+
+	do {
+		gint offset1 =
+			tvb_find_guint8(tvb, pos, maxlength - searched_bytes, needle1);
+		gint offset2 = -1;
+
+		if (offset1 == -1) {
+			return -1;
+		}
+
+		searched_bytes = offset - pos + 1;
+
+		if ((maxlength != -1) && (searched_bytes >= maxlength)) {
+			return -1;
+		}
+
+		offset2 = tvb_find_guint8(tvb, offset1 + 1, 1, needle2);
+
+		searched_bytes += 1;
+
+		if (offset2 != -1) {
+			if ((maxlength != -1) && (searched_bytes > maxlength)) {
+				return -1;
+			}
+			return offset1;
+		}
+
+		pos = offset1 + 1;
+	} while (searched_bytes < maxlength);
+
+	return -1;
+}
+
 static inline gint
 tvb_ws_mempbrk_guint8_generic(tvbuff_t *tvb, guint abs_offset, guint limit, const ws_mempbrk_pattern* pattern, guchar *found_needle)
 {
@@ -2103,8 +2145,9 @@ tvb_strncaseeql(tvbuff_t *tvb, const gint offset, const gchar *str, const size_t
 }
 
 /*
- * Call memcmp after checking if enough chars left, returning 0 if
- * it returns 0 (meaning "equal") and -1 otherwise, otherwise return -1.
+ * Check that the tvbuff contains at least size bytes, starting at
+ * offset, and that those bytes are equal to str. Return 0 for success
+ * and -1 for error. This function does not throw an exception.
  */
 gint
 tvb_memeql(tvbuff_t *tvb, const gint offset, const guint8 *str, size_t size)
@@ -2129,8 +2172,9 @@ tvb_memeql(tvbuff_t *tvb, const gint offset, const guint8 *str, size_t size)
 	}
 }
 
-/*
- * Format the data in the tvb from offset for length ...
+/**
+ * Format the data in the tvb from offset for size.  Returned string is
+ * wmem packet_scoped so call must be in that scope.
  */
 gchar *
 tvb_format_text(tvbuff_t *tvb, const gint offset, const gint size)
@@ -2141,14 +2185,14 @@ tvb_format_text(tvbuff_t *tvb, const gint offset, const gint size)
 	len = (size > 0) ? size : 0;
 
 	ptr = ensure_contiguous(tvb, offset, size);
-	return format_text(ptr, len);
+	return format_text(wmem_packet_scope(), ptr, len);
 }
 
 /*
  * Format the data in the tvb from offset for length ...
  */
 gchar *
-tvb_format_text_wsp(tvbuff_t *tvb, const gint offset, const gint size)
+tvb_format_text_wsp(wmem_allocator_t* allocator, tvbuff_t *tvb, const gint offset, const gint size)
 {
 	const guint8 *ptr;
 	gint          len;
@@ -2156,12 +2200,13 @@ tvb_format_text_wsp(tvbuff_t *tvb, const gint offset, const gint size)
 	len = (size > 0) ? size : 0;
 
 	ptr = ensure_contiguous(tvb, offset, size);
-	return format_text_wsp(ptr, len);
+	return format_text_wsp(allocator, ptr, len);
 }
 
-/*
+/**
  * Like "tvb_format_text()", but for null-padded strings; don't show
- * the null padding characters as "\000".
+ * the null padding characters as "\000".  Returned string is wmem packet_scoped
+ * so call must be in that scope.
  */
 gchar *
 tvb_format_stringzpad(tvbuff_t *tvb, const gint offset, const gint size)
@@ -2175,7 +2220,7 @@ tvb_format_stringzpad(tvbuff_t *tvb, const gint offset, const gint size)
 	ptr = ensure_contiguous(tvb, offset, size);
 	for (p = ptr, stringlen = 0; stringlen < len && *p != '\0'; p++, stringlen++)
 		;
-	return format_text(ptr, stringlen);
+	return format_text(wmem_packet_scope(), ptr, stringlen);
 }
 
 /*
@@ -2183,7 +2228,7 @@ tvb_format_stringzpad(tvbuff_t *tvb, const gint offset, const gint size)
  * the null padding characters as "\000".
  */
 gchar *
-tvb_format_stringzpad_wsp(tvbuff_t *tvb, const gint offset, const gint size)
+tvb_format_stringzpad_wsp(wmem_allocator_t* allocator, tvbuff_t *tvb, const gint offset, const gint size)
 {
 	const guint8 *ptr, *p;
 	gint          len;
@@ -2194,7 +2239,7 @@ tvb_format_stringzpad_wsp(tvbuff_t *tvb, const gint offset, const gint size)
 	ptr = ensure_contiguous(tvb, offset, size);
 	for (p = ptr, stringlen = 0; stringlen < len && *p != '\0'; p++, stringlen++)
 		;
-	return format_text_wsp(ptr, stringlen);
+	return format_text_wsp(allocator, ptr, stringlen);
 }
 
 /* Unicode REPLACEMENT CHARACTER */
@@ -2296,7 +2341,7 @@ tvb_get_string_8859_1(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint 
 }
 
 /*
- * Given a wmem scope, a tvbuff, an offset, and a length, and a translation
+ * Given a wmem scope, a tvbuff, an offset, a length, and a translation
  * table, treat the string of bytes referred to by the tvbuff, the offset,
  * and the length as a string encoded using one octet per character, with
  * octets with the high-order bit clear being ASCII and octets with the
@@ -2420,18 +2465,29 @@ tvb_get_ascii_7bits_string(wmem_allocator_t *scope, tvbuff_t *tvb,
 }
 
 /*
- * Given a wmem scope, a tvbuff, an offset, and a length, treat the string
- * of bytes referred to by the tvbuff, offset, and length as a string encoded
- * in EBCDIC using one octet per character, and return a pointer to a
- * UTF-8 string, allocated using the wmem scope.
+ * Given a wmem scope, a tvbuff, an offset, a length, and a translation
+ * table, treat the string of bytes referred to by the tvbuff, the offset,
+ * and the length as a string encoded using one octet per character, with
+ * octets being mapped by the translation table to 2-byte Unicode Basic
+ * Multilingual Plane characters (including REPLACEMENT CHARACTER), and
+ * return a pointer to a UTF-8 string, allocated with the wmem scope.
  */
 static guint8 *
-tvb_get_ebcdic_string(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint length)
+tvb_get_nonascii_unichar2_string(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint length, const gunichar2 table[256])
 {
 	const guint8  *ptr;
 
 	ptr = ensure_contiguous(tvb, offset, length);
-	return get_ebcdic_string(scope, ptr, length);
+	return get_nonascii_unichar2_string(scope, ptr, length, table);
+}
+
+static guint8 *
+tvb_get_t61_string(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint length)
+{
+	const guint8  *ptr;
+
+	ptr = ensure_contiguous(tvb, offset, length);
+	return get_t61_string(scope, ptr, length);
 }
 
 /*
@@ -2590,9 +2646,22 @@ tvb_get_string_enc(wmem_allocator_t *scope, tvbuff_t *tvb, const gint offset,
 
 	case ENC_EBCDIC:
 		/*
-		 * XXX - multiple "dialects" of EBCDIC?
+		 * "Common" EBCDIC, covering all characters with the
+		 * same code point in all Roman-alphabet EBCDIC code
+		 * pages.
 		 */
-		strptr = tvb_get_ebcdic_string(scope, tvb, offset, length);
+		strptr = tvb_get_nonascii_unichar2_string(scope, tvb, offset, length, charset_table_ebcdic);
+		break;
+
+	case ENC_EBCDIC_CP037:
+		/*
+		 * EBCDIC code page 037.
+		 */
+		strptr = tvb_get_nonascii_unichar2_string(scope, tvb, offset, length, charset_table_ebcdic_cp037);
+		break;
+
+	case ENC_T61:
+		strptr = tvb_get_t61_string(scope, tvb, offset, length);
 		break;
 	}
 	return strptr;
@@ -2757,7 +2826,7 @@ tvb_get_ucs_4_stringz(wmem_allocator_t *scope, tvbuff_t *tvb, const gint offset,
 }
 
 static guint8 *
-tvb_get_ebcdic_stringz(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint *lengthp)
+tvb_get_nonascii_unichar2_stringz(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint *lengthp, const gunichar2 table[256])
 {
 	guint	       size;
 	const guint8  *ptr;
@@ -2767,7 +2836,21 @@ tvb_get_ebcdic_stringz(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint
 	/* XXX, conversion between signed/unsigned integer */
 	if (lengthp)
 		*lengthp = size;
-	return get_ebcdic_string(scope, ptr, size);
+	return get_nonascii_unichar2_string(scope, ptr, size, table);
+}
+
+static guint8 *
+tvb_get_t61_stringz(wmem_allocator_t *scope, tvbuff_t *tvb, gint offset, gint *lengthp)
+{
+	guint	       size;
+	const guint8  *ptr;
+
+	size = tvb_strsize(tvb, offset);
+	ptr  = ensure_contiguous(tvb, offset, size);
+	/* XXX, conversion between signed/unsigned integer */
+	if (lengthp)
+		*lengthp = size;
+	return get_t61_string(scope, ptr, size);
 }
 
 guint8 *
@@ -2905,9 +2988,22 @@ tvb_get_stringz_enc(wmem_allocator_t *scope, tvbuff_t *tvb, const gint offset, g
 
 	case ENC_EBCDIC:
 		/*
-		 * XXX - multiple "dialects" of EBCDIC?
+		 * "Common" EBCDIC, covering all characters with the
+		 * same code point in all Roman-alphabet EBCDIC code
+		 * pages.
 		 */
-		strptr = tvb_get_ebcdic_stringz(scope, tvb, offset, lengthp);
+		strptr = tvb_get_nonascii_unichar2_stringz(scope, tvb, offset, lengthp, charset_table_ebcdic);
+		break;
+
+	case ENC_EBCDIC_CP037:
+		/*
+		 * EBCDIC code page 037.
+		 */
+		strptr = tvb_get_nonascii_unichar2_stringz(scope, tvb, offset, lengthp, charset_table_ebcdic_cp037);
+		break;
+
+	case ENC_T61:
+		strptr = tvb_get_t61_stringz(scope, tvb, offset, lengthp);
 		break;
 	}
 

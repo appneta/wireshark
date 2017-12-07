@@ -170,8 +170,8 @@ dissect_rmi(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
         switch(rmitype) {
         case RMI_OUTPUTSTREAM:
             /* XXX - uint, or string? */
-            proto_tree_add_uint(rmi_tree, hf_rmi_magic,
-                                tvb, offset,     4, tvb_get_ntohl(tvb,0));
+            proto_tree_add_item(rmi_tree, hf_rmi_magic,
+                                tvb, offset,     4, ENC_BIG_ENDIAN);
             proto_tree_add_item(rmi_tree, hf_rmi_version,
                                 tvb, offset + 4, 2, ENC_BIG_ENDIAN);
             proto_tree_add_item(rmi_tree, hf_rmi_protocol,
@@ -360,8 +360,8 @@ proto_register_rmi(void)
     };
 
     proto_rmi = proto_register_protocol("Java RMI", "RMI", "rmi");
-    proto_ser = proto_register_protocol("Java Serialization", "Serialization",
-                                        "serialization");
+    proto_ser = proto_register_protocol_in_name_only("Java Serialization", "Serialization",
+                                        "serialization", proto_rmi, FT_PROTOCOL);
     proto_register_field_array(proto_rmi, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
 
@@ -373,7 +373,7 @@ proto_reg_handoff_rmi(void)
     dissector_handle_t rmi_handle;
 
     rmi_handle = create_dissector_handle(dissect_rmi, proto_rmi);
-    dissector_add_uint("tcp.port", TCP_PORT_RMI, rmi_handle);
+    dissector_add_uint_with_preference("tcp.port", TCP_PORT_RMI, rmi_handle);
 }
 
 /*

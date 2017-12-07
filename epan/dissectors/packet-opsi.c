@@ -33,7 +33,7 @@ void proto_register_opsi(void);
 void proto_reg_handoff_opsi(void);
 
 /* TCP destination port dedicated to the OPSI protocol */
-#define TCP_PORT_OPSI		4002
+#define TCP_PORT_OPSI		4002 /* Not IANA registered */
 
 /* Information position in OPSI header */
 #define MAJOR_VERSION_OFFSET	0
@@ -558,7 +558,7 @@ dissect_opsi_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "OPSI");
 	col_clear(pinfo->cinfo, COL_INFO);
 
-	col_append_sep_fstr(pinfo->cinfo, COL_INFO, ", ", "%s",
+	col_append_sep_str(pinfo->cinfo, COL_INFO, ", ",
 		val_to_str(tvb_get_guint8(tvb, CODE_OFFSET), opsi_opcode,
 			"<Unknown opcode %d>"));
 	col_set_fence(pinfo->cinfo, COL_INFO);
@@ -882,7 +882,7 @@ proto_reg_handoff_opsi(void)
 {
 	dissector_handle_t opsi_handle;
 	opsi_handle = create_dissector_handle(dissect_opsi, proto_opsi);
-	dissector_add_uint("tcp.port", TCP_PORT_OPSI, opsi_handle);
+	dissector_add_uint_with_preference("tcp.port", TCP_PORT_OPSI, opsi_handle);
 }
 
 /*

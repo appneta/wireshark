@@ -44,12 +44,10 @@
 #include "packet-arp.h"
 #include "packet-tcp.h"
 
-#define TCP_PORT_DHCPFO 519
+#define TCP_PORT_DHCPFO 519 /* Not IANA registered */
 
 void proto_register_dhcpfo(void);
 void proto_reg_handoff_dhcpfo(void);
-
-static guint tcp_port_pref = TCP_PORT_DHCPFO;
 
 /* desegmentation of DHCP failover over TCP */
 static gboolean dhcpfo_desegment = TRUE;
@@ -638,7 +636,7 @@ dissect_dhcpfo_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
 			    hf_dhcpfo_vendor_class, tvb, offset,
 			    option_length, ENC_ASCII, wmem_packet_scope(), &vendor_class_str);
 			proto_item_append_text(oi,", \"%s\"",
-			    format_text(vendor_class_str, option_length));
+			    format_text(wmem_packet_scope(), vendor_class_str, option_length));
 			break;
 
 		case DHCP_FO_PD_LEASE_EXPIRATION_TIME:
@@ -805,11 +803,9 @@ dissect_dhcpfo_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
 			proto_item_append_text(oi,", %u seconds",
 			    receive_timer);
 
-			proto_tree_add_uint_format_value(option_tree,
+			proto_tree_add_uint(option_tree,
 			    hf_dhcpfo_receive_timer, tvb, offset,
-			    option_length, receive_timer,
-			    "%u seconds",
-			    receive_timer);
+			    option_length, receive_timer);
 			break;
 
 		case DHCP_FO_PD_HASH_BUCKET_ASSIGNMENT:
@@ -1081,7 +1077,7 @@ proto_register_dhcpfo(void)
 
 		{&hf_dhcpfo_receive_timer,
 			{"Receive timer", "dhcpfo.receivetimer",
-			FT_UINT32, BASE_DEC, NULL, 0,
+			FT_UINT32, BASE_DEC|BASE_UNIT_STRING, &units_second_seconds, 0,
 			NULL, HFILL }
 		},
 
@@ -1132,8 +1128,7 @@ proto_register_dhcpfo(void)
 	expert_module_t* expert_dhcpfo;
 
 /* Register the protocol name and description */
-	proto_dhcpfo = proto_register_protocol("DHCP Failover", "DHCPFO",
-	    "dhcpfo");
+	proto_dhcpfo = proto_register_protocol("DHCP Failover", "DHCPFO", "dhcpfo");
 
 /* Required function calls to register the header fields and subtrees used */
 	proto_register_field_array(proto_dhcpfo, hf, array_length(hf));
@@ -1141,10 +1136,8 @@ proto_register_dhcpfo(void)
 	expert_dhcpfo = expert_register_protocol(proto_dhcpfo);
 	expert_register_field_array(expert_dhcpfo, ei, array_length(ei));
 
-	dhcpfo_module = prefs_register_protocol(proto_dhcpfo, proto_reg_handoff_dhcpfo);
-	prefs_register_uint_preference(dhcpfo_module, "tcp_port",
-		"DHCP failover TCP Port", "Set the port for DHCP failover communications",
-		10, &tcp_port_pref);
+	dhcpfo_module = prefs_register_protocol(proto_dhcpfo, NULL);
+
 	prefs_register_bool_preference(dhcpfo_module, "desegment",
 	    "Reassemble DHCP failover messages spanning multiple TCP segments",
 	    "Whether the DHCP failover dissector should reassemble messages spanning multiple TCP segments."
@@ -1155,18 +1148,10 @@ proto_register_dhcpfo(void)
 void
 proto_reg_handoff_dhcpfo(void)
 {
-	static gboolean initialized = FALSE;
-	static dissector_handle_t dhcpfo_handle;
-	static guint saved_tcp_port;
+	dissector_handle_t dhcpfo_handle;
 
-	if (!initialized) {
-		dhcpfo_handle = create_dissector_handle(dissect_dhcpfo, proto_dhcpfo);
-		initialized = TRUE;
-	} else {
-		dissector_delete_uint("tcp.port", saved_tcp_port, dhcpfo_handle);
-	}
-	dissector_add_uint("tcp.port", tcp_port_pref, dhcpfo_handle);
-	saved_tcp_port = tcp_port_pref;
+	dhcpfo_handle = create_dissector_handle(dissect_dhcpfo, proto_dhcpfo);
+	dissector_add_uint_with_preference("tcp.port", TCP_PORT_DHCPFO, dhcpfo_handle);
 }
 
 /*

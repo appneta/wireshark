@@ -125,7 +125,6 @@ typedef struct _scsi_cdb_table_t {
 #define SCSI_SPC_PERSRESVOUT             0x5F
 #define SCSI_SPC_PREVMEDREMOVAL          0x1E
 #define SCSI_SPC_READBUFFER              0x3C
-#define SCSI_SPC_RCVCOPYRESULTS          0x84
 #define SCSI_SPC_RCVDIAGRESULTS          0x1C
 #define SCSI_SPC_RELEASE6                0x17
 #define SCSI_SPC_RELEASE10               0x57
@@ -264,7 +263,7 @@ extern value_string_ext scsi_asc_val_ext;
 	guint32   try_end_data_offset=0;				\
 									\
 	try_short_packet=pinfo->fd->cap_len<pinfo->fd->pkt_len;		\
-	try_tvb=tvb_new_subset(tvb_a, offset_a, tvb_captured_length_remaining(tvb_a, offset_a), length_arg); \
+	try_tvb=tvb_new_subset_length_caplen(tvb_a, offset_a, tvb_captured_length_remaining(tvb_a, offset_a), length_arg); \
 	try_offset=0;							\
 	TRY {
 

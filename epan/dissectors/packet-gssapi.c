@@ -66,6 +66,8 @@ static expert_field ei_gssapi_unknown_header = EI_INIT;
 
 static gboolean gssapi_reassembly = TRUE;
 
+static dissector_handle_t gssapi_handle;
+
 typedef struct _gssapi_conv_info_t {
 	gssapi_oid_value *oid;
 
@@ -102,19 +104,6 @@ static const fragment_items gssapi_frag_items = {
 
 
 static reassembly_table gssapi_reassembly_table;
-
-static void
-gssapi_reassembly_init(void)
-{
-	reassembly_table_init(&gssapi_reassembly_table,
-	                      &addresses_reassembly_table_functions);
-}
-
-static void
-gssapi_reassembly_cleanup(void)
-{
-	reassembly_table_destroy(&gssapi_reassembly_table);
-}
 
 /*
  * Subdissectors
@@ -561,6 +550,12 @@ dissect_gssapi_verf(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *d
 	return dissect_gssapi_work_wrapper(tvb, pinfo, tree, (gssapi_encrypt_info_t*)data, TRUE);
 }
 
+static void
+gssapi_shutdown(void)
+{
+	g_hash_table_destroy(gssapi_oids);
+}
+
 void
 proto_register_gssapi(void)
 {
@@ -636,12 +631,15 @@ proto_register_gssapi(void)
 	expert_gssapi = expert_register_protocol(proto_gssapi);
 	expert_register_field_array(expert_gssapi, ei, array_length(ei));
 
-	register_dissector("gssapi", dissect_gssapi, proto_gssapi);
+	gssapi_handle = register_dissector("gssapi", dissect_gssapi, proto_gssapi);
 	register_dissector("gssapi_verf", dissect_gssapi_verf, proto_gssapi);
 
-	gssapi_oids = g_hash_table_new(gssapi_oid_hash, gssapi_oid_equal);
-	register_init_routine(gssapi_reassembly_init);
-	register_cleanup_routine(gssapi_reassembly_cleanup);
+	gssapi_oids = g_hash_table_new_full(gssapi_oid_hash, gssapi_oid_equal, g_free, g_free);
+
+	reassembly_table_register(&gssapi_reassembly_table,
+	                      &addresses_reassembly_table_functions);
+
+	register_shutdown_routine(gssapi_shutdown);
 }
 
 static int
@@ -707,8 +705,6 @@ static dcerpc_auth_subdissector_fns gssapi_auth_fns = {
 void
 proto_reg_handoff_gssapi(void)
 {
-	dissector_handle_t gssapi_handle;
-
 	ntlmssp_handle = find_dissector_add_dependency("ntlmssp", proto_gssapi);
 	ntlmssp_payload_handle = find_dissector_add_dependency("ntlmssp_payload", proto_gssapi);
 	ntlmssp_verf_handle = find_dissector_add_dependency("ntlmssp_verf", proto_gssapi);
@@ -725,7 +721,6 @@ proto_reg_handoff_gssapi(void)
 					  DCE_C_RPC_AUTHN_PROTOCOL_SPNEGO,
 					  &gssapi_auth_fns);
 
-	gssapi_handle = find_dissector("gssapi");
 	dissector_add_string("dns.tsig.mac", "gss.microsoft.com", gssapi_handle);
 }
 

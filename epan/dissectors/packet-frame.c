@@ -38,8 +38,9 @@
 #include <wiretap/wtap.h>
 #include <epan/tap.h>
 #include <epan/expert.h>
-#include <wsutil/md5.h>
+#include <wsutil/wsgcrypt.h>
 #include <wsutil/str_util.h>
+#include <wmem/wmem.h>
 
 #include "packet-frame.h"
 #include "log.h"
@@ -73,6 +74,8 @@ static int hf_frame_protocols = -1;
 static int hf_frame_color_filter_name = -1;
 static int hf_frame_color_filter_text = -1;
 static int hf_frame_interface_id = -1;
+static int hf_frame_interface_name = -1;
+static int hf_frame_interface_description = -1;
 static int hf_frame_pack_flags = -1;
 static int hf_frame_pack_direction = -1;
 static int hf_frame_pack_reception_type = -1;
@@ -90,6 +93,7 @@ static int hf_frame_wtap_encap = -1;
 static int hf_comments_text = -1;
 
 static gint ett_frame = -1;
+static gint ett_ifname = -1;
 static gint ett_flags = -1;
 static gint ett_comments = -1;
 
@@ -194,6 +198,18 @@ dissect_frame(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 
 	case REC_TYPE_PACKET:
 		pinfo->current_proto = "Frame";
+		if (pinfo->phdr->presence_flags & WTAP_HAS_PACK_FLAGS) {
+			if (pinfo->phdr->pack_flags & 0x00000001)
+				pinfo->p2p_dir = P2P_DIR_RECV;
+			if (pinfo->phdr->pack_flags & 0x00000002)
+				pinfo->p2p_dir = P2P_DIR_SENT;
+		}
+
+		/*
+		 * If the pseudo-header *and* the packet record both
+		 * have direction information, the pseudo-header
+		 * overrides the packet record.
+		 */
 		if (pinfo->pseudo_header != NULL) {
 			switch (pinfo->pkt_encap) {
 
@@ -326,25 +342,35 @@ dissect_frame(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 			    pinfo->phdr->interface_id);
 		}
 		if (pinfo->phdr->presence_flags & WTAP_HAS_PACK_FLAGS) {
-			if (pinfo->phdr->pack_flags & 0x00000001) {
+			if (pinfo->phdr->pack_flags & 0x00000001)
 				proto_item_append_text(ti, " (inbound)");
-				pinfo->p2p_dir = P2P_DIR_RECV;
-			}
-			if (pinfo->phdr->pack_flags & 0x00000002) {
+			if (pinfo->phdr->pack_flags & 0x00000002)
 				proto_item_append_text(ti, " (outbound)");
-				pinfo->p2p_dir = P2P_DIR_SENT;
-			}
 		}
 
 		fh_tree = proto_item_add_subtree(ti, ett_frame);
 
-		if (pinfo->phdr->presence_flags & WTAP_HAS_INTERFACE_ID && proto_field_is_referenced(tree, hf_frame_interface_id)) {
+		if (pinfo->phdr->presence_flags & WTAP_HAS_INTERFACE_ID &&
+		   (proto_field_is_referenced(tree, hf_frame_interface_id) || proto_field_is_referenced(tree, hf_frame_interface_name) || proto_field_is_referenced(tree, hf_frame_interface_description))) {
 			const char *interface_name = epan_get_interface_name(pinfo->epan, pinfo->phdr->interface_id);
+			const char *interface_description = epan_get_interface_description(pinfo->epan, pinfo->phdr->interface_id);
+			proto_tree *if_tree;
+			proto_item *if_item;
 
-			if (interface_name)
-				proto_tree_add_uint_format_value(fh_tree, hf_frame_interface_id, tvb, 0, 0, pinfo->phdr->interface_id, "%u (%s)", pinfo->phdr->interface_id, interface_name);
-			else
-				proto_tree_add_uint(fh_tree, hf_frame_interface_id, tvb, 0, 0, pinfo->phdr->interface_id);
+			if (interface_name) {
+				if_item = proto_tree_add_uint_format_value(fh_tree, hf_frame_interface_id, tvb, 0, 0,
+									   pinfo->phdr->interface_id, "%u (%s)",
+									   pinfo->phdr->interface_id, interface_name);
+				if_tree = proto_item_add_subtree(if_item, ett_ifname);
+				proto_tree_add_string(if_tree, hf_frame_interface_name, tvb, 0, 0, interface_name);
+			} else {
+				if_item = proto_tree_add_uint(fh_tree, hf_frame_interface_id, tvb, 0, 0, pinfo->phdr->interface_id);
+			}
+
+                        if (interface_description) {
+				if_tree = proto_item_add_subtree(if_item, ett_ifname);
+				proto_tree_add_string(if_tree, hf_frame_interface_description, tvb, 0, 0, interface_description);
+                        }
 		}
 
 		if (pinfo->phdr->presence_flags & WTAP_HAS_PACK_FLAGS) {
@@ -435,17 +461,13 @@ dissect_frame(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 
 		if (generate_md5_hash) {
 			const guint8 *cp;
-			md5_state_t   md_ctx;
-			md5_byte_t    digest[16];
+			guint8        digest[HASH_MD5_LENGTH];
 			const gchar  *digest_string;
 
 			cp = tvb_get_ptr(tvb, 0, cap_len);
 
-			md5_init(&md_ctx);
-			md5_append(&md_ctx, cp, cap_len);
-			md5_finish(&md_ctx, digest);
-
-			digest_string = bytestring_to_str(wmem_packet_scope(), digest, 16, '\0');
+			gcry_md_hash_buffer(GCRY_MD_MD5, digest, cp, cap_len);
+			digest_string = bytestring_to_str(wmem_packet_scope(), digest, HASH_MD5_LENGTH, '\0');
 			ti = proto_tree_add_string(fh_tree, hf_frame_md5_hash, tvb, 0, 0, digest_string);
 			PROTO_ITEM_SET_GENERATED(ti);
 		}
@@ -680,11 +702,12 @@ dissect_frame(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 			if (!(decoded[byte] & (1 << bit))) {
 				field_info* fi = proto_find_field_from_offset(tree, i, tvb);
 				if (fi && fi->hfinfo->id != proto_frame) {
-					g_log(LOG_DOMAIN_CAPTURE, G_LOG_LEVEL_WARNING,
-						"Dissector %s incomplete in frame %u: undecoded byte number %u "
-						"(0x%.4X+%u)",
-						(fi ? fi->hfinfo->abbrev : "[unknown]"),
-						pinfo->num, i, i - i % 16, i % 16);
+					if (prefs.incomplete_dissectors_check_debug)
+						g_log(LOG_DOMAIN_CAPTURE, G_LOG_LEVEL_WARNING,
+							"Dissector %s incomplete in frame %u: undecoded byte number %u "
+							"(0x%.4X+%u)",
+							(fi ? fi->hfinfo->abbrev : "[unknown]"),
+							pinfo->num, i, i - i % 16, i % 16);
 					proto_tree_add_expert_format(tree, pinfo, &ei_incomplete, tvb, i, 1, "Undecoded byte number: %u (0x%.4X+%u)", i, i - i % 16, i % 16);
 				}
 			}
@@ -798,6 +821,16 @@ proto_register_frame(void)
 		    FT_UINT32, BASE_DEC, NULL, 0x0,
 		    NULL, HFILL }},
 
+		{ &hf_frame_interface_name,
+		  { "Interface name", "frame.interface_name",
+		    FT_STRING, BASE_NONE, NULL, 0x0,
+		    "The friendly name for this interface", HFILL }},
+
+		{ &hf_frame_interface_description,
+		  { "Interface description", "frame.interface_description",
+		    FT_STRING, BASE_NONE, NULL, 0x0,
+		    "The descriptionfor this interface", HFILL }},
+
 		{ &hf_frame_pack_flags,
 		  { "Packet flags", "frame.packet_flags",
 		    FT_UINT32, BASE_HEX, NULL, 0x0,
@@ -877,6 +910,7 @@ proto_register_frame(void)
 
  	static gint *ett[] = {
 		&ett_frame,
+		&ett_ifname,
 		&ett_flags,
 		&ett_comments
 	};
@@ -895,7 +929,7 @@ proto_register_frame(void)
 		value_string *arr;
 		int i;
 
-		hf_encap.hfinfo.strings = arr = g_new(value_string, encap_count+1);
+		hf_encap.hfinfo.strings = arr = wmem_alloc_array(wmem_epan_scope(), value_string, encap_count+1);
 
 		for (i = 0; i < encap_count; i++) {
 			arr[i].value = i;
@@ -906,7 +940,7 @@ proto_register_frame(void)
 	}
 
 	proto_frame = proto_register_protocol("Frame", "Frame", "frame");
-	proto_pkt_comment = proto_register_protocol("Packet comments", "Pkt_Comment", "pkt_comment");
+	proto_pkt_comment = proto_register_protocol_in_name_only("Packet comments", "Pkt_Comment", "pkt_comment", proto_frame, FT_PROTOCOL);
 	proto_syscall = proto_register_protocol("System Call", "Syscall", "syscall");
 
 	proto_register_field_array(proto_frame, hf, array_length(hf));

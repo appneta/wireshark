@@ -32,12 +32,14 @@
 #include <string.h>
 #include <errno.h>
 
+#include <wsutil/strtoi.h>
+
 /*
  * Win32 doesn't have SIGALRM (and it's the OS where name lookup calls
  * are most likely to take a long time, given the way address-to-name
  * lookups are done over NBNS).
  *
- * Mac OS X does have SIGALRM, but if you longjmp() out of a name resolution
+ * macOS does have SIGALRM, but if you longjmp() out of a name resolution
  * call in a signal handler, you might crash, because the state of the
  * resolution code that sends messages to lookupd might be inconsistent
  * if you jump out of it in middle of a call.
@@ -98,7 +100,7 @@
 #include "addr_resolv.h"
 #include "wsutil/filesystem.h"
 
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 #include <wsutil/file_util.h>
 #include <wsutil/pint.h>
 #include "wsutil/inet_aton.h"
@@ -115,6 +117,7 @@
 #define ENAME_MANUF     "manuf"
 #define ENAME_SERVICES  "services"
 #define ENAME_VLANS     "vlans"
+#define ENAME_SS7PCS    "ss7pcs"
 
 #define HASHETHSIZE      2048
 #define HASHHOSTSIZE     2048
@@ -158,6 +161,12 @@ typedef struct hashvlan {
 /*    struct hashvlan     *next; */
     gchar               name[MAXVLANNAMELEN];
 } hashvlan_t;
+
+typedef struct ss7pc {
+    guint32             id; /* 1st byte NI, 3 following bytes: Point Code */
+    gchar               pc_addr[MAXNAMELEN];
+    gchar               name[MAXNAMELEN];
+} hashss7pc_t;
 
 /* hash tables used for ethernet and manufacturer lookup */
 #define HASHETHER_STATUS_UNRESOLVED     1
@@ -203,6 +212,7 @@ static wmem_map_t *ipxnet_hash_table = NULL;
 static wmem_map_t *ipv4_hash_table = NULL;
 static wmem_map_t *ipv6_hash_table = NULL;
 static wmem_map_t *vlan_hash_table = NULL;
+static wmem_map_t *ss7pc_hash_table = NULL;
 
 static wmem_list_t *manually_resolved_ipv4_list = NULL;
 static wmem_list_t *manually_resolved_ipv6_list = NULL;
@@ -286,7 +296,8 @@ e_addr_resolve gbl_resolv_flags = {
     TRUE,   /* dns_pkt_addr_resolution */
     TRUE,   /* use_external_net_name_resolver */
     FALSE,  /* load_hosts_file_from_profile_only */
-    FALSE   /* vlan_name */
+    FALSE,  /* vlan_name */
+    FALSE   /* ss7 point code names */
 };
 #ifdef HAVE_C_ARES
 static guint name_resolve_concurrency = 500;
@@ -305,6 +316,7 @@ gchar *g_pipxnets_path  = NULL;     /* personal ipxnets file  */
 gchar *g_services_path  = NULL;     /* global services file   */
 gchar *g_pservices_path = NULL;     /* personal services file */
 gchar *g_pvlan_path     = NULL;     /* personal vlans file    */
+gchar *g_ss7pcs_path    = NULL;     /* personal ss7pcs file   */
                                     /* first resolving call   */
 
 /* c-ares */
@@ -412,7 +424,7 @@ fgetline(char **buf, int *size, FILE *fp)
  *  Local function definitions
  */
 static subnet_entry_t subnet_lookup(const guint32 addr);
-static void subnet_entry_set(guint32 subnet_addr, const guint32 mask_length, const gchar* name);
+static void subnet_entry_set(guint32 subnet_addr, const guint8 mask_length, const gchar* name);
 
 
 static void
@@ -514,15 +526,16 @@ parse_service_line (char *line)
         return;
     }
 
-    if (CVT_NO_ERROR != range_convert_str(&port_rng, port, max_port)) {
+    if (CVT_NO_ERROR != range_convert_str(NULL, &port_rng, port, max_port)) {
         /* some assertion here? */
+        wmem_free (NULL, port_rng);
         return;
     }
 
     cb_service = service;
     cb_proto = proto;
     range_foreach(port_rng, add_serv_port_cb);
-    g_free (port_rng);
+    wmem_free (NULL, port_rng);
     cb_proto = PT_NONE;
 } /* parse_service_line */
 
@@ -536,7 +549,7 @@ add_serv_port_cb(const guint32 port)
 }
 
 
-static void
+static gboolean
 parse_services_file(const char * path)
 {
     FILE *serv_p;
@@ -547,13 +560,14 @@ parse_services_file(const char * path)
     serv_p = ws_fopen(path, "r");
 
     if (serv_p == NULL)
-        return;
+        return FALSE;
 
     while (fgetline(&buf, &size, serv_p) >= 0) {
         parse_service_line(buf);
     }
 
     fclose(serv_p);
+    return TRUE;
 }
 
 /* -----------------
@@ -630,6 +644,7 @@ serv_name_lookup(port_type proto, guint port)
 static void
 initialize_services(void)
 {
+    gboolean parse_file = TRUE;
     g_assert(serv_port_hashtable == NULL);
     serv_port_hashtable = wmem_map_new(wmem_epan_scope(), g_int_hash, g_int_equal);
 
@@ -641,15 +656,28 @@ initialize_services(void)
 
     /* Compute the pathname of the personal services file */
     if (g_pservices_path == NULL) {
-        g_pservices_path = get_persconffile_path(ENAME_SERVICES, FALSE);
+        /* Check profile directory before personal configuration */
+        g_pservices_path = get_persconffile_path(ENAME_SERVICES, TRUE);
+        if (!parse_services_file(g_pservices_path)) {
+            g_free(g_pservices_path);
+            g_pservices_path = get_persconffile_path(ENAME_SERVICES, FALSE);
+        } else {
+            parse_file = FALSE;
+        }
     }
-    parse_services_file(g_pservices_path);
+    if (parse_file) {
+        parse_services_file(g_pservices_path);
+    }
 }
 
 static void
 service_name_lookup_cleanup(void)
 {
     serv_port_hashtable = NULL;
+    g_free(g_services_path);
+    g_services_path = NULL;
+    g_free(g_pservices_path);
+    g_pservices_path = NULL;
 }
 
 /* Fill in an IP4 structure with info from subnets file or just with the
@@ -1119,7 +1147,8 @@ get_ethbyaddr(const guint8 *addr)
 
 } /* get_ethbyaddr */
 
-static hashmanuf_t *manuf_hash_new_entry(const guint8 *addr, char* name)
+static hashmanuf_t *
+manuf_hash_new_entry(const guint8 *addr, char* name)
 {
     int    *manuf_key;
     hashmanuf_t *manuf_value;
@@ -1131,7 +1160,6 @@ static hashmanuf_t *manuf_hash_new_entry(const guint8 *addr, char* name)
     manuf_value = wmem_new(wmem_epan_scope(), hashmanuf_t);
 
     memcpy(manuf_value->addr, addr, 3);
-    manuf_value->status = (name != NULL) ? HASHETHER_STATUS_RESOLVED_NAME : HASHETHER_STATUS_UNRESOLVED;
     if (name != NULL) {
         g_strlcpy(manuf_value->resolved_name, name, MAXNAMELEN);
         manuf_value->status = HASHETHER_STATUS_RESOLVED_NAME;
@@ -1149,37 +1177,36 @@ static hashmanuf_t *manuf_hash_new_entry(const guint8 *addr, char* name)
 }
 
 static void
-add_manuf_name(const guint8 *addr, unsigned int mask, gchar *name)
+wka_hash_new_entry(const guint8 *addr, char* name)
 {
     guint8 *wka_key;
-
-    /*
-     * XXX - can we use Standard Annotation Language annotations to
-     * note that mask, as returned by parse_ethe)r_address() (and thus
-     * by the routines that call it, and thus passed to us) cannot be > 48,
-     * or is SAL too weak to express that?
-     */
-    if (mask >= 48) {
-        /* This is a well-known MAC address; just add this to the Ethernet
-           hash table */
-        add_eth_name(addr, name);
-        return;
-    }
-
-    if (mask == 0) {
-        /* This is a manufacturer ID; add it to the manufacturer ID hash table */
-        manuf_hash_new_entry(addr, name);
-        return;
-    } /* mask == 0 */
-
-    /* This is a range of well-known addresses; add it to the appropriate
-       well-known-address table, creating that table if necessary. */
 
     wka_key = (guint8 *)wmem_alloc(wmem_epan_scope(), 6);
     memcpy(wka_key, addr, 6);
 
     wmem_map_insert(wka_hashtable, wka_key, wmem_strdup(wmem_epan_scope(), name));
+}
 
+static void
+add_manuf_name(const guint8 *addr, unsigned int mask, gchar *name)
+{
+    switch (mask)
+    {
+    case 0:
+        /* This is a manufacturer ID; add it to the manufacturer ID hash table */
+        manuf_hash_new_entry(addr, name);
+        break;
+
+    case 48:
+        /* This is a well-known MAC address; add it to the Ethernet hash table */
+        add_eth_name(addr, name);
+        break;
+
+    default:
+        /* This is a range of well-known addresses; add it to the well-known-address table */
+        wka_hash_new_entry(addr, name);
+        break;
+    }
 } /* add_manuf_name */
 
 static hashmanuf_t *
@@ -1318,6 +1345,13 @@ initialize_ethers(void)
 
 } /* initialize_ethers */
 
+static void
+ethers_cleanup(void)
+{
+    g_free(g_pethers_path);
+    g_pethers_path = NULL;
+}
+
 /* Resolve ethernet address */
 static hashether_t *
 eth_addr_resolve(hashether_t *tp) {
@@ -1337,7 +1371,7 @@ eth_addr_resolve(hashether_t *tp) {
         /* Unknown name.  Try looking for it in the well-known-address
            tables for well-known address ranges smaller than 2^24. */
         mask = 7;
-        for (;;) {
+        do {
             /* Only the topmost 5 bytes participate fully */
             if ((name = wka_name_lookup(addr, mask+40)) != NULL) {
                 g_snprintf(tp->resolved_name, MAXNAMELEN, "%s_%02x",
@@ -1345,13 +1379,10 @@ eth_addr_resolve(hashether_t *tp) {
                 tp->status = HASHETHER_STATUS_RESOLVED_DUMMY;
                 return tp;
             }
-            if (mask == 0)
-                break;
-            mask--;
-        }
+        } while (mask--);
 
         mask = 7;
-        for (;;) {
+        do {
             /* Only the topmost 4 bytes participate fully */
             if ((name = wka_name_lookup(addr, mask+32)) != NULL) {
                 g_snprintf(tp->resolved_name, MAXNAMELEN, "%s_%02x:%02x",
@@ -1359,13 +1390,10 @@ eth_addr_resolve(hashether_t *tp) {
                 tp->status = HASHETHER_STATUS_RESOLVED_DUMMY;
                 return tp;
             }
-            if (mask == 0)
-                break;
-            mask--;
-        }
+        } while (mask--);
 
         mask = 7;
-        for (;;) {
+        do {
             /* Only the topmost 3 bytes participate fully */
             if ((name = wka_name_lookup(addr, mask+24)) != NULL) {
                 g_snprintf(tp->resolved_name, MAXNAMELEN, "%s_%02x:%02x:%02x",
@@ -1373,10 +1401,7 @@ eth_addr_resolve(hashether_t *tp) {
                 tp->status = HASHETHER_STATUS_RESOLVED_DUMMY;
                 return tp;
             }
-            if (mask == 0)
-                break;
-            mask--;
-        }
+        } while (mask--);
 
         /* Now try looking in the manufacturer table. */
         manuf_value = manuf_name_lookup(addr);
@@ -1390,7 +1415,7 @@ eth_addr_resolve(hashether_t *tp) {
         /* Now try looking for it in the well-known-address
            tables for well-known address ranges larger than 2^24. */
         mask = 7;
-        for (;;) {
+        do {
             /* Only the topmost 2 bytes participate fully */
             if ((name = wka_name_lookup(addr, mask+16)) != NULL) {
                 g_snprintf(tp->resolved_name, MAXNAMELEN, "%s_%02x:%02x:%02x:%02x",
@@ -1399,13 +1424,10 @@ eth_addr_resolve(hashether_t *tp) {
                 tp->status = HASHETHER_STATUS_RESOLVED_DUMMY;
                 return tp;
             }
-            if (mask == 0)
-                break;
-            mask--;
-        }
+        } while (mask--);
 
         mask = 7;
-        for (;;) {
+        do {
             /* Only the topmost byte participates fully */
             if ((name = wka_name_lookup(addr, mask+8)) != NULL) {
                 g_snprintf(tp->resolved_name, MAXNAMELEN, "%s_%02x:%02x:%02x:%02x:%02x",
@@ -1414,12 +1436,10 @@ eth_addr_resolve(hashether_t *tp) {
                 tp->status = HASHETHER_STATUS_RESOLVED_DUMMY;
                 return tp;
             }
-            if (mask == 0)
-                break;
-            mask--;
-        }
+        } while (mask--);
 
-        for (mask = 7; mask > 0; mask--) {
+        mask = 7;
+        do {
             /* Not even the topmost byte participates fully */
             if ((name = wka_name_lookup(addr, mask)) != NULL) {
                 g_snprintf(tp->resolved_name, MAXNAMELEN, "%s_%02x:%02x:%02x:%02x:%02x:%02x",
@@ -1428,7 +1448,7 @@ eth_addr_resolve(hashether_t *tp) {
                 tp->status = HASHETHER_STATUS_RESOLVED_DUMMY;
                 return tp;
             }
-        }
+        } while (--mask); /* Work down to the last bit */
 
         /* No match whatsoever. */
         set_address(&ether_addr, AT_ETHER, 6, addr);
@@ -1487,6 +1507,7 @@ eth_name_lookup(const guint8 *addr, const gboolean resolve)
     hashether_t  *tp;
 
     tp = (hashether_t *)wmem_map_lookup(eth_hashtable, addr);
+
     if (tp == NULL) {
         tp = eth_hash_new_entry(addr, resolve);
     } else {
@@ -1707,6 +1728,8 @@ static void
 ipx_name_lookup_cleanup(void)
 {
     ipxnet_hash_table = NULL;
+    g_free(g_pipxnets_path);
+    g_pipxnets_path = NULL;
 }
 
 #if 0
@@ -1906,8 +1929,8 @@ initialize_vlans(void)
     g_assert(vlan_hash_table == NULL);
     vlan_hash_table = wmem_map_new(wmem_epan_scope(), g_int_hash, g_int_equal);
 
-    /* Set g_pipxnets_path here, but don't actually do anything
-     * with it. It's used in get_ipxnetbyname() and get_ipxnetbyaddr()
+    /* Set g_pvlan_path here, but don't actually do anything
+     * with it. It's used in get_vlannamebyid()
      */
     if (g_pvlan_path == NULL)
         g_pvlan_path = get_persconffile_path(ENAME_VLANS, FALSE);
@@ -1918,6 +1941,8 @@ static void
 vlan_name_lookup_cleanup(void)
 {
     vlan_hash_table = NULL;
+    g_free(g_pvlan_path);
+    g_pvlan_path = NULL;
 }
 
 static const gchar *
@@ -2135,7 +2160,7 @@ read_subnets_file (const char *subnetspath)
     int size = 0;
     gchar *cp, *cp2;
     guint32 host_addr; /* IPv4 ONLY */
-    int mask_length;
+    guint8 mask_length;
 
     if ((hf = ws_fopen(subnetspath, "r")) == NULL)
         return FALSE;
@@ -2162,15 +2187,14 @@ read_subnets_file (const char *subnetspath)
             continue; /* no */
         }
 
-        mask_length = atoi(cp2);
-        if (0 >= mask_length || mask_length > 32) {
+        if (!ws_strtou8(cp2, NULL, &mask_length) || mask_length == 0 || mask_length > 32) {
             continue; /* invalid mask length */
         }
 
         if ((cp = strtok(NULL, " \t")) == NULL)
             continue; /* no subnet name */
 
-        subnet_entry_set(host_addr, (guint32)mask_length, cp);
+        subnet_entry_set(host_addr, mask_length, cp);
     }
     wmem_free(wmem_epan_scope(), line);
 
@@ -2231,7 +2255,7 @@ subnet_lookup(const guint32 addr)
  * given length.
  */
 static void
-subnet_entry_set(guint32 subnet_addr, const guint32 mask_length, const gchar* name)
+subnet_entry_set(guint32 subnet_addr, const guint8 mask_length, const gchar* name)
 {
     subnet_length_entry_t* entry;
     sub_net_hashipv4_t * tp;
@@ -2289,9 +2313,18 @@ subnet_name_lookup_init(void)
         subnet_length_entries[i].mask = g_htonl(ip_get_subnet_mask(length));
     }
 
-    subnetspath = get_persconffile_path(ENAME_SUBNETS, FALSE);
-    if (!read_subnets_file(subnetspath) && errno != ENOENT) {
-        report_open_failure(subnetspath, errno, FALSE);
+    /* Check profile directory before personal configuration */
+    subnetspath = get_persconffile_path(ENAME_SUBNETS, TRUE);
+    if (!read_subnets_file(subnetspath)) {
+        if (errno != ENOENT) {
+            report_open_failure(subnetspath, errno, FALSE);
+        }
+
+        g_free(subnetspath);
+        subnetspath = get_persconffile_path(ENAME_SUBNETS, FALSE);
+        if (!read_subnets_file(subnetspath) && errno != ENOENT) {
+            report_open_failure(subnetspath, errno, FALSE);
+        }
     }
     g_free(subnetspath);
 
@@ -2305,6 +2338,151 @@ subnet_name_lookup_init(void)
     g_free(subnetspath);
 }
 
+/* SS7 PC Name Resolution Portion */
+static hashss7pc_t *
+new_ss7pc(const guint8 ni, const guint32 pc)
+{
+    hashss7pc_t *tp = wmem_new(wmem_epan_scope(), hashss7pc_t);
+    tp->id = (ni<<24) + (pc&0xffffff);
+    tp->pc_addr[0] = '\0';
+    tp->name[0] = '\0';
+
+    return tp;
+}
+
+static hashss7pc_t *
+host_lookup_ss7pc(const guint8 ni, const guint32 pc)
+{
+    hashss7pc_t * volatile tp;
+    guint32 id;
+
+    id = (ni<<24) + (pc&0xffffff);
+
+    tp = (hashss7pc_t *)wmem_map_lookup(ss7pc_hash_table, GUINT_TO_POINTER(id));
+    if (tp == NULL) {
+        tp = new_ss7pc(ni, pc);
+        wmem_map_insert(ss7pc_hash_table, GUINT_TO_POINTER(id), tp);
+    }
+
+    return tp;
+}
+
+void fill_unresolved_ss7pc(const gchar * pc_addr, const guint8 ni, const guint32 pc)
+{
+    hashss7pc_t *tp = host_lookup_ss7pc(ni, pc);
+
+    g_strlcpy(tp->pc_addr, pc_addr, MAXNAMELEN);
+}
+
+const gchar *
+get_hostname_ss7pc(const guint8 ni, const guint32 pc)
+{
+    hashss7pc_t *tp = host_lookup_ss7pc(ni, pc);
+
+    /* never resolved yet*/
+    if (tp->pc_addr[0] == '\0')
+        return tp->pc_addr;
+
+    /* Don't have name in file */
+    if (tp->name[0] == '\0')
+        return tp->pc_addr;
+
+    if (!gbl_resolv_flags.ss7pc_name)
+        return tp->pc_addr;
+
+    return tp->name;
+}
+
+static void
+add_ss7pc_name(const guint8 ni, guint32 pc, const gchar *name)
+{
+    hashss7pc_t *tp;
+    guint32 id;
+
+    if (!name || name[0] == '\0')
+        return;
+
+    id = (ni<<24) + (pc&0xffffff);
+    tp = (hashss7pc_t *)wmem_map_lookup(ss7pc_hash_table, GUINT_TO_POINTER(id));
+    if (!tp) {
+        tp = new_ss7pc(ni, pc);
+        wmem_map_insert(ss7pc_hash_table, GUINT_TO_POINTER(id), tp);
+    }
+
+    if (g_ascii_strcasecmp(tp->name, name)) {
+        g_strlcpy(tp->name, name, MAXNAMELEN);
+    }
+}
+
+static gboolean
+read_ss7pcs_file(const char *ss7pcspath)
+{
+    FILE *hf;
+    char *line = NULL;
+    int size = 0;
+    gchar *cp;
+    guint8 ni;
+    guint32 pc;
+    gboolean entry_found = FALSE;
+
+    /*
+    *  File format is Network Indicator (decimal)<dash>Point Code (Decimal)<tab/space>Hostname
+    */
+    if ((hf = ws_fopen(ss7pcspath, "r")) == NULL)
+        return FALSE;
+
+    while (fgetline(&line, &size, hf) >= 0) {
+        if ((cp = strchr(line, '#')))
+            *cp = '\0';
+
+        if ((cp = strtok(line, "-")) == NULL)
+            continue; /*no ni-pc separator*/
+        if (!ws_strtou8(cp, NULL, &ni))
+            continue;
+        if (ni > 3)
+             continue;
+
+        if ((cp = strtok(NULL, " \t")) == NULL)
+            continue; /* no tokens for pc and name */
+        if (!ws_strtou32(cp, NULL, &pc))
+            continue;
+        if (pc >> 24 > 0)
+            continue;
+
+        if ((cp = strtok(NULL, " \t")) == NULL)
+            continue; /* no host name */
+
+        entry_found = TRUE;
+        add_ss7pc_name(ni, pc, cp);
+    }
+    wmem_free(wmem_epan_scope(), line);
+
+    fclose(hf);
+    return entry_found ? TRUE : FALSE;
+}
+
+static void
+ss7pc_name_lookup_init(void)
+{
+    char *ss7pcspath;
+
+    g_assert(ss7pc_hash_table == NULL);
+
+    ss7pc_hash_table = wmem_map_new(wmem_epan_scope(), g_direct_hash, g_direct_equal);
+
+    /*
+     * Load the user's ss7pcs file
+     */
+    ss7pcspath = get_persconffile_path(ENAME_SS7PCS, TRUE);
+    if (!read_ss7pcs_file(ss7pcspath) && errno != ENOENT) {
+        report_open_failure(ss7pcspath, errno, FALSE);
+    }
+    g_free(ss7pcspath);
+}
+
+/* SS7PC Name Resolution End*/
+
+
 /*
  *  External Functions
  */
@@ -2314,7 +2492,8 @@ addr_resolve_pref_init(module_t *nameres)
 {
     prefs_register_bool_preference(nameres, "mac_name",
             "Resolve MAC addresses",
-            "Resolve Ethernet MAC address to manufacturer names",
+            "Resolve Ethernet MAC addresses to host names from the preferences"
+            " or system's Ethers file, or to a manufacturer based name.",
             &gbl_resolv_flags.mac_name);
 
     prefs_register_bool_preference(nameres, "transport_name",
@@ -2369,12 +2548,17 @@ addr_resolve_pref_init(module_t *nameres)
 
     prefs_register_bool_preference(nameres, "vlan_name",
             "Resolve VLAN IDs",
-            "Resolve VLAN IDs to describing names."
-            " To do so you need a file called vlans in your"
-            " user preference directory. Format of the file is:"
-            "  \"ID<Tab>Name\""
-            " One line per VLAN.",
+            "Resolve VLAN IDs to network names from the preferences \"vlans\" file."
+            " Format of the file is: \"ID<Tab>Name\"."
+            " One line per VLAN, e.g.: 1 Management",
             &gbl_resolv_flags.vlan_name);
+
+    prefs_register_bool_preference(nameres, "ss7_pc_name",
+            "Resolve SS7 PCs",
+            "Resolve SS7 Point Codes to node names from the profiles \"ss7pcs\" file."
+            " Format of the file is: \"Network_Indicator<Dash>PC_Decimal<Tab>Name\"."
+            " One line per Point Code, e.g.: 2-1234 MyPointCode1",
+            &gbl_resolv_flags.ss7pc_name);
 
 }
 
@@ -2386,6 +2570,7 @@ disable_name_resolution(void) {
     gbl_resolv_flags.dns_pkt_addr_resolution            = FALSE;
     gbl_resolv_flags.use_external_net_name_resolver     = FALSE;
     gbl_resolv_flags.vlan_name                          = FALSE;
+    gbl_resolv_flags.ss7pc_name                         = FALSE;
 }
 
 #ifdef HAVE_C_ARES
@@ -2526,6 +2711,8 @@ add_ipv4_name(const guint addr, const gchar *name)
         new_resolved_objects = TRUE;
     }
     tp->flags |= TRIED_RESOLVE_ADDRESS|NAME_RESOLVED;
+    /* Clear DUMMY_ADDRESS_ENTRY */
+    tp->flags &= ~DUMMY_ADDRESS_ENTRY;
 } /* add_ipv4_name */
 
 /* -------------------------- */
@@ -2556,6 +2743,8 @@ add_ipv6_name(const struct e_in6_addr *addrp, const gchar *name)
         new_resolved_objects = TRUE;
     }
     tp->flags |= TRIED_RESOLVE_ADDRESS|NAME_RESOLVED;
+    /* Clear DUMMY_ADDRESS_ENTRY */
+    tp->flags &= ~DUMMY_ADDRESS_ENTRY;
 } /* add_ipv6_name */
 
 static void
@@ -2652,6 +2841,8 @@ host_name_lookup_init(void)
     subnet_name_lookup_init();
 
     add_manually_resolved();
+
+    ss7pc_name_lookup_init();
 }
 
 void
@@ -2665,6 +2856,7 @@ host_name_lookup_cleanup(void)
     ipxnet_hash_table = NULL;
     ipv4_hash_table = NULL;
     ipv6_hash_table = NULL;
+    ss7pc_hash_table = NULL;
 
     for(i = 0; i < SUBNETLENGTHSIZE; ++i) {
         if (subnet_length_entries[i].subnet_addresses != NULL) {
@@ -2805,7 +2997,7 @@ get_ether_name_if_known(const guint8 *addr)
     g_assert(tp != NULL);
 
     if (tp->status == HASHETHER_STATUS_RESOLVED_NAME) {
-        /* Name is from an ethers file (or is a "well-known" MAC address name from the manuf file) */
+        /* Name is from an ethers file */
         return tp->resolved_name;
     }
     else {
@@ -3219,6 +3411,7 @@ addr_resolv_cleanup(void)
 {
     vlan_name_lookup_cleanup();
     service_name_lookup_cleanup();
+    ethers_cleanup();
     ipx_name_lookup_cleanup();
     /* host name initialization is done on a per-capture-file basis */
     /*host_name_lookup_cleanup();*/

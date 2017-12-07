@@ -33,18 +33,16 @@ set(CLEAN_FILES
 	${IDL2WRS_FILES}
 )
 
-if (WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${CLEAN_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${CLEAN_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 add_executable(idl2wrs ${IDL2WRS_FILES})
 set_target_properties(idl2wrs PROPERTIES FOLDER "Executables")
 
-target_link_libraries(idl2wrs ${GLIB2_LIBRARIES})
+target_link_libraries(idl2wrs ${GLIB2_LIBRARIES} wsutil)
 
 foreach(PROTOCOL_NAME IN LISTS PIDL_DISSECTOR_NAMES)
 	# Use a stamp file instead of OUTPUT to packet-dcerpc-X.c to

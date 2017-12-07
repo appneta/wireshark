@@ -4,6 +4,7 @@
 
 # Do not prefix comments with ";". They will be removed by CMake.
 
+# MUST match "<Product ... Name=" in wix/Wireshark.wxs.
 !define PROGRAM_NAME "@PROGRAM_NAME@"
 !define TOP_SRC_DIR "@TOP_SRC_DIR@"
 !define STAGING_DIR "@STAGING_DIR@"
@@ -13,7 +14,7 @@
 !define WIRESHARK_LIB_DIR "@WIRESHARK_LIB_DIR@"
 !define WINPCAP_PACKAGE_VERSION @WINPCAP_PACKAGE_VERSION@
 !define PCAP_DISPLAY_VERSION @PCAP_DISPLAY_VERSION@
-!define USBPCAP_DISPLAY_VERSION "1.1.0.0-g794bf26-5"
+!define USBPCAP_DISPLAY_VERSION "1.2.0.3"
 !define VERSION @VERSION@
 !define VERSION_MAJOR @VERSION_MAJOR@
 !define VERSION_MINOR @VERSION_MINOR@

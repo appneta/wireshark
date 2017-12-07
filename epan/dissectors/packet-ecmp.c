@@ -37,6 +37,7 @@
 #include "packet-mbtcp.h"
 
 #define PROTO_TAG_ECMP	"ECMP"
+#define ECMP_TCP_PORT   6160
 
 void proto_reg_handoff_ecmp(void);
 void proto_register_ecmp (void);
@@ -49,9 +50,6 @@ static int proto_modbus = -1;
 
 /* These are the handles of our subdissectors */
 static dissector_handle_t modbus_handle = NULL;
-
-/*stores the port number for our protocol (ECMP)*/
-static const guint16 global_ecmp_port = 6160;
 
 /*smallest size of a packet, number of bytes*/
 static const gint ecmp_min_packet_size  = 6;
@@ -646,7 +644,7 @@ static int hf_ecmp_param_format_read_not_allowed = -1;
 static int hf_ecmp_param_format_protected_from_destinations = -1;
 static int hf_ecmp_param_format_parameter_not_visible = -1;
 static int hf_ecmp_param_format_not_clonable = -1;
-static int hf_ecmp_param_format_voltage_or_current_rating_dependant = -1;
+static int hf_ecmp_param_format_voltage_or_current_rating_dependent = -1;
 static int hf_ecmp_param_format_parameter_has_no_default = -1;
 static int hf_ecmp_param_format_number_of_decimal_places = -1;
 static int hf_ecmp_param_format_variable_maximum_and_minimum = -1;
@@ -1031,7 +1029,7 @@ static int get_response_size(int offset, tvbuff_t *tvb, proto_tree* ecmp_tree)
 
 	/*display chunks and max response size in response subtree*/
 	proto_tree_add_item(ecmp_response_size_tree, hf_ecmp_chunking, tvb, offset, 2, ENC_BIG_ENDIAN);
-	proto_tree_add_uint_format_value(ecmp_response_size_tree, hf_ecmp_max_response_size, tvb, offset, 2, max_response_size, "%d bytes", max_response_size);
+	proto_tree_add_item(ecmp_response_size_tree, hf_ecmp_max_response_size, tvb, offset, 2, ENC_BIG_ENDIAN);
 	offset+= 2;
 
 	return offset;
@@ -1593,7 +1591,7 @@ static void get_object_info_response(packet_info* pinfo, int offset, tvbuff_t *t
 							&hf_ecmp_param_format_protected_from_destinations,
 							&hf_ecmp_param_format_parameter_not_visible,
 							&hf_ecmp_param_format_not_clonable,
-							&hf_ecmp_param_format_voltage_or_current_rating_dependant,
+							&hf_ecmp_param_format_voltage_or_current_rating_dependent,
 							&hf_ecmp_param_format_parameter_has_no_default,
 							&hf_ecmp_param_format_number_of_decimal_places,
 							&hf_ecmp_param_format_variable_maximum_and_minimum,
@@ -1727,7 +1725,7 @@ static int get_parameter_responses(packet_info* pinfo, int offset, guint8 comman
 					}
 				} else {
 					offset++;
-					/*display reponse data_byte*/
+					/*display response data_byte*/
 					start_offset = offset;
 					ecmp_parameter_response_tree = proto_tree_add_subtree_format(ecmp_parameter_number_tree, tvb, offset, 0, ett_ecmp_command, &ecmp_response_item, "Response %d:", (a+1));
 					proto_tree_add_item(ecmp_parameter_response_tree, hf_ecmp_parameter_status, tvb, offset, 1, ENC_BIG_ENDIAN);
@@ -2184,11 +2182,8 @@ static int add_cyclic_setup_attributes(packet_info* pinfo, int offset, guint16 l
 
 			case 7: /* rx timeout */
 			{
-				guint32 val;
-
 				/* tout */
-				val = tvb_get_ntohl(tvb, offset);
-				proto_tree_add_uint_format_value(cyclic_setup_attrib_item, hf_ecmp_rx_timeout, tvb, offset, 4, val, "%dus", val);
+				proto_tree_add_item(cyclic_setup_attrib_item, hf_ecmp_rx_timeout, tvb, offset, 4, ENC_BIG_ENDIAN);
 				offset += 4;
 
 				/* action */
@@ -3225,7 +3220,7 @@ void proto_register_ecmp (void)
 	{ "Chunks allowed","ecmp.chunking", FT_UINT16, BASE_DEC, NULL,0xF000, "ECMP number of chunks allowed", HFILL}},
 
 	{ &hf_ecmp_max_response_size,
-	{ "Maximum Response Size","ecmp.response_size", FT_UINT16, BASE_DEC, NULL,0x0FFF, NULL, HFILL}},
+	{ "Maximum Response Size","ecmp.response_size", FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0FFF, NULL, HFILL}},
 
 	{ &hf_ecmp_category,
 	{ "Device", "ecmp.category", FT_UINT8, BASE_DEC, VALS(category), 0x0, "ECMP Category (drive or option module)", HFILL }},
@@ -3406,7 +3401,7 @@ void proto_register_ecmp (void)
 	{ &hf_ecmp_param_format_protected_from_destinations, { "PT- Protected from destinations", "ecmp.param_format.protected_from_destinations", FT_UINT32, BASE_DEC, NULL, 0x00000008, NULL, HFILL }},
 	{ &hf_ecmp_param_format_parameter_not_visible, { "NV- Parameter not visible", "ecmp.param_format.parameter_not_visible", FT_UINT32, BASE_DEC, NULL, 0x00000010, NULL, HFILL }},
 	{ &hf_ecmp_param_format_not_clonable, { "NC- Not clonable", "ecmp.param_format.not_clonable", FT_UINT32, BASE_DEC, NULL, 0x00000020, NULL, HFILL }},
-	{ &hf_ecmp_param_format_voltage_or_current_rating_dependant, { "RA- Voltage or current rating dependant", "ecmp.param_format.voltage_or_current_rating_dependant", FT_UINT32, BASE_DEC, NULL, 0x00000040, NULL, HFILL }},
+	{ &hf_ecmp_param_format_voltage_or_current_rating_dependent, { "RA- Voltage or current rating dependent", "ecmp.param_format.voltage_or_current_rating_dependent", FT_UINT32, BASE_DEC, NULL, 0x00000040, NULL, HFILL }},
 	{ &hf_ecmp_param_format_parameter_has_no_default, { "ND- Parameter has no default", "ecmp.param_format.parameter_has_no_default", FT_UINT32, BASE_DEC, NULL, 0x00000080, NULL, HFILL }},
 	{ &hf_ecmp_param_format_number_of_decimal_places, { "DP- Number of Decimal places", "ecmp.param_format.number_of_decimal_places", FT_UINT32, BASE_DEC, NULL, 0x00000F00, NULL, HFILL }},
 	{ &hf_ecmp_param_format_variable_maximum_and_minimum, { "VM- Variable maximum and minimum", "ecmp.param_format.variable_maximum_and_minimum", FT_UINT32, BASE_DEC, NULL, 0x00001000, NULL, HFILL }},
@@ -3482,7 +3477,7 @@ void proto_register_ecmp (void)
 	{ &hf_ecmp_file_length, { "File length", "ecmp.file_length", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
 	{ &hf_ecmp_mec_offset, { "mec_offset", "ecmp.mec_offset", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
 	{ &hf_ecmp_sample_period, { "Sample period", "ecmp.sample_period", FT_RELATIVE_TIME, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-	{ &hf_ecmp_rx_timeout, { "RX Timeout", "ecmp.rx_timeout", FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_ecmp_rx_timeout, { "RX Timeout", "ecmp.rx_timeout", FT_UINT32, BASE_DEC|BASE_UNIT_STRING, &units_microseconds, 0x0, NULL, HFILL }},
 	{ &hf_ecmp_rx_action, { "Action", "ecmp.rx_action", FT_UINT8, BASE_DEC, NULL, 0x0, NULL, HFILL }},
 	{ &hf_ecmp_rx_event_destination, { "Event Destination", "ecmp.rx_event_destination", FT_UINT8, BASE_DEC, NULL, 0x0, NULL, HFILL }},
 	{ &hf_ecmp_rx_event, { "Event", "ecmp.rx_event", FT_UINT8, BASE_DEC, NULL, 0x0, NULL, HFILL }},
@@ -3564,18 +3559,14 @@ void proto_register_ecmp (void)
 /* Wireshark literally scans this file (packet-ecmp.c) to find this function  */
 void proto_reg_handoff_ecmp(void)
 {
-	static gboolean initialized = FALSE;
-	static dissector_handle_t ecmp_tcp_handle, ecmp_udp_handle;
+	dissector_handle_t ecmp_tcp_handle, ecmp_udp_handle;
 
-	if (!initialized) {
-		ecmp_tcp_handle = create_dissector_handle(dissect_ecmp_tcp, proto_ecmp);
-		ecmp_udp_handle = create_dissector_handle(dissect_ecmp_udp, proto_ecmp);
+	ecmp_tcp_handle = create_dissector_handle(dissect_ecmp_tcp, proto_ecmp);
+	ecmp_udp_handle = create_dissector_handle(dissect_ecmp_udp, proto_ecmp);
 
-		/* Cyclic frames are over UDP and non-cyclic are over TCP */
-		dissector_add_uint("udp.port", global_ecmp_port, ecmp_udp_handle);
-		dissector_add_uint("tcp.port", global_ecmp_port, ecmp_tcp_handle);
-	initialized = TRUE;
-	}
+	/* Cyclic frames are over UDP and non-cyclic are over TCP */
+	dissector_add_uint_with_preference("udp.port", ECMP_TCP_PORT, ecmp_udp_handle);
+	dissector_add_uint_with_preference("tcp.port", ECMP_TCP_PORT, ecmp_tcp_handle);
 
 	/* Modbus dissector hooks */
 	modbus_handle = find_dissector_add_dependency("modbus", proto_ecmp);

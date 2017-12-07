@@ -37,7 +37,20 @@ then
 	GLIB2="glib2-devel libglib-2_0-0"
 	PCAP="libpcap-devel libpcap1"
 	ZLIB="zlib-devel libz1"
+	SNAPPY="snappy-devel libsnappy1"
+	# The runtime package name changes with the version.  Just pull it
+	# in through the -devel package.
+	LZ4="liblz4-devel"
 	CARES="libcares-devel libcares2"
+	NGHTTP2="nghttp2"
+	# SUSE doesn't split the pod2* commands into a separate package like RH
+	PERLPODS=""
+	GEOIP="libGeoIP-devel"
+	GNUTLS="libgnutls-devel"
+	GETTEXT="gettext-tools"
+	QT5="libqt5-linguist-devel libqt5-qtsvg-devel libqt5-qtmultimedia-devel
+		libQt5PrintSupport-devel"
+	CAP_PROGS="libcap-progs"
 else
 	if [ ! -r /etc/redhat-release ]
 	then
@@ -48,6 +61,7 @@ else
 	if type -p dnf > /dev/null
 	then
 		INSTALL_CMD=dnf
+		POD2HTML="perl-Pod-Html"
 	else
 		INSTALL_CMD=yum
 	fi
@@ -57,14 +71,31 @@ else
 	GLIB2="glib2-devel glib2"
 	PCAP="libpcap-devel libpcap"
 	ZLIB="zlib-devel zlib"
+	SNAPPY="snappy-devel snappy"
+	LZ4="lz4 lz4-devel" # May need to enable EPEL
 	CARES="c-ares-devel c-ares"
+	NGHTTP2="libnghttp2"
+	PERLPODS="perl-podlators"
+	GEOIP="GeoIP-devel"
+	GNUTLS="gnutls-devel"
+	GETTEXT="gettext-devel"
+	QT5="qt5-linguist qt5-qtsvg-devel"
 fi
 
 PKGS="autoconf automake libtool gcc flex bison python perl $GLIB2
 $PCAP $ZLIB lua-devel lua $CARES $GTK3 $GTK2 desktop-file-utils $QT fop
-asciidoc git git-review perl-podlators"
+asciidoc git git-review $PERLPODS"
+
+PKGS_OPT="libnl3-devel libnghttp2-devel $NGHTTP2 $SNAPPY $LZ4 libcap $CAP_PROGS
+libcap-devel lynx $GEOIP libgcrypt-devel $GNUTLS $GETTEXT libssh-devel
+krb5-devel perl-Parse-Yapp sbc-devel libsmi-devel $POD2HTML $QT5"
 
 echo "Run this command (as root):"
 echo
 echo $INSTALL_CMD install $PKGS
-
+echo
+echo "To install optional packages:"
+echo
+echo $INSTALL_CMD install $PKGS_OPT
+echo
+echo "This tool has been obsoleted by tools/rpm-setup.sh"

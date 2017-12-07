@@ -1115,19 +1115,6 @@ static gpointer obex_profile_value(packet_info *pinfo _U_)
     return NULL;
 }
 
-static void
-defragment_init(void)
-{
-    reassembly_table_init(&obex_reassembly_table,
-                          &addresses_reassembly_table_functions);
-}
-
-static void
-defragment_cleanup(void)
-{
-    reassembly_table_destroy(&obex_reassembly_table);
-}
-
 static int
 is_ascii_str(const guint8 *str, int length)
 {
@@ -1371,8 +1358,8 @@ dissect_obex_application_parameter_bt_pbap(tvbuff_t *tvb, packet_info *pinfo, pr
                 proto_tree_add_item(parameter_tree, hf_pbap_application_parameter_data_list_start_offset, tvb, offset, 2, ENC_BIG_ENDIAN);
                 break;
             case 0x06: /* Filter */
-                proto_tree_add_bitmask(parameter_tree, tvb, offset, hf_pbap_application_parameter_data_filter, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_1, ENC_BIG_ENDIAN);
-                proto_tree_add_bitmask(parameter_tree, tvb, offset, hf_pbap_application_parameter_data_filter, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_0, ENC_BIG_ENDIAN);
+                proto_tree_add_bitmask(parameter_tree, tvb, offset + 0, hf_pbap_application_parameter_data_filter, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_1, ENC_BIG_ENDIAN);
+                proto_tree_add_bitmask(parameter_tree, tvb, offset + 4, hf_pbap_application_parameter_data_filter, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_0, ENC_BIG_ENDIAN);
                 break;
             case 0x07: /* Format */
                 proto_tree_add_item(parameter_tree, hf_pbap_application_parameter_data_format, tvb, offset, 1, ENC_NA);
@@ -1390,8 +1377,8 @@ dissect_obex_application_parameter_bt_pbap(tvbuff_t *tvb, packet_info *pinfo, pr
                 proto_tree_add_item(parameter_tree, hf_pbap_application_parameter_data_secondary_version_counter, tvb, offset, 16, ENC_NA);
                 break;
             case 0x0C: /* vCard Selector */
-                proto_tree_add_bitmask(parameter_tree, tvb, offset, hf_pbap_application_parameter_vcard_selector, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_1, ENC_BIG_ENDIAN);
-                proto_tree_add_bitmask(parameter_tree, tvb, offset, hf_pbap_application_parameter_vcard_selector, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_0, ENC_BIG_ENDIAN);
+                proto_tree_add_bitmask(parameter_tree, tvb, offset + 0, hf_pbap_application_parameter_vcard_selector, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_1, ENC_BIG_ENDIAN);
+                proto_tree_add_bitmask(parameter_tree, tvb, offset + 4, hf_pbap_application_parameter_vcard_selector, ett_obex_filter,  hfx_pbap_application_parameter_data_filter_0, ENC_BIG_ENDIAN);
                 break;
             case 0x0D: /* Database Identifier */
                 proto_tree_add_item(parameter_tree, hf_pbap_application_parameter_data_database_identifier, tvb, offset, 16, ENC_NA);
@@ -3833,8 +3820,8 @@ proto_register_obex(void)
     expert_obex = expert_register_protocol(proto_obex);
     expert_register_field_array(expert_obex, ei, array_length(ei));
 
-    register_init_routine(&defragment_init);
-    register_cleanup_routine(&defragment_cleanup);
+    reassembly_table_register(&obex_reassembly_table,
+                          &addresses_reassembly_table_functions);
 
     register_decode_as(&obex_profile_da);
 
@@ -3959,8 +3946,8 @@ proto_reg_handoff_obex(void)
     dissector_add_for_decode_as("usb.product",  obex_handle);
     dissector_add_for_decode_as("usb.device",   obex_handle);
     dissector_add_for_decode_as("usb.protocol", obex_handle);
-    dissector_add_for_decode_as("tcp.port",     obex_handle);
-    dissector_add_for_decode_as("udp.port",     obex_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port",     obex_handle);
+    dissector_add_for_decode_as_with_preference("udp.port",     obex_handle);
 }
 
 /*

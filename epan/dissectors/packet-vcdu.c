@@ -655,6 +655,7 @@ proto_register_vcdu(void)
         vcdu_uat_data_update_cb,
         NULL,
         NULL,
+        NULL,
         vcdu_uat_flds);
 
     prefs_register_uat_preference(vcdu_module,
@@ -669,7 +670,7 @@ proto_register_vcdu(void)
 void
 proto_reg_handoff_vcdu(void)
 {
-    dissector_add_for_decode_as("udp.port", vcdu_handle);
+    dissector_add_for_decode_as_with_preference("udp.port", vcdu_handle);
     ccsds_handle = find_dissector_add_dependency("ccsds", proto_vcdu);
 }
 

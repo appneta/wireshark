@@ -29,7 +29,7 @@
 void SparkLineDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                               const QModelIndex &index) const
 {
-    QList<int> *points = qvariant_cast<QList<int> *>(index.data(Qt::UserRole));
+    QList<int> points = qvariant_cast<QList<int> >(index.data(Qt::UserRole));
     int max = 1;
     int em_w = option.fontMetrics.height();
     int content_w = option.rect.width() - (em_w / 4);
@@ -42,19 +42,19 @@ void SparkLineDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
 
     QStyledItemDelegate::paint(painter, option, index);
 
-    if (!points || points->isEmpty() || steps < 1.0 || content_h <= 0) {
+    if (points.isEmpty() || steps < 1.0 || content_h <= 0) {
         return;
     }
 
-    while((qreal) points->length() > steps) {
-        points->removeFirst();
+    while((qreal) points.length() > steps) {
+        points.removeFirst();
     }
 
-    foreach (val, *points) {
+    foreach (val, points) {
         if (val > max) max = val;
     }
 
-    foreach (val, *points) {
+    foreach (val, points) {
         fpoints.append(QPointF(idx, (qreal) content_h - (val * content_h / max)));
         idx = idx + step_w;
     }
@@ -74,7 +74,11 @@ void SparkLineDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
                               ? QPalette::Normal : QPalette::Disabled;
     if (cg == QPalette::Normal && !(option_vi.state & QStyle::State_Active))
         cg = QPalette::Inactive;
+#if defined(Q_OS_WIN)
     if (option_vi.state & QStyle::State_Selected) {
+#else
+    if ((option_vi.state & QStyle::State_Selected) && !(option_vi.state & QStyle::State_MouseOver)) {
+#endif
         painter->setPen(option_vi.palette.color(cg, QPalette::HighlightedText));
     } else {
         painter->setPen(option_vi.palette.color(cg, QPalette::Text));

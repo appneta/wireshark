@@ -82,10 +82,12 @@ static uat_t* encaps_uat;
 
 static gint exported_pdu_tap = -1;
 
+static dissector_handle_t user_encap_handle;
+
 /*
  * Use this for DLT_USER2 if we don't have an encapsulation for it.
  */
-static user_encap_t user2_encap;
+static user_encap_t user2_encap = {WTAP_ENCAP_USER2, "pktap", NULL, "", NULL, "", NULL, 0, 0};
 
 static void export_pdu(tvbuff_t *tvb, packet_info* pinfo, char *proto_name)
 {
@@ -168,7 +170,7 @@ static int dissect_user(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree, voi
     len = tvb_captured_length(tvb) - (encap->header_size + encap->trailer_size);
     reported_len = tvb_reported_length(tvb) - (encap->header_size + encap->trailer_size);
 
-    payload_tvb = tvb_new_subset(tvb, encap->header_size, len, reported_len);
+    payload_tvb = tvb_new_subset_length_caplen(tvb, encap->header_size, len, reported_len);
     export_pdu(payload_tvb, pinfo, encap->payload_proto_name);
     call_dissector(encap->payload_proto, payload_tvb, pinfo, tree);
     if (encap->payload_proto_name) {
@@ -222,24 +224,12 @@ UAT_PROTO_DEF(user_encap, trailer_proto, trailer_proto, trailer_proto_name, user
 
 void proto_reg_handoff_user_encap(void)
 {
-    dissector_handle_t user_encap_handle;
     guint i;
 
-    user_encap_handle = find_dissector("user_dlt");
-
-    user2_encap.encap = WTAP_ENCAP_USER2;
-    user2_encap.payload_proto_name = g_strdup("pktap");
     user2_encap.payload_proto = find_dissector("pktap");
-    user2_encap.header_proto_name = g_strdup("");
-    user2_encap.header_proto = NULL;
-    user2_encap.trailer_proto_name = g_strdup("");
-    user2_encap.trailer_proto = NULL;
-    user2_encap.header_size = 0;
-    user2_encap.trailer_size = 0;
 
-    for (i = WTAP_ENCAP_USER0 ; i <= WTAP_ENCAP_USER15; i++)
+    for (i = WTAP_ENCAP_USER0; i <= WTAP_ENCAP_USER15; i++)
         dissector_add_uint("wtap_encap", i, user_encap_handle);
-
 }
 
 
@@ -285,6 +275,7 @@ void proto_register_user_encap(void)
                          NULL,
                          user_free_cb,
                          NULL,
+                         NULL,
                          user_flds );
 
     prefs_register_uat_preference(module,
@@ -294,7 +285,7 @@ void proto_register_user_encap(void)
                       encaps_uat);
 
 
-    register_dissector("user_dlt",dissect_user,proto_user_encap);
+    user_encap_handle = register_dissector("user_dlt",dissect_user,proto_user_encap);
 
     /*
     prefs_register_protocol_obsolete(proto_register_protocol("DLT User A","DLT_USER_A","user_dlt_a"));

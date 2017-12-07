@@ -35,7 +35,7 @@ void proto_reg_handoff_mac_lte(void);
 
 /* Described in:
  * 3GPP TS 36.321 Evolved Universal Terrestrial Radio Access (E-UTRA)
- *                Medium Access Control (MAC) protocol specification v13.2.0
+ *                Medium Access Control (MAC) protocol specification v13.5.0
  */
 
 
@@ -46,12 +46,19 @@ static int mac_lte_tap = -1;
 
 static dissector_handle_t rlc_lte_handle;
 static dissector_handle_t lte_rrc_bcch_dl_sch_handle;
+static dissector_handle_t lte_rrc_bcch_dl_sch_br_handle;
+static dissector_handle_t lte_rrc_bcch_dl_sch_nb_handle;
 static dissector_handle_t lte_rrc_bcch_bch_handle;
+static dissector_handle_t lte_rrc_bcch_bch_nb_handle;
 static dissector_handle_t lte_rrc_pcch_handle;
+static dissector_handle_t lte_rrc_pcch_nb_handle;
 static dissector_handle_t lte_rrc_ul_ccch_handle;
+static dissector_handle_t lte_rrc_ul_ccch_nb_handle;
 static dissector_handle_t lte_rrc_dl_ccch_handle;
+static dissector_handle_t lte_rrc_dl_ccch_nb_handle;
 static dissector_handle_t lte_rrc_sbcch_sl_bch_handle;
 static dissector_handle_t lte_rrc_sc_mcch_handle;
+
 
 /* Decoding context */
 static int hf_mac_lte_context = -1;
@@ -194,6 +201,12 @@ static int hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_b = -1;
 static int hf_mac_lte_rar_ul_grant_msg3_pusch_res_alloc_ce_mode_b = -1;
 static int hf_mac_lte_rar_ul_grant_nb_rep_msg3_pusch_ce_mode_b = -1;
 static int hf_mac_lte_rar_ul_grant_tbs_ce_mode_b = -1;
+static int hf_mac_lte_rar_ul_grant_ul_subcarrier_spacing = -1;
+static int hf_mac_lte_rar_ul_grant_subcarrier_indication = -1;
+static int hf_mac_lte_rar_ul_grant_scheduling_delay = -1;
+static int hf_mac_lte_rar_ul_grant_msg3_repetition_number = -1;
+static int hf_mac_lte_rar_ul_grant_mcs_index = -1;
+static int hf_mac_lte_rar_ul_grant_padding_nb_mode = -1;
 static int hf_mac_lte_rar_temporary_crnti = -1;
 
 /* Common channel control values */
@@ -477,16 +490,26 @@ static const value_string carrier_id_vals[] =
 
 static const value_string dci_format_vals[] =
 {
-    { 0, "0"},
-    { 1, "1"},
-    { 2, "1A"},
-    { 3, "1B"},
-    { 4, "1C"},
-    { 5, "1D"},
-    { 6, "2"},
-    { 7, "2A"},
-    { 8, "3/3A"},
-    { 0, NULL }
+    {  0, "0"},
+    {  1, "1"},
+    {  2, "1A"},
+    {  3, "1B"},
+    {  4, "1C"},
+    {  5, "1D"},
+    {  6, "2"},
+    {  7, "2A"},
+    {  8, "3/3A"},
+    {  9, "2B"},
+    { 10, "2C"},
+    { 11, "2D"},
+    { 12, "4"},
+    { 13, "6-0A"},
+    { 14, "6-1A"},
+    { 15, "6-2"},
+    { 16, "N0"},
+    { 17, "N1"},
+    { 18, "N2"},
+    {  0, NULL }
 };
 
 static const value_string aggregation_level_vals[] =
@@ -495,6 +518,8 @@ static const value_string aggregation_level_vals[] =
     { 1, "2"},
     { 2, "4"},
     { 3, "8"},
+    { 4, "16"},
+    { 5, "24"},
     { 0, NULL }
 };
 
@@ -583,6 +608,7 @@ static const value_string ulsch_lcid_vals[] =
     { 9,                                    "9"},
     { 10,                                   "10"},
     { 11,                                   "CCCH (Category 0)"},
+    { 12,                                   "CCCH (frequency hopping for unicast)"},
     { TRUNCATED_SIDELINK_BSR,               "Truncated Sidelink BSR"},
     { SIDELINK_BSR,                         "Sidelink BSR"},
     { DUAL_CONN_POWER_HEADROOM_REPORT_LCID, "Dual Connectivity Power Headroom Report"},
@@ -766,6 +792,37 @@ static const value_string rar_ul_grant_nb_rep_msg3_pusch_ce_mode_b_vals[] =
     { 5, "Yb/4"},
     { 6, "Yb/2"},
     { 7, "Yb"},
+    { 0, NULL}
+};
+
+
+static const true_false_string ul_subcarrier_spacing_val =
+{
+    "15 kHz",
+    "3.75 kHz"
+};
+
+
+static const value_string scheduling_delay_vals[]=
+{
+    { 0, "k0 = 8"},
+    { 1, "k0 = 16"},
+    { 2, "k0 = 32"},
+    { 3, "k0 = 64"},
+    { 0, NULL}
+};
+
+
+static const value_string msg3_rep_nb_vals[] =
+{
+    { 0, "1"},
+    { 1, "2"},
+    { 2, "4"},
+    { 3, "8"},
+    { 4, "16"},
+    { 5, "32"},
+    { 6, "64"},
+    { 7, "128"},
     { 0, NULL}
 };
 
@@ -2257,12 +2314,14 @@ static void
 call_with_catch_all(dissector_handle_t handle, tvbuff_t* tvb, packet_info *pinfo, proto_tree *tree)
 {
     /* Call it (catch exceptions so that stats will be updated) */
-    TRY {
-        call_dissector_only(handle, tvb, pinfo, tree, NULL);
+    if (handle) {
+        TRY {
+            call_dissector_only(handle, tvb, pinfo, tree, NULL);
+        }
+        CATCH_ALL {
+        }
+        ENDTRY
     }
-    CATCH_ALL {
-    }
-    ENDTRY
 }
 
 /* Dissect context fields in the format described in packet-mac-lte.h.
@@ -2756,7 +2815,7 @@ static void show_extra_phy_parameters(packet_info *pinfo, tvbuff_t *tvb, proto_t
 }
 
 
-/* Dissect a single Random Access Reponse body */
+/* Dissect a single Random Access Response body */
 static gint dissect_rar_entry(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                               proto_item *pdu_ti,
                               gint offset, guint8 rapid, mac_lte_info *p_mac_lte_info)
@@ -2816,140 +2875,162 @@ static gint dissect_rar_entry(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     /* Create subtree for UL grant break-down */
     ul_grant_tree = proto_item_add_subtree(ul_grant_ti, ett_mac_lte_rar_ul_grant);
 
-    switch (p_mac_lte_info->ceMode) {
-        case no_ce_mode:
-        default:
-            /* Hopping flag (1 bit) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_hopping,
-                                tvb, offset, 1, ENC_BIG_ENDIAN);
+    if (p_mac_lte_info->nbMode == no_nb_mode) {
+        switch (p_mac_lte_info->ceMode) {
+            case no_ce_mode:
+            default:
+                /* Hopping flag (1 bit) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_hopping,
+                                    tvb, offset, 1, ENC_BIG_ENDIAN);
 
-            /* Fixed sized resource block assignment (10 bits) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_fsrba,
-                                tvb, offset, 2, ENC_BIG_ENDIAN);
+                /* Fixed sized resource block assignment (10 bits) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_fsrba,
+                                    tvb, offset, 2, ENC_BIG_ENDIAN);
 
-            /* Truncated Modulation and coding scheme (4 bits) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tmcs,
-                                tvb, offset+1, 2, ENC_BIG_ENDIAN);
+                /* Truncated Modulation and coding scheme (4 bits) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tmcs,
+                                    tvb, offset+1, 2, ENC_BIG_ENDIAN);
 
-            /* TPC command for scheduled PUSCH (3 bits) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tcsp,
-                                tvb, offset+2, 1, ENC_BIG_ENDIAN);
+                /* TPC command for scheduled PUSCH (3 bits) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tcsp,
+                                    tvb, offset+2, 1, ENC_BIG_ENDIAN);
 
-            /* UL delay (1 bit) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_ul_delay,
-                                tvb, offset+2, 1, ENC_BIG_ENDIAN);
+                /* UL delay (1 bit) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_ul_delay,
+                                    tvb, offset+2, 1, ENC_BIG_ENDIAN);
 
-            /* CQI request (1 bit) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_cqi_request,
-                                tvb, offset+2, 1, ENC_BIG_ENDIAN);
+                /* CQI request (1 bit) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_cqi_request,
+                                    tvb, offset+2, 1, ENC_BIG_ENDIAN);
 
-            offset += 3;
-            break;
-
-        case ce_mode_a:
-            if (p_mac_lte_info->nUlRb == 0) {
-                /* UL bandwidth is unknown; do not dissect UL grant */
                 offset += 3;
                 break;
-            }
 
-            bits_offset = (offset<<3) + 4;
+            case ce_mode_a:
+                if (p_mac_lte_info->nUlRb == 0) {
+                    /* UL bandwidth is unknown; do not dissect UL grant */
+                    offset += 3;
+                    break;
+                }
 
-            /* Msg3 PUSCH narrowband index (0 to 4 bits) */
-            if (p_mac_lte_info->nUlRb == 15) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
-                                         tvb, bits_offset, 1, ENC_BIG_ENDIAN);
-                bits_offset += 1;
-            } else if (p_mac_lte_info->nUlRb == 25) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
-                                         tvb, bits_offset, 2, ENC_BIG_ENDIAN);
-                bits_offset += 2;
-            } else if (p_mac_lte_info->nUlRb == 50) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
-                                         tvb, bits_offset, 3, ENC_BIG_ENDIAN);
-                bits_offset += 3;
-            } else if ((p_mac_lte_info->nUlRb == 75) || (p_mac_lte_info->nUlRb == 100)) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
-                                         tvb, bits_offset, 4, ENC_BIG_ENDIAN);
-                bits_offset += 4;
-            }
+                bits_offset = (offset<<3) + 4;
 
-            /* Msg3 PUSCH Resource allocation (4 bits) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_res_alloc_ce_mode_a,
-                                     tvb, bits_offset, 4, ENC_BIG_ENDIAN);
-            bits_offset += 4;
+                /* Msg3 PUSCH narrowband index (0 to 4 bits) */
+                if (p_mac_lte_info->nUlRb == 15) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
+                                            tvb, bits_offset, 1, ENC_BIG_ENDIAN);
+                    bits_offset += 1;
+                } else if (p_mac_lte_info->nUlRb == 25) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
+                                            tvb, bits_offset, 2, ENC_BIG_ENDIAN);
+                    bits_offset += 2;
+                } else if (p_mac_lte_info->nUlRb == 50) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
+                                            tvb, bits_offset, 3, ENC_BIG_ENDIAN);
+                    bits_offset += 3;
+                } else if ((p_mac_lte_info->nUlRb == 75) || (p_mac_lte_info->nUlRb == 100)) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_a,
+                                            tvb, bits_offset, 4, ENC_BIG_ENDIAN);
+                    bits_offset += 4;
+                }
 
-            /* Number of Repetitions for Msg3 PUSCH (2 bits) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_nb_rep_msg3_pusch_ce_mode_a,
-                                     tvb, bits_offset, 2, ENC_BIG_ENDIAN);
-            bits_offset += 2;
-
-            /* MCS (3 bits) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_mcs_ce_mode_a,
-                                     tvb, bits_offset, 3, ENC_BIG_ENDIAN);
-            bits_offset += 3;
-
-            /* TPC (3 bits) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tpc_ce_mode_a,
-                                     tvb, bits_offset, 3, ENC_BIG_ENDIAN);
-            bits_offset += 3;
-
-            /* CSI request (1 bit) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_csi_request_ce_mode_a,
-                                     tvb, bits_offset, 1, ENC_BIG_ENDIAN);
-            bits_offset += 1;
-
-            /* UL delay (1 bit) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_ul_delay_ce_mode_a,
-                                     tvb, bits_offset, 1, ENC_BIG_ENDIAN);
-            bits_offset += 1;
-
-            /* Msg3/4 MPDCCH narrowband index (2 bits) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_msg4_mpdcch_nb_idx,
-                                     tvb, bits_offset, 2, ENC_BIG_ENDIAN);
-            bits_offset += 2;
-
-            /* Optional padding (0 to 4 bits) to complete the 20 bits UL Grant */
-            if (p_mac_lte_info->nUlRb == 6) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
+                /* Msg3 PUSCH Resource allocation (4 bits) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_res_alloc_ce_mode_a,
                                         tvb, bits_offset, 4, ENC_BIG_ENDIAN);
-            } else if (p_mac_lte_info->nUlRb == 15) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
-                                        tvb, bits_offset, 3, ENC_BIG_ENDIAN);
-            } else if (p_mac_lte_info->nUlRb == 25) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
+                bits_offset += 4;
+
+                /* Number of Repetitions for Msg3 PUSCH (2 bits) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_nb_rep_msg3_pusch_ce_mode_a,
                                         tvb, bits_offset, 2, ENC_BIG_ENDIAN);
-            } else if (p_mac_lte_info->nUlRb == 50) {
-                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
+                bits_offset += 2;
+
+                /* MCS (3 bits) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_mcs_ce_mode_a,
+                                        tvb, bits_offset, 3, ENC_BIG_ENDIAN);
+                bits_offset += 3;
+
+                /* TPC (3 bits) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tpc_ce_mode_a,
+                                        tvb, bits_offset, 3, ENC_BIG_ENDIAN);
+                bits_offset += 3;
+
+                /* CSI request (1 bit) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_csi_request_ce_mode_a,
                                         tvb, bits_offset, 1, ENC_BIG_ENDIAN);
-            }
+                bits_offset += 1;
 
-            offset += 3;
-            break;
+                /* UL delay (1 bit) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_ul_delay_ce_mode_a,
+                                        tvb, bits_offset, 1, ENC_BIG_ENDIAN);
+                bits_offset += 1;
 
-        case ce_mode_b:
-            /* Msg3 PUSCH narrowband index (2 bits) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_b,
-                                tvb, offset, 1, ENC_BIG_ENDIAN);
+                /* Msg3/4 MPDCCH narrowband index (2 bits) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_msg4_mpdcch_nb_idx,
+                                        tvb, bits_offset, 2, ENC_BIG_ENDIAN);
+                bits_offset += 2;
 
-            /* Msg3 PUSCH Resource allocation (3 bits) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_res_alloc_ce_mode_b,
-                                tvb, offset, 2, ENC_BIG_ENDIAN);
+                /* Optional padding (0 to 4 bits) to complete the 20 bits UL Grant */
+                if (p_mac_lte_info->nUlRb == 6) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
+                                            tvb, bits_offset, 4, ENC_BIG_ENDIAN);
+                } else if (p_mac_lte_info->nUlRb == 15) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
+                                            tvb, bits_offset, 3, ENC_BIG_ENDIAN);
+                } else if (p_mac_lte_info->nUlRb == 25) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
+                                            tvb, bits_offset, 2, ENC_BIG_ENDIAN);
+                } else if (p_mac_lte_info->nUlRb == 50) {
+                    proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_ce_mode_a,
+                                            tvb, bits_offset, 1, ENC_BIG_ENDIAN);
+                }
 
-            /* Number of Repetitions for Msg3 PUSCH (3 bits) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_nb_rep_msg3_pusch_ce_mode_b,
-                                tvb, offset+1, 1, ENC_BIG_ENDIAN);
+                offset += 3;
+                break;
 
-            /* TBS (2 bits) */
-            proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tbs_ce_mode_b,
-                                tvb, offset+1, 1, ENC_BIG_ENDIAN);
+            case ce_mode_b:
+                /* Msg3 PUSCH narrowband index (2 bits) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_nb_idx_ce_mode_b,
+                                    tvb, offset, 1, ENC_BIG_ENDIAN);
 
-            /* Msg3/4 MPDCCH narrowband index (2 bits) */
-            proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_msg4_mpdcch_nb_idx,
-                                     tvb, ((offset+1)<<3)+6, 2, ENC_BIG_ENDIAN);
+                /* Msg3 PUSCH Resource allocation (3 bits) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_pusch_res_alloc_ce_mode_b,
+                                    tvb, offset, 2, ENC_BIG_ENDIAN);
 
-            offset += 2;
-            break;
+                /* Number of Repetitions for Msg3 PUSCH (3 bits) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_nb_rep_msg3_pusch_ce_mode_b,
+                                    tvb, offset+1, 1, ENC_BIG_ENDIAN);
+
+                /* TBS (2 bits) */
+                proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_tbs_ce_mode_b,
+                                    tvb, offset+1, 1, ENC_BIG_ENDIAN);
+
+                /* Msg3/4 MPDCCH narrowband index (2 bits) */
+                proto_tree_add_bits_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_msg4_mpdcch_nb_idx,
+                                        tvb, ((offset+1)<<3)+6, 2, ENC_BIG_ENDIAN);
+
+                offset += 2;
+                break;
+        }
+    } else {
+        /* Uplink subcarrier spacing (1 bit) */
+        proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_ul_subcarrier_spacing, tvb, offset, 1, ENC_BIG_ENDIAN);
+
+        /* Subcarrier indication (6 bits) */
+        proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_subcarrier_indication, tvb, offset, 2, ENC_BIG_ENDIAN);
+
+        /* Scheduling delay (2 bits) */
+        proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_scheduling_delay, tvb, offset+1, 1, ENC_BIG_ENDIAN);
+
+        /* Msg3 repetition number (3 bits) */
+        proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_msg3_repetition_number, tvb, offset+1, 1, ENC_BIG_ENDIAN);
+
+        /* MCS index (3 bits) */
+        proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_mcs_index, tvb, offset+2, 1, ENC_BIG_ENDIAN);
+
+        /* Padding (5 bits) */
+        proto_tree_add_item(ul_grant_tree, hf_mac_lte_rar_ul_grant_padding_nb_mode, tvb, offset+2, 1, ENC_BIG_ENDIAN);
+
+        offset += 3;
     }
 
     /* Temporary C-RNTI */
@@ -2971,7 +3052,7 @@ static gint dissect_rar_entry(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 
 
 #define MAX_RAR_PDUS 64
-/* Dissect Random Access Reponse (RAR) PDU */
+/* Dissect Random Access Response (RAR) PDU */
 static void dissect_rar(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, proto_item *pdu_ti,
                         gint offset, mac_lte_info *p_mac_lte_info, mac_lte_tap_info *tap_info)
 {
@@ -3160,10 +3241,25 @@ static void dissect_bch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         /* Get appropriate dissector handle */
         dissector_handle_t protocol_handle = 0;
         if (p_mac_lte_info->rntiType == SI_RNTI) {
-            protocol_handle = lte_rrc_bcch_dl_sch_handle;
+            if (p_mac_lte_info->nbMode == no_nb_mode) {
+                if (p_mac_lte_info->ceMode == no_ce_mode) {
+                    protocol_handle = lte_rrc_bcch_dl_sch_handle;
+                }
+                else {
+                    protocol_handle = lte_rrc_bcch_dl_sch_br_handle;
+                }
+            }
+            else {
+                protocol_handle = lte_rrc_bcch_dl_sch_nb_handle;
+            }
         }
         else {
-            protocol_handle = lte_rrc_bcch_bch_handle;
+            if (p_mac_lte_info->nbMode == no_nb_mode) {
+                protocol_handle = lte_rrc_bcch_bch_handle;
+            }
+            else {
+                protocol_handle = lte_rrc_bcch_bch_nb_handle;
+            }
         }
 
         /* Hide raw view of bytes */
@@ -3181,7 +3277,7 @@ static void dissect_bch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
 /* Dissect PCH PDU */
 static void dissect_pch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
-                        proto_item *pdu_ti, int offset, guint8 direction,  mac_lte_tap_info *tap_info)
+                        proto_item *pdu_ti, int offset, mac_lte_info *p_mac_lte_info,  mac_lte_tap_info *tap_info)
 {
     proto_item *ti;
 
@@ -3209,11 +3305,16 @@ static void dissect_pch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         PROTO_ITEM_SET_HIDDEN(ti);
 
         /* Call it (catch exceptions so that stats will be updated) */
-        call_with_catch_all(lte_rrc_pcch_handle, rrc_tvb, pinfo, tree);
+        if (p_mac_lte_info->nbMode == no_nb_mode) {
+            call_with_catch_all(lte_rrc_pcch_handle, rrc_tvb, pinfo, tree);
+        }
+        else {
+            call_with_catch_all(lte_rrc_pcch_nb_handle, rrc_tvb, pinfo, tree);
+        }
     }
 
     /* Check that this *is* downlink! */
-    if (direction == DIRECTION_UPLINK) {
+    if (p_mac_lte_info->direction == DIRECTION_UPLINK) {
         expert_add_info(pinfo, ti, &ei_mac_lte_pch_pdu);
     }
 }
@@ -3270,7 +3371,7 @@ static void call_rlc_dissector(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
                                guint8 mode, guint8 direction, guint16 ueid,
                                guint16 channelType, guint16 channelId,
                                guint8 sequenceNumberLength,
-                               guint8 priority, gboolean rlcExtLiField)
+                               guint8 priority, gboolean rlcExtLiField, mac_lte_nb_mode nbMode)
 {
     tvbuff_t            *rb_tvb = tvb_new_subset_length(tvb, offset, data_length);
     struct rlc_lte_info *p_rlc_lte_info;
@@ -3291,6 +3392,11 @@ static void call_rlc_dissector(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
     p_rlc_lte_info->pduLength = data_length;
     p_rlc_lte_info->sequenceNumberLength = sequenceNumberLength;
     p_rlc_lte_info->extendedLiField = rlcExtLiField;
+    if (nbMode == nb_mode) {
+        p_rlc_lte_info->nbMode = rlc_nb_mode;
+    } else {
+        p_rlc_lte_info->nbMode = rlc_no_nb_mode;
+    }
 
     /* Store info in packet */
     p_add_proto_data(wmem_file_scope(), pinfo, proto_rlc_lte, 0, p_rlc_lte_info);
@@ -4266,8 +4372,8 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
                                      "(%s",
                                      val_to_str_const(lcids[number_of_headers],
                                                       ulsch_lcid_vals, "(Unknown LCID)"));
-            if (lcids[number_of_headers] == 11) {
-                /* This LCID is used for CCCH by Category 0 devices
+            if (lcids[number_of_headers] == 11 || lcids[number_of_headers] == 12) {
+                /* This LCID is used for CCCH by Category 0 devices / devices using frequency hopping for unicast
                    Let's remap it to LCID 0 for statistics and other checks */
                 lcids[number_of_headers] = 0;
             }
@@ -4823,7 +4929,7 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
 
                                 it = proto_tree_add_item_ret_uint(slbsr_tree, hf_mac_lte_control_sidelink_reserved,
                                                                   tvb, curr_offset, 1, ENC_BIG_ENDIAN, &reserved);
-                                if (reserved & 0x0f) {
+                                if (reserved) {
                                     if (lcids[n] == SIDELINK_BSR) {
                                         expert_add_info_format(pinfo, it, &ei_mac_lte_reserved_not_zero,
                                                                "Sidelink BSR Reserved bits not zero");
@@ -5517,7 +5623,7 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
             dpr_tree = proto_item_add_subtree(dpr_ti, ett_mac_lte_data_vol_power_headroom);
             dpr_ti = proto_tree_add_item_ret_uint(dpr_tree, hf_mac_lte_data_vol_power_headroom_reserved,
                                                   tvb, offset, 1, ENC_BIG_ENDIAN, &reserved);
-            if (reserved & 0xc0) {
+            if (reserved) {
                 expert_add_info_format(pinfo, dpr_ti, &ei_mac_lte_reserved_not_zero,
                                        "Data Volume and Power Headroom Report Reserved bits not zero");
             }
@@ -5569,10 +5675,20 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
             /* Get appropriate dissector handle */
             dissector_handle_t protocol_handle = 0;
             if (p_mac_lte_info->direction == DIRECTION_UPLINK) {
-                protocol_handle = lte_rrc_ul_ccch_handle;
+                if (p_mac_lte_info->nbMode == no_nb_mode) {
+                    protocol_handle = lte_rrc_ul_ccch_handle;
+                }
+                else {
+                    protocol_handle = lte_rrc_ul_ccch_nb_handle;
+                }
             }
             else {
-                protocol_handle = lte_rrc_dl_ccch_handle;
+                if (p_mac_lte_info->nbMode == no_nb_mode) {
+                    protocol_handle = lte_rrc_dl_ccch_handle;
+                }
+                else {
+                    protocol_handle = lte_rrc_dl_ccch_nb_handle;
+                }
             }
 
             /* Hide raw view of bytes */
@@ -5583,7 +5699,9 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
         }
 
         /* LCID 1 and 2 can be assumed to be srb1&2, so can dissect as RLC AM */
-        else if ((lcids[n] == 1) || (lcids[n] == 2)) {
+        /* LCID 3 in NB mode can be assumed to be srb1bis, so can dissect as RLC AM */
+        else if ((lcids[n] == 1) || (lcids[n] == 2) ||
+                 (p_mac_lte_info->nbMode == nb_mode && lcids[n] == 3)) {
             if (global_mac_lte_attempt_srb_decode) {
                 /* Call RLC dissector */
                 call_rlc_dissector(tvb, pinfo, tree, pdu_ti, offset, data_length,
@@ -5591,7 +5709,7 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
                                    CHANNEL_TYPE_SRB, lcids[n], 0,
                                    get_mac_lte_channel_priority(p_mac_lte_info->ueid,
                                                                 lcids[n], p_mac_lte_info->direction),
-                                   FALSE);
+                                   FALSE, p_mac_lte_info->nbMode);
 
                 /* Hide raw view of bytes */
                 PROTO_ITEM_SET_HIDDEN(sdu_ti);
@@ -5624,7 +5742,7 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
                     call_rlc_dissector(tvb, pinfo, tree, pdu_ti, offset, data_length,
                                        RLC_UM_MODE, p_mac_lte_info->direction, p_mac_lte_info->ueid,
                                        CHANNEL_TYPE_DRB, (guint16)drb_id, seqnum_length,
-                                       priority, FALSE);
+                                       priority, FALSE, p_mac_lte_info->nbMode);
                     break;
                 case rlcAM:
                 case rlcAMulExtLiField:
@@ -5645,13 +5763,13 @@ static void dissect_ulsch_or_dlsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree
                     call_rlc_dissector(tvb, pinfo, tree, pdu_ti, offset, data_length,
                                        RLC_AM_MODE, p_mac_lte_info->direction, p_mac_lte_info->ueid,
                                        CHANNEL_TYPE_DRB, (guint16)drb_id, seqnum_length,
-                                       priority, rlc_ext_li_field);
+                                       priority, rlc_ext_li_field, p_mac_lte_info->nbMode);
                     break;
                 case rlcTM:
                     call_rlc_dissector(tvb, pinfo, tree, pdu_ti, offset, data_length,
                                        RLC_TM_MODE, p_mac_lte_info->direction, p_mac_lte_info->ueid,
                                        CHANNEL_TYPE_DRB, (guint16)drb_id, 0,
-                                       priority, FALSE);
+                                       priority, FALSE, p_mac_lte_info->nbMode);
                     break;
                 case rlcRaw:
                     /* Nothing to do! */
@@ -6108,12 +6226,12 @@ static void dissect_mch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, pro
             /* Call RLC dissector */
             call_rlc_dissector(tvb, pinfo, tree, pdu_ti, offset, data_length,
                                RLC_UM_MODE, DIRECTION_DOWNLINK, 0,
-                               CHANNEL_TYPE_MCCH, 0, 5, 0, FALSE);
+                               CHANNEL_TYPE_MCCH, 0, 5, 0, FALSE, p_mac_lte_info->nbMode);
         } else if ((lcids[n] <= 28) && global_mac_lte_call_rlc_for_mtch) {
             /* Call RLC dissector */
             call_rlc_dissector(tvb, pinfo, tree, pdu_ti, offset, data_length,
                                RLC_UM_MODE, DIRECTION_DOWNLINK, 0,
-                               CHANNEL_TYPE_MTCH, 0, 5, 0, FALSE);
+                               CHANNEL_TYPE_MTCH, 0, 5, 0, FALSE, p_mac_lte_info->nbMode);
         } else {
             /* Dissect SDU as raw bytes */
             sdu_ti = proto_tree_add_bytes_format(tree, hf_mac_lte_mch_sdu, tvb, offset, pdu_lengths[n],
@@ -6245,7 +6363,7 @@ static void dissect_slsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     ti = proto_tree_add_item_ret_uint(pdu_subheader_tree, hf_mac_lte_slsch_reserved,
                                       tvb, offset, 1, ENC_BIG_ENDIAN, &reserved);
     offset++;
-    if (reserved & 0x0f) {
+    if (reserved) {
         expert_add_info_format(pinfo, ti, &ei_mac_lte_reserved_not_zero,
                                "SL-SCH header Reserved bits not zero");
     }
@@ -6274,8 +6392,9 @@ static void dissect_slsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                                                     ett_mac_lte_slsch_subheader);
 
         /* Check 1st 2 reserved bits */
-        ti = proto_tree_add_item_ret_uint(pdu_subheader_tree, hf_mac_lte_slsch_reserved2,
-                                          tvb, offset, 1, ENC_BIG_ENDIAN, &first_byte);
+        ti = proto_tree_add_item(pdu_subheader_tree, hf_mac_lte_slsch_reserved2,
+                                 tvb, offset, 1, ENC_BIG_ENDIAN);
+        first_byte = tvb_get_guint8(tvb, offset);
         if ((first_byte & 0xc0) != 0) {
             expert_add_info_format(pinfo, ti, &ei_mac_lte_reserved_not_zero,
                                    "SL-SCH header Reserved bits not zero");
@@ -6333,7 +6452,7 @@ static void dissect_slsch(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                                              tvb, offset, 1, ENC_BIG_ENDIAN, &format);
 
                 /* Now read length field itself */
-                if (format & 0x80) {
+                if (format) {
                     /* >= 128 - use 15 bits */
                     proto_tree_add_bits_ret_val(pdu_subheader_tree, hf_mac_lte_slsch_length,
                                                 tvb, offset*8 + 1, 15, &length, ENC_BIG_ENDIAN);
@@ -6974,7 +7093,7 @@ int dissect_mac_lte(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* d
 
         case P_RNTI:
             /* PCH PDU */
-            dissect_pch(tvb, pinfo, mac_lte_tree, pdu_ti, offset, p_mac_lte_info->direction, tap_info);
+            dissect_pch(tvb, pinfo, mac_lte_tree, pdu_ti, offset, p_mac_lte_info, tap_info);
             break;
 
         case RA_RNTI:
@@ -8080,7 +8199,7 @@ void proto_register_mac_lte(void)
             }
         },
         { &hf_mac_lte_rar_ul_grant_msg3_pusch_res_alloc_ce_mode_b,
-            { "Msg3 PUSCH Resource allocation",
+            { "Msg3 PUSCH resource allocation",
               "mac-lte.rar.ul-grant.msg3-pusch-res-alloc", FT_UINT16, BASE_DEC, NULL, 0x0380,
               NULL, HFILL
             }
@@ -8094,6 +8213,42 @@ void proto_register_mac_lte(void)
         { &hf_mac_lte_rar_ul_grant_tbs_ce_mode_b,
             { "TBS",
               "mac-lte.rar.ul-grant.tbs", FT_UINT8, BASE_DEC, NULL, 0x0c,
+              NULL, HFILL
+            }
+        },
+        { &hf_mac_lte_rar_ul_grant_ul_subcarrier_spacing,
+            { "Uplink subcarrier spacing",
+              "mac-lte.rar.ul-grant.ul-subcarrier-spacing", FT_BOOLEAN, 8, TFS(&ul_subcarrier_spacing_val), 0x08,
+              NULL, HFILL
+            }
+        },
+        { &hf_mac_lte_rar_ul_grant_subcarrier_indication,
+            { "Subcarrier indication",
+              "mac-lte.rar.ul-grant.subcarrier-indication", FT_UINT16, BASE_DEC, NULL, 0x07e0,
+              NULL, HFILL
+            }
+        },
+        { &hf_mac_lte_rar_ul_grant_scheduling_delay,
+            { "Scheduling delay",
+              "mac-lte.rar.ul-grant.scheduling-delay", FT_UINT8, BASE_DEC, VALS(scheduling_delay_vals), 0x18,
+              NULL, HFILL
+            }
+        },
+        { &hf_mac_lte_rar_ul_grant_msg3_repetition_number,
+            { "Msg3 repetition number",
+              "mac-lte.rar.ul-grant.msg3-repetition-number", FT_UINT8, BASE_DEC, VALS(msg3_rep_nb_vals), 0x07,
+              NULL, HFILL
+            }
+        },
+        { &hf_mac_lte_rar_ul_grant_mcs_index,
+            { "MCS index",
+              "mac-lte.rar.ul-grant.mcs-index", FT_UINT8, BASE_DEC, NULL, 0xe0,
+              NULL, HFILL
+            }
+        },
+        { &hf_mac_lte_rar_ul_grant_padding_nb_mode,
+            { "Padding",
+              "mac-lte.rar.ul-grant.padding", FT_UINT8, BASE_HEX, NULL, 0x1f,
               NULL, HFILL
             }
         },
@@ -9095,6 +9250,7 @@ void proto_register_mac_lte(void)
                                     NULL,
                                     NULL,
                                     NULL,
+                                    NULL,
                                     lcid_drb_mapping_flds );
 
     prefs_register_uat_preference(mac_lte_module,
@@ -9144,10 +9300,16 @@ void proto_reg_handoff_mac_lte(void)
 
     rlc_lte_handle = find_dissector_add_dependency("rlc-lte", proto_mac_lte);
     lte_rrc_bcch_dl_sch_handle = find_dissector_add_dependency("lte_rrc.bcch_dl_sch", proto_mac_lte);
+    lte_rrc_bcch_dl_sch_br_handle = find_dissector_add_dependency("lte_rrc.bcch_dl_sch_br", proto_mac_lte);
+    lte_rrc_bcch_dl_sch_nb_handle = find_dissector_add_dependency("lte_rrc.bcch_dl_sch.nb", proto_mac_lte);
     lte_rrc_bcch_bch_handle = find_dissector_add_dependency("lte_rrc.bcch_bch", proto_mac_lte);
+    lte_rrc_bcch_bch_nb_handle = find_dissector_add_dependency("lte_rrc.bcch_bch.nb", proto_mac_lte);
     lte_rrc_pcch_handle = find_dissector_add_dependency("lte_rrc.pcch", proto_mac_lte);
+    lte_rrc_pcch_nb_handle = find_dissector_add_dependency("lte_rrc.pcch.nb", proto_mac_lte);
     lte_rrc_ul_ccch_handle = find_dissector_add_dependency("lte_rrc.ul_ccch", proto_mac_lte);
+    lte_rrc_ul_ccch_nb_handle = find_dissector_add_dependency("lte_rrc.ul_ccch.nb", proto_mac_lte);
     lte_rrc_dl_ccch_handle = find_dissector_add_dependency("lte_rrc.dl_ccch", proto_mac_lte);
+    lte_rrc_dl_ccch_nb_handle = find_dissector_add_dependency("lte_rrc.dl_ccch.nb", proto_mac_lte);
     lte_rrc_sbcch_sl_bch_handle = find_dissector_add_dependency("lte_rrc.sbcch_sl_bch", proto_mac_lte);
     lte_rrc_sc_mcch_handle = find_dissector_add_dependency("lte_rrc.sc_mcch", proto_mac_lte);
 }

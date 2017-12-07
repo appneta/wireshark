@@ -28,6 +28,8 @@
 
 #include "ui/help_url.h"
 
+#include <ui/qt/variant_pointer.h>
+
 #include <wsutil/str_util.h>
 
 #include "file_set_dialog.h"
@@ -41,8 +43,6 @@
 #include <QFont>
 #include <QTreeWidgetItem>
 #include <QUrl>
-
-Q_DECLARE_METATYPE(fileset_entry *)
 
 /* this file is a part of the current file set, add it to the dialog */
 void
@@ -113,18 +113,22 @@ void FileSetDialog::addFile(fileset_entry *entry) {
          * it will be 0.
          */
         if (entry->ctime > 0)
+<<<<<<< HEAD
             created = QDateTime::fromTime_t(entry->ctime).toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
+=======
+            created = QDateTime::fromTime_t(uint(entry->ctime)).toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
+>>>>>>> upstream/master-2.4
         else
             created = "Not available";
     }
 
-    modified = QDateTime::fromTime_t(entry->mtime).toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
+    modified = QDateTime::fromTime_t(uint(entry->mtime)).toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
 
     size_str = format_size(entry->size, format_size_unit_bytes|format_size_prefix_si);
 
     entry_item = new QTreeWidgetItem(fs_ui_->fileSetTree);
     entry_item->setToolTip(0, QString(tr("Open this capture file")));
-    entry_item->setData(0, Qt::UserRole, qVariantFromValue(entry));
+    entry_item->setData(0, Qt::UserRole, VariantPointer<fileset_entry>::asQVariant(entry));
 
     entry_item->setText(0, entry->name);
     entry_item->setText(1, created);
@@ -184,7 +188,7 @@ void FileSetDialog::on_fileSetTree_currentItemChanged(QTreeWidgetItem *current, 
     if (!current)
         return;
 
-    entry = current->data(0, Qt::UserRole).value<fileset_entry *>();
+    entry = VariantPointer<fileset_entry>::asPtr(current->data(0, Qt::UserRole));
 
     if (!entry || entry->current)
         return;

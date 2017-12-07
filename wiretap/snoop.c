@@ -445,7 +445,7 @@ static gboolean snoop_read(wtap *wth, int *err, gchar **err_info,
 	 * Skip over the padding, if any.
 	 */
 	if (padbytes != 0) {
-		if (!file_skip(wth->fh, padbytes, err))
+		if (!wtap_read_bytes(wth->fh, NULL, padbytes, err, err_info))
 			return FALSE;
 	}
 
@@ -484,24 +484,24 @@ snoop_read_packet(wtap *wth, FILE_T fh, struct wtap_pkthdr *phdr,
 	rec_size = g_ntohl(hdr.rec_len);
 	orig_size = g_ntohl(hdr.orig_len);
 	packet_size = g_ntohl(hdr.incl_len);
-	if (orig_size > WTAP_MAX_PACKET_SIZE) {
+	if (orig_size > WTAP_MAX_PACKET_SIZE_STANDARD) {
 		/*
 		 * Probably a corrupt capture file; don't blow up trying
 		 * to allocate space for an immensely-large packet.
 		 */
 		*err = WTAP_ERR_BAD_FILE;
 		*err_info = g_strdup_printf("snoop: File has %u-byte original length, bigger than maximum of %u",
-		    orig_size, WTAP_MAX_PACKET_SIZE);
+		    orig_size, WTAP_MAX_PACKET_SIZE_STANDARD);
 		return -1;
 	}
-	if (packet_size > WTAP_MAX_PACKET_SIZE) {
+	if (packet_size > WTAP_MAX_PACKET_SIZE_STANDARD) {
 		/*
 		 * Probably a corrupt capture file; don't blow up trying
 		 * to allocate space for an immensely-large packet.
 		 */
 		*err = WTAP_ERR_BAD_FILE;
 		*err_info = g_strdup_printf("snoop: File has %u-byte packet, bigger than maximum of %u",
-		    packet_size, WTAP_MAX_PACKET_SIZE);
+		    packet_size, WTAP_MAX_PACKET_SIZE_STANDARD);
 		return -1;
 	}
 	if (packet_size > rec_size) {
@@ -735,7 +735,7 @@ snoop_read_shomiti_wireless_pseudoheader(FILE_T fh,
 	}
 	/* Skip the header. */
 	rsize = ((int) whdr.pad[3]) - 8;
-	if (file_seek(fh, rsize, SEEK_CUR, err) == -1)
+	if (!wtap_read_bytes(fh, NULL, rsize, err, err_info))
 		return FALSE;
 
 	memset(&pseudo_header->ieee_802_11, 0, sizeof(pseudo_header->ieee_802_11));
@@ -844,7 +844,7 @@ static gboolean snoop_dump(wtap_dumper *wdh,
 	reclen += padlen;
 
 	/* Don't write anything we're not willing to read. */
-	if (phdr->caplen + atm_hdrsize > WTAP_MAX_PACKET_SIZE) {
+	if (phdr->caplen + atm_hdrsize > WTAP_MAX_PACKET_SIZE_STANDARD) {
 		*err = WTAP_ERR_PACKET_TOO_LARGE;
 		return FALSE;
 	}

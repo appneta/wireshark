@@ -29,10 +29,12 @@ Tools menu (or use the context menu in the packet list). Wireshark will set an
 appropriate display filter and pop up a dialog box with all the data from the
 TCP stream laid out in order, as shown in <<ChAdvFollowStream>>.
 
-[NOTE]
+[TIP]
 ====
-Opening the ``Follow TCP Stream'' installs a display filter to
-select all the packets in the TCP stream you have selected.
+Opening the ``Follow TCP Stream'' applies a display filter which selects
+all the packets in the TCP stream you have selected. Some people open the
+``Follow TCP Stream'' dialog and immediately close it as a quick way to
+isolate a particular stream.
 ====
 
 ==== The ``Follow TCP Stream'' dialog box
@@ -40,7 +42,7 @@ select all the packets in the TCP stream you have selected.
 [[ChAdvFollowStream]]
 
 .The ``Follow TCP Stream'' dialog box
-image::wsug_graphics/ws-follow-stream.png[]
+image::wsug_graphics/ws-follow-stream.png[{screenshot-attrs}]
 
 The stream content is displayed in the same sequence as it appeared on the
 network. Traffic from A to B is marked in red, while traffic from B to A is
@@ -128,34 +130,35 @@ You can choose to decode the data from one of the following formats:
 
 You can choose to view the data in one of the following formats:
 
-. __ASCII__: In this view you see the bytes as ASCII.
+[horizontal]
+*ASCII*:: In this view you see the bytes as ASCII.
   All control characters and non-ASCII bytes are replaced by dot.
 
-. __ASCII & Control__: In this view all control characters are shown using a
+*ASCII & Control*:: In this view all control characters are shown using a
   UTF-8 symbol and all non-ASCII bytes are replaced by dot.
 
-. __C Array__: This allows you to import the field data into your own C program.
+*C Array*:: This allows you to import the field data into your own C program.
 
-. __EBCDIC__: For the big-iron freaks out there.
+*EBCDIC*:: For the big-iron freaks out there.
 
-. __HEX Dump__: This allows you to see all the data. This will require a lot of
+*HEX Dump*:: This allows you to see all the data. This will require a lot of
   screen space and is best used with binary protocols.
 
-. __HTML__: This allows you to see all the data formatted as a HTML document.
+*HTML*:: This allows you to see all the data formatted as a HTML document.
   The HTML supported is what's supported by the Qt QTextEdit class.
 
-. __Image__: This will try to convert the bytes into an image.
+*Image*:: This will try to convert the bytes into an image.
   Images supported are what's supported by the Qt QImage class.
 
-. __ISO 8859-1__: In this view you see the bytes as ISO 8859-1.
+*ISO 8859-1*:: In this view you see the bytes as ISO 8859-1.
 
-. __Raw__: This allows you to load the unaltered stream data into a different
+*Raw*:: This allows you to load the unaltered stream data into a different
   program for further examination. The display will show HEX data, but
   ``Save As'' will result in a binary file.
 
-. __UTF8__: In this view you see the bytes as UTF-8.
+*UTF8*:: In this view you see the bytes as UTF-8.
 
-. __YAML__: This will show the bytes as a YAML binary dump.
+*YAML*:: This will show the bytes as a YAML binary dump.
 
 [[ChAdvExpert]]
 
@@ -274,7 +277,7 @@ You can open the expert info dialog by selecting menu:Analyze[Expert Info].
 // XXX - add explanation of the dialogs context menu.
 
 .The ``Expert Info'' dialog box
-image::wsug_graphics/ws-expert-infos.png[]
+image::wsug_graphics/ws-expert-infos.png[{screenshot-attrs}]
 
 [[ChAdvExpertDialogTabs]]
 
@@ -306,7 +309,7 @@ pinpoint problems.
 ==== ``Colorized'' Protocol Details Tree
 
 .The ``Colorized'' protocol details tree
-image::wsug_graphics/ws-expert-colored-tree.png[]
+image::wsug_graphics/ws-expert-colored-tree.png[{screenshot-attrs}]
 
 The protocol field causing an expert info is colorized, e.g. uses a cyan
 background for a note severity level. This color is propagated to the toplevel
@@ -323,12 +326,205 @@ marked cyan as well.
 ==== ``Expert'' Packet List Column (optional)
 
 .The ``Expert'' packet list column
-image::wsug_graphics/ws-expert-column.png[]
+image::wsug_graphics/ws-expert-column.png[{screenshot-attrs}]
 
 An optional ``Expert Info Severity'' packet list column is available that
 displays the most significant severity of a packet or stays empty if everything
 seems OK. This column is not displayed by default but can be easily added using
 the Preferences Columns page described in <<ChCustPreferencesSection>>.
+
+[[ChAdvTCPAnalysis]]
+
+=== TCP Analysis
+
+By default, Wireshark's TCP dissector tracks the state of each TCP
+session and provides additional information when problems or potential
+problems are detected. Analysis is done once for each TCP packet when a
+capture file is first opened. Packets are processed in the order in
+which they appear in the packet list. You can enable or disable this
+feature via the ``Analyze TCP sequence numbers'' TCP dissector preference.
+
+.``TCP Analysis'' packet detail items
+image::wsug_graphics/ws-tcp-analysis.png[{screenshot-attrs}]
+
+TCP Analysis flags are added to the TCP protocol tree under ``SEQ/ACK
+analysis''. Each flag is described below. Terms such as ``next expected
+sequence number'' and ``next expected acknowledgement number'' refer to
+the following'':
+
+// tcp_analyze_seq_info->nextseq
+Next expected sequence number:: The last-seen sequence number plus
+segment length. Set when there are no analysis flags and and for zero
+window probes.
+
+// tcp_analyze_seq_info->maxseqtobeacked
+Next expected acknowledgement number:: The last-seen sequence number for
+segments. Set when there are no analysis flags and for zero window probes.
+
+// tcp_analyze_seq_info->lastack
+Last-seen acknowledgment number:: Always set. Note that this is not the
+same as the next expected acknowledgment number.
+
+// tcp_analyze_seq_info->lastack
+Last-seen acknowledgment number:: Always updated for each packet. Note
+that this is not the same as the next expected acknowledgment number.
+
+// TCP_A_ACK_LOST_PACKET
+[float]
+==== TCP ACKed unseen segment
+
+Set when the expected next acknowledgement number is set for the reverse
+direction and it's less than the current acknowledgement number.
+
+// TCP_A_DUPLICATE_ACK
+[float]
+==== TCP Dup ACK __<frame>__#__<acknowledgement number>__
+
+Set when all of the following are true:
+
+- The segment size is zero.
+- The window size is non-zero and hasn't changed.
+- The next expected sequence number and last-seen acknowledgment number are non-zero (i.e. the connection has been established).
+- SYN, FIN, and RST are not set.
+
+// TCP_A_FAST_RETRANSMISSION
+[float]
+==== TCP Fast Retransmission
+
+Set when all of the following are true:
+
+- This is not a keepalive packet.
+- In the forward direction, the segment size is greater than zero or the SYN or FIN is set.
+- The next expected sequence number is greater than the current sequence number.
+- We have more than two duplicate ACKs in the reverse direction.
+- The current sequence number equals the next expected acknowledgement number.
+- We saw the last acknowledgement less than 20ms ago.
+
+Supersedes ``Out-Of-Order'', ``Spurious Retransmission'', and ``Retransmission''.
+
+// TCP_A_KEEP_ALIVE
+[float]
+==== TCP Keep-Alive
+
+Set when the segment size is zero or one, the current sequence number
+is one byte less than the next expected sequence number, and any of SYN,
+FIN, or RST are set.
+
+Supersedes ``Fast Retransmission'', ``Out-Of-Order'', ``Spurious
+Retransmission'', and ``Retransmission''.
+
+// TCP_A_KEEP_ALIVE_ACK
+[float]
+==== TCP Keep-Alive ACK
+
+Set when all of the following are true:
+
+- The segment size is zero.
+- The window size is non-zero and hasn't changed.
+- The current sequence number is the same as the next expected sequence number.
+- The current acknowledgement number is the same as the last-seen acknowledgement number.
+- The most recently seen packet in the reverse direction was a keepalive.
+- The packet is not a SYN, FIN, or RST.
+
+Supersedes ``Dup ACK'' and ``ZeroWindowProbeAck''.
+
+// TCP_A_OUT_OF_ORDER
+[float]
+==== TCP Out-Of-Order
+
+Set when all of the following are true:
+
+- This is not a keepalive packet.
+- In the forward direction, the segment length is greater than zero or the SYN or FIN is set.
+- The next expected sequence number is greater than the current sequence number.
+- The next expected sequence number and the next sequence number differ.
+- The last segment arrived within the calculated RTT (3ms by default).
+
+Supersedes ``Spurious Retransmission'' and ``Retransmission''.
+
+// TCP_A_REUSED_PORTS
+[float]
+==== TCP Port numbers reused
+
+Set when the SYN flag is set (not SYN+ACK), we have an existing conversation using the same addresses and ports, and the sequencue number is different than the existing conversation's initial sequence number.
+
+// TCP_A_LOST_PACKET
+[float]
+==== TCP Previous segment not captured
+
+Set when the current sequence number is greater than the next expected sequence number.
+
+// TCP_A_SPURIOUS_RETRANSMISSION
+[float]
+==== TCP Spurious Retransmission
+
+Set when all of the following are true:
+
+- In the forward direction, the segment length is greater than zero or the SYN or FIN is set.
+- This is not a keepalive packet.
+- The segment length is greater than zero.
+- Data for this flow has been acknowledged. That is, the last-seen acknowledgement number has been set.
+- The next sequence number is less than or equal to the last-seen acknowledgement number.
+
+Supersedes ``Retransmission''.
+
+// TCP_A_RETRANSMISSION
+[float]
+==== TCP Retransmission
+
+Set when all of the following are true:
+
+- This is not a keepalive packet.
+- In the forward direction, the segment length is greater than zero or the SYN or FIN is set.
+- The next expected sequence number is greater than the current sequence number.
+
+// TCP_A_WINDOW_FULL
+[float]
+==== TCP Window Full
+
+Set when the segment size is non-zero, we know the window size in the
+reverse direction, and our segment size exceeds the window size in the
+reverse direction.
+
+// TCP_A_WINDOW_UPDATE
+[float]
+==== TCP Window Update
+
+Set when the all of the following are true:
+
+- The segment size is zero.
+- The window size is non-zero and not equal to the last-seen window size.
+- The sequence number is equal to the next expected sequence number.
+- The acknowledgement number is equal to the last-seen acknowledgement number.
+- None of SYN, FIN, or RST are set.
+
+// TCP_A_ZERO_WINDOW
+[float]
+==== TCP ZeroWindow
+
+Set when the window size is zero and non of SYN, FIN, or RST are set.
+
+// TCP_A_ZERO_WINDOW_PROBE
+[float]
+==== TCP ZeroWindowProbe
+
+Set when the sequence number is equal to the next expected sequence
+number, the segment size is one, and last-seen window size in the
+reverse direction was zero.
+
+// TCP_A_ZERO_WINDOW_PROBE_ACK
+[float]
+==== TCP ZeroWindowProbeAck
+
+Set when the all of the following are true:
+
+- The segment size is zero.
+- The window size is zero.
+- The sequence number is equal to the next expected sequence number.
+- The acknowledgement number is equal to the last-seen acknowledgement number.
+- The last-seen packet in the reverse direction was a zero window probe.
+
+Supersedes ``TCP Dup ACK''.
 
 [[ChAdvTimestamps]]
 
@@ -446,9 +642,8 @@ If it's 3 o'clock in Berlin it's 2 o'clock in UTC ``at the same moment''.
 Be aware that at a few places on earth don't use time zones with even hour
 offsets (e.g. New Delhi uses UTC+05:30)!
 
-Further information can be found at:
-link:wikipedia-web-site:[]Time_zone[wikipedia-web-site:[]Time_zone] and
-link:wikipedia-web-site:[]Coordinated_Universal_Time[wikipedia-web-site:[]Coordinated_Universal_Time].
+Further information can be found at: {wikipedia-main-url}Time_zone and
+{wikipedia-main-url}Coordinated_Universal_Time.
 ****
 
 
@@ -469,12 +664,11 @@ Australia).
 Keep in mind: UTC remains the same all year around, regardless of DST!
 
 Further information can be found at
-link:wikipedia-web-site:[]Daylight_saving[wikipedia-web-site:[]Daylight_saving].
+link:{wikipedia-main-url}Daylight_saving[].
 ****
 
 Further time zone and DST information can be found at
-link:greenwichmeantime-web-site:[][greenwichmeantime-web-site:[]] and
-link:timeanddate-web-site:[][timeanddate-web-site:[]].
+{greenwichmeantime-main-url} and {timeanddate-main-url}.
 
 ==== Set your computer's time correctly!
 
@@ -502,8 +696,7 @@ before, you are simply in a different time zone with a different local time.
 You can use the Network Time Protocol (NTP) to automatically adjust your
 computer to the correct time, by synchronizing it to Internet NTP clock servers.
 NTP clients are available for all operating systems that Wireshark supports (and
-for a lot more), for examples see:
-link:ntp-web-site:[][ntp-web-site:[]].
+for a lot more), for examples see {ntp-main-url}.
 
 
 ==== Wireshark and Time Zones
@@ -601,7 +794,7 @@ See <<ChUsePacketBytesPaneSection>>).
 [[ChAdvWiresharkBytesPaneTabs]]
 
 .The ``Packet Bytes'' pane with a reassembled tab
-image::wsug_graphics/ws-bytes-pane-tabs.png[]
+image::wsug_graphics/ws-bytes-pane-tabs.png[{screenshot-attrs}]
 
 Reassembly might take place at several protocol layers, so it's possible that
 multiple tabs in the ``Packet Bytes'' pane appear.
@@ -793,7 +986,7 @@ medium, the importance of error detection, the processor load to perform the
 calculation, the performance needed and many other things.
 
 Further information about checksums can be found at:
-link:wikipedia-web-site:[]Checksum[wikipedia-web-site:[]Checksum].
+{wikipedia-main-url}Checksum.
 ****
 
 ==== Wireshark checksum validation

@@ -39,6 +39,8 @@ static int proto_ethercat_frame = -1;
 
 static dissector_table_t ethercat_frame_dissector_table;
 
+static dissector_handle_t ethercat_frame_handle;
+
 /* Define the tree for the EtherCAT frame */
 static int ett_ethercat_frame = -1;
 static int hf_ethercat_frame_length = -1;
@@ -129,12 +131,16 @@ void proto_register_ethercat_frame(void)
          &ett_ethercat_frame
       };
 
+<<<<<<< HEAD
    proto_ethercat_frame = proto_register_protocol("EtherCAT frame header",
                                                   "ETHERCAT","ecatf");
+=======
+   proto_ethercat_frame = proto_register_protocol("EtherCAT frame header", "ETHERCAT", "ecatf");
+>>>>>>> upstream/master-2.4
    proto_register_field_array(proto_ethercat_frame,hf,array_length(hf));
    proto_register_subtree_array(ett, array_length(ett));
 
-   register_dissector("ecatf", dissect_ethercat_frame, proto_ethercat_frame);
+   ethercat_frame_handle = register_dissector("ecatf", dissect_ethercat_frame, proto_ethercat_frame);
 
    /* Define a handle (ecatf.type) for sub dissectors that want to dissect
       the Ethercat frame ether type (E88A4) payload. */
@@ -144,12 +150,9 @@ void proto_register_ethercat_frame(void)
 
 void proto_reg_handoff_ethercat_frame(void)
 {
-   dissector_handle_t ethercat_frame_handle;
-
-   ethercat_frame_handle = find_dissector("ecatf");
    dissector_add_uint("ethertype", ETHERTYPE_ECATF, ethercat_frame_handle);
-   dissector_add_uint("udp.port", ETHERTYPE_ECATF, ethercat_frame_handle);
-   dissector_add_uint("tcp.port", ETHERTYPE_ECATF, ethercat_frame_handle);
+   dissector_add_uint_with_preference("udp.port", ETHERTYPE_ECATF, ethercat_frame_handle);
+   dissector_add_uint_with_preference("tcp.port", ETHERTYPE_ECATF, ethercat_frame_handle);
 }
 
 /*

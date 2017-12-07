@@ -32,7 +32,7 @@ void proto_register_knet(void);
 void proto_reg_handoff_knet(void);
 
 #define PROTO_TAG_KNET      "KNET"    /*!< Definition of kNet Protocol */
-#define PORT                2345
+#define PORT                2345 /* Not IANA registered */
 
 #define KNET_SCTP_PACKET    1000
 #define KNET_TCP_PACKET     1001
@@ -119,8 +119,6 @@ static dissector_handle_t knet_handle_udp;
 
 /* Ports used by the dissectors */
 static guint32 knet_sctp_port =   PORT; /*!< Port used by kNet SCTP */
-static guint32 knet_tcp_port =    PORT; /*!< Port used by kNet TCP */
-static guint32 knet_udp_port =    PORT; /*!< Port used by kNet UDP */
 
 static const value_string packettypenames[] = { /*!< Messageid List */
     { PINGREQUEST,          "Ping Request"        },
@@ -741,12 +739,12 @@ proto_register_knet(void)
         &ett_knet_payload
     };
 
+    /* Register protocols */
+    proto_knet = proto_register_protocol ("kNet Protocol", "KNET", "knet");
+
     /* Register header field & subtree arrays */
     proto_register_field_array(proto_knet, hf_knet, array_length(hf_knet));
     proto_register_subtree_array(ett_knet, array_length(ett_knet));
-
-    /* Register protocols */
-    proto_knet = proto_register_protocol ("kNet Protocol", "KNET", "knet");
 
     knet_handle_sctp = register_dissector("knetsctp", dissect_knet_sctp, proto_knet);
     knet_handle_tcp = register_dissector("knettcp",  dissect_knet_tcp, proto_knet);
@@ -757,14 +755,6 @@ proto_register_knet(void)
     prefs_register_uint_preference(knet_module, "sctp.port", "kNet SCTP Port",
                                    "Set the SCTP port for kNet messages",
                                    10, &knet_sctp_port);
-
-    prefs_register_uint_preference(knet_module, "tcp.port", "kNet TCP Port",
-                                   "Set the TCP port for kNet messages",
-                                   10, &knet_tcp_port);
-
-    prefs_register_uint_preference(knet_module, "udp.port", "kNet UDP Port",
-                                   "Set the UDP port for kNet messages",
-                                   10, &knet_udp_port);
 }
 
 /**
@@ -777,28 +767,20 @@ proto_reg_handoff_knet(void)
     static gboolean initialized = FALSE;
 
     static guint current_sctp_port;
-    static guint current_tcp_port;
-    static guint current_udp_port;
 
     if(!initialized)
     {
+        dissector_add_uint_with_preference("tcp.port", PORT, knet_handle_tcp);
+        dissector_add_uint_with_preference("udp.port", PORT, knet_handle_udp);
         initialized = TRUE;
     }
     else
     {
         dissector_delete_uint("sctp.port", current_sctp_port, knet_handle_sctp);
-        dissector_delete_uint("tcp.port",  current_tcp_port,  knet_handle_tcp);
-        dissector_delete_uint("udp.port",  current_udp_port,  knet_handle_udp);
     }
 
     current_sctp_port = knet_sctp_port;
     dissector_add_uint("sctp.port", current_sctp_port, knet_handle_sctp);
-
-    current_tcp_port = knet_tcp_port;
-    dissector_add_uint("tcp.port", current_tcp_port, knet_handle_tcp);
-
-    current_udp_port = knet_udp_port;
-    dissector_add_uint("udp.port", current_udp_port, knet_handle_udp);
 }
 /*
 * Editor modelines - http://www.wireshark.org/tools/modelines.html

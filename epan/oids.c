@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 
 #include "wmem/wmem.h"
 #include "uat.h"
@@ -37,6 +37,7 @@
 #include "packet.h"
 #include "wsutil/filesystem.h"
 #include "dissectors/packet-ber.h"
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 
 #ifdef HAVE_LIBSMI
 #include <smi.h>
@@ -46,7 +47,7 @@ static gboolean load_smi_modules = FALSE;
 static gboolean suppress_smi_errors = FALSE;
 #endif
 
-#define D(level,args) do if (debuglevel >= level) { printf args; printf("\n"); fflush(stdout); } while(0)
+#define D(level,args) do if (debuglevel >= level) { ws_debug_printf args; ws_debug_printf("\n"); fflush(stdout); } while(0)
 
 #include "oids.h"
 
@@ -760,12 +761,16 @@ void oid_pref_init(module_t *nameres)
 
     prefs_register_bool_preference(nameres, "load_smi_modules",
                                   "Enable OID resolution",
-                                  "You must restart Wireshark for this change to take effect",
+                                  "Resolve Object IDs to object names from the MIB and PIB"
+                                  " modules defined below."
+                                  " You must restart Wireshark for this change to take effect",
                                   &load_smi_modules);
 
     prefs_register_bool_preference(nameres, "suppress_smi_errors",
                                   "Suppress SMI errors",
-                                  "Some errors can be ignored. If unsure, set to false.",
+                                  "While loading MIB or PIB modules errors may be detected,"
+                                  " which are reported. Some errors can be ignored."
+                                  " If unsure, set to false.",
                                   &suppress_smi_errors);
 
     smi_paths_uat = uat_new("SMI Paths",
@@ -787,13 +792,14 @@ void oid_pref_init(module_t *nameres)
                             NULL,
                             smi_mod_free_cb,
                             restart_needed_warning,
+                            NULL,
                             smi_paths_fields);
 
     prefs_register_uat_preference(nameres,
                                   "smi_paths",
                                   "SMI (MIB and PIB) paths",
-                                  "Search paths for SMI (MIB and PIB) modules. You must\n"
-                                  "restart Wireshark for these changes to take effect.",
+                                  "Search paths for SMI (MIB and PIB) modules. You must"
+                                  " restart Wireshark for these changes to take effect.",
                                   smi_paths_uat);
 
     smi_modules_uat = uat_new("SMI Modules",
@@ -815,13 +821,14 @@ void oid_pref_init(module_t *nameres)
                               NULL,
                               smi_mod_free_cb,
                               restart_needed_warning,
+                              NULL,
                               smi_fields);
 
     prefs_register_uat_preference(nameres,
                                   "smi_modules",
                                   "SMI (MIB and PIB) modules",
-                                  "List of enabled SMI (MIB and PIB) modules. You must\n"
-                                  "restart Wireshark for these changes to take effect.",
+                                  "List of SMI (MIB and PIB) modules to load. You must"
+                                  " restart Wireshark for these changes to take effect.",
                                   smi_modules_uat);
 
 #else
@@ -860,33 +867,27 @@ char* oid_subid2string(wmem_allocator_t *scope, guint32* subids, guint len) {
 	return rel_oid_subid2string(scope, subids, len, TRUE);
 }
 char* rel_oid_subid2string(wmem_allocator_t *scope, guint32* subids, guint len, gboolean is_absolute) {
-	char *s, *w;
+
+	wmem_strbuf_t *oid_str;
+	gsize oid_str_len;
 
 	if(!subids || len == 0)
 		return wmem_strdup(scope, "*** Empty OID ***");
 
-	s = (char *)wmem_alloc0(scope, ((len)*11)+2);
-	w = s;
+	oid_str = wmem_strbuf_new(scope, "");
 
 	if (!is_absolute)
-		*w++ = '.';
+		wmem_strbuf_append_c(oid_str, '.');
 
 	do {
-#ifdef _WIN32
-		/*
-		 * GLib appears to use gnulib's snprintf on Windows, which is
-		 * slow. MSDN says that _snprintf can return -1, but that
-		 * shouldn't be possible here.
-		 */
-		w += _snprintf(w,12,"%u.",*subids++);
-#else
-		w += g_snprintf(w,12,"%u.",*subids++);
-#endif
+		wmem_strbuf_append_printf(oid_str, "%u.",*subids++);
 	} while(--len);
 
-	if (w!=s) *(w-1) = '\0'; else *(s) = '\0';
+	/* Remove trailing "." (which is guaranteed to be there) */
+	oid_str_len = wmem_strbuf_get_len(oid_str);
+	wmem_strbuf_truncate(oid_str, oid_str_len - 1);
 
-	return s;
+	return wmem_strbuf_finalize(oid_str);
 }
 
 static guint check_num_oid(const char* str) {
@@ -1131,9 +1132,13 @@ guint oid_subid2encoded(wmem_allocator_t *scope, guint subids_len, guint32* subi
 		switch(len) {
 			default: *bytes_p=NULL; return 0;
 			case 5: *(b++) = ((subid & 0xF0000000) >> 28) | 0x80;
+			/* FALL THROUGH */
 			case 4: *(b++) = ((subid & 0x0FE00000) >> 21) | 0x80;
+			/* FALL THROUGH */
 			case 3: *(b++) = ((subid & 0x001FC000) >> 14) | 0x80;
+			/* FALL THROUGH */
 			case 2: *(b++) = ((subid & 0x00003F80) >> 7)  | 0x80;
+			/* FALL THROUGH */
 			case 1: *(b++) =   subid & 0x0000007F ; break;
 		}
 	}

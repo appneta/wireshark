@@ -657,7 +657,6 @@ tvb_mip6_fmt_ts(tvbuff_t *tvb, gint offset)
 	time_t		 temptime;
 	struct tm	*bd;
 	double		 fractime;
-	char		*buff;
 
 	tempstmp = tvb_get_ntoh48(tvb, offset);
 	tempfrac = tvb_get_ntohs(tvb, offset+6);
@@ -673,16 +672,13 @@ tvb_mip6_fmt_ts(tvbuff_t *tvb, gint offset)
 	}
 
 	fractime = bd->tm_sec + tempfrac / NTP_FLOAT_DENOM;
-	buff = (char *)wmem_alloc(wmem_packet_scope(), NTP_TS_SIZE);
-	g_snprintf(buff, NTP_TS_SIZE,
-		 "%s %2d, %d %02d:%02d:%07.4f UTC",
+	return wmem_strdup_printf(wmem_packet_scope(), "%s %2d, %d %02d:%02d:%07.4f UTC",
 		 mon_names[bd->tm_mon],
 		 bd->tm_mday,
 		 bd->tm_year + 1900,
 		 bd->tm_hour,
 		 bd->tm_min,
 		 fractime);
-	return buff;
 }
 /* tvb_ntp_fmt_ts - converts NTP timestamp to human readable string.
  * TVB and an offset (IN).
@@ -955,10 +951,7 @@ dissect_ntp_std(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ntp_tree)
 	 */
 	rootdelay = ((gint16)tvb_get_ntohs(tvb, 4)) +
 			(tvb_get_ntohs(tvb, 6) / 65536.0);
-	proto_tree_add_double_format_value(ntp_tree, hf_ntp_rootdelay, tvb, 4, 4,
-				   rootdelay,
-				   "%9.4f sec",
-				   rootdelay);
+	proto_tree_add_double(ntp_tree, hf_ntp_rootdelay, tvb, 4, 4, rootdelay);
 
 	/* Root Dispersion, 32-bit unsigned fixed-point number indicating
 	 * the nominal error relative to the primary reference source, in
@@ -966,10 +959,7 @@ dissect_ntp_std(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ntp_tree)
 	 */
 	rootdispersion = ((gint16)tvb_get_ntohs(tvb, 8)) +
 				(tvb_get_ntohs(tvb, 10) / 65536.0);
-	proto_tree_add_double_format_value(ntp_tree, hf_ntp_rootdispersion, tvb, 8, 4,
-				   rootdispersion,
-				   "%9.4f sec",
-				   rootdispersion);
+	proto_tree_add_double(ntp_tree, hf_ntp_rootdispersion, tvb, 8, 4, rootdispersion);
 
 	/* Now, there is a problem with secondary servers.  Standards
 	 * asks from stratum-2 - stratum-15 servers to set this to the
@@ -1191,6 +1181,7 @@ dissect_ntp_ctrl(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *ntp_tree)
 			 * then data part could be the same as if opcode is NTPCTRL_OP_READVAR
 			 * --> so, no "break" here!
 			 */
+			/* FALL THROUGH */
 		case NTPCTRL_OP_READVAR:
 		case NTPCTRL_OP_WRITEVAR:
 		case NTPCTRL_OP_READCLOCK:
@@ -1428,11 +1419,11 @@ proto_register_ntp(void)
 			"Peer Clock Precision", "ntp.precision", FT_INT8, BASE_DEC,
 			NULL, 0, "The precision of the system clock", HFILL }},
 		{ &hf_ntp_rootdelay, {
-			"Root Delay", "ntp.rootdelay", FT_DOUBLE, BASE_NONE,
-			NULL, 0, "Total round-trip delay to the reference clock", HFILL }},
+			"Root Delay", "ntp.rootdelay", FT_DOUBLE, BASE_NONE|BASE_UNIT_STRING,
+			&units_second_seconds, 0, "Total round-trip delay to the reference clock", HFILL }},
 		{ &hf_ntp_rootdispersion, {
-			"Root Dispersion", "ntp.rootdispersion", FT_DOUBLE, BASE_NONE,
-			NULL, 0, "Total dispersion to the reference clock", HFILL }},
+			"Root Dispersion", "ntp.rootdispersion", FT_DOUBLE, BASE_NONE|BASE_UNIT_STRING,
+			&units_second_seconds, 0, "Total dispersion to the reference clock", HFILL }},
 		{ &hf_ntp_refid, {
 			"Reference ID", "ntp.refid", FT_BYTES, BASE_NONE,
 			NULL, 0, "Particular server or reference clock being used", HFILL }},
@@ -1704,8 +1695,8 @@ proto_reg_handoff_ntp(void)
 	dissector_handle_t ntp_handle;
 
 	ntp_handle = create_dissector_handle(dissect_ntp, proto_ntp);
-	dissector_add_uint("udp.port", UDP_PORT_NTP, ntp_handle);
-	dissector_add_uint("tcp.port", TCP_PORT_NTP, ntp_handle);
+	dissector_add_uint_with_preference("udp.port", UDP_PORT_NTP, ntp_handle);
+	dissector_add_uint_with_preference("tcp.port", TCP_PORT_NTP, ntp_handle);
 }
 
 /*

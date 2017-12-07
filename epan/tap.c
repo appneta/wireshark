@@ -39,6 +39,8 @@
 #include <epan/packet_info.h>
 #include <epan/dfilter/dfilter.h>
 #include <epan/tap.h>
+#include <wsutil/ws_printf.h> /* ws_g_warning */
+#include <wsutil/glib-compat.h>
 
 static gboolean tapping_is_active=FALSE;
 
@@ -176,6 +178,13 @@ register_all_plugin_tap_listeners(void)
 {
 	g_slist_foreach(tap_plugins, register_tap_plugin_listener, NULL);
 }
+
+static void
+tap_plugin_destroy(gpointer p)
+{
+	g_free(p);
+}
+
 #endif /* HAVE_PLUGINS */
 
 /* **********************************************************************
@@ -213,13 +222,19 @@ tap_init(void)
 int
 register_tap(const char *name)
 {
-	tap_dissector_t *td, *tdl;
-	int i, tap_id;
+	tap_dissector_t *td, *tdl = NULL, *tdl_prev;
+	int i=0;
 
 	if(tap_dissector_list){
-		tap_id=find_tap_id(name);
-		if (tap_id)
-			return tap_id;
+		/* Check if we allready have the name registered, if it is return the tap_id of that tap.
+		 * After the for loop tdl_prev will point to the last element of the list, add the new one there.
+		 */
+		for (i = 1, tdl = tap_dissector_list; tdl; i++, tdl_prev = tdl, tdl = tdl->next) {
+			if (!strcmp(tdl->name, name)) {
+				return i;
+			}
+		}
+		tdl = tdl_prev;
 	}
 
 	td=(tap_dissector_t *)g_malloc(sizeof(tap_dissector_t));
@@ -230,8 +245,6 @@ register_tap(const char *name)
 		tap_dissector_list=td;
 		i=1;
 	} else {
-		for(i=2,tdl=tap_dissector_list;tdl->next;i++,tdl=tdl->next)
-			;
 		tdl->next=td;
 	}
 	return i;
@@ -271,7 +284,7 @@ tap_queue_packet(int tap_id, packet_info *pinfo, const void *tap_specific_data)
 	 * rather than having a fixed maximum number of entries?
 	 */
 	if(tap_packet_index >= TAP_PACKET_QUEUE_LEN){
-		g_warning("Too many taps queued");
+		ws_g_warning("Too many taps queued");
 		return;
 	}
 
@@ -306,7 +319,7 @@ void tap_build_interesting (epan_dissect_t *edt)
 	   interesting hf_fields */
 	for(tl=tap_listener_queue;tl;tl=tl->next){
 		if(tl->code){
-			epan_dissect_prime_dfilter(edt, tl->code);
+			epan_dissect_prime_with_dfilter(edt, tl->code);
 		}
 	}
 }
@@ -737,6 +750,31 @@ union_of_tap_listener_flags(void)
 		flags|=tl->flags;
 	}
 	return flags;
+}
+
+void tap_cleanup(void)
+{
+	volatile tap_listener_t *elem_lq;
+	volatile tap_listener_t *head_lq = tap_listener_queue;
+	tap_dissector_t *elem_dl;
+	tap_dissector_t *head_dl = tap_dissector_list;
+
+	while(head_lq){
+		elem_lq = head_lq;
+		head_lq = head_lq->next;
+		free_tap_listener(elem_lq);
+	}
+
+	while(head_dl){
+		elem_dl = head_dl;
+		head_dl = head_dl->next;
+		g_free((char*)elem_dl->name);
+		g_free((gpointer)elem_dl);
+	}
+
+#ifdef HAVE_PLUGINS
+	g_slist_free_full(tap_plugins, tap_plugin_destroy);
+#endif /* HAVE_PLUGINS */
 }
 
 /*

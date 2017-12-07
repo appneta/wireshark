@@ -73,10 +73,12 @@ SUBDIRS =		\
 	lppa		\
 	lppe		\
 	lte-rrc		\
+	m2ap		\
 	m3ap		\
 	mms		\
 	mpeg-audio	\
 	mpeg-pes	\
+	mudurl 		\
 	nbap		\
 	novell_pkis		\
 	ns_cert_exts	\

@@ -396,12 +396,6 @@ capture_input_new_packets(capture_session *cap_session, int to_read)
     capture_callback_invoke(capture_cb_capture_fixed_continue, cap_session);
   }
 
-  /* update the main window so we get events (e.g. from the stop toolbar button) */
-  /* This causes a hang on Windows (see bug 7305). Do we need this on any platform? */
-#ifndef _WIN32
-  main_window_update();
-#endif
-
   if(capture_opts->show_info)
     capture_info_new_packets(to_read, cap_session->cap_data_info);
 }
@@ -679,6 +673,7 @@ capture_stat_start(capture_options *capture_opts) {
       device = g_array_index(capture_opts->all_ifaces, interface_t, i);
       if (device.type != IF_PIPE) {
         sc_item = (if_stat_cache_item_t *)g_malloc0(sizeof(if_stat_cache_item_t));
+        g_assert(device.if_info.name);
         sc_item->name = g_strdup(device.if_info.name);
         sc->cache_list = g_list_append(sc->cache_list, sc_item);
       }

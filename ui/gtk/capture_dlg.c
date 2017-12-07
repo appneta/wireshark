@@ -35,6 +35,9 @@
 #include <epan/addr_resolv.h>
 #include <epan/prefs.h>
 #include <wsutil/filesystem.h>
+#include <wsutil/strtoi.h>
+
+#include <wiretap/wtap.h>
 
 #include "ui/capture.h"
 #include "caputils/capture_ifinfo.h"
@@ -761,6 +764,11 @@ capture_all_filter_check_syntax_cb(GtkWidget *w _U_, gpointer user_data _U_)
         simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "The link type of interface %s was not specified.", device.name);
         continue;  /* Programming error: somehow managed to select an "unsupported" entry */
       }
+#ifdef HAVE_EXTCAP
+      /* Can't verify extcap capture filters */
+      if (device.if_info.extcap != NULL && strlen(device.if_info.extcap) > 0)
+        continue;
+#endif
       filter_text = gtk_combo_box_text_get_active_text (GTK_COMBO_BOX_TEXT(filter_cm));
       if (strlen(filter_text) == 0) {
         colorize_filter_te_as_empty(filter_te);
@@ -1069,6 +1077,7 @@ options_airpcap_advanced_cb(GtkWidget *w, gpointer d)
 #endif
 
 #ifdef HAVE_PCAP_REMOTE
+#if 0
 /* PCAP interface type menu item */
 struct iftype_info {
   capture_source  id;
@@ -1082,6 +1091,9 @@ static struct iftype_info iftype[] = {
 };
 
 #define REMOTE_HOST_START ((sizeof(iftype) / sizeof(iftype[0])) + 1)
+#else
+#define REMOTE_HOST_START 3
+#endif
 #define REMOTE_HOST_SEPARATOR "---"
 
 static void
@@ -1091,6 +1103,7 @@ iftype_combo_box_add_remote_separators (GtkWidget *iftype_cbx)
   gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(iftype_cbx), "Clear list");
 }
 
+#if 0
 static void
 iftype_combo_box_add (GtkWidget *iftype_cbx, interface_t *device)
 {
@@ -1103,7 +1116,7 @@ iftype_combo_box_add (GtkWidget *iftype_cbx, interface_t *device)
 
   rh = recent_get_remote_host(device->remote_opts.remote_host_opts.remote_host);
   if (!rh) {
-    rh = g_malloc0 (sizeof (*rh));
+    rh = (struct remote_host *)g_malloc0 (sizeof (*rh));
     if (recent_get_remote_host_list_size() == 0) {
       iftype_combo_box_add_remote_separators (iftype_cbx);
     }
@@ -1145,11 +1158,12 @@ iftype_combo_box_add (GtkWidget *iftype_cbx, interface_t *device)
   gtk_combo_box_set_active(GTK_COMBO_BOX(iftype_cbx), pos);
   g_object_set_data(G_OBJECT(iftype_cbx), E_CAP_CBX_IFTYPE_NOUPDATE_KEY, GINT_TO_POINTER(0));
 }
+#endif
 
 static void
 iftype_combo_box_add_remote_host (gpointer key, gpointer value _U_, gpointer user_data)
 {
-  gtk_combo_box_text_insert_text(GTK_COMBO_BOX_TEXT(user_data), REMOTE_HOST_START, key);
+  gtk_combo_box_text_insert_text(GTK_COMBO_BOX_TEXT(user_data), REMOTE_HOST_START, (const char *)key);
 }
 
 /* Fill the menu of available types of interfaces */
@@ -1157,14 +1171,12 @@ static GtkWidget *
 iftype_combo_box_new(void)
 {
   GtkWidget *iftype_cbx;
-  GHashTable *ht;
 
   iftype_cbx = gtk_combo_box_text_new_with_entry();
 
-  ht = get_remote_host_list();
-  if (g_hash_table_size (ht) > 0) {
+  if (recent_get_remote_host_list_size() > 0) {
     /* Add remote hosts */
-    g_hash_table_foreach (ht, iftype_combo_box_add_remote_host, iftype_cbx);
+    recent_remote_host_list_foreach (iftype_combo_box_add_remote_host, iftype_cbx);
     iftype_combo_box_add_remote_separators (iftype_cbx);
   }
 
@@ -1173,6 +1185,7 @@ iftype_combo_box_new(void)
   return iftype_cbx;
 }
 
+#if 0
 static gboolean
 iftype_combo_is_separator (GtkTreeModel *model, GtkTreeIter *iter, gpointer data _U_)
 {
@@ -1189,6 +1202,7 @@ iftype_combo_is_separator (GtkTreeModel *model, GtkTreeIter *iter, gpointer data
 
 }
 #endif
+#endif
 
 #ifdef HAVE_PCAP_REMOTE
 static void
@@ -1198,42 +1212,44 @@ error_list_remote_interface_cb (gpointer dialog _U_, gint btn _U_, gpointer data
 }
 
 static void
-insert_new_rows(GList *list)
+insert_new_rows(GList *rlist)
 {
-  interface_t        device;
   GtkTreeIter        iter;
-  GList             *if_entry;
-  if_info_t         *if_info;
-  char              *if_string = NULL, *temp = NULL, *snaplen_string;
-  gchar             *descr;
-  if_capabilities_t *caps;
-  gint               linktype_count;
-  gboolean           monitor_mode;
-  GSList            *curr_addr;
-  int                ips       = 0;
-  guint              i;
-  if_addr_t         *addr;
-  GList             *lt_entry;
-  data_link_info_t  *data_link_info;
-  gchar             *str       = NULL, *link_type_name = NULL;
-  gboolean           found     = FALSE;
-  GString           *ip_str;
   GtkTreeView       *if_cb;
   GtkTreeModel      *model;
-  link_row          *linkr     = NULL;
-  address           addr_str;
-  char*             temp_addr_str = NULL;
+  char              *snaplen_string;
+  gchar             *link_type_name = NULL;
+  char              *temp = NULL;
+
+  GList             *if_entry, *lt_entry;
+  if_info_t         *if_info;
+  char              *if_string = NULL;
+  gchar             *descr, *auth_str;
+  if_capabilities_t *caps;
+  gint               linktype_count;
+  gboolean           monitor_mode, found = FALSE;
+  GSList            *curr_addr;
+  int                ips = 0;
+  guint              i;
+  if_addr_t         *addr;
+  data_link_info_t  *data_link_info;
+  GString           *ip_str;
+  link_row          *linkr = NULL;
+  interface_t        device;
+  guint              num_interfaces;
+  remote_options    *roptions;
 
   if_cb = (GtkTreeView *) g_object_get_data(G_OBJECT(cap_open_w), E_CAP_IFACE_KEY);
   model = gtk_tree_view_get_model(if_cb);
+
+  roptions = &global_remote_opts;
   /* Scan through the list and build a list of strings to display. */
-  for (if_entry = g_list_first(list); if_entry != NULL; if_entry = g_list_next(if_entry)) {
-    gchar *auth_str = NULL;
+  num_interfaces = global_capture_opts.all_ifaces->len;
+  for (if_entry = g_list_first(rlist); if_entry != NULL; if_entry = g_list_next(if_entry)) {
+    auth_str = NULL;
     if_info = (if_info_t *)if_entry->data;
-#ifdef HAVE_PCAP_REMOTE
     add_interface_to_remote_list(if_info);
-#endif
-    for (i = 0; i < global_capture_opts.all_ifaces->len; i++) {
+    for (i = 0; i < num_interfaces; i++) {
       device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
       if (strcmp(device.name, if_info->name) == 0) {
         found = TRUE;
@@ -1245,10 +1261,10 @@ insert_new_rows(GList *list)
       continue;
     }
     ip_str = g_string_new("");
-    str = "";
     ips = 0;
     memset(&device, 0, sizeof(device));
     device.name = g_strdup(if_info->name);
+    device.if_info.name = g_strdup("Don't crash on bug 13448");
     /* Is this interface hidden and, if so, should we include it
        anyway? */
     descr = capture_dev_user_descr_find(if_info->name);
@@ -1287,21 +1303,19 @@ insert_new_rows(GList *list)
     }
     device.cfilter = g_strdup(global_capture_opts.default_options.cfilter);
     monitor_mode = prefs_capture_device_monitor_mode(if_string);
-#ifdef HAVE_PCAP_REMOTE
-    if (global_remote_opts.remote_host_opts.auth_type == CAPTURE_AUTH_PWD) {
-      auth_str = g_strdup_printf("%s:%s", global_remote_opts.remote_host_opts.auth_username,
-                                 global_remote_opts.remote_host_opts.auth_password);
+    if (roptions->remote_host_opts.auth_type == CAPTURE_AUTH_PWD) {
+      auth_str = g_strdup_printf("%s:%s", roptions->remote_host_opts.auth_username,
+                                 roptions->remote_host_opts.auth_password);
     }
-#endif
     caps = capture_get_if_capabilities(if_string, monitor_mode, auth_str, NULL, main_window_update);
     g_free(auth_str);
-    gtk_list_store_append (GTK_LIST_STORE(model), &iter);
     for (; (curr_addr = g_slist_nth(if_info->addrs, ips)) != NULL; ips++) {
+      address addr_str;
+      char* temp_addr_str = NULL;
       if (ips != 0) {
         g_string_append(ip_str, "\n");
       }
       addr = (if_addr_t *)curr_addr->data;
-
       switch (addr->ifat_type) {
         case IF_AT_IPv4:
           set_address(&addr_str, AT_IPv4, 4, &addr->addr.ip4_addr);
@@ -1315,7 +1329,6 @@ insert_new_rows(GList *list)
           break;
         default:
           /* In case we add non-IP addresses */
-          temp_addr_str = NULL;
           break;
       }
 
@@ -1338,18 +1351,15 @@ insert_new_rows(GList *list)
          * used.
          */
         if (data_link_info->description != NULL) {
-          str = g_strdup(data_link_info->description);
+          linkr->name = g_strdup(data_link_info->description);
           linkr->dlt = data_link_info->dlt;
         } else {
-          str = g_strdup_printf("%s (not supported)", data_link_info->name);
+          linkr->name = g_strdup_printf("%s (not supported)", data_link_info->name);
           linkr->dlt = -1;
         }
         if (linktype_count == 0) {
-          link_type_name = g_strdup(str);
           device.active_dlt = data_link_info->dlt;
         }
-        linkr->name = g_strdup(str);
-        g_free(str);
         device.links = g_list_append(device.links, linkr);
         linktype_count++;
       } /* for link_types */
@@ -1359,40 +1369,48 @@ insert_new_rows(GList *list)
       device.monitor_mode_supported = FALSE;
 #endif
       device.active_dlt = -1;
-      link_type_name = g_strdup("default");
     }
     device.addresses = g_strdup(ip_str->str);
     device.no_addresses = ips;
+    device.remote_opts.src_type = roptions->src_type;
+    if (device.remote_opts.src_type == CAPTURE_IFREMOTE) {
+      device.local = FALSE;
+    }
+    device.remote_opts.remote_host_opts.remote_host = g_strdup(roptions->remote_host_opts.remote_host);
+    device.remote_opts.remote_host_opts.remote_port = g_strdup(roptions->remote_host_opts.remote_port);
+    device.remote_opts.remote_host_opts.auth_type = roptions->remote_host_opts.auth_type;
+    device.remote_opts.remote_host_opts.auth_username = g_strdup(roptions->remote_host_opts.auth_username);
+    device.remote_opts.remote_host_opts.auth_password = g_strdup(roptions->remote_host_opts.auth_password);
+    device.remote_opts.remote_host_opts.datatx_udp = roptions->remote_host_opts.datatx_udp;
+    device.remote_opts.remote_host_opts.nocap_rpcap = roptions->remote_host_opts.nocap_rpcap;
+    device.remote_opts.remote_host_opts.nocap_local = roptions->remote_host_opts.nocap_local;
+#ifdef HAVE_PCAP_SETSAMPLING
+    device.remote_opts.sampling_method = roptions->sampling_method;
+    device.remote_opts.sampling_param = roptions->sampling_param;
+#endif
+    device.selected = TRUE;
+    global_capture_opts.num_selected++;
+    g_array_append_val(global_capture_opts.all_ifaces, device);
+    g_string_free(ip_str, TRUE);
+
+    if (caps == NULL) {
+      link_type_name = g_strdup("default");
+    } else {
+      data_link_info = (data_link_info_t *)caps->data_link_types->data;
+      if (data_link_info->description != NULL) {
+        link_type_name = g_strdup(data_link_info->description);
+      } else {
+        link_type_name = g_strdup_printf("%s (not supported)", data_link_info->name);
+      }
+    }
     if (ips == 0) {
       temp = g_strdup_printf("<b>%s</b>", device.display_name);
     } else {
       temp = g_strdup_printf("<b>%s</b>\n<span size='small'>%s</span>", device.display_name, device.addresses);
     }
-#ifdef HAVE_PCAP_REMOTE
-    device.remote_opts.src_type= global_remote_opts.src_type;
-    if (device.remote_opts.src_type == CAPTURE_IFREMOTE) {
-      device.local = FALSE;
-    }
-    device.remote_opts.remote_host_opts.remote_host = g_strdup(global_remote_opts.remote_host_opts.remote_host);
-    device.remote_opts.remote_host_opts.remote_port = g_strdup(global_remote_opts.remote_host_opts.remote_port);
-    device.remote_opts.remote_host_opts.auth_type = global_remote_opts.remote_host_opts.auth_type;
-    device.remote_opts.remote_host_opts.auth_username = g_strdup(global_remote_opts.remote_host_opts.auth_username);
-    device.remote_opts.remote_host_opts.auth_password = g_strdup(global_remote_opts.remote_host_opts.auth_password);
-    device.remote_opts.remote_host_opts.datatx_udp = global_remote_opts.remote_host_opts.datatx_udp;
-    device.remote_opts.remote_host_opts.nocap_rpcap = global_remote_opts.remote_host_opts.nocap_rpcap;
-    device.remote_opts.remote_host_opts.nocap_local = global_remote_opts.remote_host_opts.nocap_local;
-#else
-    device.local = TRUE;
-#endif
-#ifdef HAVE_PCAP_SETSAMPLING
-    device.remote_opts.sampling_method = global_remote_opts.sampling_method;
-    device.remote_opts.sampling_param = global_remote_opts.sampling_param;
-#endif
-    device.selected = TRUE;
-    global_capture_opts.num_selected++;
-    g_array_append_val(global_capture_opts.all_ifaces, device);
     snaplen_string = g_strdup_printf("%d", device.snaplen);
 
+    gtk_list_store_append (GTK_LIST_STORE(model), &iter);
 #if defined(HAVE_PCAP_CREATE)
     gtk_list_store_set (GTK_LIST_STORE(model), &iter, CAPTURE, FALSE, IFACE_HIDDEN_NAME, device.name, INTERFACE, temp, LINK, link_type_name, PMODE, (device.pmode?"enabled":"disabled"), SNAPLEN, snaplen_string, BUFFER, device.buffer, MONITOR, "no",FILTER, "",-1);
 #elif defined(CAN_SET_CAPTURE_BUFFER_SIZE)
@@ -1400,10 +1418,7 @@ insert_new_rows(GList *list)
  #else
     gtk_list_store_set (GTK_LIST_STORE(model), &iter, CAPTURE, FALSE, IFACE_HIDDEN_NAME, device.name, INTERFACE, temp, LINK, link_type_name, PMODE, (device.pmode?"enabled":"disabled"), SNAPLEN, snaplen_string, -1);
 #endif
-    g_string_free(ip_str, TRUE);
-#ifdef HAVE_PCAP_REMOTE
     add_interface_to_list(global_capture_opts.all_ifaces->len-1);
-#endif
   } /*for*/
   gtk_tree_view_set_model(GTK_TREE_VIEW(if_cb), model);
 }
@@ -1505,7 +1520,7 @@ capture_remote_ok_cb(GtkWidget *win _U_, GtkWidget *remote_w)
   global_remote_opts.remote_host_opts.auth_password =
     g_strdup(gtk_entry_get_text(GTK_ENTRY(passwd_te)));
 
-  rh = g_malloc (sizeof (*rh));
+  rh = (struct remote_host *)g_malloc (sizeof (*rh));
   rh->r_host = g_strdup(global_remote_opts.remote_host_opts.remote_host);
   rh->remote_port = g_strdup(global_remote_opts.remote_host_opts.remote_port);
   rh->auth_type = global_remote_opts.remote_host_opts.auth_type;
@@ -1537,12 +1552,12 @@ select_if_type_cb(GtkComboBox *iftype_cbx, gpointer data _U_)
   gint num_remote = recent_get_remote_host_list_size();
 
   if (new_iftype != -1 && new_iftype == num_remote+1) {
-    free_remote_host_list();
+    recent_free_remote_host_list();
     num_remote += 2;
     while (num_remote--) { /* Remove separator lines and "Clear" item */
       gtk_combo_box_text_remove (GTK_COMBO_BOX_TEXT(iftype_cbx), num_remote);
     }
-    remote_w = g_object_get_data(G_OBJECT(interface_management_w), E_CAP_REMOTE_DIALOG_PTR_KEY);
+    remote_w = (GtkWidget *)g_object_get_data(G_OBJECT(interface_management_w), E_CAP_REMOTE_DIALOG_PTR_KEY);
     window_destroy(GTK_WIDGET(remote_w));
     capture_remote_cb(GTK_WIDGET(iftype_cbx), FALSE);
   } else {
@@ -1550,18 +1565,18 @@ select_if_type_cb(GtkComboBox *iftype_cbx, gpointer data _U_)
     rh = recent_get_remote_host(string);
     g_free (string);
     if (rh) {
-      remote_w = g_object_get_data(G_OBJECT(interface_management_w), E_CAP_REMOTE_DIALOG_PTR_KEY);
-      port_te = g_object_get_data(G_OBJECT(remote_w), E_REMOTE_PORT_TE_KEY);
+      remote_w = (GtkWidget *)g_object_get_data(G_OBJECT(interface_management_w), E_CAP_REMOTE_DIALOG_PTR_KEY);
+      port_te = (GtkWidget *)g_object_get_data(G_OBJECT(remote_w), E_REMOTE_PORT_TE_KEY);
       gtk_entry_set_text(GTK_ENTRY(port_te), rh->remote_port);
-      auth_rb = g_object_get_data(G_OBJECT(remote_w), E_REMOTE_AUTH_PASSWD_KEY);
+      auth_rb = (GtkWidget *)g_object_get_data(G_OBJECT(remote_w), E_REMOTE_AUTH_PASSWD_KEY);
       if (rh->auth_type == CAPTURE_AUTH_PWD) {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(auth_rb), TRUE);
       } else {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(auth_rb), FALSE);
       }
-      user_te = g_object_get_data(G_OBJECT(remote_w), E_REMOTE_USERNAME_TE_KEY);
+      user_te = (GtkWidget *)g_object_get_data(G_OBJECT(remote_w), E_REMOTE_USERNAME_TE_KEY);
       gtk_entry_set_text(GTK_ENTRY(user_te), rh->auth_username);
-      pass_te = g_object_get_data(G_OBJECT(remote_w), E_REMOTE_PASSWD_TE_KEY);
+      pass_te = (GtkWidget *)g_object_get_data(G_OBJECT(remote_w), E_REMOTE_PASSWD_TE_KEY);
       gtk_entry_set_text(GTK_ENTRY(pass_te), rh->auth_password);
     }
   }
@@ -1569,7 +1584,7 @@ select_if_type_cb(GtkComboBox *iftype_cbx, gpointer data _U_)
 
 /* Show remote capture interface parameters dialog */
 static void
-capture_remote_cb(GtkWidget *w, gboolean focus_username)
+capture_remote_cb(GtkWidget *w _U_, gboolean focus_username)
 {
   GtkWidget *remote_w,
             *main_vb, *host_grid,
@@ -1656,14 +1671,14 @@ capture_remote_cb(GtkWidget *w, gboolean focus_username)
   bbox = dlg_button_row_new(GTK_STOCK_OK, GTK_STOCK_CANCEL, NULL);
   gtk_box_pack_start(GTK_BOX(main_vb), bbox, FALSE, FALSE, 5);
 
-  ok_but = g_object_get_data(G_OBJECT(bbox), GTK_STOCK_OK);
+  ok_but = (GtkWidget *)g_object_get_data(G_OBJECT(bbox), GTK_STOCK_OK);
   gtk_widget_set_can_default(ok_but, TRUE);
   g_signal_connect(ok_but, "clicked", G_CALLBACK(capture_remote_ok_cb), remote_w);
   gtk_widget_set_tooltip_text(ok_but,
                        "Accept remote host parameters and lookup "
                        "remote interfaces.");
   g_object_set_data(G_OBJECT(remote_w), E_REMOTE_OK_BT_KEY, ok_but);
-  cancel_bt = g_object_get_data(G_OBJECT(bbox), GTK_STOCK_CANCEL);
+  cancel_bt = (GtkWidget *)g_object_get_data(G_OBJECT(bbox), GTK_STOCK_CANCEL);
   gtk_widget_set_tooltip_text(cancel_bt, "Cancel and exit dialog.");
   window_set_cancel_button(remote_w, cancel_bt, capture_remote_cancel_cb);
 
@@ -1709,7 +1724,7 @@ options_remote_destroy_cb(GtkWidget *win, gpointer user_data _U_)
 {
   GtkWidget *caller;
 
-  caller = g_object_get_data(G_OBJECT(win), E_OPT_REMOTE_CALLER_PTR_KEY);
+  caller = (GtkWidget *)g_object_get_data(G_OBJECT(win), E_OPT_REMOTE_CALLER_PTR_KEY);
   g_object_set_data(G_OBJECT(caller), E_OPT_REMOTE_DIALOG_PTR_KEY, NULL);
 }
 
@@ -1799,7 +1814,7 @@ options_remote_cb(GtkWidget *w _U_, gpointer d _U_)
   interface_t    device;
 
   caller = gtk_widget_get_toplevel(w);
-  opt_remote_w = g_object_get_data(G_OBJECT(caller), E_OPT_REMOTE_DIALOG_PTR_KEY);
+  opt_remote_w = (GtkWidget *)g_object_get_data(G_OBJECT(caller), E_OPT_REMOTE_DIALOG_PTR_KEY);
   if (opt_remote_w != NULL) {
     reactivate_window(opt_remote_w);
     return;
@@ -1904,10 +1919,10 @@ options_remote_cb(GtkWidget *w _U_, gpointer d _U_)
   bbox = dlg_button_row_new(GTK_STOCK_OK, GTK_STOCK_CANCEL, NULL);
   gtk_box_pack_start(GTK_BOX(main_vb), bbox, FALSE, FALSE, 5);
 
-  ok_but = g_object_get_data(G_OBJECT(bbox), GTK_STOCK_OK);
+  ok_but = (GtkWidget *)g_object_get_data(G_OBJECT(bbox), GTK_STOCK_OK);
   g_signal_connect(ok_but, "clicked", G_CALLBACK(options_remote_ok_cb), opt_remote_w);
   gtk_widget_set_tooltip_text(ok_but, "Accept parameters and close dialog");
-  cancel_bt = g_object_get_data(G_OBJECT(bbox), GTK_STOCK_CANCEL);
+  cancel_bt = (GtkWidget *)g_object_get_data(G_OBJECT(bbox), GTK_STOCK_CANCEL);
   gtk_widget_set_tooltip_text(cancel_bt, "Cancel and exit dialog.");
   window_set_cancel_button(opt_remote_w, cancel_bt, window_cancel_button_cb);
 
@@ -2461,7 +2476,7 @@ save_options_cb(GtkWidget *win _U_, gpointer user_data _U_)
     if (device.snaplen < MIN_PACKET_SIZE)
       device.snaplen = MIN_PACKET_SIZE;
   } else {
-    device.snaplen = WTAP_MAX_PACKET_SIZE;
+    device.snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
   }
   filter_text = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(filter_cm));
   if (device.cfilter)
@@ -2512,8 +2527,8 @@ adjust_snap_sensitivity(GtkWidget *tb _U_, gpointer parent_w _U_)
       gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(snap_cb)));
   device.has_snaplen = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(snap_cb));
   if (!device.has_snaplen) {
-    gtk_spin_button_set_value(GTK_SPIN_BUTTON (snap_sb), WTAP_MAX_PACKET_SIZE);
-    device.snaplen = WTAP_MAX_PACKET_SIZE;
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON (snap_sb), WTAP_MAX_PACKET_SIZE_STANDARD);
+    device.snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
   }
   g_array_insert_val(global_capture_opts.all_ifaces, marked_interface, device);
 }
@@ -2639,7 +2654,7 @@ void options_interface_cb(GtkTreeView *view, GtkTreePath *path, GtkTreeViewColum
   device.monitor_mode_supported = FALSE;
 #endif
   device.has_snaplen = FALSE;
-  device.snaplen = 65535;
+  device.snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
   device.cfilter = NULL;
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
   device.buffer = DEFAULT_CAPTURE_BUFFER_SIZE;
@@ -2666,7 +2681,12 @@ void options_interface_cb(GtkTreeView *view, GtkTreePath *path, GtkTreeViewColum
       break;
     }
   }
-  marked_row = atoi(gtk_tree_path_to_string(path));
+  // not sure if this can happen, just to be sure...
+  if (gtk_tree_path_get_depth(path) == 0) {
+    marked_row = 0;
+  } else {
+    marked_row = gtk_tree_path_get_indices(path)[0];
+  }
   opt_edit_w = dlg_window_new("Edit Interface Settings");
   gtk_window_set_modal(GTK_WINDOW(opt_edit_w), TRUE);
   gtk_window_set_type_hint (GTK_WINDOW (opt_edit_w), GDK_WINDOW_TYPE_HINT_DIALOG);
@@ -2877,7 +2897,7 @@ void options_interface_cb(GtkTreeView *view, GtkTreePath *path, GtkTreeViewColum
   gtk_box_pack_start(GTK_BOX(snap_hb), snap_cb, FALSE, FALSE, 0);
 
   snap_adj = (GtkAdjustment *) gtk_adjustment_new((gfloat) device.snaplen,
-    MIN_PACKET_SIZE, WTAP_MAX_PACKET_SIZE, 1.0, 10.0, 0.0);
+    MIN_PACKET_SIZE, WTAP_MAX_PACKET_SIZE_STANDARD, 1.0, 10.0, 0.0);
   snap_sb = gtk_spin_button_new (snap_adj, 0, 0);
   gtk_spin_button_set_wrap (GTK_SPIN_BUTTON (snap_sb), TRUE);
   gtk_widget_set_size_request(snap_sb, 80, -1);
@@ -2959,7 +2979,7 @@ void options_interface_cb(GtkTreeView *view, GtkTreePath *path, GtkTreeViewColum
   gtk_box_pack_start (GTK_BOX(buffer_size_hb), buffer_size_lb, FALSE, FALSE, 0);
 
   buffer_size_adj = (GtkAdjustment *) gtk_adjustment_new((gfloat) device.buffer,
-    1, 65535, 1.0, 10.0, 0.0);
+    1, WTAP_MAX_PACKET_SIZE_STANDARD, 1.0, 10.0, 0.0);
   buffer_size_sb = gtk_spin_button_new (buffer_size_adj, 0, 0);
   gtk_spin_button_set_value(GTK_SPIN_BUTTON (buffer_size_sb), (gfloat) device.buffer);
   gtk_spin_button_set_wrap (GTK_SPIN_BUTTON (buffer_size_sb), TRUE);
@@ -3584,15 +3604,23 @@ pipe_del_bt_clicked_cb(GtkWidget *w _U_, gpointer data _U_)
   GtkTreeModel     *model, *optmodel;
   GtkTreeIter       iter, optiter;
   GtkTreeView      *if_cb;
+  GtkTreePath      *path;
   gchar            *name, *optname = NULL;
   guint             i;
+  gint32            num;
 
   sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(pipe_l));
   /* If something was selected */
 
   if (gtk_tree_selection_get_selected(sel, &model, &iter)) {
     gtk_tree_model_get(model, &iter, 0, &name, -1);
-    if (name != NULL && atoi(gtk_tree_model_get_string_from_iter(model, &iter)) < (gint)global_capture_opts.all_ifaces->len) {
+    path = gtk_tree_model_get_path(model, &iter);
+    if (gtk_tree_path_get_depth(path) == 0) {
+      num = 0;
+    } else {
+      num = gtk_tree_path_get_indices(path)[0];
+    }
+    if (name != NULL && num < (gint)global_capture_opts.all_ifaces->len) {
       for (i = 0; i < global_capture_opts.all_ifaces->len; i++) {
         if (strcmp(g_array_index(global_capture_opts.all_ifaces, interface_t, i).name, name) == 0) {
           g_array_remove_index(global_capture_opts.all_ifaces, i);
@@ -3701,7 +3729,7 @@ cancel_pipe_cb (gpointer w _U_)
 #ifdef HAVE_PCAP_REMOTE
   if (interface_management_w && G_IS_OBJECT(interface_management_w)) {
     GtkWidget *remote_w;
-    remote_w = g_object_get_data(G_OBJECT(interface_management_w), E_CAP_REMOTE_DIALOG_PTR_KEY);
+    remote_w = (GtkWidget *)g_object_get_data(G_OBJECT(interface_management_w), E_CAP_REMOTE_DIALOG_PTR_KEY);
     if (remote_w != NULL && G_IS_OBJECT(remote_w))
       window_destroy(remote_w);
   }
@@ -3893,7 +3921,7 @@ fill_remote_list(void)
 }
 
 static void
-button_hide_cb(GtkTreeViewColumn *column, GtkCellRenderer *renderer,
+button_hide_cb(GtkTreeViewColumn *column _U_, GtkCellRenderer *renderer,
                GtkTreeModel *model, GtkTreeIter *iter, gpointer data _U_)
 {
   gchar *enabled;
@@ -3939,7 +3967,7 @@ ok_remote_cb(GtkWidget *win _U_, gpointer *data _U_)
   GtkTreeView   *remote_l = GTK_TREE_VIEW(g_object_get_data(G_OBJECT(interface_management_w), E_CAP_REMOTE_L_KEY));
   model = gtk_tree_view_get_model(remote_l);
 
-  new_hide = g_malloc0(MAX_VAL_LEN);
+  new_hide = (char *)g_malloc0(MAX_VAL_LEN);
 
   if (gtk_tree_model_get_iter_first (model, &iter)) {
     do {
@@ -3981,7 +4009,7 @@ select_host_cb(GtkTreeSelection *selection _U_,
   gtk_tree_model_get_iter (model, &iter, path);
   if (gtk_tree_model_iter_has_child(model, &iter)) {
     num_selected++;
-    gtk_widget_set_sensitive(g_object_get_data(G_OBJECT(interface_management_w), E_REMOTE_DEL_BT_KEY), TRUE);
+    gtk_widget_set_sensitive((GtkWidget *)g_object_get_data(G_OBJECT(interface_management_w), E_REMOTE_DEL_BT_KEY), TRUE);
     return TRUE;
   } else {
     return FALSE;
@@ -4011,7 +4039,7 @@ remove_remote_host(GtkWidget *w _U_, gpointer data _U_)
     }
     gtk_tree_store_remove(GTK_TREE_STORE(model), &iter);
     if (--num_selected == 0) {
-      gtk_widget_set_sensitive(g_object_get_data(G_OBJECT(interface_management_w), E_REMOTE_DEL_BT_KEY), FALSE);
+      gtk_widget_set_sensitive((GtkWidget *)g_object_get_data(G_OBJECT(interface_management_w), E_REMOTE_DEL_BT_KEY), FALSE);
     }
     for (i = global_capture_opts.all_ifaces->len-1; i >= 0; i--) {
       device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
@@ -5628,7 +5656,7 @@ capture_dlg_prep(gpointer parent_w) {
         global_capture_opts.autostop_filesize = tmp;
       } else {
         simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
-          "%sMultiple files: Requested filesize too large!%s\n\n"
+          "%sMultiple files: Requested file size too large.%s\n\n"
           "The setting \"Next file every x byte(s)\" can't be greater than %u bytes (2GiB).",
           simple_dialog_primary_start(), simple_dialog_primary_end(), (guint32)G_MAXINT + 1);
         return FALSE;
@@ -5638,13 +5666,13 @@ capture_dlg_prep(gpointer parent_w) {
     /* test if the settings are ok for a ringbuffer */
     if (global_capture_opts.save_file == NULL) {
       simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
-        "%sMultiple files: No capture file name given!%s\n\n"
+        "%sMultiple files: No capture file name given.%s\n\n"
         "You must specify a filename if you want to use multiple files.",
         simple_dialog_primary_start(), simple_dialog_primary_end());
       return FALSE;
     } else if (!global_capture_opts.has_autostop_filesize && !global_capture_opts.has_file_duration) {
       simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
-        "%sMultiple files: No file limit given!%s\n\n"
+        "%sMultiple files: No file limit given.%s\n\n"
         "You must specify a file size or duration at which is switched to the next capture file\n"
         "if you want to use multiple files.",
         simple_dialog_primary_start(), simple_dialog_primary_end());
@@ -5662,7 +5690,7 @@ capture_dlg_prep(gpointer parent_w) {
         global_capture_opts.autostop_filesize = tmp;
       } else {
         simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
-          "%sStop Capture: Requested filesize too large!%s\n\n"
+          "%sStop Capture: Requested file size too large.%s\n\n"
           "The setting \"after x byte(s)\" can't be greater than %u bytes (2GiB).",
           simple_dialog_primary_start(), simple_dialog_primary_end(), (guint32)G_MAXINT + 1);
         return FALSE;
@@ -5724,7 +5752,7 @@ create_and_fill_model(GtkTreeView *view)
         device.has_snaplen = hassnap;
       } else {
         /* No preferences set yet, use default values */
-        device.snaplen = WTAP_MAX_PACKET_SIZE;
+        device.snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
         device.has_snaplen = FALSE;
       }
 
@@ -5837,7 +5865,13 @@ activate_monitor(GtkTreeViewColumn *tree_column _U_, GtkCellRenderer *renderer,
 {
   interface_t  device;
   GtkTreePath *path  = gtk_tree_model_get_path(tree_model, iter);
-  int          indx = atoi(gtk_tree_path_to_string(path));
+  int          indx = 0;
+
+  if (gtk_tree_path_get_depth(path) == 0) {
+    indx = 0;
+  } else {
+    indx = gtk_tree_path_get_indices(path)[0];
+  }
 
   device = g_array_index(global_capture_opts.all_ifaces, interface_t, indx);
 

@@ -126,6 +126,20 @@ wmem_list_find(wmem_list_t *list, const void *data)
     return NULL;
 }
 
+wmem_list_frame_t *
+wmem_list_find_custom(wmem_list_t *list, const void *data, GCompareFunc compare_func)
+{
+    wmem_list_frame_t *cur;
+
+    for (cur = list->head; cur != NULL; cur = cur->next) {
+        if (compare_func(cur->data, data) == 0) {
+            return cur;
+        }
+    }
+
+    return NULL;
+}
+
 void
 wmem_list_prepend(wmem_list_t *list, void *data)
 {
@@ -167,6 +181,51 @@ wmem_list_append(wmem_list_t *list, void *data)
 
     list->tail = new_frame;
     list->count++;
+}
+
+void
+wmem_list_insert_sorted(wmem_list_t *list, void* data, GCompareFunc func)
+{
+    wmem_list_frame_t *new_frame;
+    wmem_list_frame_t *cur;
+    wmem_list_frame_t *prev;
+
+    new_frame = wmem_new(list->allocator, wmem_list_frame_t);
+    new_frame->data = data;
+    new_frame->next = NULL;
+    new_frame->prev = NULL;
+
+    if (!list->head) {
+        list->head = new_frame;
+        list->tail = new_frame;
+        return;
+    }
+
+    cur = list->head;
+
+    if (func(cur->data, data) >= 0) {
+        cur->prev = new_frame;
+        new_frame->next = cur;
+        list->head = new_frame;
+        return;
+    }
+
+    do {
+        prev = cur;
+        cur = cur->next;
+    } while (cur && func(cur->data, data) <= 0);
+
+    if (!cur) {
+        prev->next = new_frame;
+        new_frame->prev = prev;
+        list->tail = new_frame;
+        return;
+    }
+
+    new_frame->prev = prev;
+    new_frame->next = cur;
+    new_frame->prev->next = new_frame;
+    new_frame->next->prev = new_frame;
 }
 
 wmem_list_t *
@@ -212,6 +271,7 @@ wmem_list_foreach(wmem_list_t *list, GFunc foreach_func, gpointer user_data)
         cur = cur->next;
     }
 }
+
 /*
  * Editor modelines  -  http://www.wireshark.org/tools/modelines.html
  *

@@ -52,6 +52,8 @@ static int hf_turnchannel_len = -1;
 /* Initialize the subtree pointers */
 static gint ett_turnchannel = -1;
 
+static dissector_handle_t turnchannel_udp_handle;
+
 static int
 dissect_turnchannel_message(tvbuff_t *tvb, packet_info *pinfo,
 			    proto_tree *tree, void *data _U_)
@@ -103,7 +105,7 @@ dissect_turnchannel_message(tvbuff_t *tvb, packet_info *pinfo,
 	  if (data_len < reported_len) {
 	    reported_len = data_len;
 	  }
-	  next_tvb = tvb_new_subset(tvb, TURNCHANNEL_HDR_LEN, new_len,
+	  next_tvb = tvb_new_subset_length_caplen(tvb, TURNCHANNEL_HDR_LEN, new_len,
 				    reported_len);
 
 
@@ -182,8 +184,7 @@ proto_register_turnchannel(void)
 	proto_turnchannel = proto_register_protocol("TURN Channel",
 	    "TURNCHANNEL", "turnchannel");
 
-	register_dissector("turnchannel", dissect_turnchannel_message,
-			   proto_turnchannel);
+	turnchannel_udp_handle = register_dissector("turnchannel", dissect_turnchannel_message, proto_turnchannel);
 
 /* subdissectors */
 	heur_subdissector_list = register_heur_dissector_list("turnchannel", proto_turnchannel);
@@ -199,14 +200,12 @@ void
 proto_reg_handoff_turnchannel(void)
 {
 	dissector_handle_t turnchannel_tcp_handle;
-	dissector_handle_t turnchannel_udp_handle;
 
 	turnchannel_tcp_handle = create_dissector_handle(dissect_turnchannel_tcp, proto_turnchannel);
-	turnchannel_udp_handle = find_dissector("turnchannel");
 
 	/* Register for "Decode As" in case STUN negotiation isn't captured */
-	dissector_add_for_decode_as("tcp.port", turnchannel_tcp_handle);
-	dissector_add_for_decode_as("udp.port", turnchannel_udp_handle);
+	dissector_add_for_decode_as_with_preference("tcp.port", turnchannel_tcp_handle);
+	dissector_add_for_decode_as_with_preference("udp.port", turnchannel_udp_handle);
 
 	/* TURN negotiation is handled through STUN2 dissector (packet-stun.c),
 	   so only it should be able to determine if a packet is a TURN packet */

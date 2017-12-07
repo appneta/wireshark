@@ -33,6 +33,7 @@
 #include "profile.h"
 
 #include "ui/simple_dialog.h"
+#include "ui/recent.h"
 
 #include <wsutil/file_util.h>
 
@@ -109,7 +110,8 @@ get_profile_parent (const gchar *profilename)
     return profilename;
 }
 
-const gchar *apply_profile_changes(void) {
+const gchar *apply_profile_changes(void)
+{
     char        *pf_dir_path, *pf_dir_path2, *pf_filename;
     GList       *fl1, *fl2;
     profile_def *profile1, *profile2;
@@ -122,10 +124,15 @@ const gchar *apply_profile_changes(void) {
         profile1 = (profile_def *) fl1->data;
         g_strstrip(profile1->name);
         if ((err_msg = profile_name_is_valid(profile1->name)) != NULL) {
-            return err_msg;
+            gchar *message = g_strdup_printf("%s\nProfiles unchanged.", err_msg);
+            g_free((gchar *)err_msg);
+            return message;
         }
         fl1 = g_list_next(fl1);
     }
+
+    /* Write recent file for current profile before copying or renaming */
+    write_profile_recent();
 
     /* Then do all copy profiles */
     fl1 = edited_profile_list();
@@ -305,8 +312,11 @@ init_profile_list(void)
 {
     WS_DIR        *dir;             /* scanned directory */
     WS_DIRENT     *file;            /* current file */
-    const gchar   *profiles_dir, *name;
-    gchar         *filename;
+    const gchar   *name;
+    GList         *local_profiles = NULL;
+    GList         *global_profiles = NULL;
+    GList         *iter;
+    gchar         *profiles_dir, *filename;
 
     empty_profile_list(TRUE);
 
@@ -321,12 +331,20 @@ init_profile_list(void)
             filename = g_strdup_printf ("%s%s%s", profiles_dir, G_DIR_SEPARATOR_S, name);
 
             if (test_for_directory(filename) == EISDIR) {
-                /*fl_entry =*/ add_to_profile_list(name, name, PROF_STAT_EXISTS, FALSE, FALSE);
+                local_profiles = g_list_prepend(local_profiles, g_strdup(name));
             }
             g_free (filename);
         }
         ws_dir_close (dir);
     }
+    g_free(profiles_dir);
+
+    local_profiles = g_list_sort(local_profiles, (GCompareFunc)g_ascii_strcasecmp);
+    for (iter = g_list_first(local_profiles); iter; iter = g_list_next(iter)) {
+        name = (gchar *)iter->data;
+        add_to_profile_list(name, name, PROF_STAT_EXISTS, FALSE, FALSE);
+    }
+    g_list_free_full(local_profiles, g_free);
 
     /* Global profiles */
     profiles_dir = get_global_profiles_dir();
@@ -336,13 +354,20 @@ init_profile_list(void)
             filename = g_strdup_printf ("%s%s%s", profiles_dir, G_DIR_SEPARATOR_S, name);
 
             if (test_for_directory(filename) == EISDIR) {
-                /*fl_entry =*/ add_to_profile_list(name, name, PROF_STAT_EXISTS, TRUE, TRUE);
-                /*profile = (profile_def *) fl_entry->data;*/
+                global_profiles = g_list_prepend(global_profiles, g_strdup(name));
             }
             g_free (filename);
         }
         ws_dir_close (dir);
     }
+    g_free(profiles_dir);
+
+    global_profiles = g_list_sort(global_profiles, (GCompareFunc)g_ascii_strcasecmp);
+    for (iter = g_list_first(global_profiles); iter; iter = g_list_next(iter)) {
+        name = (gchar *)iter->data;
+        add_to_profile_list(name, name, PROF_STAT_EXISTS, TRUE, TRUE);
+    }
+    g_list_free_full(global_profiles, g_free);
 
     /* Make the current list and the edited list equal */
     copy_profile_list ();
@@ -381,7 +406,7 @@ profile_name_is_valid(const gchar *name)
 #endif
 
     if (reason) {
-        message = g_strdup_printf("A profile name cannot %s\nProfiles unchanged.", reason);
+        message = g_strdup_printf("A profile name cannot %s", reason);
         g_free(reason);
         return message;
     }

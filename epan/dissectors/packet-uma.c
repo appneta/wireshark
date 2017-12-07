@@ -195,10 +195,7 @@ static expert_field ei_uma_cbs_frames = EI_INIT;
 static expert_field ei_uma_unknown_format = EI_INIT;
 
 /* The dynamic payload type which will be dissected as uma */
-
-static range_t *global_uma_tcp_port_range;
-
-#define DEFAULT_UMA_PORT_RANGE "14001"
+#define DEFAULT_UMA_PORT_RANGE "14001" /* Not IANA registered */
 
 /* Global variables */
 static	guint32		sgw_ipv4_address;
@@ -1542,7 +1539,7 @@ dissect_uma_IE(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset)
 		}
 		if((!pinfo->fd->flags.visited) && RTP_UDP_port!=0){
 
-			rtp_add_address(pinfo, &src_addr, RTP_UDP_port, 0, "UMA", pinfo->num, FALSE, 0);
+			rtp_add_address(pinfo, PT_UDP, &src_addr, RTP_UDP_port, 0, "UMA", pinfo->num, FALSE, 0);
 			if ((RTP_UDP_port & 0x1) == 0){ /* Even number RTP port RTCP should follow on odd number */
 				RTCP_UDP_port = RTP_UDP_port + 1;
 				rtcp_add_address(pinfo, &src_addr, RTCP_UDP_port, 0, "UMA", pinfo->num);
@@ -1755,24 +1752,12 @@ dissect_uma_urlc_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *
 void
 proto_reg_handoff_uma(void)
 {
-	static gboolean Initialized=FALSE;
-	static range_t *uma_tcp_port_range;
+	dissector_add_for_decode_as_with_preference("udp.port", uma_udp_handle);
+	rtcp_handle = find_dissector_add_dependency("rtcp", proto_uma);
+	llc_handle = find_dissector_add_dependency("llcgprs", proto_uma);
+	bssap_pdu_type_table = find_dissector_table("bssap.pdu_type");
 
-	if (!Initialized) {
-		uma_tcp_handle = find_dissector("umatcp");
-		uma_udp_handle = find_dissector("umaudp");
-		dissector_add_for_decode_as("udp.port", uma_udp_handle);
-		rtcp_handle = find_dissector_add_dependency("rtcp", proto_uma);
-		llc_handle = find_dissector_add_dependency("llcgprs", proto_uma);
-		bssap_pdu_type_table = find_dissector_table("bssap.pdu_type");
-		Initialized=TRUE;
-	} else {
-		dissector_delete_uint_range("tcp.port", uma_tcp_port_range, uma_tcp_handle);
-		g_free(uma_tcp_port_range);
-	}
-
-	uma_tcp_port_range = range_copy(global_uma_tcp_port_range);
-	dissector_add_uint_range("tcp.port", uma_tcp_port_range, uma_tcp_handle);
+	dissector_add_uint_range_with_preference("tcp.port", DEFAULT_UMA_PORT_RANGE, uma_tcp_handle);
 }
 
 /* this format is require because a script is used to build the C function
@@ -2301,8 +2286,9 @@ proto_register_uma(void)
 /* Register the protocol name and description */
 	proto_uma = proto_register_protocol("Unlicensed Mobile Access","UMA", "uma");
 	/* subdissector code */
-	register_dissector("umatcp", dissect_uma_tcp, proto_uma);
-	register_dissector("umaudp", dissect_uma_urlc_udp, proto_uma);
+	uma_tcp_handle = register_dissector("umatcp", dissect_uma_tcp, proto_uma);
+	uma_udp_handle = register_dissector("umaudp", dissect_uma_urlc_udp, proto_uma);
+
 
 /* Required function calls to register the header fields and subtrees used */
 	proto_register_field_array(proto_uma, hf, array_length(hf));
@@ -2311,10 +2297,7 @@ proto_register_uma(void)
 	expert_register_field_array(expert_uma, ei, array_length(ei));
 
 	/* Register a configuration option for port */
-	uma_module = prefs_register_protocol(proto_uma, proto_reg_handoff_uma);
-
-	/* Set default TCP ports */
-	range_convert_str(&global_uma_tcp_port_range, DEFAULT_UMA_PORT_RANGE, MAX_UDP_PORT);
+	uma_module = prefs_register_protocol(proto_uma, NULL);
 
 	prefs_register_bool_preference(uma_module, "desegment_ucp_messages",
 		"Reassemble UMA messages spanning multiple TCP segments",
@@ -2323,11 +2306,6 @@ proto_register_uma(void)
 		&uma_desegment);
 	prefs_register_obsolete_preference(uma_module, "tcp.port1");
 	prefs_register_obsolete_preference(uma_module, "udp.ports");
-	prefs_register_range_preference(uma_module, "tcp.ports", "UMA TCP ports",
-				  "TCP ports to be decoded as UMA (default: "
-				  DEFAULT_UMA_PORT_RANGE ")",
-				  &global_uma_tcp_port_range, MAX_UDP_PORT);
-
 }
 
 /*

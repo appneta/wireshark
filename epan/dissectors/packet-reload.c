@@ -22,12 +22,12 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * Please refer to the following specs for protocol detail:
- * - draft-ietf-p2psip-base-18
- * - draft-ietf-p2psip-sip-06
- * - draft-ietf-p2psip-service-discovery-03
- * - draft-ietf-p2psip-self-tuning-04
- * - draft-ietf-p2psip-diagnostics-10
- * - draft-zong-p2psip-drr-01
+ * - RFC 6940
+ * - RFC 7904
+ * - RFC 7374
+ * - RFC 7363
+ * - RFC 7851
+ * - RFC 7263
  */
 
 #include "config.h"
@@ -1026,19 +1026,6 @@ static const value_string applicationids[] = {
  * defragmentation
  */
 static reassembly_table reload_reassembly_table;
-
-static void
-reload_defragment_init(void)
-{
-  reassembly_table_init(&reload_reassembly_table,
-                        &addresses_reassembly_table_functions);
-}
-
-static void
-reload_defragment_cleanup(void)
-{
-  reassembly_table_destroy(&reload_reassembly_table);
-}
 
 
 static guint
@@ -2980,10 +2967,10 @@ static int dissect_diagnosticrequest(int anchor, tvbuff_t *tvb, packet_info *pin
   ti_local = proto_tree_add_item(tree, hf, tvb, offset, length, ENC_NA);
   local_tree = proto_item_add_subtree(ti_local, ett_reload_diagnosticrequest);
 
-  proto_tree_add_item(local_tree, hf_reload_diagnostic_expiration, tvb, offset, 8, ENC_TIME_NTP|ENC_BIG_ENDIAN);
+  proto_tree_add_item(local_tree, hf_reload_diagnostic_expiration, tvb, offset, 8, ENC_TIME_MSECS|ENC_BIG_ENDIAN);
   local_offset += 8;
   proto_tree_add_item(local_tree, hf_reload_diagnosticrequest_timestampinitiated, tvb,
-                      offset+local_offset, 8, ENC_TIME_NTP|ENC_BIG_ENDIAN);
+                      offset+local_offset, 8, ENC_TIME_MSECS|ENC_BIG_ENDIAN);
   local_offset += 8;
   local_offset += dissect_dmflag(tvb, local_tree, offset+local_offset);
   local_length = tvb_get_ntohl(tvb, offset+local_offset);
@@ -3215,10 +3202,10 @@ static int dissect_diagnosticresponse(int anchor, tvbuff_t *tvb, packet_info *pi
   ti_local = proto_tree_add_item(tree, hf, tvb, offset, length, ENC_NA);
   local_tree = proto_item_add_subtree(ti_local, ett_reload_diagnosticresponse);
 
-  proto_tree_add_item(local_tree, hf_reload_diagnostic_expiration, tvb, offset, 8, ENC_TIME_NTP|ENC_BIG_ENDIAN);
+  proto_tree_add_item(local_tree, hf_reload_diagnostic_expiration, tvb, offset, 8, ENC_TIME_MSECS|ENC_BIG_ENDIAN);
   local_offset += 8;
   proto_tree_add_item(local_tree, hf_reload_diagnosticresponse_timestampreceived,
-                      tvb, offset+local_offset, 8, ENC_TIME_NTP|ENC_BIG_ENDIAN);
+                      tvb, offset+local_offset, 8, ENC_TIME_MSECS|ENC_BIG_ENDIAN);
   local_offset += 8;
   proto_tree_add_item(local_tree, hf_reload_diagnosticresponse_hopcounter, tvb, offset+local_offset, 1, ENC_BIG_ENDIAN);
 
@@ -3596,7 +3583,7 @@ extern gint dissect_reload_messagecontents(tvbuff_t *tvb, packet_info *pinfo, pr
               config_data_tree = proto_item_add_subtree(ti_config_data, ett_reload_configupdatereq_config_data);
               proto_tree_add_item(config_data_tree, hf_reload_length_uint24, tvb, offset+local_offset, 3, ENC_BIG_ENDIAN);
               call_dissector_only(xml_handle,
-                                  tvb_new_subset(tvb, offset+local_offset+3, config_length, length-offset-local_offset-3),
+                                  tvb_new_subset_length_caplen(tvb, offset+local_offset+3, config_length, length-offset-local_offset-3),
                                   pinfo, config_data_tree, NULL);
             }
           }
@@ -3633,7 +3620,7 @@ extern gint dissect_reload_messagecontents(tvbuff_t *tvb, packet_info *pinfo, pr
                 proto_tree_add_item(kinddescription_tree, hf_reload_length_uint16,
                                     tvb, offset+local_offset+kinds_offset, 2, ENC_BIG_ENDIAN);
                 call_dissector(xml_handle,
-                               tvb_new_subset(tvb, offset+local_offset+kinds_offset+2,
+                               tvb_new_subset_length_caplen(tvb, offset+local_offset+kinds_offset+2,
                                               local_increment,
                                               length-(offset+local_offset+kinds_offset+2)),
                                pinfo, kinddescription_tree);
@@ -5909,6 +5896,7 @@ proto_register_reload(void)
             NULL,
             uat_kindid_record_free_cb,
             NULL,
+            NULL,
             reloadkindidlist_uats_flds);
 
 
@@ -5929,8 +5917,8 @@ proto_register_reload(void)
   prefs_register_string_preference(reload_module, "topology_plugin",
                                    "topology plugin", "topology plugin defined in the overlay", &reload_topology_plugin);
 
-  register_init_routine(reload_defragment_init);
-  register_cleanup_routine(reload_defragment_cleanup);
+  reassembly_table_register(&reload_reassembly_table,
+                        &addresses_reassembly_table_functions);
 }
 
 void

@@ -27,6 +27,7 @@
 #include "summary.h"
 
 #include "wsutil/str_util.h"
+#include "wsutil/utf8_entities.h"
 #include "ws_version_info.h"
 
 #include "qt_ui_utils.h"
@@ -106,7 +107,7 @@ void CaptureFilePropertiesDialog::updateWidgets()
     ui->commentsTextEdit->setEnabled(enable);
 
     fillDetails();
-    ui->commentsTextEdit->setText(cf_read_shb_comment(cap_file_.capFile()));
+    ui->commentsTextEdit->setText(cf_read_section_comment(cap_file_.capFile()));
 
     WiresharkDialog::updateWidgets();
 }
@@ -191,7 +192,7 @@ QString CaptureFilePropertiesDialog::summaryToHtml()
         << table_data_tmpl.arg(encaps_str)
         << table_row_end;
 
-    if (summary.has_snap) {
+    if (summary.snap != 0) {
         out << table_row_begin
             << table_vheader_tmpl.arg(tr("Snapshot length"))
             << table_data_tmpl.arg(summary.snap)
@@ -357,8 +358,7 @@ QString CaptureFilePropertiesDialog::summaryToHtml()
         << table_hheader25_tmpl.arg(tr("Marked"))
         << table_row_end;
 
-    // TRANSLATOR Abbreviation for "not applicable"
-    QString n_a = tr("N/A");
+    QString n_a = UTF8_EM_DASH;
     QString captured_str, displayed_str, marked_str;
 
     // Packets
@@ -512,16 +512,11 @@ void CaptureFilePropertiesDialog::fillDetails()
     cursor.insertHtml(summary);
     cursor.insertBlock(); // Work around rendering oddity.
 
-    QString file_comments = cf_read_shb_comment(cap_file_.capFile());
+    QString file_comments = cf_read_section_comment(cap_file_.capFile());
     if (!file_comments.isEmpty()) {
         QString file_comments_html;
 
-        QString comment_escaped;
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-            comment_escaped = Qt::escape(file_comments);
-#else
-            comment_escaped = file_comments.toHtmlEscaped();
-#endif
+        QString comment_escaped = html_escape(file_comments).replace('\n', "<br>");
         file_comments_html = section_tmpl_.arg(tr("File Comment"));
         file_comments_html += para_tmpl_.arg(comment_escaped);
 
@@ -535,17 +530,13 @@ void CaptureFilePropertiesDialog::fillDetails()
 
         for (guint32 framenum = 1; framenum <= cap_file_.capFile()->count ; framenum++) {
             frame_data *fdata = frame_data_sequence_find(cap_file_.capFile()->frames, framenum);
-            char *pkt_comment = cf_get_comment(cap_file_.capFile(), fdata);
+            char *pkt_comment = cf_get_packet_comment(cap_file_.capFile(), fdata);
 
             if (pkt_comment) {
                 QString frame_comment_html = tr("<p>Frame %1: ").arg(framenum);
                 QString raw_comment = pkt_comment;
 
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-                frame_comment_html += Qt::escape(raw_comment);
-#else
-                frame_comment_html += raw_comment.toHtmlEscaped();
-#endif
+                frame_comment_html += html_escape(raw_comment).replace('\n', "<br>");
                 frame_comment_html += "</p>\n";
                 cursor.insertBlock();
                 cursor.insertHtml(frame_comment_html);
@@ -586,7 +577,7 @@ void CaptureFilePropertiesDialog::on_buttonBox_accepted()
     if (wtap_dump_can_write(cap_file_.capFile()->linktypes, WTAP_COMMENT_PER_SECTION))
     {
         gchar *str = qstring_strdup(ui->commentsTextEdit->toPlainText());
-        cf_update_capture_comment(cap_file_.capFile(), str);
+        cf_update_section_comment(cap_file_.capFile(), str);
         emit captureCommentChanged();
         fillDetails();
     }

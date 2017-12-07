@@ -67,6 +67,9 @@
 #include <epan/uat.h>
 #include <epan/decode_as.h>
 #include <wiretap/wtap.h>
+#ifdef DEBUG_BER
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
+#endif
 
 #include "packet-ber.h"
 
@@ -658,9 +661,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("dissect_ber_tagged_type(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "dissect_ber_tagged_type(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("dissect_ber_tagged_type(%s) entered\n", name);
+proto_tree_add_debug_text(tree, "dissect_ber_tagged_type(%s) entered\n", name);
 }
 }
 #endif
@@ -1193,7 +1196,7 @@ get_ber_identifier(tvbuff_t *tvb, int offset, gint8 *ber_class, gboolean *pc, gi
     id = tvb_get_guint8(tvb, offset);
     offset += 1;
 #ifdef DEBUG_BER
-printf ("BER ID=%02x", id);
+ws_debug_printf("BER ID=%02x", id);
 #endif
     /* 8.1.2.2 */
     tmp_class = (id >> 6) & 0x03;
@@ -1205,7 +1208,7 @@ printf ("BER ID=%02x", id);
         while (tvb_reported_length_remaining(tvb, offset) > 0) {
             t = tvb_get_guint8(tvb, offset);
 #ifdef DEBUG_BER
-printf (" %02x", t);
+ws_debug_printf(" %02x", t);
 #endif
             offset += 1;
             tmp_tag <<= 7;
@@ -1216,7 +1219,7 @@ printf (" %02x", t);
     }
 
 #ifdef DEBUG_BER
-printf ("\n");
+ws_debug_printf("\n");
 #endif
     if (ber_class)
         *ber_class = tmp_class;
@@ -1354,7 +1357,7 @@ try_get_ber_length(tvbuff_t *tvb, int offset, guint32 *length, gboolean *ind, gi
         *ind = tmp_ind;
 
 #ifdef DEBUG_BER
-printf("get BER length %d, offset %d (remaining %d)\n", tmp_length, offset, tvb_reported_length_remaining(tvb, offset));
+ws_debug_printf("get BER length %d, offset %d (remaining %d)\n", tmp_length, offset, tvb_reported_length_remaining(tvb, offset));
 #endif
 
     return offset;
@@ -1400,7 +1403,7 @@ dissect_ber_length(packet_info *pinfo _U_, proto_tree *tree, tvbuff_t *tvb, int 
         *ind = tmp_ind;
 
 #ifdef DEBUG_BER
-printf("dissect BER length %d, offset %d (remaining %d)\n", tmp_length, offset, tvb_reported_length_remaining(tvb, offset));
+proto_tree_add_debug_text("dissect BER length %d, offset %d (remaining %d)\n", tmp_length, offset, tvb_reported_length_remaining(tvb, offset));
 #endif
 
     last_length = tmp_length;
@@ -1410,15 +1413,6 @@ printf("dissect BER length %d, offset %d (remaining %d)\n", tmp_length, offset, 
 }
 
 static reassembly_table octet_segment_reassembly_table;
-
-static void ber_defragment_init(void) {
-    reassembly_table_init(&octet_segment_reassembly_table,
-                          &addresses_reassembly_table_functions);
-}
-
-static void ber_defragment_cleanup(void) {
-    reassembly_table_destroy(&octet_segment_reassembly_table);
-}
 
 static int
 dissect_ber_constrained_octet_string_impl(gboolean implicit_tag, asn1_ctx_t *actx, proto_tree *tree, tvbuff_t *tvb, int offset, gint32 min_len, gint32 max_len, gint hf_id, tvbuff_t **out_tvb, guint nest_level);
@@ -1555,9 +1549,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("OCTET STRING dissect_ber_octet string(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "OCTET STRING dissect_ber_octet string(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("OCTET STRING dissect_ber_octet_string(%s) entered\n", name);
+proto_tree_add_debug_text(tree, "OCTET STRING dissect_ber_octet_string(%s) entered\n", name);
 }
 }
 #endif
@@ -1703,21 +1697,11 @@ printf("OCTET STRING dissect_ber_octet_string(%s) entered\n", name);
                 break;
 
             case BER_UNI_TAG_TeletexString:
-                /*
-                 * XXX - the G0 part of this starts out as T.61, not ASCII.
-                 *
-                 * XXX - treat as ASCII for now.
-                 */
-                encoding = ENC_ASCII|ENC_NA;
+                encoding = ENC_T61|ENC_NA;
                 break;
 
             case BER_UNI_TAG_VideotexString:
-                /*
-                 * XXX - the G0 part of this starts out as T.61, not ASCII.
-                 *
-                 * XXX - treat as ASCII for now.
-                 */
-                encoding = ENC_ASCII|ENC_NA;
+                encoding = ENC_T61|ENC_NA;
                 break;
 
             case BER_UNI_TAG_GraphicString:
@@ -1860,9 +1844,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("INTEGERnew dissect_ber_integer(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "INTEGERnew dissect_ber_integer(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("INTEGERnew dissect_ber_integer(%s) entered implicit_tag:%d \n", name, implicit_tag);
+proto_tree_add_debug_text(tree, "INTEGERnew dissect_ber_integer(%s) entered implicit_tag:%d \n", name, implicit_tag);
 }
 }
 #endif
@@ -2139,9 +2123,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("SEQUENCE dissect_ber_sequence(%s) entered offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "SEQUENCE dissect_ber_sequence(%s) entered offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("SEQUENCE dissect_ber_sequence(%s) entered\n", name);
+proto_tree_add_debug_text(tree, "SEQUENCE dissect_ber_sequence(%s) entered\n", name);
 }
 }
 #endif
@@ -2397,9 +2381,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(next_tvb, 0) > 3) {
-printf("SEQUENCE dissect_ber_sequence(%s) calling subdissector offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(next_tvb, 0), tvb_get_guint8(next_tvb, 0), tvb_get_guint8(next_tvb, 1), tvb_get_guint8(next_tvb, 2));
+proto_tree_add_debug_text(tree, "SEQUENCE dissect_ber_sequence(%s) calling subdissector offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(next_tvb, 0), tvb_get_guint8(next_tvb, 0), tvb_get_guint8(next_tvb, 1), tvb_get_guint8(next_tvb, 2));
 } else {
-printf("SEQUENCE dissect_ber_sequence(%s) calling subdissector\n", name);
+proto_tree_add_debug_text(tree, "SEQUENCE dissect_ber_sequence(%s) calling subdissector\n", name);
 }
 }
 #endif
@@ -2424,7 +2408,7 @@ name = hfinfo->name;
 } else {
 name = "unnamed";
 }
-printf("SEQUENCE dissect_ber_sequence(%s) subdissector ate %d bytes\n", name, count);
+proto_tree_add_debug_text(tree, "SEQUENCE dissect_ber_sequence(%s) subdissector ate %d bytes\n", name, count);
 }
 #endif
         /* if it was optional and no bytes were eaten and it was */
@@ -2505,9 +2489,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("SET dissect_ber_set(%s) entered offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "SET dissect_ber_set(%s) entered offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("SET dissect_ber_set(%s) entered\n", name);
+proto_tree_add_debug_text(tree, "SET dissect_ber_set(%s) entered\n", name);
 }
 }
 #endif
@@ -2651,9 +2635,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(next_tvb, 0) > 3) {
-printf("SET dissect_ber_set(%s) calling subdissector offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(next_tvb, 0), tvb_get_guint8(next_tvb, 0), tvb_get_guint8(next_tvb, 1), tvb_get_guint8(next_tvb, 2));
+proto_tree_add_debug_text(tree, "SET dissect_ber_set(%s) calling subdissector offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(next_tvb, 0), tvb_get_guint8(next_tvb, 0), tvb_get_guint8(next_tvb, 1), tvb_get_guint8(next_tvb, 2));
 } else {
-printf("SET dissect_ber_set(%s) calling subdissector\n", name);
+proto_tree_add_debug_text(tree, "SET dissect_ber_set(%s) calling subdissector\n", name);
 }
 }
 #endif
@@ -2781,9 +2765,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("CHOICE dissect_ber_choice(%s) entered offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "CHOICE dissect_ber_choice(%s) entered offset:%d len:%d %02x:%02x:%02x\n", name, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("CHOICE dissect_ber_choice(%s) entered len:%d\n", name, tvb_reported_length_remaining(tvb, offset));
+proto_tree_add_debug_text(tree, "CHOICE dissect_ber_choice(%s) entered len:%d\n", name, tvb_reported_length_remaining(tvb, offset));
 }
 }
 #endif
@@ -2846,7 +2830,7 @@ printf("CHOICE dissect_ber_choice(%s) entered len:%d\n", name, tvb_reported_leng
         }
 
 #ifdef DEBUG_BER_CHOICE
-printf("CHOICE testing potential subdissector class[%p]:%d:(expected)%d  tag:%d:(expected)%d flags:%d\n", ch, ber_class, ch->ber_class, tag, ch->tag, ch->flags);
+proto_tree_add_debug_text(tree, "CHOICE testing potential subdissector class[%p]:%d:(expected)%d  tag:%d:(expected)%d flags:%d\n", ch, ber_class, ch->ber_class, tag, ch->tag, ch->flags);
 #endif
         if ( (first_pass
            && (((ch->ber_class == ber_class) && (ch->tag == tag))
@@ -2901,9 +2885,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(next_tvb, 0) > 3) {
-printf("CHOICE dissect_ber_choice(%s) calling subdissector start_offset:%d offset:%d len:%d %02x:%02x:%02x\n", name, start_offset, offset, tvb_reported_length_remaining(next_tvb, 0), tvb_get_guint8(next_tvb, 0), tvb_get_guint8(next_tvb, 1), tvb_get_guint8(next_tvb, 2));
+proto_tree_add_debug_text(tree, "CHOICE dissect_ber_choice(%s) calling subdissector start_offset:%d offset:%d len:%d %02x:%02x:%02x\n", name, start_offset, offset, tvb_reported_length_remaining(next_tvb, 0), tvb_get_guint8(next_tvb, 0), tvb_get_guint8(next_tvb, 1), tvb_get_guint8(next_tvb, 2));
 } else {
-printf("CHOICE dissect_ber_choice(%s) calling subdissector len:%d\n", name, tvb_reported_length(next_tvb));
+proto_tree_add_debug_text(tree, "CHOICE dissect_ber_choice(%s) calling subdissector len:%d\n", name, tvb_reported_length(next_tvb));
 }
 }
 #endif
@@ -2924,7 +2908,7 @@ name = hfinfo->name;
 } else {
 name = "unnamed";
 }
-printf("CHOICE dissect_ber_choice(%s) subdissector ate %d bytes\n", name, count);
+proto_tree_add_debug_text(tree, "CHOICE dissect_ber_choice(%s) subdissector ate %d bytes\n", name, count);
 }
 #endif
             if ((count == 0) && (((ch->ber_class == ber_class) && (ch->tag == -1) && (ch->flags & BER_FLAGS_NOOWNTAG)) || !first_pass)) {
@@ -2939,7 +2923,7 @@ name = hfinfo->name;
 } else {
 name = "unnamed";
 }
-printf("CHOICE dissect_ber_choice(%s) trying again\n", name);
+proto_tree_add_debug_text(tree, "CHOICE dissect_ber_choice(%s) trying again\n", name);
 }
 #endif
                 continue;
@@ -3065,9 +3049,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("RESTRICTED STRING dissect_ber_octet string(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "RESTRICTED STRING dissect_ber_octet string(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("RESTRICTED STRING dissect_ber_octet_string(%s) entered\n", name);
+proto_tree_add_debug_text(tree, "RESTRICTED STRING dissect_ber_octet_string(%s) entered\n", name);
 }
 }
 #endif
@@ -3161,9 +3145,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb, offset) > 3) {
-printf("OBJECT IDENTIFIER dissect_ber_any_oid(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "OBJECT IDENTIFIER dissect_ber_any_oid(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("OBJECT IDENTIFIER dissect_ber_any_oid(%s) entered\n", name);
+proto_tree_add_debug_text(tree, "OBJECT IDENTIFIER dissect_ber_any_oid(%s) entered\n", name);
 }
 }
 #endif
@@ -3298,9 +3282,9 @@ name = hfinfo->name;
 name = "unnamed";
 }
 if (tvb_reported_length_remaining(tvb,offset) > 3) {
-printf("SQ OF dissect_ber_sq_of(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
+proto_tree_add_debug_text(tree, "SQ OF dissect_ber_sq_of(%s) entered implicit_tag:%d offset:%d len:%d %02x:%02x:%02x\n", name, implicit_tag, offset, tvb_reported_length_remaining(tvb, offset), tvb_get_guint8(tvb, offset), tvb_get_guint8(tvb, offset+1), tvb_get_guint8(tvb, offset+2));
 } else {
-printf("SQ OF dissect_ber_sq_of(%s) entered\n", name);
+proto_tree_add_debug_text(tree, "SQ OF dissect_ber_sq_of(%s) entered\n", name);
 }
 }
 #endif
@@ -4284,6 +4268,12 @@ oid_has_dissector(const char *oid) {
     return(dissector_get_string_handle(ber_oid_dissector_table, oid) != NULL);
 }
 
+static void
+ber_shutdown(void)
+{
+    g_hash_table_destroy(syntax_table);
+}
+
 void
 proto_register_ber(void)
 {
@@ -4529,6 +4519,7 @@ proto_register_ber(void)
                                NULL,
                                oid_free_cb,
                                ber_update_oids,
+                               NULL,
                                users_flds);
 
     proto_ber = proto_register_protocol("Basic Encoding Rules (ASN.1 X.690)", "BER", "ber");
@@ -4573,14 +4564,16 @@ proto_register_ber(void)
                                   " and the syntax of any associated values",
                                   users_uat);
 
-    ber_oid_dissector_table = register_dissector_table("ber.oid", "BER OID Dissectors", proto_ber, FT_STRING, BASE_NONE);
+    ber_oid_dissector_table = register_dissector_table("ber.oid", "BER OID", proto_ber, FT_STRING, BASE_NONE);
     ber_syntax_dissector_table = register_dissector_table("ber.syntax", "BER syntax", proto_ber, FT_STRING, BASE_NONE);
-    syntax_table = g_hash_table_new(g_str_hash, g_str_equal); /* oid to syntax */
+    syntax_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free); /* oid to syntax */
 
     register_ber_syntax_dissector("ASN.1", proto_ber, dissect_ber_syntax);
 
-    register_init_routine(ber_defragment_init);
-    register_cleanup_routine(ber_defragment_cleanup);
+    reassembly_table_register(&octet_segment_reassembly_table,
+                          &addresses_reassembly_table_functions);
+
+    register_shutdown_routine(ber_shutdown);
 
     register_decode_as(&ber_da);
 }
@@ -4604,7 +4597,7 @@ proto_reg_handoff_ber(void)
 
     /* allow the dissection of BER/DER carried over a TCP transport
        by using "Decode As..." */
-    dissector_add_for_decode_as("tcp.port", ber_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", ber_handle);
 
     ber_update_oids();
 }

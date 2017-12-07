@@ -232,7 +232,7 @@ typedef struct {
   guint8  value;        /* command for asp, bitmap for atp */
 } asp_request_val;
 
-static GHashTable *asp_request_hash = NULL;
+static wmem_map_t *asp_request_hash = NULL;
 
 /* Hash Functions */
 static gint  asp_equal (gconstpointer v, gconstpointer v2)
@@ -255,7 +255,7 @@ static guint asp_hash  (gconstpointer v)
 }
 
 /* ------------------------------------ */
-static GHashTable *atp_request_hash = NULL;
+static wmem_map_t *atp_request_hash = NULL;
 
 
 /* ------------------------------------ */
@@ -733,7 +733,7 @@ dissect_atp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
     memcpy(request_key.src, (!aspinfo.reply)?pinfo->src.data:pinfo->dst.data, 4);
     request_key.seq = aspinfo.seq;
 
-    request_val = (asp_request_val *) g_hash_table_lookup(atp_request_hash, &request_key);
+    request_val = (asp_request_val *) wmem_map_lookup(atp_request_hash, &request_key);
 
     if (!request_val && query && nbe > 1)  {
       asp_request_key *new_request_key;
@@ -749,7 +749,7 @@ dissect_atp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
       request_val = wmem_new(wmem_file_scope(), asp_request_val);
       request_val->value = nbe;
 
-      g_hash_table_insert(atp_request_hash, new_request_key,request_val);
+      wmem_map_insert(atp_request_hash, new_request_key,request_val);
     }
   }
 
@@ -981,7 +981,7 @@ get_transaction(tvbuff_t *tvb, packet_info *pinfo, struct aspinfo *aspinfo)
   memcpy(request_key.src, (!aspinfo->reply)?pinfo->src.data:pinfo->dst.data, 4);
   request_key.seq = aspinfo->seq;
 
-  request_val = (asp_request_val *) g_hash_table_lookup(asp_request_hash, &request_key);
+  request_val = (asp_request_val *) wmem_map_lookup(asp_request_hash, &request_key);
   if (!request_val && !aspinfo->reply )  {
     fn = tvb_get_guint8(tvb, 0);
     new_request_key = wmem_new(wmem_file_scope(), asp_request_key);
@@ -990,7 +990,7 @@ get_transaction(tvbuff_t *tvb, packet_info *pinfo, struct aspinfo *aspinfo)
     request_val = wmem_new(wmem_file_scope(), asp_request_val);
     request_val->value = fn;
 
-    g_hash_table_insert(asp_request_hash, new_request_key, request_val);
+    wmem_map_insert(asp_request_hash, new_request_key, request_val);
   }
 
   if (!request_val)
@@ -1130,7 +1130,7 @@ dissect_asp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     case ASPFUNC_TICKLE:
     case ASPFUNC_WRTCONT:
       proto_tree_add_item(asp_tree, hf_asp_zero_value, tvb, offset, 4, ENC_NA);
-      /* fall */
+      /* FALL THROUGH */
     case ASPFUNC_ATTN:  /* FIXME capture and spec disagree */
     default:
       proto_item_set_len(asp_tree, 4);
@@ -1583,32 +1583,6 @@ dissect_llap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
   return tvb_captured_length(tvb);
 }
 
-static void
-atp_init(void)
-{
-  reassembly_table_init(&atp_reassembly_table,
-                        &addresses_reassembly_table_functions);
-  atp_request_hash = g_hash_table_new(asp_hash, asp_equal);
-}
-
-static void
-atp_cleanup(void)
-{
-  reassembly_table_destroy(&atp_reassembly_table);
-  g_hash_table_destroy(atp_request_hash);
-}
-
-static void
-asp_reinit( void)
-{
-
-  if (asp_request_hash)
-    g_hash_table_destroy(asp_request_hash);
-
-  asp_request_hash = g_hash_table_new(asp_hash, asp_equal);
-
-}
-
 void
 proto_register_atalk(void)
 {
@@ -2047,6 +2021,7 @@ proto_reg_handoff_atalk(void)
   dissector_handle_t atp_handle;
   dissector_handle_t zip_ddp_handle;
   dissector_handle_t rtmp_data_handle, llap_handle;
+  capture_dissector_handle_t llap_cap_handle;
 
   ddp_short_handle = create_dissector_handle(dissect_ddp_short, proto_ddp);
   ddp_handle = create_dissector_handle(dissect_ddp, proto_ddp);
@@ -2058,7 +2033,7 @@ proto_reg_handoff_atalk(void)
 
   nbp_handle = create_dissector_handle(dissect_nbp, proto_nbp);
   dissector_add_uint("ddp.type", DDP_NBP, nbp_handle);
-  dissector_add_for_decode_as("udp.port", nbp_handle);
+  dissector_add_for_decode_as_with_preference("udp.port", nbp_handle);
 
   atp_handle = create_dissector_handle(dissect_atp, proto_atp);
   dissector_add_uint("ddp.type", DDP_ATP, atp_handle);
@@ -2078,11 +2053,14 @@ proto_reg_handoff_atalk(void)
 
   llap_handle = create_dissector_handle(dissect_llap, proto_llap);
   dissector_add_uint("wtap_encap", WTAP_ENCAP_LOCALTALK, llap_handle);
-  register_capture_dissector("wtap_encap", WTAP_ENCAP_LOCALTALK, capture_llap, proto_llap);
+  llap_cap_handle = create_capture_dissector_handle(capture_llap, proto_llap);
+  capture_dissector_add_uint("wtap_encap", WTAP_ENCAP_LOCALTALK, llap_cap_handle);
 
-  register_init_routine( atp_init);
-  register_cleanup_routine( atp_cleanup);
-  register_init_routine( &asp_reinit);
+  reassembly_table_register(&atp_reassembly_table,
+                        &addresses_reassembly_table_functions);
+
+  atp_request_hash = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), asp_hash, asp_equal);
+  asp_request_hash = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), asp_hash, asp_equal);
 
   afp_handle  = find_dissector_add_dependency("afp", proto_asp);
   afp_server_status_handle  = find_dissector_add_dependency("afp_server_status", proto_asp);

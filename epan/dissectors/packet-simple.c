@@ -300,7 +300,7 @@ static void dissect_simple_link16(tvbuff_t *tvb, packet_info *pinfo _U_, proto_t
     case SIMPLE_LINK16_FIXED_FORMAT:
         memset(&state, 0, sizeof(state));
         for (i = 0; i < word_count; i += 5) {
-            newtvb = tvb_new_subset(tvb, offset, 10, -1);
+            newtvb = tvb_new_subset_length_caplen(tvb, offset, 10, -1);
             add_new_data_source(pinfo, newtvb, "Link 16 Word");
             call_dissector_with_data(link16_handle, newtvb, pinfo, tree, &state);
             offset += 10;
@@ -603,7 +603,7 @@ void proto_register_simple(void)
           { "DX Common TOMS/BOMS", "simple.status.dx_flag.common_toms_boms", FT_BOOLEAN, 16, NULL, 0x4,
             NULL, HFILL }},
         { &hf_simple_status_dx_flag_simple_receive,
-          { "DX SIMPLE Recieve", "simple.status.dx_flag.simple_receive", FT_BOOLEAN, 16, NULL, 0x8,
+          { "DX SIMPLE Receive", "simple.status.dx_flag.simple_receive", FT_BOOLEAN, 16, NULL, 0x8,
             NULL, HFILL }},
         { &hf_simple_status_dx_flag_simple_transmit,
           { "DX SIMPLE Transmit", "simple.status.dx_flag.simple_transmit", FT_BOOLEAN, 16, NULL, 0x10,
@@ -685,7 +685,8 @@ void proto_reg_handoff_simple(void)
 {
     dissector_handle_t simple_dissector_handle;
     simple_dissector_handle = create_dissector_handle(dissect_simple, proto_simple);
-    dissector_add_for_decode_as("udp.port", simple_dissector_handle);
+    dissector_add_for_decode_as_with_preference("udp.port", simple_dissector_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", simple_dissector_handle);
 
     link16_handle = find_dissector_add_dependency("link16", proto_simple);
 }

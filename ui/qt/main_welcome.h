@@ -27,9 +27,10 @@
 class QListWidget;
 class QListWidgetItem;
 class QTreeWidgetItem;
+class QMenu;
 
 #include "splash_overlay.h"
-#include "interface_tree.h"
+#include "interface_frame.h"
 
 namespace Ui {
     class MainWelcome;
@@ -41,7 +42,7 @@ class MainWelcome : public QFrame
 public:
     explicit MainWelcome(QWidget *parent = 0);
     virtual ~MainWelcome();
-    InterfaceTree *getInterfaceTree();
+    InterfaceFrame *getInterfaceFrame();
     const QString captureFilter();
     void setCaptureFilter(const QString capture_filter);
 
@@ -49,13 +50,21 @@ public slots:
     void interfaceSelected();
 
 protected:
-    void resizeEvent(QResizeEvent *event);
+    virtual void resizeEvent(QResizeEvent *event);
+    virtual void changeEvent(QEvent* event);
+
+protected slots:
+    void on_recentLabel_clicked();
+    void on_captureLabel_clicked();
+    void on_helpLabel_clicked();
 
 private:
     Ui::MainWelcome *welcome_ui_;
+    QString flavor_;
+    QString show_in_str_;
 
     SplashOverlay *splash_overlay_;
-    // QListWidget doesn't activate items when the return or enter keys are pressed on OS X.
+    // QListWidget doesn't activate items when the return or enter keys are pressed on macOS.
     // We may want to subclass it at some point.
     QListWidget *recent_files_;
 //    MWOverlay *overlay;
@@ -71,23 +80,26 @@ signals:
 #ifdef HAVE_EXTCAP
     void showExtcapOptions(QString &device_name);
 #endif
+    void interfacesChanged();
 
 public slots:
     void setCaptureFilterText(const QString capture_filter);
 
 private slots:
     void appInitialized();
+    void interfaceListChanged();
     void captureFilterTextEdited(const QString capture_filter);
-#ifdef HAVE_EXTCAP
-    void interfaceClicked(QTreeWidgetItem *item, int column);
-#endif
-    void interfaceDoubleClicked(QTreeWidgetItem *item, int column);
-    void updateRecentFiles();
+    void updateRecentCaptures();
     void openRecentItem(QListWidgetItem *item);
-    void changeEvent(QEvent* event);
     void showRecentContextMenu(QPoint pos);
     void showRecentFolder();
     void copyRecentPath();
+    void removeRecentPath();
+
+#ifdef HAVE_EXTCAP
+    void on_interfaceFrame_showExtcapOptions(QString device_name);
+#endif
+    void on_interfaceFrame_startCapture();
 };
 
 #endif // MAIN_WELCOME_H

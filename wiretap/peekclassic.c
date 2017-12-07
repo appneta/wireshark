@@ -365,14 +365,15 @@ static gboolean peekclassic_read_v7(wtap *wth, int *err, gchar **err_info,
 
 	/* Skip extra ignored data at the end of the packet. */
 	if ((guint32)sliceLength > wth->phdr.caplen) {
-		if (!file_skip(wth->fh, sliceLength - wth->phdr.caplen, err))
+		if (!wtap_read_bytes(wth->fh, NULL, sliceLength - wth->phdr.caplen,
+		    err, err_info))
 			return FALSE;
 	}
 
 	/* Records are padded to an even length, so if the slice length
 	   is odd, read the padding byte. */
 	if (sliceLength & 0x01) {
-		if (!file_skip(wth->fh, 1, err))
+		if (!wtap_read_bytes(wth->fh, NULL, 1, err, err_info))
 			return FALSE;
 	}
 
@@ -436,7 +437,7 @@ static int peekclassic_read_packet_v7(wtap *wth, FILE_T fh,
 	}
 	/*
 	 * The maximum value of sliceLength and length are 65535, which
-	 * are less than WTAP_MAX_PACKET_SIZE will ever be, so we don't
+	 * are less than WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't
 	 * need to check them.
 	 */
 
@@ -620,7 +621,7 @@ static gboolean peekclassic_read_packet_v56(wtap *wth, FILE_T fh,
 	}
 	/*
 	 * The maximum value of sliceLength and length are 65535, which
-	 * are less than WTAP_MAX_PACKET_SIZE will ever be, so we don't
+	 * are less than WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't
 	 * need to check them.
 	 */
 

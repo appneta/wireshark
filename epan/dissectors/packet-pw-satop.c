@@ -62,6 +62,9 @@ static expert_field ei_cw_bits03 = EI_INIT;
 static expert_field ei_cw_packet_size_too_small = EI_INIT;
 
 static dissector_handle_t pw_padding_handle;
+static dissector_handle_t pw_satop_udp_handle;
+static dissector_handle_t pw_satop_mpls_handle;
+
 
 const char pwc_longname_pw_satop[] = "SAToP (no RTP support)";
 static const char shortname[] = "SAToP (no RTP)";
@@ -372,7 +375,7 @@ void dissect_pw_satop(tvbuff_t * tvb_original
 			tree2 = proto_item_add_subtree(item, ett);
 			{
 				tvbuff_t* tvb;
-				tvb = tvb_new_subset(tvb_original, PWC_SIZEOF_CW + payload_size, padding_size, -1);
+				tvb = tvb_new_subset_length_caplen(tvb_original, PWC_SIZEOF_CW + payload_size, padding_size, -1);
 				call_dissector(pw_padding_handle, tvb, pinfo, tree2);
 			}
 		}
@@ -459,21 +462,17 @@ void proto_register_pw_satop(void)
 	proto_register_subtree_array(ett_array, array_length(ett_array));
 	expert_pwsatop = expert_register_protocol(proto);
 	expert_register_field_array(expert_pwsatop, ei, array_length(ei));
-	register_dissector("pw_satop_udp", dissect_pw_satop_udp, proto);
-	return;
+	pw_satop_mpls_handle = register_dissector("pw_satop_mpls", dissect_pw_satop_mpls, proto);
+	pw_satop_udp_handle = register_dissector("pw_satop_udp", dissect_pw_satop_udp, proto);
 }
 
 void proto_reg_handoff_pw_satop(void)
 {
-	dissector_handle_t pw_satop_mpls_handle;
-
 	pw_padding_handle = find_dissector_add_dependency("pw_padding", proto);
 
 	/* For Decode As */
-	pw_satop_mpls_handle = create_dissector_handle( dissect_pw_satop_mpls, proto );
 	dissector_add_for_decode_as("mpls.label", pw_satop_mpls_handle);
-
-	dissector_add_for_decode_as("udp.port", find_dissector("pw_satop_udp"));
+	dissector_add_for_decode_as_with_preference("udp.port", pw_satop_udp_handle);
 }
 
 /*

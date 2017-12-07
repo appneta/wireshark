@@ -42,11 +42,15 @@
 #include <epan/prefs.h>
 #include <epan/value_string.h>
 
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 #include <wsutil/file_util.h>
 
 /* This needs to match NUM_GEOIP_COLS in hostlist_table.h */
 #define MAX_GEOIP_DBS 13
+
+#ifndef HAVE_GEOIP_FREE
+#define GeoIP_free  free
+#endif
 
 /* Column names for each database type */
 value_string geoip_type_name_vals[] = {
@@ -90,6 +94,12 @@ typedef struct _geoip_db_path_t {
 
 static geoip_db_path_t *geoip_db_paths = NULL;
 static guint num_geoip_db_paths = 0;
+static const geoip_db_path_t geoip_db_system_paths[] = {
+#ifdef G_OS_UNIX
+    { "/usr/share/GeoIP" },
+#endif
+    { NULL }
+};
 static uat_t *geoip_db_paths_uat = NULL;
 UAT_DIRECTORYNAME_CB_DEF(geoip_mod, path, geoip_db_path_t)
 
@@ -136,9 +146,7 @@ static void geoip_db_path_free_cb(void* p) {
     g_free(m->path);
 }
 
-/* called every time the user presses "Apply" or "OK in the list of
- * GeoIP directories, and also once on startup */
-static void geoip_db_post_update_cb(void) {
+static void geoip_dat_cleanup(void) {
     GeoIP *gi;
     guint i;
 
@@ -166,10 +174,25 @@ static void geoip_db_post_update_cb(void) {
         }
         /* finally, free the array itself */
         g_array_free(geoip_dat_arr, TRUE);
+        geoip_dat_arr = NULL;
     }
+}
+
+/* called every time the user presses "Apply" or "OK in the list of
+ * GeoIP directories, and also once on startup */
+static void geoip_db_post_update_cb(void) {
+    guint i;
+    GeoIP* gi;
+
+    geoip_dat_cleanup();
 
     /* allocate the array */
     geoip_dat_arr = g_array_new(FALSE, FALSE, sizeof(GeoIP *));
+
+    /* First try the system paths */
+    for (i = 0; geoip_db_system_paths[i].path != NULL; i++) {
+        geoip_dat_scan_dir(geoip_db_system_paths[i].path);
+    }
 
     /* Walk all the directories */
     for (i = 0; i < num_geoip_db_paths; i++) {
@@ -190,6 +213,11 @@ static void geoip_db_post_update_cb(void) {
     gi = (GeoIP *)g_malloc(sizeof (GeoIP));
     gi->databaseType = WS_LON_FAKE_EDITION;
     g_array_append_val(geoip_dat_arr, gi);
+}
+
+static void geoip_db_cleanup(void)
+{
+    geoip_dat_cleanup();
 }
 
 /**
@@ -217,14 +245,15 @@ geoip_db_pref_init(module_t *nameres)
             NULL,
             geoip_db_path_free_cb,
             geoip_db_post_update_cb,
+            geoip_db_cleanup,
             geoip_db_paths_fields);
 
     prefs_register_uat_preference(nameres,
             "geoip_db_paths",
             "GeoIP database directories",
-                "Search paths for GeoIP address mapping databases.\n"
-                "Wireshark will look in each directory for files beginning\n"
-                "with \"Geo\" and ending with \".dat\".",
+            "Search paths for GeoIP address mapping databases."
+            " Wireshark will look in each directory for files beginning"
+            " with \"Geo\" and ending with \".dat\".",
             geoip_db_paths_uat);
 }
 
@@ -268,9 +297,10 @@ geoip_db_lookup_latlon4(guint32 addr, float *lat, float *lon) {
                 case GEOIP_CITY_EDITION_REV0:
                 case GEOIP_CITY_EDITION_REV1:
                     gir = GeoIP_record_by_ipnum(gi, addr);
-                    if(gir) {
+                    if (gir) {
                         *lat = gir->latitude;
                         *lon = gir->longitude;
+                        GeoIPRecord_delete(gir);
                         return 0;
                     }
                     return -1;
@@ -311,7 +341,8 @@ char *
 geoip_db_lookup_ipv4(guint dbnum, guint32 addr, const char *not_found) {
     GeoIP *gi;
     GeoIPRecord *gir;
-    const char *raw_val;
+    char *name;
+    const char *country;
     char *val, *ret = NULL;
 
     if (dbnum > geoip_db_num_dbs()) {
@@ -324,9 +355,9 @@ geoip_db_lookup_ipv4(guint dbnum, guint32 addr, const char *not_found) {
     if (gi) {
         switch (gi->databaseType) {
             case GEOIP_COUNTRY_EDITION:
-                raw_val = GeoIP_country_name_by_ipnum(gi, addr);
-                if (raw_val) {
-                    ret = db_val_to_utf_8(raw_val, gi);
+                country = GeoIP_country_name_by_ipnum(gi, addr);
+                if (country) {
+                    ret = db_val_to_utf_8(country, gi);
                 }
                 break;
 
@@ -340,14 +371,17 @@ geoip_db_lookup_ipv4(guint dbnum, guint32 addr, const char *not_found) {
                 } else if (gir && gir->city) {
                     ret = db_val_to_utf_8(gir->city, gi);
                 }
+                if (gir)
+                    GeoIPRecord_delete(gir);
                 break;
 
             case GEOIP_ORG_EDITION:
             case GEOIP_ISP_EDITION:
             case GEOIP_ASNUM_EDITION:
-                raw_val = GeoIP_name_by_ipnum(gi, addr);
-                if (raw_val) {
-                    ret = db_val_to_utf_8(raw_val, gi);
+                name = GeoIP_name_by_ipnum(gi, addr);
+                if (name) {
+                    ret = db_val_to_utf_8(name, gi);
+                    GeoIP_free(name);
                 }
                 break;
 
@@ -435,7 +469,8 @@ char *
 geoip_db_lookup_ipv6(guint dbnum, struct e_in6_addr addr, const char *not_found) {
     GeoIP *gi;
     geoipv6_t gaddr;
-    const char *raw_val;
+    char *name;
+    const char *country;
     char *val, *ret = NULL;
 #if NUM_DB_TYPES > 31
     GeoIPRecord *gir;
@@ -453,9 +488,9 @@ geoip_db_lookup_ipv6(guint dbnum, struct e_in6_addr addr, const char *not_found)
     if (gi) {
         switch (gi->databaseType) {
             case GEOIP_COUNTRY_EDITION_V6:
-                raw_val = GeoIP_country_name_by_ipnum_v6(gi, gaddr);
-                if (raw_val) {
-                    ret = db_val_to_utf_8(raw_val, gi);
+                country = GeoIP_country_name_by_ipnum_v6(gi, gaddr);
+                if (country) {
+                    ret = db_val_to_utf_8(country, gi);
                 }
                 break;
 
@@ -475,9 +510,10 @@ geoip_db_lookup_ipv6(guint dbnum, struct e_in6_addr addr, const char *not_found)
             case GEOIP_ORG_EDITION_V6:
             case GEOIP_ISP_EDITION_V6:
             case GEOIP_ASNUM_EDITION_V6:
-                raw_val = GeoIP_name_by_ipnum_v6(gi, gaddr);
-                if (raw_val) {
-                    ret = db_val_to_utf_8(raw_val, gi);
+                name = GeoIP_name_by_ipnum_v6(gi, gaddr);
+                if (name) {
+                    ret = db_val_to_utf_8(name, gi);
+                    GeoIP_free(name);
                 }
                 break;
 #endif /* NUM_DB_TYPES */
@@ -540,19 +576,19 @@ geoip_db_lookup_ipv6(guint dbnum _U_, struct e_in6_addr addr _U_, const char *no
 gchar *
 geoip_db_get_paths(void) {
     GString* path_str = NULL;
-    char path_separator;
     guint i;
 
     path_str = g_string_new("");
-#ifdef _WIN32
-    path_separator = ';';
-#else
-    path_separator = ':';
-#endif
+
+    for (i = 0; geoip_db_system_paths[i].path != NULL; i++) {
+        g_string_append_printf(path_str,
+                "%s" G_SEARCHPATH_SEPARATOR_S, geoip_db_system_paths[i].path);
+    }
 
     for (i = 0; i < num_geoip_db_paths; i++) {
         if (geoip_db_paths[i].path) {
-            g_string_append_printf(path_str, "%s%c", geoip_db_paths[i].path, path_separator);
+            g_string_append_printf(path_str,
+                    "%s" G_SEARCHPATH_SEPARATOR_S, geoip_db_paths[i].path);
         }
     }
 

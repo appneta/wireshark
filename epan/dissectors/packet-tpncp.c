@@ -32,7 +32,8 @@
 #include <epan/to_str.h>
 #include <wsutil/filesystem.h>
 #include <wsutil/file_util.h>
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
+#include <wsutil/strtoi.h>
 #include "packet-tcp.h"
 
 /*-------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -104,7 +105,7 @@ static guint global_tpncp_trunkpack_tcp_port = TCP_PORT_TPNCP_TRUNKPACK;
 static guint global_tpncp_trunkpack_udp_port = UDP_PORT_TPNCP_TRUNKPACK;
 static guint global_tpncp_host_tcp_port = TCP_PORT_TPNCP_HOST;
 static guint global_tpncp_host_udp_port = UDP_PORT_TPNCP_HOST;
-static guint global_tpncp_load_db = FALSE;
+static gboolean global_tpncp_load_db = FALSE;
 
 static dissector_handle_t tpncp_handle;
 
@@ -617,21 +618,26 @@ static gint init_tpncp_data_fields_info(tpncp_data_field_info *data_fields_info,
 
         if ((tmp = strtok(tpncp_db_entry, " ")) == NULL)
             continue; /* Badly formed data base entry - skip corresponding field's registration. */
-        data_id = atoi(tmp);
+        if (!ws_strtou32(tmp, NULL, &data_id))
+            continue;
         if ((tpncp_data_field_name = strtok(NULL, " ")) == NULL)
             continue; /* Badly formed data base entry - skip corresponding field's registration. */
         if ((tmp = strtok(NULL, " ")) == NULL)
             continue; /* Badly formed data base entry - skip corresponding field's registration. */
-        tpncp_data_field_sign = atoi(tmp);
+        if (!ws_strtou32(tmp, NULL, &tpncp_data_field_sign))
+            continue;
         if ((tmp = strtok(NULL, " ")) == NULL)
             continue; /* Badly formed data base entry - skip corresponding field's registration. */
-        tpncp_data_field_size = atoi(tmp);
+        if (!ws_strtou32(tmp, NULL, &tpncp_data_field_size))
+            continue;
         if ((tmp = strtok(NULL, " ")) == NULL)
             continue; /* Badly formed data base entry - skip corresponding field's registration. */
-        tpncp_data_field_array_dim = atoi(tmp);
+        if (!ws_strtou32(tmp, NULL, &tpncp_data_field_array_dim))
+            continue;
         if ((tmp = strtok(NULL, " ")) == NULL)
             continue; /* Badly formed data base entry - skip corresponding field's registration. */
-        tpncp_data_field_is_ip_addr = atoi(tmp);
+        if (!ws_strtou32(tmp, NULL, &tpncp_data_field_is_ip_addr))
+            continue;
         if ((tmp = strtok(NULL, "\n")) == NULL)
             continue; /* Badly formed data base entry - skip corresponding field's registration. */
 
@@ -754,6 +760,7 @@ done:
 void proto_reg_handoff_tpncp(void) {
     static gint tpncp_prefs_initialized = FALSE;
     static dissector_handle_t tpncp_tcp_handle;
+    gint idx;
 
     /*  If we weren't able to load the database (and thus the hf_ entries)
      *  do not attach to any ports (if we did then we'd get a "dissector bug"
@@ -776,6 +783,34 @@ void proto_reg_handoff_tpncp(void) {
     }
 
     if(global_tpncp_load_db){
+        if (hf_allocated == 0) {
+            if (init_tpncp_db() == -1) {
+                report_failure("tpncp: Could not load tpncp.dat file, tpncp dissector will not work");
+                return;
+            }
+
+            /* Rather than duplicating large quantities of code from
+             * proto_register_field_array() and friends to sanitize the tpncp.dat file
+             * when we read it, just catch any exceptions we get while registering and
+             * take them as a hint that the file is corrupt. Then move on, so that at
+             * least the rest of the protocol dissectors will still work.
+             */
+            TRY {
+                /* The function proto_register_field_array does not work with dynamic
+                 * arrays, so pass dynamic array elements one-by-one in the loop.
+                 */
+                for(idx = 0; idx < hf_size; idx++) {
+                    proto_register_field_array(proto_tpncp, &hf[idx], 1);
+                }
+            }
+
+            CATCH_ALL {
+                report_failure("Corrupt tpncp.dat file, tpncp dissector will not work.");
+            }
+
+            ENDTRY;
+        }
+
         trunkpack_tcp_port = global_tpncp_trunkpack_tcp_port;
         trunkpack_udp_port = global_tpncp_trunkpack_udp_port;
 
@@ -790,49 +825,25 @@ void proto_reg_handoff_tpncp(void) {
 /*-------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void proto_register_tpncp(void) {
-    gint idx;
     module_t *tpncp_module;
     static gint *ett[] = {
         &ett_tpncp,
         &ett_tpncp_body
     };
 
+    /* this dissector reads hf entries from a database
+       a boolean preference defines whether the database is loaded or not
+       we initialize the hf array in the handoff function when we have
+       access to the preference's value */
+
     proto_tpncp = proto_register_protocol("AudioCodes TPNCP (TrunkPack Network Control Protocol)",
                                           "TPNCP", "tpncp");
-    if(global_tpncp_load_db){
-        if (init_tpncp_db() == -1) {
-            report_failure("tpncp: Could not load tpncp.dat file, tpncp dissector will not work");
-            return;
-        }
-
-
-        /* Rather than duplicating large quantities of code from
-         * proto_register_field_array() and friends to sanitize the tpncp.dat file
-         * when we read it, just catch any exceptions we get while registering and
-         * take them as a hint that the file is corrupt. Then move on, so that at
-         * least the rest of the protocol dissectors will still work.
-         */
-        TRY {
-            /* The function proto_register_field_array does not work with dynamic
-             * arrays, so pass dynamic array elements one-by-one in the loop.
-             */
-            for(idx = 0; idx < hf_size; idx++) {
-                proto_register_field_array(proto_tpncp, &hf[idx], 1);
-            }
-        }
-
-        CATCH_ALL {
-            report_failure("Corrupt tpncp.dat file, tpncp dissector will not work.");
-        }
-
-        ENDTRY;
-
-        proto_register_subtree_array(ett, array_length(ett));
-    }
 
     tpncp_handle = register_dissector("tpncp", dissect_tpncp, proto_tpncp);
 
     tpncp_module = prefs_register_protocol(proto_tpncp, proto_reg_handoff_tpncp);
+
+    proto_register_subtree_array(ett, array_length(ett));
 
     /* See https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=9569 for some discussion on this as well */
     prefs_register_bool_preference(tpncp_module, "load_db",

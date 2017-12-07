@@ -35,13 +35,11 @@ set(CRYPT_FILES
 )
 source_group(crypt FILES ${CRYPT_FILES})
 
-if(WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${CRYPT_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${CRYPT_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 add_library(crypt OBJECT
 	${CRYPT_FILES}
@@ -50,6 +48,7 @@ add_library(crypt OBJECT
 set_target_properties(crypt PROPERTIES
 	FOLDER "Libs/epan/crypt"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 )
 
 CHECKAPI(

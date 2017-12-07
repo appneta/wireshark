@@ -71,6 +71,7 @@ static const value_string ltype_vals[] = {
 	{ LINUX_SLL_P_802_2,	"802.2 LLC" },
 	{ LINUX_SLL_P_PPPHDLC,	"PPP (HDLC)" },
 	{ LINUX_SLL_P_CAN,	"CAN" },
+	{ LINUX_SLL_P_CANFD,	"CAN FD" },
 	{ LINUX_SLL_P_IRDA_LAP,	"IrDA LAP" },
 	{ LINUX_SLL_P_ISI,	"ISI" },
 	{ LINUX_SLL_P_IEEE802154,	"IEEE 802.15.4" },
@@ -116,6 +117,11 @@ static header_field_info hfi_sll_src_ipv4 SLL_HFI_INIT =
 static header_field_info hfi_sll_src_other SLL_HFI_INIT =
 	{ "Source",	"sll.src.other", FT_BYTES, BASE_NONE,
 	  NULL, 0x0, "Source link-layer address", HFILL };
+
+/* Unused remaining bytes */
+static header_field_info hfi_sll_unused SLL_HFI_INIT =
+	{ "Unused", "sll.unused", FT_BYTES, BASE_NONE,
+	  NULL, 0x0, "Unused bytes", HFILL };
 
 /* if the protocol field is an internal Linux protocol type */
 static header_field_info hfi_sll_ltype SLL_HFI_INIT =
@@ -253,6 +259,11 @@ dissect_sll(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 		break;
 	}
 
+	/* Not all bytes of SLL_ADDRLEN have been used. Add remaining as unused */
+	if (SLL_ADDRLEN - halen > 0)
+		proto_tree_add_item(fh_tree, &hfi_sll_unused, tvb, 6 + halen,
+			SLL_ADDRLEN - halen, ENC_BIG_ENDIAN);
+
 	protocol = tvb_get_ntohs(tvb, 14);
 	next_tvb = tvb_new_subset_remaining(tvb, SLL_HEADER_SIZE);
 	if (protocol <= 1536) {	/* yes, 1536 - that's how Linux does it */
@@ -307,6 +318,7 @@ proto_register_sll(void)
 		&hfi_sll_src_eth,
 		&hfi_sll_src_ipv4,
 		&hfi_sll_src_other,
+		&hfi_sll_unused,
 		&hfi_sll_ltype,
 		&hfi_sll_gretype,
 		/* registered here but handled in ethertype.c */
@@ -347,6 +359,8 @@ proto_register_sll(void)
 void
 proto_reg_handoff_sll(void)
 {
+	capture_dissector_handle_t sll_cap_handle;
+
 	/*
 	 * Get handles for the IPX and LLC dissectors.
 	 */
@@ -355,7 +369,8 @@ proto_reg_handoff_sll(void)
 	netlink_handle = find_dissector_add_dependency("netlink", proto_sll);
 
 	dissector_add_uint("wtap_encap", WTAP_ENCAP_SLL, sll_handle);
-	register_capture_dissector("wtap_encap", WTAP_ENCAP_SLL, capture_sll, hfi_sll->id);
+	sll_cap_handle = create_capture_dissector_handle(capture_sll, proto_sll);
+	capture_dissector_add_uint("wtap_encap", WTAP_ENCAP_SLL, sll_cap_handle);
 }
 
 /*

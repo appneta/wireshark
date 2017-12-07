@@ -136,8 +136,8 @@ $wtap_presence_flags_table =~ s/\n$/\n}\n/msi;
 #	values from enum fttype
 #
 
-$ft_types_table = " -- Field Types\nftypes = {\n";
-$frametypes_table = " -- Field Type FRAMENUM Types\nframetype = {\n";
+$ft_types_table = "-- Field Types\nftypes = {\n";
+$frametypes_table = "-- Field Type FRAMENUM Types\nframetype = {\n";
 
 my $ftype_num = 0;
 my $frametypes_num = 0;
@@ -164,7 +164,7 @@ $frametypes_table =~ s/,\n$/\n}\n/msi;
 #	#defines for encodings and expert group and severity levels
 #
 
-$bases_table        = "-- Display Bases\n base = {\n";
+$bases_table        = "-- Display Bases\nbase = {\n";
 $encodings          = "-- Encodings\n";
 $expert_pi          = "-- Expert flags and facilities (deprecated - see 'expert' table below)\n";
 $expert_pi_tbl      = "-- Expert flags and facilities\nexpert = {\n";
@@ -180,8 +180,14 @@ my $skip_this = 0;
 while(<PROTO_H>) {
     $skip_this = 0;
 
-    if (/^\s+BASE_([A-Z_]+)[ ]*=[ ]*([0-9]+)[, ]+/ ) {
-        $bases_table .= "\t[\"$1\"] = $2,\n";
+    if (/^\s+(?:BASE|STR|SEP)_([A-Z_]+)[ ]*=[ ]*([0-9]+)[,\s]+(?:\/\*\*< (.*?) \*\/)?/) {
+        $bases_table .= "\t[\"$1\"] = $2,  -- $3\n";
+    }
+
+    if (/^#define\s+BASE_(UNIT_STRING)[ ]*((?:0x)?[0-9]+)[ ]+(?:\/\*\*< (.*?) \*\/)?/) {
+        # Handle BASE_UNIT_STRING as a valid base value in Lua
+        my $num = hex($2);
+        $bases_table .= "\t[\"$1\"] = $num,  -- $3\n";
     }
 
     if (/^.define\s+PI_SEVERITY_MASK /) {
@@ -221,6 +227,26 @@ while(<PROTO_H>) {
 close PROTO_H;
 
 #
+# Extract values from time_fmt.h:
+#
+#	ABSOLUTE_TIME_XXX values for absolute time bases
+#
+
+my $absolute_time_num = 0;
+
+open TIME_FMT_H, "< $WSROOT/epan/time_fmt.h" or die "cannot open '$WSROOT/epan/time_fmt.h':  $!";
+while(<TIME_FMT_H>) {
+    if (/^\s+ABSOLUTE_TIME_([A-Z_]+)[ ]*=[ ]*([0-9]+)[,\s]+(?:\/\* (.*?) \*\/)?/) {
+        $bases_table .= "\t[\"$1\"] = $2,  -- $3\n";
+        $absolute_time_num = $2 + 1;
+    } elsif (/^\s+ABSOLUTE_TIME_([A-Z_]+)[,\s]+(?:\/\* (.*?) \*\/)?/) {
+        $bases_table .= "\t[\"$1\"] = $absolute_time_num,  -- $2\n";
+        $absolute_time_num++;
+    }
+}
+close TIME_FTM_H;
+
+#
 # Extract values from stat_groups.h:
 #
 #	MENU_X_X values for register_stat_group_t
@@ -244,8 +270,8 @@ while(<STAT_GROUPS>) {
 close STAT_GROUPS;
 
 
-$bases_table .= "}\n\n";
-$encodings .= "\n\n";
+$bases_table .= "}\n";
+$encodings .= "\n";
 $expert_pi .= "\n";
 $expert_pi_severity .= "\t},\n";
 $expert_pi_group .= "\t},\n";

@@ -29,7 +29,6 @@
 #include <epan/packet.h>
 #include <epan/tap.h>
 #include <epan/expert.h>
-#include <epan/prefs.h>
 #include <epan/dissectors/packet-rtp.h>
 #include <epan/dissectors/packet-rtcp.h>
 #include "packet-unistim.h"
@@ -44,11 +43,6 @@
 #include "expansion.h"
 
 void proto_register_unistim(void);
-
-/* Don't set this to 5000 until this dissector is made a heuristic one!
-   It collides (at least) with tapa.
-   static guint global_unistim_port = 5000; */
-static guint global_unistim_port = 0;
 
 static unistim_info_t *uinfo;
 static int unistim_tap = -1;
@@ -2316,7 +2310,7 @@ dissect_audio_switch(proto_tree *msg_tree,packet_info *pinfo,
                set_address(&far_addr, AT_IPv4, 4, &far_ip_addr);
 
                far_port = tvb_get_ntohs(tvb, offset-8);
-               rtp_add_address(pinfo, &far_addr, far_port, 0, "UNISTIM", pinfo->num, FALSE, NULL);
+               rtp_add_address(pinfo, PT_UDP, &far_addr, far_port, 0, "UNISTIM", pinfo->num, FALSE, NULL);
 
                far_port = tvb_get_ntohs(tvb, offset-6);
                rtcp_add_address(pinfo, &far_addr, far_port, 0, "UNISTIM", pinfo->num);
@@ -2652,6 +2646,7 @@ dissect_audio_phone(proto_tree *msg_tree,
             proto_tree_add_item(msg_tree,hf_audio_transducer_pair,tvb,offset,1,ENC_BIG_ENDIAN);
             offset+=1;msg_len-=1;
          }
+         break;
       case 0x14:
    /*Query APB Response*/
          proto_tree_add_item(msg_tree,hf_audio_apb_number,tvb,offset,1,ENC_BIG_ENDIAN);
@@ -2691,8 +2686,6 @@ dissect_audio_phone(proto_tree *msg_tree,
 
 void
 proto_register_unistim(void){
-
-   module_t* unistim_module;
 
    static hf_register_info hf[] = {
       { &hf_unistim_seq_nu,
@@ -4041,33 +4034,15 @@ proto_register_unistim(void){
    expert_register_field_array(expert_unistim, ei, array_length(ei));
 
    unistim_tap = register_tap("unistim");
-
-   unistim_module = prefs_register_protocol(proto_unistim, proto_reg_handoff_unistim);
-
-   prefs_register_uint_preference(unistim_module, "udp.port", "UNISTIM UDP port",
-                                  "UNISTIM port (default 5000)", 10, &global_unistim_port);
 }
 
 void
 proto_reg_handoff_unistim(void) {
-   static gboolean initialized = FALSE;
-   static dissector_handle_t unistim_handle;
-   static guint unistim_port;
 
-   if (!initialized) {
-      unistim_handle=create_dissector_handle(dissect_unistim,proto_unistim);
-      dissector_add_for_decode_as("udp.port", unistim_handle);
-      initialized=TRUE;
-   } else {
-      if (unistim_port != 0) {
-         dissector_delete_uint("udp.port",unistim_port,unistim_handle);
-      }
-   }
+   dissector_handle_t unistim_handle;
 
-   if (global_unistim_port != 0) {
-      dissector_add_uint("udp.port",global_unistim_port,unistim_handle);
-   }
-   unistim_port = global_unistim_port;
+   unistim_handle=create_dissector_handle(dissect_unistim,proto_unistim);
+   dissector_add_for_decode_as_with_preference("udp.port", unistim_handle);
 }
 
 /*

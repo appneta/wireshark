@@ -38,14 +38,21 @@
 
 extern "C" {
 
-// object_list_add_entry and object_list_get_entry are defined in ui/export_object.h
+static void
+object_list_add_entry(void *gui_data, export_object_entry_t *entry) {
+    export_object_list_gui_t *object_list = (export_object_list_gui_t*)gui_data;
 
-void object_list_add_entry(export_object_list_t *object_list, export_object_entry_t *entry) {
-    if (object_list && object_list->eod) object_list->eod->addObjectEntry(entry);
+    if (object_list && object_list->eod)
+        object_list->eod->addObjectEntry(entry);
 }
 
-export_object_entry_t *object_list_get_entry(export_object_list_t *object_list, int row) {
-    if (object_list && object_list->eod) return object_list->eod->objectEntry(row);
+static export_object_entry_t*
+object_list_get_entry(void *gui_data, int row) {
+    export_object_list_gui_t *object_list = (export_object_list_gui_t*)gui_data;
+
+    if (object_list && object_list->eod)
+        return object_list->eod->objectEntry(row);
+
     return NULL;
 }
 
@@ -55,12 +62,17 @@ export_object_entry_t *object_list_get_entry(export_object_list_t *object_list, 
 static void
 eo_reset(void *tapdata)
 {
-    export_object_list_t *object_list = (export_object_list_t *) tapdata;
+    export_object_list_t *tap_object = (export_object_list_t *)tapdata;
+    export_object_list_gui_t *object_list = (export_object_list_gui_t *)tap_object->gui_data;
     if (object_list && object_list->eod) object_list->eod->resetObjects();
 }
 
 } // extern "C"
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master-2.4
 enum {
     COL_PACKET,
     COL_HOSTNAME,
@@ -135,15 +147,16 @@ private:
     export_object_entry_t *entry_;
 };
 
+<<<<<<< HEAD
 ExportObjectDialog::ExportObjectDialog(QWidget &parent, CaptureFile &cf, ObjectType object_type) :
+=======
+ExportObjectDialog::ExportObjectDialog(QWidget &parent, CaptureFile &cf, register_eo_t* eo) :
+>>>>>>> upstream/master-2.4
     WiresharkDialog(parent, cf),
     eo_ui_(new Ui::ExportObjectDialog),
     save_bt_(NULL),
     save_all_bt_(NULL),
-    tap_name_(NULL),
-    name_(NULL),
-    tap_packet_(NULL),
-    eo_protocoldata_resetfn_(NULL)
+    eo_(eo)
 {
     QPushButton *close_bt;
 
@@ -155,37 +168,17 @@ ExportObjectDialog::ExportObjectDialog(QWidget &parent, CaptureFile &cf, ObjectT
     eo_ui_->progressBar->setAttribute(Qt::WA_MacSmallSize, true);
 #endif
 
-    export_object_list_.eod = this;
+    eo_gui_data_.eod = this;
 
-    switch (object_type) {
-    case Dicom:
-        tap_name_ = "dicom_eo";
-        name_ = "DICOM";
-        tap_packet_ = eo_dicom_packet;
-        break;
-    case Http:
-        tap_name_ = "http_eo";
-        name_ = "HTTP";
-        tap_packet_ = eo_http_packet;
-        break;
-    case Smb:
-        tap_name_ = "smb_eo";
-        name_ = "SMB";
-        tap_packet_ = eo_smb_packet;
-        eo_protocoldata_resetfn_ = eo_smb_cleanup;
-        break;
-    case Tftp:
-        tap_name_ = "tftp_eo";
-        name_ = "TFTP";
-        tap_packet_ = eo_tftp_packet;
-        break;
-    }
+    export_object_list_.add_entry = object_list_add_entry;
+    export_object_list_.get_entry = object_list_get_entry;
+    export_object_list_.gui_data = (void*)&eo_gui_data_;
 
     save_bt_ = eo_ui_->buttonBox->button(QDialogButtonBox::Save);
     save_all_bt_ = eo_ui_->buttonBox->button(QDialogButtonBox::SaveAll);
     close_bt = eo_ui_->buttonBox->button(QDialogButtonBox::Close);
 
-    setWindowTitle(wsApp->windowTitleString(QStringList() << tr("Export") << tr("%1 object list").arg(name_)));
+    setWindowTitle(wsApp->windowTitleString(QStringList() << tr("Export") << tr("%1 object list").arg(proto_get_protocol_short_name(find_protocol_by_id(get_eo_proto_id(eo))))));
 
     if (save_bt_) save_bt_->setEnabled(false);
     if (save_all_bt_) save_all_bt_->setEnabled(false);
@@ -201,7 +194,7 @@ ExportObjectDialog::ExportObjectDialog(QWidget &parent, CaptureFile &cf, ObjectT
 ExportObjectDialog::~ExportObjectDialog()
 {
     delete eo_ui_;
-    export_object_list_.eod = NULL;
+    eo_gui_data_.eod = NULL;
     removeTapListeners();
 }
 
@@ -228,8 +221,18 @@ export_object_entry_t *ExportObjectDialog::objectEntry(int row)
 
 void ExportObjectDialog::resetObjects()
 {
+<<<<<<< HEAD
     eo_ui_->objectTree->clear();
     if (eo_protocoldata_resetfn_) eo_protocoldata_resetfn_();
+=======
+    export_object_gui_reset_cb reset_cb = get_eo_reset_func(eo_);
+
+    eo_ui_->objectTree->clear();
+
+    if (reset_cb)
+        reset_cb();
+
+>>>>>>> upstream/master-2.4
     if (save_bt_) save_bt_->setEnabled(false);
     if (save_all_bt_) save_all_bt_->setEnabled(false);
 }
@@ -237,9 +240,9 @@ void ExportObjectDialog::resetObjects()
 void ExportObjectDialog::show()
 {
     /* Data will be gathered via a tap callback */
-    if (!registerTapListener(tap_name_, &export_object_list_, NULL, 0,
+    if (!registerTapListener(get_eo_tap_listener_name(eo_), &export_object_list_, NULL, 0,
                              eo_reset,
-                             tap_packet_,
+                             get_eo_packet_func(eo_),
                              NULL)) {
         return;
     }
@@ -252,7 +255,10 @@ void ExportObjectDialog::show()
 
     eo_ui_->objectTree->setSortingEnabled(true);
     eo_ui_->objectTree->sortByColumn(COL_PACKET, Qt::AscendingOrder);
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master-2.4
 }
 
 void ExportObjectDialog::accept()
@@ -322,15 +328,16 @@ void ExportObjectDialog::saveCurrentEntry()
         return;
     }
 
+    GString *safe_filename = eo_massage_str(entry->filename, EXPORT_OBJECT_MAXFILELEN-path.canonicalPath().length(), 0);
     file_name = QFileDialog::getSaveFileName(this, wsApp->windowTitleString(tr("Save Object As" UTF8_HORIZONTAL_ELLIPSIS)),
-                                             path.filePath(entry->filename));
+                                             safe_filename->str);
+    g_string_free(safe_filename, TRUE);
 
     if (file_name.length() > 0) {
         eo_save_entry(file_name.toUtf8().constData(), entry, TRUE);
     }
 }
 
-#define MAXFILELEN  255
 void ExportObjectDialog::saveAllEntries()
 {
     int i;
@@ -345,7 +352,7 @@ void ExportObjectDialog::saveAllEntries()
     //
     // XXX - what we *really* want is something that asks the user
     // for an existing directory *but* lets them create a new
-    // directory in the process.  That's what we get on OS X,
+    // directory in the process.  That's what we get on macOS,
     // as the native dialog is used, and it supports that; does
     // that also work on Windows and with Qt's own dialog?
     //
@@ -353,17 +360,25 @@ void ExportObjectDialog::saveAllEntries()
                                                      save_in_dir.canonicalPath(),
                                                      QFileDialog::ShowDirsOnly);
 
-    if (save_in_path.length() < 1 || save_in_path.length() > MAXFILELEN) return;
+    if (save_in_path.length() < 1 || save_in_path.length() > EXPORT_OBJECT_MAXFILELEN) return;
 
     for (i = 0; (item = eo_ui_->objectTree->topLevelItem(i)) != NULL; i++) {
         int count = 0;
         gchar *save_as_fullpath = NULL;
+<<<<<<< HEAD
 
         ExportObjectTreeWidgetItem *eo_ti = dynamic_cast<ExportObjectTreeWidgetItem *>(item);
         if (!eo_ti) {
             continue;
         }
 
+=======
+        ExportObjectTreeWidgetItem *eo_ti = dynamic_cast<ExportObjectTreeWidgetItem *>(item);
+        if (!eo_ti) {
+            continue;
+        }
+
+>>>>>>> upstream/master-2.4
         export_object_entry_t *entry = eo_ti->entry();
         if (!entry) continue;
 
@@ -373,16 +388,16 @@ void ExportObjectDialog::saveAllEntries()
             g_free(save_as_fullpath);
             if (entry->filename)
                 safe_filename = eo_massage_str(entry->filename,
-                    MAXFILELEN - save_in_path.length(), count);
+                    EXPORT_OBJECT_MAXFILELEN - save_in_path.length(), count);
             else {
                 char generic_name[256];
                 const char *ext;
-                ext = ct2ext(entry->content_type);
+                ext = eo_ct2ext(entry->content_type);
                 g_snprintf(generic_name, sizeof(generic_name),
                     "object%u%s%s", entry->pkt_num, ext ? "." : "",
                     ext ? ext : "");
                 safe_filename = eo_massage_str(generic_name,
-                    MAXFILELEN - save_in_path.length(), count);
+                    EXPORT_OBJECT_MAXFILELEN - save_in_path.length(), count);
             }
             save_as_fullpath = g_build_filename(save_in_path.toUtf8().constData(),
                                                 safe_filename->str, NULL);

@@ -68,7 +68,7 @@ mp2t_read_packet(mp2t_filetype_t *mp2t, FILE_T fh, gint64 offset,
     guint64 tmp;
 
     /*
-     * MP2T_SIZE will always be less than WTAP_MAX_PACKET_SIZE, so
+     * MP2T_SIZE will always be less than WTAP_MAX_PACKET_SIZE_STANDARD, so
      * we don't have to worry about the packet being too big.
      */
     ws_buffer_assure_space(buf, MP2T_SIZE);
@@ -120,7 +120,7 @@ mp2t_read(wtap *wth, int *err, gchar **err_info, gint64 *data_offset)
 
     /* if there's a trailer, skip it and go to the start of the next packet */
     if (mp2t->trailer_len!=0) {
-        if (-1 == file_seek(wth->fh, mp2t->trailer_len, SEEK_CUR, err)) {
+        if (!wtap_read_bytes(wth->fh, NULL, mp2t->trailer_len, err, err_info)) {
             return FALSE;
         }
     }

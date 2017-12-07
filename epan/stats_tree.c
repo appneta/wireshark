@@ -245,6 +245,16 @@ stats_tree_reinit(void *p)
     }
 }
 
+static void
+stats_tree_cfg_free(gpointer p)
+{
+    stats_tree_cfg* cfg = (stats_tree_cfg*)p;
+    g_free(cfg->tapname);
+    g_free(cfg->abbr);
+    g_free(cfg->name);
+    g_free(cfg);
+}
+
 /* register a new stats_tree */
 extern void
 stats_tree_register_with_group(const char *tapname, const char *abbr, const char *name,
@@ -269,7 +279,7 @@ stats_tree_register_with_group(const char *tapname, const char *abbr, const char
     cfg->flags = flags&~ST_FLG_MASK;
     cfg->st_flags = flags&ST_FLG_MASK;
 
-    if (!registry) registry = g_hash_table_new(g_str_hash,g_str_equal);
+    if (!registry) registry = g_hash_table_new_full(g_str_hash,g_str_equal,NULL,stats_tree_cfg_free);
 
     g_hash_table_insert(registry,cfg->abbr,cfg);
 }
@@ -639,7 +649,7 @@ stats_tree_manip_node(manip_node_mode mode, stats_tree *st, const char *name,
         case MN_AVERAGE:
             node->counter++;
             update_burst_calc(node, 1);
-            /* fall through to average code */
+            /* fall through */ /*to average code */
         case MN_AVERAGE_NOTICK:
             node->total += value;
             if (node->minvalue > value) {
@@ -771,9 +781,14 @@ stats_tree_create_range_node_string(stats_tree *st, const gchar *name,
     stat_node *rng_root = new_stat_node(st, name, parent_id, FALSE, TRUE);
     stat_node *range_node = NULL;
 
-    for (i = 0; i < num_str_ranges; i++) {
+    for (i = 0; i < num_str_ranges - 1; i++) {
         range_node = new_stat_node(st, str_ranges[i], rng_root->id, FALSE, FALSE);
         range_node->rng = get_range(str_ranges[i]);
+    }
+    range_node = new_stat_node(st, str_ranges[i], rng_root->id, FALSE, FALSE);
+    range_node->rng = get_range(str_ranges[i]);
+    if (range_node->rng->floor == range_node->rng->ceil) {
+        range_node->rng->ceil = G_MAXINT;
     }
 
     return rng_root->id;
@@ -1319,6 +1334,11 @@ WS_DLL_PUBLIC void stats_tree_format_node_as_str(const stat_node *node,
     if (format_type==ST_FORMAT_XML) {
         g_string_append(s,"</stat-node>\n");
     }
+}
+
+void stats_tree_cleanup(void)
+{
+    g_hash_table_destroy(registry);
 }
 
 /*

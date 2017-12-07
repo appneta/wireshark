@@ -21,7 +21,7 @@
 #ifndef FTYPES_INT_H
 #define FTYPES_INT_H
 
-#include <epan/packet.h>
+#include <epan/proto.h>
 #include "ftypes.h"
 
 
@@ -90,26 +90,28 @@ struct _ftype_t {
 	FvalueToStringRepr	val_to_string_repr;
 	FvalueStringReprLen	len_string_repr;
 
-	/* could be union */
-	FvalueSetByteArrayFunc	set_value_byte_array;
-	FvalueSetBytesFunc	set_value_bytes;
-	FvalueSetGuidFunc	set_value_guid;
-	FvalueSetTimeFunc	set_value_time;
-	FvalueSetStringFunc	set_value_string;
-	FvalueSetProtocolFunc	set_value_protocol;
-	FvalueSetUnsignedIntegerFunc	set_value_uinteger;
-	FvalueSetSignedIntegerFunc		set_value_sinteger;
-	FvalueSetUnsignedInteger64Func	set_value_uinteger64;
-	FvalueSetSignedInteger64Func		set_value_sinteger64;
-	FvalueSetFloatingFunc	set_value_floating;
+	union {
+		FvalueSetByteArrayFunc	set_value_byte_array;
+		FvalueSetBytesFunc	set_value_bytes;
+		FvalueSetGuidFunc	set_value_guid;
+		FvalueSetTimeFunc	set_value_time;
+		FvalueSetStringFunc	set_value_string;
+		FvalueSetProtocolFunc	set_value_protocol;
+		FvalueSetUnsignedIntegerFunc	set_value_uinteger;
+		FvalueSetSignedIntegerFunc	set_value_sinteger;
+		FvalueSetUnsignedInteger64Func	set_value_uinteger64;
+		FvalueSetSignedInteger64Func	set_value_sinteger64;
+		FvalueSetFloatingFunc	set_value_floating;
+	} set_value;
 
-	/* could be union */
-	FvalueGetFunc		get_value;
-	FvalueGetUnsignedIntegerFunc	get_value_uinteger;
-	FvalueGetSignedIntegerFunc		get_value_sinteger;
-	FvalueGetUnsignedInteger64Func	get_value_uinteger64;
-	FvalueGetSignedInteger64Func	get_value_sinteger64;
-	FvalueGetFloatingFunc	get_value_floating;
+	union {
+		FvalueGetFunc		get_value_ptr;
+		FvalueGetUnsignedIntegerFunc	get_value_uinteger;
+		FvalueGetSignedIntegerFunc	get_value_sinteger;
+		FvalueGetUnsignedInteger64Func	get_value_uinteger64;
+		FvalueGetSignedInteger64Func	get_value_sinteger64;
+		FvalueGetFloatingFunc	get_value_floating;
+	} get_value;
 
 	FvalueCmp		cmp_eq;
 	FvalueCmp		cmp_ne;

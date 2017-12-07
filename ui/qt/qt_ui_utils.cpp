@@ -47,6 +47,11 @@
 #include <QUrl>
 #include <QUuid>
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+// Qt::escape
+#include <QTextDocument>
+#endif
+
 /* Make the format_size_flags_e enum usable in C++ */
 format_size_flags_e operator|(format_size_flags_e lhs, format_size_flags_e rhs) {
     return (format_size_flags_e) ((int)lhs| (int)rhs);
@@ -171,18 +176,23 @@ const QString file_size_to_qstring(const gint64 size)
 
 const QString time_t_to_qstring(time_t ti_time)
 {
-    QDateTime date_time = QDateTime::fromTime_t(ti_time);
+    QDateTime date_time = QDateTime::fromTime_t(uint(ti_time));
     QString time_str = date_time.toLocalTime().toString("yyyy-MM-dd hh:mm:ss");
     return time_str;
 }
 
+QString html_escape(const QString plain_string) {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    return Qt::escape(plain_string);
+#else
+    return plain_string.toHtmlEscaped();
+#endif
+}
+
+
 void smooth_font_size(QFont &font) {
     QFontDatabase fdb;
-#if QT_VERSION < QT_VERSION_CHECK(4, 8, 0)
-    QList<int> size_list = fdb.smoothSizes(font.family(), "");
-#else
     QList<int> size_list = fdb.smoothSizes(font.family(), font.styleName());
-#endif
 
     if (size_list.size() < 2) return;
 

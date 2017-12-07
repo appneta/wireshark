@@ -87,6 +87,7 @@ const value_string expert_group_vals[] = {
 	{ PI_COMMENTS_GROUP,    "Comment" },
 	{ PI_DECRYPTION,        "Decryption" },
 	{ PI_ASSUMPTION,        "Assumption" },
+	{ PI_DEPRECATED,        "Deprecated" },
 	{ 0, NULL }
 };
 
@@ -249,6 +250,7 @@ expert_packet_init(void)
 			uat_expert_update_cb,
 			uat_expert_free_cb,
 			uat_expert_post_update_cb,
+			NULL,
 			custom_expert_fields);
 
 		prefs_register_uat_preference(module_expert,

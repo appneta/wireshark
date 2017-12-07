@@ -654,7 +654,7 @@ dissect_isns_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
         /* Fall Thru if there are attributes */
         if (tvb_reported_length_remaining(tvb, offset) == 0)
             return tvb_captured_length(tvb);
-
+    /* FALL THROUGH */
     /* Messages */
     case ISNS_FUNC_DEVATTRREG:
     case ISNS_FUNC_DEVATTRQRY:
@@ -880,7 +880,6 @@ AddAttribute(packet_info *pinfo, tvbuff_t *tvb, proto_tree *tree, guint offset,
             tvb, offset, 4, ENC_BIG_ENDIAN);
     offset +=4;
 
-    proto_item_set_len(attr_item, 8+len);
     proto_item_append_text(attr_item, ": %s", val_to_str_ext_const(tag, &isns_attribute_tags_ext, "Unknown"));
 
     /* it seems that an empty attribute is always valid, the original code had a similar statement */
@@ -890,6 +889,7 @@ AddAttribute(packet_info *pinfo, tvbuff_t *tvb, proto_tree *tree, guint offset,
             /* 5.6.5.1 */
             proto_tree_add_uint_format_value(tree, hf_isns_portal_group_tag, tvb, offset, 8, 0, "<NULL>");
         }
+        proto_item_set_len(attr_item, 8+len);
         return offset;
     }
 
@@ -1138,6 +1138,11 @@ AddAttribute(packet_info *pinfo, tvbuff_t *tvb, proto_tree *tree, guint offset,
         default:
             proto_tree_add_item(attr_tree, hf_isns_not_decoded_yet, tvb, offset, len, ENC_NA);
     }
+
+    /* Make sure the data is all there - and that the length won't overflow */
+    tvb_ensure_bytes_exist(tvb, offset, len);
+    /* Set the length of the item to cover only the actual item length */
+    proto_item_set_len(attr_item, 8+len);
 
     offset += len;
     return offset;
@@ -1727,8 +1732,8 @@ proto_reg_handoff_isns(void)
     isns_tcp_handle = create_dissector_handle(dissect_isns_tcp,proto_isns);
     isns_udp_handle = create_dissector_handle(dissect_isns_udp,proto_isns);
 
-    dissector_add_uint("tcp.port",ISNS_TCP_PORT,isns_tcp_handle);
-    dissector_add_uint("udp.port",ISNS_UDP_PORT,isns_udp_handle);
+    dissector_add_uint_with_preference("tcp.port",ISNS_TCP_PORT,isns_tcp_handle);
+    dissector_add_uint_with_preference("udp.port",ISNS_UDP_PORT,isns_udp_handle);
 }
 
 /*

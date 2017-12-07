@@ -69,6 +69,8 @@ NODIST_GENERATED_HEADER_FILES = \
 	ui_gsm_map_summary_dialog.h			\
 	ui_iax2_analysis_dialog.h			\
 	ui_import_text_dialog.h				\
+	ui_interface_frame.h				\
+	ui_interface_toolbar.h				\
 	ui_io_graph_dialog.h				\
 	ui_layout_preferences_frame.h			\
 	ui_lbm_lbtrm_transport_dialog.h			\
@@ -154,13 +156,16 @@ GENERATOR_FILES =
 MOC_HDRS = \
 	about_dialog.h					\
 	accordion_frame.h				\
+	additional_toolbar.h				\
 	address_editor_frame.h				\
+	apply_line_edit.h				\
 	bluetooth_att_server_attributes_dialog.h	\
 	bluetooth_device_dialog.h			\
 	bluetooth_devices_dialog.h			\
 	bluetooth_hci_summary_dialog.h			\
 	byte_view_tab.h					\
 	byte_view_text.h				\
+	cache_proxy_model.h				\
 	capture_file.h					\
 	capture_file_dialog.h				\
 	capture_file_properties_dialog.h		\
@@ -171,6 +176,7 @@ MOC_HDRS = \
 	capture_interfaces_dialog.h			\
 	capture_preferences_frame.h			\
 	coloring_rules_dialog.h				\
+	clickable_label.h				\
 	color_utils.h					\
 	column_preferences_frame.h			\
 	column_editor_frame.h				\
@@ -188,6 +194,7 @@ MOC_HDRS = \
 	endpoint_dialog.h				\
 	expert_info_dialog.h				\
 	export_dissection_dialog.h			\
+	export_object_action.h				\
 	export_object_dialog.h				\
 	export_pdu_dialog.h				\
 	field_filter_edit.h				\
@@ -208,7 +215,13 @@ MOC_HDRS = \
 	gsm_map_summary_dialog.h			\
 	iax2_analysis_dialog.h				\
 	import_text_dialog.h				\
-	interface_tree.h				\
+	interface_frame.h				\
+	interface_toolbar.h				\
+	interface_toolbar_lineedit.h			\
+	interface_toolbar_reader.h			\
+	interface_tree_model.h				\
+	interface_tree_cache_model.h			\
+	interface_sort_filter_model.h			\
 	io_graph_dialog.h				\
 	label_stack.h					\
 	layout_preferences_frame.h			\
@@ -227,8 +240,10 @@ MOC_HDRS = \
 	module_preferences_scroll_area.h		\
 	multicast_statistics_dialog.h			\
 	mtp3_summary_dialog.h				\
+	numeric_value_chooser_delegate.h		\
 	overlay_scroll_bar.h				\
 	packet_comment_dialog.h				\
+	path_chooser_delegate.h				\
 	packet_dialog.h					\
 	packet_format_group_box.h			\
 	packet_list.h					\
@@ -267,7 +282,6 @@ MOC_HDRS = \
 	sequence_dialog.h				\
 	service_response_time_dialog.h			\
 	show_packet_bytes_dialog.h			\
-	simple_dialog.h					\
 	simple_statistics_dialog.h			\
 	sparkline_delegate.h				\
 	splash_overlay.h				\
@@ -275,13 +289,20 @@ MOC_HDRS = \
 	stock_icon_tool_button.h			\
 	supported_protocols_dialog.h			\
 	syntax_line_edit.h				\
+	tabnav_tree_widget.h				\
 	tap_parameter_dialog.h				\
 	tcp_stream_dialog.h				\
 	time_shift_dialog.h				\
+	timeline_delegate.h				\
 	traffic_table_dialog.h				\
+	uat_delegate.h					\
 	uat_dialog.h					\
+	uat_model.h					\
+	uat_tree_view.h					\
 	voip_calls_dialog.h				\
+	voip_calls_info_model.h				\
 	wireless_frame.h				\
+	wireless_timeline.h				\
 	wireshark_application.h				\
 	wireshark_dialog.h				\
 	wlan_statistics_dialog.h
@@ -323,6 +344,8 @@ UI_FILES = \
 	gsm_map_summary_dialog.ui			\
 	iax2_analysis_dialog.ui				\
 	import_text_dialog.ui				\
+	interface_frame.ui				\
+	interface_toolbar.ui				\
 	io_graph_dialog.ui				\
 	layout_preferences_frame.ui			\
 	lbm_lbtrm_transport_dialog.ui			\
@@ -425,13 +448,16 @@ QM_FILES = $(TS_FILES:.ts=.qm)
 WIRESHARK_QT_SRC = \
 	about_dialog.cpp				\
 	accordion_frame.cpp				\
+	additional_toolbar.cpp				\
 	address_editor_frame.cpp			\
+	apply_line_edit.cpp				\
 	bluetooth_att_server_attributes_dialog.cpp	\
 	bluetooth_device_dialog.cpp			\
 	bluetooth_devices_dialog.cpp			\
 	bluetooth_hci_summary_dialog.cpp		\
 	byte_view_tab.cpp				\
 	byte_view_text.cpp				\
+	cache_proxy_model.cpp				\
 	capture_file.cpp				\
 	capture_file_dialog.cpp				\
 	capture_file_properties_dialog.cpp		\
@@ -441,6 +467,7 @@ WIRESHARK_QT_SRC = \
 	capture_info_dialog.cpp				\
 	capture_interfaces_dialog.cpp			\
 	capture_preferences_frame.cpp			\
+	clickable_label.cpp				\
 	color_utils.cpp					\
 	coloring_rules_dialog.cpp			\
 	column_preferences_frame.cpp			\
@@ -458,6 +485,7 @@ WIRESHARK_QT_SRC = \
 	enabled_protocols_dialog.cpp			\
 	endpoint_dialog.cpp				\
 	export_dissection_dialog.cpp			\
+	export_object_action.cpp			\
 	export_object_dialog.cpp			\
 	export_pdu_dialog.cpp				\
 	field_filter_edit.cpp				\
@@ -476,7 +504,13 @@ WIRESHARK_QT_SRC = \
 	geometry_state_dialog.cpp			\
 	iax2_analysis_dialog.cpp			\
 	import_text_dialog.cpp				\
-	interface_tree.cpp				\
+	interface_frame.cpp				\
+	interface_toolbar.cpp				\
+	interface_toolbar_lineedit.cpp			\
+	interface_toolbar_reader.cpp			\
+	interface_tree_model.cpp			\
+	interface_tree_cache_model.cpp			\
+	interface_sort_filter_model.cpp			\
 	label_stack.cpp					\
 	layout_preferences_frame.cpp			\
 	lbm_lbtrm_transport_dialog.cpp			\
@@ -493,6 +527,7 @@ WIRESHARK_QT_SRC = \
 	main_window_slots.cpp				\
 	manage_interfaces_dialog.cpp			\
 	module_preferences_scroll_area.cpp		\
+	numeric_value_chooser_delegate.cpp		\
 	overlay_scroll_bar.cpp				\
 	packet_comment_dialog.cpp			\
 	packet_dialog.cpp				\
@@ -501,6 +536,7 @@ WIRESHARK_QT_SRC = \
 	packet_list_model.cpp				\
 	packet_list_record.cpp				\
 	packet_range_group_box.cpp			\
+	path_chooser_delegate.cpp			\
 	percent_bar_delegate.cpp			\
 	preference_editor_frame.cpp			\
 	preferences_dialog.cpp				\
@@ -542,13 +578,20 @@ WIRESHARK_QT_SRC = \
 	stock_icon_tool_button.cpp			\
 	supported_protocols_dialog.cpp			\
 	syntax_line_edit.cpp				\
+	tabnav_tree_widget.cpp				\
 	tap_parameter_dialog.cpp			\
 	tcp_stream_dialog.cpp				\
 	time_shift_dialog.cpp				\
+	timeline_delegate.cpp				\
 	traffic_table_dialog.cpp			\
+	uat_delegate.cpp				\
 	uat_dialog.cpp					\
+	uat_model.cpp					\
+	uat_tree_view.cpp				\
 	voip_calls_dialog.cpp				\
+	voip_calls_info_model.cpp			\
 	wireless_frame.cpp				\
+	wireless_timeline.cpp				\
 	wireshark_application.cpp			\
 	wireshark_dialog.cpp
 
@@ -572,8 +615,10 @@ noinst_HEADERS = \
 	packet_list_record.h	\
 	qcustomplot.h		\
 	qt_ui_utils.h		\
+	simple_dialog.h		\
 	stock_icon.h		\
-	tango_colors.h
+	tango_colors.h		\
+	variant_pointer.h
 
 if HAVE_EXTCAP
 NODIST_GENERATED_HEADER_FILES += \
@@ -786,6 +831,10 @@ iax2_analysis_dialog.$(OBJEXT): ui_iax2_analysis_dialog.h
 import_text_dialog.$(OBJEXT): ui_import_text_dialog.h
 
 io_graph_dialog.$(OBJEXT): ui_io_graph_dialog.h
+
+interface_frame.$(OBJEXT): ui_interface_frame.h
+
+interface_toolbar.$(OBJEXT): ui_interface_toolbar.h
 
 layout_preferences_frame.$(OBJEXT): ui_layout_preferences_frame.h
 

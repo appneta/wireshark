@@ -715,6 +715,7 @@ static int hf_gsm_a_geo_loc_type_of_shape = -1;
 static int hf_gsm_a_geo_loc_sign_of_lat = -1;
 static int hf_gsm_a_geo_loc_deg_of_lat =-1;
 static int hf_gsm_a_geo_loc_deg_of_long =-1;
+static int hf_gsm_a_geo_loc_osm_uri =-1;
 static int hf_gsm_a_geo_loc_uncertainty_code = -1;
 static int hf_gsm_a_geo_loc_uncertainty_semi_major = -1;
 static int hf_gsm_a_geo_loc_uncertainty_semi_minor = -1;
@@ -813,7 +814,7 @@ typedef guint16 (**elem_func_hander)(tvbuff_t *tvb, proto_tree *tree, packet_inf
 void
 dissect_geographical_description(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree) {
 
-    proto_item *lat_item, *long_item, *major_item, *minor_item, *alt_item, *uncer_item;
+    proto_item *lat_item, *long_item, *major_item, *minor_item, *alt_item, *uncer_item, *loc_uri_item;
     /*proto_tree *subtree; */
     guint8      type_of_shape;
     /*guint8 no_of_points;*/
@@ -822,6 +823,10 @@ dissect_geographical_description(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
     guint8      value;
     guint32     uvalue32;
     gint32      svalue32;
+    gchar       *deg_lat_str;
+    gchar       *deg_lon_str;
+    gchar       *osm_uri;
+    int         loc_offset;
 
     /*subtree = proto_item_add_subtree(item, ett_gsm_a_geo_desc);*/
 
@@ -855,9 +860,11 @@ dissect_geographical_description(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
         uvalue32  = tvb_get_ntoh24(tvb,offset);
         /* convert degrees (X/0x7fffff) * 90 = degrees */
         lat_item = proto_tree_add_item(tree, hf_gsm_a_geo_loc_deg_of_lat, tvb, offset, 3, ENC_BIG_ENDIAN);
-        proto_item_append_text(lat_item, " (%s%.5f degrees)",
+        deg_lat_str = wmem_strdup_printf(wmem_packet_scope(), "%s%.5f",
             (uvalue32 & 0x00800000) ? "-" : "",
             ((double)(uvalue32 & 0x7fffff)/8388607.0) * 90);
+        proto_item_append_text(lat_item, " (%s degrees)", deg_lat_str);
+        loc_offset = offset;
         if (length < 7)
             return;
         offset    = offset + 3;
@@ -865,8 +872,9 @@ dissect_geographical_description(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
         svalue32 |= (svalue32 & 0x800000) ? 0xff000000 : 0x00000000;
         long_item = proto_tree_add_item(tree, hf_gsm_a_geo_loc_deg_of_long, tvb, offset, 3, ENC_BIG_ENDIAN);
         /* (X/0xffffff) *360 = degrees */
-        proto_item_append_text(long_item, " (%.5f degrees)",
+        deg_lon_str = wmem_strdup_printf(wmem_packet_scope(), "%.5f",
             ((double)svalue32/16777215.0) * 360);
+        proto_item_append_text(long_item, " (%s degrees)", deg_lon_str);
         offset = offset + 3;
         if (type_of_shape == ELLIPSOID_POINT_WITH_UNCERT_CIRC) {
             /* Ellipsoid Point with uncertainty Circle */
@@ -963,6 +971,10 @@ dissect_geographical_description(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
             /* Confidence */
             proto_tree_add_item(tree, hf_gsm_a_geo_loc_confidence, tvb, offset, 1, ENC_BIG_ENDIAN);
         }
+        osm_uri = wmem_strdup_printf(wmem_packet_scope(), "https://www.openstreetmap.org/?mlat=%s&mlon=%s&zoom=12", deg_lat_str, deg_lon_str);
+        loc_uri_item = proto_tree_add_string(tree, hf_gsm_a_geo_loc_osm_uri, tvb, loc_offset, 6, osm_uri);
+        PROTO_ITEM_SET_URL(loc_uri_item);
+        PROTO_ITEM_SET_GENERATED(loc_uri_item);
 
         break;
     case POLYGON:                   /* Polygon */
@@ -1035,8 +1047,7 @@ dissect_description_of_velocity(tvbuff_t *tvb, proto_tree *tree, packet_info *pi
         proto_tree_add_bits_item(tree, hf_gsm_a_bearing, tvb, (curr_offset<<3)+7, 9, ENC_BIG_ENDIAN);
         curr_offset += 2;
         /* Horizontal speed is encoded in increments of 1 kilometre per hour using a 16 bit binary coded number N. */
-        velocity_item = proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
-        proto_item_append_text(velocity_item, " km/h");
+        proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
         curr_offset += 2;
         break;
     case 1:
@@ -1049,14 +1060,12 @@ dissect_description_of_velocity(tvbuff_t *tvb, proto_tree *tree, packet_info *pi
         proto_tree_add_bits_item(tree, hf_gsm_a_bearing, tvb, (curr_offset<<3)+7, 9, ENC_BIG_ENDIAN);
         curr_offset += 2;
         /* Horizontal speed is encoded in increments of 1 kilometre per hour using a 16 bit binary coded number N. */
-        velocity_item = proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
-        proto_item_append_text(velocity_item, " km/h");
+        proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
         curr_offset += 2;
         /* Vertical Speed Octet 5
          * Vertical speed is encoded in increments of 1 kilometre per hour using 8 bits giving a number N between 0 and 28-1.
          */
-        velocity_item = proto_tree_add_item(tree, hf_gsm_a_vertical_speed, tvb, offset, 1, ENC_BIG_ENDIAN);
-        proto_item_append_text(velocity_item, " km/h");
+        proto_tree_add_item(tree, hf_gsm_a_vertical_speed, tvb, offset, 1, ENC_BIG_ENDIAN);
         curr_offset++;
         break;
     case 2:
@@ -1067,8 +1076,7 @@ dissect_description_of_velocity(tvbuff_t *tvb, proto_tree *tree, packet_info *pi
         proto_tree_add_bits_item(tree, hf_gsm_a_bearing, tvb, (curr_offset<<3)+7, 9, ENC_BIG_ENDIAN);
         curr_offset += 2;
         /* Horizontal speed is encoded in increments of 1 kilometre per hour using a 16 bit binary coded number N. */
-        velocity_item = proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
-        proto_item_append_text(velocity_item, " km/h");
+        proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
         curr_offset += 2;
         /* Uncertainty Speed Octet 5
          * Uncertainty speed is encoded in increments of 1 kilometre per hour using an 8 bit binary coded number N. The value of
@@ -1093,14 +1101,12 @@ dissect_description_of_velocity(tvbuff_t *tvb, proto_tree *tree, packet_info *pi
         proto_tree_add_bits_item(tree, hf_gsm_a_bearing, tvb, (curr_offset<<3)+7, 9, ENC_BIG_ENDIAN);
         curr_offset += 2;
         /* Horizontal speed is encoded in increments of 1 kilometre per hour using a 16 bit binary coded number N. */
-        velocity_item = proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
-        proto_item_append_text(velocity_item, " km/h");
+        proto_tree_add_item(tree, hf_gsm_a_horizontal_speed, tvb, offset, 2, ENC_BIG_ENDIAN);
         curr_offset += 2;
         /* Vertical Speed Octet 5
          * Vertical speed is encoded in increments of 1 kilometre per hour using 8 bits giving a number N between 0 and 28-1.
          */
-        velocity_item = proto_tree_add_item(tree, hf_gsm_a_vertical_speed, tvb, offset, 1, ENC_BIG_ENDIAN);
-        proto_item_append_text(velocity_item, " km/h");
+        proto_tree_add_item(tree, hf_gsm_a_vertical_speed, tvb, offset, 1, ENC_BIG_ENDIAN);
         curr_offset++;
 
         /* Horizontal Uncertainty Speed Octet 6 */
@@ -2158,7 +2164,7 @@ de_mid(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guin
 
         curr_offset++;
 
-        if (len > 1)
+        if (len != 1 && len != 3)
         {
             expert_add_info(pinfo, tree, &ei_gsm_a_format_not_supported);
         }
@@ -4517,6 +4523,11 @@ proto_register_gsm_a_common(void)
         FT_INT24, BASE_DEC, NULL, 0xffffff,
         NULL, HFILL }
     },
+    { &hf_gsm_a_geo_loc_osm_uri,
+        { "Location OSM URI", "gsm_a.gad.location_uri",
+        FT_STRING, BASE_NONE, NULL, 0x0,
+        NULL, HFILL }
+    },
     { &hf_gsm_a_geo_loc_uncertainty_code,
         { "Uncertainty code", "gsm_a.gad.uncertainty_code",
         FT_UINT8, BASE_DEC, NULL, 0x7f,
@@ -4564,12 +4575,12 @@ proto_register_gsm_a_common(void)
     },
     { &hf_gsm_a_horizontal_speed,
         { "Horizontal Speed", "gsm_a.gad.horizontal_velocity",
-        FT_UINT16, BASE_DEC, NULL, 0x0,
+        FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_kmh, 0x0,
         NULL, HFILL }
     },
     { &hf_gsm_a_vertical_speed,
         { "Vertical Speed", "gsm_a.gad.vertical_speed",
-        FT_UINT8, BASE_DEC, NULL, 0x0,
+        FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_kmh, 0x0,
         NULL, HFILL }
     },
     { &hf_gsm_a_uncertainty_speed,

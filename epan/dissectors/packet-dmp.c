@@ -139,15 +139,7 @@ void proto_reg_handoff_dmp(void);
 #define ALGORITHM_NONE    0x0
 #define ALGORITHM_ZLIB    0x1
 
-/* Type of structured id to print */
-#define STRUCT_ID_NONE     0
-#define STRUCT_ID_UINT8    1
-#define STRUCT_ID_UINT16   2
-#define STRUCT_ID_UINT32   3
-#define STRUCT_ID_UINT64   4
-#define STRUCT_ID_STRING   5
-#define STRUCT_ID_ZSTRING  6
-
+/* National Decoding */
 #define NAT_DECODE_NONE    0
 #define NAT_DECODE_DMP     1
 #define NAT_DECODE_THALES  2
@@ -316,12 +308,6 @@ static int hf_message_compr = -1;
 static int hf_message_body_data = -1;
 static int hf_message_body_compressed = -1;
 static int hf_message_body_plain = -1;
-static int hf_message_bodyid_uint8 = -1;
-static int hf_message_bodyid_uint16 = -1;
-static int hf_message_bodyid_uint32 = -1;
-static int hf_message_bodyid_uint64 = -1;
-static int hf_message_bodyid_string = -1;
-static int hf_message_bodyid_zstring = -1;
 static int hf_message_body_structured = -1;
 
 static int hf_delivery_report = -1;
@@ -516,8 +502,8 @@ typedef struct _dmp_id_val {
   guint32  ack_resend_count;           /* Acknowledgement resend counter */
 } dmp_id_val;
 
-static GHashTable *dmp_id_hash_table = NULL;
-static GHashTable *dmp_long_id_hash_table = NULL;
+static wmem_map_t *dmp_id_hash_table = NULL;
+static wmem_map_t *dmp_long_id_hash_table = NULL;
 
 /* Global values used in several functions */
 static struct dmp_data {
@@ -530,7 +516,6 @@ static struct dmp_data {
   gint     prec;
   gint     body_format;
   gint     notif_type;
-  const guint8 *struct_id;
   gint32   subm_time;
   guint8   msg_id_type;
   guint8   mts_id_length;
@@ -547,15 +532,10 @@ static struct dmp_data {
 } dmp;
 
 /* User definable values */
-static range_t *global_dmp_port_range;
 static gint     dmp_nat_decode = NAT_DECODE_DMP;
 static gint     dmp_local_nation = 0;
 static gboolean use_seq_ack_analysis = TRUE;
 static gboolean dmp_align = FALSE;
-static gboolean dmp_subject_as_id = FALSE;
-static gint     dmp_struct_format = STRUCT_ID_NONE;
-static guint    dmp_struct_offset = 0;
-static guint    dmp_struct_length = 1;
 
 typedef struct _dmp_security_class_t {
   guint nation;
@@ -792,7 +772,7 @@ static value_string nat_pol_id[MAX_NATIONAL_VALUES+1];
  * for description we use the Country Name and
  * for value we use the DMP value for National Policy Identifier.
  */
-static const enum_val_t dmp_national_values[MAX_NATIONAL_VALUES+1] = {
+static const enum_val_t dmp_national_values[] = {
   { "???",  "None", 0x00 },
   { "alb",  "Albania", 0x1B },
   { "arm",  "Armenia", 0x20 },
@@ -981,17 +961,6 @@ static const value_string ack_msg_type [] = {
   { ACK,    " (ack)"     },
   { 0,      NULL } };
 
-static const enum_val_t struct_id_options[] = {
-  { "none",    "None",                        STRUCT_ID_NONE     },
-  { "1byte",   "1 Byte value",                STRUCT_ID_UINT8    },
-  { "2byte",   "2 Byte value",                STRUCT_ID_UINT16   },
-  { "4byte",   "4 Byte value",                STRUCT_ID_UINT32   },
-  { "8byte",   "8 Byte value",                STRUCT_ID_UINT64   },
-  { "fstring", "Fixed text string",           STRUCT_ID_STRING   },
-  { "zstring", "Zero terminated text string", STRUCT_ID_ZSTRING  },
-  { NULL,      NULL,                          0                  }
-};
-
 static const enum_val_t national_decoding[] = {
   { "none",    "None (raw data)", NAT_DECODE_NONE   },
   { "dmp",     "As for regular",  NAT_DECODE_DMP    },
@@ -1062,9 +1031,11 @@ static void build_national_strings (void)
   /*
   ** We use values from dmp_national_values to build value_string for nat_pol_id.
   */
-  while (dmp_national_values[i].name && i < MAX_NATIONAL_VALUES) {
-    nat_pol_id[i].value  = dmp_national_values[i].value;
-    nat_pol_id[i].strptr = dmp_national_values[i].description;
+  while (dmp_national_values[i].name) {
+    if (i < MAX_NATIONAL_VALUES) {
+      nat_pol_id[i].value  = dmp_national_values[i].value;
+      nat_pol_id[i].strptr = dmp_national_values[i].description;
+    }
     i++;
   }
   nat_pol_id[i].value = 0;
@@ -1408,7 +1379,7 @@ static void register_dmp_id (packet_info *pinfo, guint8 reason)
     copy_address_wmem(wmem_file_scope(), &dmp_key->src, &(pinfo->dst));
     copy_address_wmem(wmem_file_scope(), &dmp_key->dst, &(pinfo->src));
 
-    dmp_data = (dmp_id_val *) g_hash_table_lookup (dmp_id_hash_table, dmp_key);
+    dmp_data = (dmp_id_val *) wmem_map_lookup (dmp_id_hash_table, dmp_key);
 
     if (dmp_data) {
       /* Found message */
@@ -1431,7 +1402,7 @@ static void register_dmp_id (packet_info *pinfo, guint8 reason)
     copy_address_wmem(wmem_file_scope(), &dmp_key->dst, &(pinfo->dst));
   }
 
-  dmp_data = (dmp_id_val *) g_hash_table_lookup (dmp_id_hash_table, dmp_key);
+  dmp_data = (dmp_id_val *) wmem_map_lookup (dmp_id_hash_table, dmp_key);
 
   if (!pinfo->fd->flags.visited) {
     if (dmp_data) {
@@ -1477,7 +1448,7 @@ static void register_dmp_id (packet_info *pinfo, guint8 reason)
           dmp_data->msg_id = pinfo->num;
         }
 
-        g_hash_table_insert (dmp_id_hash_table, dmp_key, dmp_data);
+        wmem_map_insert (dmp_id_hash_table, dmp_key, dmp_data);
       }
     }
 
@@ -1648,13 +1619,21 @@ static void dmp_add_seq_ack_analysis (tvbuff_t *tvb, packet_info *pinfo,
   }
 }
 
-static gchar *dissect_7bit_string (tvbuff_t *tvb, gint offset, gint length, guchar *byte_rest)
+static const gchar *dissect_7bit_string (tvbuff_t *tvb, gint offset, gint length, guchar *byte_rest)
 {
-  guchar *encoded = (guchar *)tvb_memdup (wmem_packet_scope(), tvb, offset, length);
-  guchar *decoded = (guchar *)wmem_alloc0 (wmem_packet_scope(), (size_t)(length * 1.2) + 1);
+  guchar *encoded, *decoded;
   guchar  rest = 0, bits = 1;
   gint    len = 0, i;
 
+  if (length <= 0) {
+    if (byte_rest) {
+      *byte_rest = '\0';
+    }
+    return "";
+  }
+
+  encoded = (guchar *)tvb_memdup (wmem_packet_scope(), tvb, offset, length);
+  decoded = (guchar *)wmem_alloc0 (wmem_packet_scope(), (size_t)(length * 1.2) + 1);
   for (i = 0; i < length; i++) {
     decoded[len++] = encoded[i] >> bits | rest;
     rest = (encoded[i] << (7 - bits) & 0x7F);
@@ -1671,7 +1650,7 @@ static gchar *dissect_7bit_string (tvbuff_t *tvb, gint offset, gint length, guch
     *byte_rest = rest;
   }
 
-  return (gchar *) decoded;
+  return decoded;
 }
 
 static const gchar *dissect_thales_mts_id (tvbuff_t *tvb, gint offset, gint length, guchar *byte_rest)
@@ -2697,17 +2676,17 @@ static gint dissect_mts_identifier (tvbuff_t *tvb, packet_info *pinfo, proto_tre
     mts_id = tvb_bytes_to_str(wmem_packet_scope(), tvb, offset, dmp.mts_id_length);
   }
   proto_item_append_text (dmp.mts_id_item, " (%zu bytes decompressed)", strlen(mts_id));
-  mts_id = format_text (mts_id, strlen(mts_id));
+  mts_id = format_text(wmem_packet_scope(), mts_id, strlen(mts_id));
   if (subject) {
     ti = proto_tree_add_string (tree, hf_message_subj_mts_id, tvb, offset, dmp.mts_id_length, mts_id);
     hidden_item = proto_tree_add_string (tree, hf_mts_id, tvb, offset, dmp.mts_id_length, mts_id);
     /* Read from hash, for analysis */
-    dmp.subj_id = GPOINTER_TO_UINT (g_hash_table_lookup (dmp_long_id_hash_table, mts_id));
+    dmp.subj_id = GPOINTER_TO_UINT (wmem_map_lookup (dmp_long_id_hash_table, mts_id));
   } else {
     ti = proto_tree_add_string (tree, hf_envelope_mts_id, tvb, offset, dmp.mts_id_length, mts_id);
     hidden_item = proto_tree_add_string (tree, hf_mts_id, tvb, offset, dmp.mts_id_length, mts_id);
     /* Insert into hash, for analysis */
-    g_hash_table_insert (dmp_long_id_hash_table, g_strdup (mts_id), GUINT_TO_POINTER ((guint)dmp.msg_id));
+    wmem_map_insert (dmp_long_id_hash_table, g_strdup (mts_id), GUINT_TO_POINTER ((guint)dmp.msg_id));
   }
   PROTO_ITEM_SET_HIDDEN (hidden_item);
   offset += dmp.mts_id_length;
@@ -2753,17 +2732,17 @@ static gint dissect_ipm_identifier (tvbuff_t *tvb, packet_info *pinfo, proto_tre
     ipm_id = tvb_bytes_to_str(wmem_packet_scope(), tvb, offset, ipm_id_length);
   }
   proto_item_append_text (tf, " (%zu bytes decompressed)", strlen(ipm_id));
-  ipm_id = format_text (ipm_id, strlen(ipm_id));
+  ipm_id = format_text(wmem_packet_scope(), ipm_id, strlen(ipm_id));
   if (subject) {
     ti = proto_tree_add_string (tree, hf_message_subj_ipm_id, tvb, offset, ipm_id_length, ipm_id);
     hidden_item = proto_tree_add_string (tree, hf_ipm_id, tvb, offset, ipm_id_length, ipm_id);
     /* Read from hash, for analysis */
-    dmp.subj_id = GPOINTER_TO_UINT (g_hash_table_lookup (dmp_long_id_hash_table, ipm_id));
+    dmp.subj_id = GPOINTER_TO_UINT (wmem_map_lookup (dmp_long_id_hash_table, ipm_id));
   } else {
     ti = proto_tree_add_string (tree, hf_envelope_ipm_id, tvb, offset, ipm_id_length, ipm_id);
     hidden_item = proto_tree_add_string (tree, hf_ipm_id, tvb, offset, ipm_id_length, ipm_id);
     /* Insert into hash, for analysis */
-    g_hash_table_insert (dmp_long_id_hash_table, g_strdup (ipm_id), GUINT_TO_POINTER ((guint)dmp.msg_id));
+    wmem_map_insert (dmp_long_id_hash_table, g_strdup (ipm_id), GUINT_TO_POINTER ((guint)dmp.msg_id));
   }
   PROTO_ITEM_SET_HIDDEN (hidden_item);
   offset += ipm_id_length;
@@ -3068,46 +3047,6 @@ static gint dissect_dmp_envelope (tvbuff_t *tvb, packet_info *pinfo,
   return offset;
 }
 
-static void dissect_dmp_structured_id (tvbuff_t *tvb, proto_tree *body_tree,
-                                       gint offset)
-{
-  gint        length;
-
-  offset += dmp_struct_offset;
-  switch (dmp_struct_format) {
-
-  case STRUCT_ID_UINT8:
-    dmp.struct_id = wmem_strdup_printf (wmem_packet_scope(), "%u", tvb_get_guint8 (tvb, offset));
-    proto_tree_add_item (body_tree, hf_message_bodyid_uint8, tvb, offset, 1, ENC_BIG_ENDIAN);
-    break;
-
-  case STRUCT_ID_UINT16:
-    dmp.struct_id = wmem_strdup_printf (wmem_packet_scope(), "%u", tvb_get_ntohs (tvb, offset));
-    proto_tree_add_item (body_tree, hf_message_bodyid_uint16, tvb, offset, 2, ENC_BIG_ENDIAN);
-    break;
-
-  case STRUCT_ID_UINT32:
-    dmp.struct_id = wmem_strdup_printf (wmem_packet_scope(), "%u", tvb_get_ntohl (tvb, offset));
-    proto_tree_add_item (body_tree, hf_message_bodyid_uint32, tvb, offset, 4, ENC_BIG_ENDIAN);
-    break;
-
-  case STRUCT_ID_UINT64:
-    dmp.struct_id = wmem_strdup_printf (wmem_packet_scope(), "%" G_GINT64_MODIFIER "u", tvb_get_ntoh64 (tvb, offset));
-    proto_tree_add_item (body_tree, hf_message_bodyid_uint64, tvb, offset, 8, ENC_BIG_ENDIAN);
-    break;
-
-  case STRUCT_ID_STRING:
-    proto_tree_add_item_ret_string(body_tree, hf_message_bodyid_string, tvb, offset, dmp_struct_length, ENC_ASCII|ENC_NA, wmem_packet_scope(), &dmp.struct_id);
-    break;
-
-  case STRUCT_ID_ZSTRING:
-    dmp.struct_id = tvb_get_stringz_enc(wmem_packet_scope(), tvb, offset, &length, ENC_ASCII);
-    proto_tree_add_item (body_tree, hf_message_bodyid_zstring, tvb, offset, length, ENC_ASCII|ENC_NA);
-    break;
-
-  }
-}
-
 /*
  * Ref chapter 6.3.7.1 STANAG 4406 message structure
  * and chapter 6.3.8.1 IPM 88 message structure
@@ -3127,9 +3066,6 @@ static gint dissect_dmp_message (tvbuff_t *tvb, packet_info *pinfo,
 
   if (dmp.body_format == FREE_TEXT_SUBJECT) {
     len = tvb_strsize (tvb, offset);
-    if (dmp_subject_as_id) {
-      dmp.struct_id = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, len, ENC_ASCII);
-    }
     proto_tree_add_item (message_tree, hf_message_subject, tvb, offset, len, ENC_ASCII|ENC_NA);
     offset += len;
   }
@@ -3192,7 +3128,6 @@ static gint dissect_dmp_message (tvbuff_t *tvb, packet_info *pinfo,
   if (dmp.body_format == STRUCTURED) {
     /* Structured Message ID */
     field_tree = proto_item_add_subtree (tf, ett_message_body);
-    dissect_dmp_structured_id (tvb, field_tree, offset);
     proto_tree_add_item (field_tree, hf_message_body_structured, tvb, offset, len, ENC_NA);
   } else if (len > 0 && (dmp.body_format == FREE_TEXT ||
                          dmp.body_format == FREE_TEXT_SUBJECT)) {
@@ -3220,10 +3155,6 @@ static gint dissect_dmp_message (tvbuff_t *tvb, packet_info *pinfo,
     }
   }
   offset += len;
-
-  if (dmp.struct_id) {
-    proto_item_append_text (en, ", Id: %s", format_text (dmp.struct_id, strlen(dmp.struct_id)));
-  }
 
   proto_item_set_len (en, offset - boffset);
 
@@ -4013,25 +3944,25 @@ static int dissect_dmp (tvbuff_t *tvb, packet_info *pinfo,
     dmp_add_seq_ack_analysis (tvb, pinfo, dmp_tree, offset);
   }
 
-    if (((dmp.msg_type == STANAG) || (dmp.msg_type == IPM) ||
-         (dmp.msg_type == REPORT) || (dmp.msg_type == NOTIF)) &&
-        dmp.id_val && dmp.id_val->msg_resend_count)
-    {
-      guint retrans_num;
-      if (dmp.msg_type == REPORT) {
-        retrans_num = dmp.id_val->rep_id;
-      } else if (dmp.msg_type == NOTIF) {
-        retrans_num = dmp.id_val->not_id;
-      } else {
-        retrans_num = dmp.id_val->msg_id;
-      }
-      col_append_fstr (pinfo->cinfo, COL_INFO, "[Retrans %d#%d] ",
-                       retrans_num, dmp.id_val->msg_resend_count);
-      retrans_or_dup_ack = TRUE;
-    } else if (dmp.msg_type == ACK && dmp.id_val && dmp.id_val->ack_resend_count) {
-      col_append_fstr (pinfo->cinfo, COL_INFO, "[Dup ACK %d#%d] ",
-                       dmp.id_val->ack_id, dmp.id_val->ack_resend_count);
-      retrans_or_dup_ack = TRUE;
+  if (((dmp.msg_type == STANAG) || (dmp.msg_type == IPM) ||
+       (dmp.msg_type == REPORT) || (dmp.msg_type == NOTIF)) &&
+      dmp.id_val && dmp.id_val->msg_resend_count)
+  {
+    guint retrans_num;
+    if (dmp.msg_type == REPORT) {
+      retrans_num = dmp.id_val->rep_id;
+    } else if (dmp.msg_type == NOTIF) {
+      retrans_num = dmp.id_val->not_id;
+    } else {
+      retrans_num = dmp.id_val->msg_id;
+    }
+    col_append_fstr (pinfo->cinfo, COL_INFO, "[Retrans %d#%d] ",
+                     retrans_num, dmp.id_val->msg_resend_count);
+    retrans_or_dup_ack = TRUE;
+  } else if (dmp.msg_type == ACK && dmp.id_val && dmp.id_val->ack_resend_count) {
+    col_append_fstr (pinfo->cinfo, COL_INFO, "[Dup ACK %d#%d] ",
+                     dmp.id_val->ack_id, dmp.id_val->ack_resend_count);
+    retrans_or_dup_ack = TRUE;
   }
   if (dmp_align && !retrans_or_dup_ack) {
     if (dmp.msg_type == ACK) {
@@ -4062,14 +3993,6 @@ static int dissect_dmp (tvbuff_t *tvb, packet_info *pinfo,
       col_append_fstr (pinfo->cinfo, COL_INFO, ", Subj Id: %d",
                        dmp.subj_id);
     }
-  } else if (dmp.struct_id) {
-    if (dmp_align && !retrans_or_dup_ack) {
-      col_append_fstr (pinfo->cinfo, COL_INFO, "  Body Id: %s",
-                       format_text (dmp.struct_id, strlen(dmp.struct_id)));
-    } else {
-      col_append_fstr (pinfo->cinfo, COL_INFO, ", Body Id: %s",
-                       format_text (dmp.struct_id, strlen(dmp.struct_id)));
-    }
   }
   if (dmp.checksum && (checksum1 != checksum2)) {
     col_append_str (pinfo->cinfo, COL_INFO, ", Checksum incorrect");
@@ -4082,18 +4005,6 @@ static int dissect_dmp (tvbuff_t *tvb, packet_info *pinfo,
   return offset;
 }
 
-static void dmp_init_routine (void)
-{
-  dmp_id_hash_table = g_hash_table_new (dmp_id_hash, dmp_id_hash_equal);
-  dmp_long_id_hash_table = g_hash_table_new (g_str_hash, g_str_equal);
-}
-
-static void dmp_cleanup_routine (void)
-{
-  g_hash_table_destroy(dmp_id_hash_table);
-  g_hash_table_destroy(dmp_long_id_hash_table);
-}
-
 void proto_register_dmp (void)
 {
   static hf_register_info hf[] = {
@@ -4102,7 +4013,7 @@ void proto_register_dmp (void)
     */
     { &hf_dmp_id,
       { "DMP Identifier", "dmp.id", FT_UINT16, BASE_DEC,
-        NULL, 0x0, NULL, HFILL}},
+        NULL, 0x0, NULL, HFILL} },
 
     /* MTS Identifier */
     { &hf_mts_id,
@@ -4119,12 +4030,12 @@ void proto_register_dmp (void)
     */
     { &hf_envelope,
       { "Envelope", "dmp.envelope", FT_NONE, BASE_NONE,
-        NULL, 0x0, NULL, HFILL}},
+        NULL, 0x0, NULL, HFILL} },
 
     /* Protocol data */
     { &hf_envelope_protocol_id,
       { "Protocol Identifier", "dmp.protocol_id", FT_UINT8,
-        BASE_HEX, NULL, 0xF8, NULL, HFILL}},
+        BASE_HEX, NULL, 0xF8, NULL, HFILL} },
     { &hf_envelope_version,
       { "Protocol Version", "dmp.version", FT_UINT8, BASE_DEC,
         VALS(version_vals), 0x07, NULL, HFILL } },
@@ -4161,7 +4072,7 @@ void proto_register_dmp (void)
         VALS(msg_id_type_vals), 0x60, NULL, HFILL } },
     { &hf_envelope_msg_id_length,
       { "Message Identifier Length", "dmp.msg_id_short", FT_UINT8, BASE_DEC,
-        VALS(msg_id_length_vals), 0x10, NULL, HFILL}},
+        VALS(msg_id_length_vals), 0x10, NULL, HFILL} },
     { &hf_envelope_mts_id_length,
       { "MTS Identifier Length", "dmp.mts_id_length", FT_UINT8, BASE_DEC,
         NULL, 0x1F, NULL, HFILL } },
@@ -4179,10 +4090,10 @@ void proto_register_dmp (void)
     /* Message identifier */
     { &hf_envelope_msg_id,
       { "Message Identifier", "dmp.msg_id", FT_UINT16, BASE_DEC,
-        NULL, 0x0, NULL, HFILL}},
+        NULL, 0x0, NULL, HFILL} },
     { &hf_envelope_msg_id_12bit,
       { "Message Identifier", "dmp.msg_id", FT_UINT16, BASE_DEC,
-        NULL, 0x0FFF, NULL, HFILL}},
+        NULL, 0x0FFF, NULL, HFILL} },
 
     /* MTS Identifier */
     { &hf_envelope_mts_id,
@@ -4197,13 +4108,13 @@ void proto_register_dmp (void)
     /* Extensions */
     { &hf_extensions,
       { "Extensions", "dmp.extensions", FT_NONE, BASE_NONE,
-        NULL, 0x0, NULL, HFILL}},
+        NULL, 0x0, NULL, HFILL} },
     { &hf_extension,
       { "Extension", "dmp.extension", FT_NONE, BASE_NONE,
         NULL, 0x0, NULL, HFILL } },
     { &hf_extension_header,
       { "Extension Header", "dmp.extension_header", FT_NONE, BASE_NONE,
-        NULL, 0x0, NULL, HFILL}},
+        NULL, 0x0, NULL, HFILL} },
     { &hf_extension_more,
       { "More Extensions", "dmp.extension_more", FT_BOOLEAN, 8,
         TFS (&tfs_present_absent), 0x80, NULL, HFILL } },
@@ -4234,7 +4145,7 @@ void proto_register_dmp (void)
     /* Envelope flags */
     { &hf_envelope_flags,
       { "Flags", "dmp.envelope_flags", FT_UINT8, BASE_DEC,
-        NULL, 0x0, "Envelope Flags", HFILL}},
+        NULL, 0x0, "Envelope Flags", HFILL} },
     { &hf_envelope_content_id_discarded,
       { "Content Identifier discarded", "dmp.cont_id_discarded",
         FT_BOOLEAN, 8, TFS(&tfs_yes_no), 0x80,
@@ -4242,7 +4153,7 @@ void proto_register_dmp (void)
     { &hf_envelope_recip_reassign_prohib,
       { "Recipient reassign prohibited","dmp.recip_reassign_prohib",
         FT_BOOLEAN, 8, TFS(&tfs_yes_no), 0x40,
-        NULL, HFILL }},
+        NULL, HFILL } },
     { &hf_envelope_dl_expansion_prohib,
       { "DL expansion prohibited", "dmp.dl_expansion_prohib",
         FT_BOOLEAN, 8, TFS(&tfs_yes_no), 0x20, NULL,
@@ -4251,10 +4162,10 @@ void proto_register_dmp (void)
     /* Recipient Count */
     { &hf_envelope_recipients,
       { "Recipient Count", "dmp.rec_count", FT_UINT8, BASE_DEC,
-        NULL, 0x1F, NULL, HFILL}},
+        NULL, 0x1F, NULL, HFILL} },
     { &hf_envelope_ext_recipients,
       { "Extended Recipient Count", "dmp.ext_rec_count", FT_UINT16,
-        BASE_DEC, NULL, 0x7FFF, NULL, HFILL}},
+        BASE_DEC, NULL, 0x7FFF, NULL, HFILL} },
 
     /*
     ** Address
@@ -4433,7 +4344,7 @@ void proto_register_dmp (void)
         NULL, 0x0, NULL, HFILL } },
     { &hf_message_sec_class_val,
       { "Security Classification", "dmp.sec_class", FT_UINT8,
-        BASE_DEC, NULL, 0xE0, NULL, HFILL}},
+        BASE_DEC, NULL, 0xE0, NULL, HFILL} },
     { &hf_message_sec_pol,
       { "Security Policy", "dmp.sec_pol", FT_UINT8, BASE_DEC,
         VALS (sec_pol), 0x1C, NULL, HFILL } },
@@ -4443,7 +4354,7 @@ void proto_register_dmp (void)
     { &hf_message_auth_users,
       { "Authorizing users discarded", "dmp.auth_discarded",
         FT_BOOLEAN, 8, TFS (&tfs_yes_no), 0x02,
-        NULL, HFILL }},
+        NULL, HFILL } },
     { &hf_message_subject_disc,
       { "Subject discarded", "dmp.subject_discarded", FT_BOOLEAN, 8,
         TFS (&tfs_yes_no), 0x01, NULL, HFILL } },
@@ -4586,7 +4497,7 @@ void proto_register_dmp (void)
     */
     { &hf_message_body,
       { "Message Body", "dmp.body", FT_NONE, BASE_NONE, NULL,
-        0x0, NULL, HFILL}},
+        0x0, NULL, HFILL} },
 
     /* Body Id */
     { &hf_message_eit,
@@ -4611,25 +4522,6 @@ void proto_register_dmp (void)
     { &hf_message_body_plain,
       { "Message Body", "dmp.body.plain", FT_STRING, BASE_NONE,
         NULL, 0x0, NULL, HFILL } },
-    { &hf_message_bodyid_uint8,
-      { "Structured Id", "dmp.body.id", FT_UINT8, BASE_DEC,
-        NULL, 0x0, "Structured Body Id (1 byte)", HFILL } },
-    { &hf_message_bodyid_uint16,
-      { "Structured Id", "dmp.body.id", FT_UINT16, BASE_DEC,
-        NULL, 0x0, "Structured Body Id (2 bytes)", HFILL } },
-    { &hf_message_bodyid_uint32,
-      { "Structured Id", "dmp.body.id", FT_UINT32, BASE_DEC,
-        NULL, 0x0, "Structured Body Id (4 bytes)", HFILL } },
-    { &hf_message_bodyid_uint64,
-      { "Structured Id", "dmp.body.id64", FT_UINT64, BASE_DEC,
-        NULL, 0x0, "Structured Body Id (8 bytes)", HFILL } },
-    { &hf_message_bodyid_string,
-      { "Structured Id", "dmp.body.idstring", FT_STRING, BASE_NONE,
-        NULL, 0x0, "Structured Body Id (fixed text string)", HFILL } },
-    { &hf_message_bodyid_zstring,
-      { "Structured Id", "dmp.body.idstring", FT_STRINGZ, BASE_NONE,
-        NULL, 0x0, "Structured Body Id (zero terminated text string)",
-        HFILL } },
     { &hf_message_body_structured,
       { "Structured Body", "dmp.body.structured", FT_BYTES, BASE_NONE,
         NULL, 0x0, NULL, HFILL } },
@@ -4639,10 +4531,10 @@ void proto_register_dmp (void)
     */
     { &hf_delivery_report,
       { "Delivery Report", "dmp.dr", FT_NONE, BASE_NONE, NULL,
-        0x0, NULL, HFILL}},
+        0x0, NULL, HFILL} },
     { &hf_non_delivery_report,
       { "Non-Delivery Report", "dmp.ndr", FT_NONE, BASE_NONE, NULL,
-        0x0, NULL, HFILL}},
+        0x0, NULL, HFILL} },
 
     { &hf_report_type,
       { "Report Type", "dmp.report_type", FT_BOOLEAN, 8,
@@ -4942,22 +4834,54 @@ void proto_register_dmp (void)
   };
 
   static ei_register_info ei[] = {
-     { &ei_reserved_value, { "dmp.reserved.expert", PI_UNDECODED, PI_WARN, "Reserved value", EXPFILL }},
-     { &ei_message_sic_illegal, { "dmp.sic.illegal", PI_UNDECODED, PI_NOTE, "Illegal SIC", EXPFILL }},
-     { &ei_analysis_ack_unexpected, { "dmp.analysis.ack_unexpected", PI_SEQUENCE, PI_NOTE, "Unexpected ACK", EXPFILL }},
-     { &ei_analysis_ack_missing, { "dmp.analysis.ack_missing.expert", PI_SEQUENCE, PI_NOTE, "Acknowledgement missing", EXPFILL }},
-     { &ei_analysis_msg_missing, { "dmp.analysis.msg_missing", PI_SEQUENCE, PI_NOTE, "Message missing", EXPFILL }},
-     { &ei_analysis_retrans_no, { "dmp.analysis.retrans_no.expert", PI_SEQUENCE, PI_NOTE, "Retransmission #", EXPFILL }},
-     { &ei_analysis_ack_dup_no, { "dmp.analysis.dup_ack_no.expert", PI_SEQUENCE, PI_NOTE, "Dup ACK #", EXPFILL }},
-     { &ei_addr_dir_rec_no_generated, { "dmp.rec_no.expert", PI_MALFORMED, PI_WARN, "Recipient number too big", EXPFILL }},
-     { &ei_addr_ext_rec_no_generated, { "dmp.rec_no.expert", PI_MALFORMED, PI_WARN, "Recipient number too big", EXPFILL }},
-     { &ei_ack_reason, { "dmp.ack_reason.expert", PI_RESPONSE_CODE, PI_NOTE, "ACK reason: %s", EXPFILL }},
-     { &ei_envelope_version_value, { "dmp.version_value.unsupported", PI_UNDECODED, PI_ERROR, "Unsupported DMP Version", EXPFILL }},
-     { &ei_envelope_msg_id, { "dmp.msg_id.short_id", PI_PROTOCOL, PI_NOTE, "Id < 4096 - should use ShortId", EXPFILL }},
-     { &ei_7bit_string_unused_bits, { "dmp.7bit_string.unused_bits", PI_PROTOCOL, PI_WARN, "Unused bits in last byte shall be null", EXPFILL }},
-     { &ei_message_compr, { "dmp.body.compression.unknown", PI_UNDECODED, PI_WARN, "Unknown compression algorithm", EXPFILL }},
-     { &ei_message_body_uncompress, { "dmp.body.uncompress.fail", PI_UNDECODED, PI_WARN, "Error: Unable to uncompress content", EXPFILL }},
-     { &ei_checksum_bad, { "dmp.checksum_bad.expert", PI_CHECKSUM, PI_WARN, "Bad checksum", EXPFILL }},
+    { &ei_reserved_value,
+      { "dmp.reserved.expert", PI_UNDECODED, PI_WARN,
+        "Reserved value", EXPFILL } },
+    { &ei_message_sic_illegal,
+      { "dmp.sic.illegal", PI_UNDECODED, PI_NOTE,
+        "Illegal SIC", EXPFILL } },
+    { &ei_analysis_ack_unexpected,
+      { "dmp.analysis.ack_unexpected", PI_SEQUENCE, PI_NOTE,
+        "Unexpected ACK", EXPFILL } },
+    { &ei_analysis_ack_missing,
+      { "dmp.analysis.ack_missing.expert", PI_SEQUENCE, PI_NOTE,
+        "Acknowledgement missing", EXPFILL } },
+    { &ei_analysis_msg_missing,
+      { "dmp.analysis.msg_missing", PI_SEQUENCE, PI_NOTE,
+        "Message missing", EXPFILL } },
+    { &ei_analysis_retrans_no,
+      { "dmp.analysis.retrans_no.expert", PI_SEQUENCE, PI_NOTE,
+        "Retransmission #", EXPFILL } },
+    { &ei_analysis_ack_dup_no,
+      { "dmp.analysis.dup_ack_no.expert", PI_SEQUENCE, PI_NOTE,
+        "Dup ACK #", EXPFILL } },
+    { &ei_addr_dir_rec_no_generated,
+      { "dmp.rec_no.expert", PI_MALFORMED, PI_WARN,
+        "Recipient number too big", EXPFILL } },
+    { &ei_addr_ext_rec_no_generated,
+      { "dmp.rec_no.expert", PI_MALFORMED, PI_WARN,
+        "Recipient number too big", EXPFILL } },
+    { &ei_ack_reason,
+      { "dmp.ack_reason.expert", PI_RESPONSE_CODE, PI_NOTE,
+        "ACK reason: %s", EXPFILL } },
+    { &ei_envelope_version_value,
+      { "dmp.version_value.unsupported", PI_UNDECODED, PI_ERROR,
+        "Unsupported DMP Version", EXPFILL } },
+    { &ei_envelope_msg_id,
+      { "dmp.msg_id.short_id", PI_PROTOCOL, PI_NOTE,
+        "Id < 4096 - should use ShortId", EXPFILL } },
+    { &ei_7bit_string_unused_bits,
+      { "dmp.7bit_string.unused_bits", PI_PROTOCOL, PI_WARN,
+        "Unused bits in last byte shall be null", EXPFILL } },
+    { &ei_message_compr,
+      { "dmp.body.compression.unknown", PI_UNDECODED, PI_WARN,
+        "Unknown compression algorithm", EXPFILL } },
+    { &ei_message_body_uncompress,
+      { "dmp.body.uncompress.fail", PI_UNDECODED, PI_WARN,
+        "Error: Unable to uncompress content", EXPFILL } },
+    { &ei_checksum_bad,
+      { "dmp.checksum_bad.expert", PI_CHECKSUM, PI_WARN,
+        "Bad checksum", EXPFILL } },
   };
 
   static uat_field_t attributes_flds[] = {
@@ -4979,6 +4903,7 @@ void proto_register_dmp (void)
                                   NULL,
                                   dmp_class_free_cb,
                                   NULL,
+                                  NULL,
                                   attributes_flds);
 
   module_t *dmp_module;
@@ -4992,26 +4917,19 @@ void proto_register_dmp (void)
   proto_register_subtree_array (ett, array_length (ett));
   expert_dmp = expert_register_protocol(proto_dmp);
   expert_register_field_array(expert_dmp, ei, array_length(ei));
-  register_init_routine (&dmp_init_routine);
-  register_cleanup_routine (&dmp_cleanup_routine);
 
-  /* Set default UDP ports */
-  range_convert_str (&global_dmp_port_range, DEFAULT_DMP_PORT_RANGE,
-                     MAX_UDP_PORT);
+  dmp_id_hash_table = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), dmp_id_hash, dmp_id_hash_equal);
+  dmp_long_id_hash_table = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), wmem_str_hash, g_str_equal);
 
   /* Build national values */
   build_national_strings ();
 
   /* Register our configuration options */
-  dmp_module = prefs_register_protocol (proto_dmp, proto_reg_handoff_dmp);
+  dmp_module = prefs_register_protocol (proto_dmp, NULL);
 
   prefs_register_obsolete_preference (dmp_module, "udp_port");
   prefs_register_obsolete_preference (dmp_module, "udp_port_second");
 
-  prefs_register_range_preference (dmp_module, "udp_ports",
-                                  "DMP port numbers",
-                                  "Port numbers used for DMP traffic",
-                                   &global_dmp_port_range, MAX_UDP_PORT);
   prefs_register_enum_preference (dmp_module, "national_decode",
                                   "National decoding",
                                   "Select the type of decoding for nationally-defined values",
@@ -5040,47 +4958,16 @@ void proto_register_dmp (void)
                                   " (does not align when retransmission or"
                                   " duplicate acknowledgement indication)",
                                   &dmp_align);
-  prefs_register_bool_preference (dmp_module, "subject_as_id",
-                                  "Print subject as body id",
-                                  "Print subject as body id in free text "
-                                  "messages with subject",
-                                  &dmp_subject_as_id);
-  prefs_register_enum_preference (dmp_module, "struct_print",
-                                  "Structured message id format",
-                                  "Format of the structured message id",
-                                  &dmp_struct_format, struct_id_options,
-                                  FALSE);
-  prefs_register_uint_preference (dmp_module, "struct_offset",
-                                  "Offset to structured message id",
-                                  "Used to set where the structured message "
-                                  "id starts in the User Data",
-                                  10, &dmp_struct_offset);
-
-  prefs_register_uint_preference (dmp_module, "struct_length",
-                                  "Fixed text string length",
-                                  "Used to set length of fixed text string "
-                                  "in the structured message id format "
-                                  "(maximum 128 characters)",
-                                  10, &dmp_struct_length);
+  prefs_register_obsolete_preference(dmp_module, "subject_as_id");
+  prefs_register_obsolete_preference(dmp_module, "struct_print");
+  prefs_register_obsolete_preference(dmp_module, "struct_offset");
+  prefs_register_obsolete_preference(dmp_module, "struct_length");
 }
 
 void proto_reg_handoff_dmp (void)
 {
-  static range_t *dmp_port_range;
-  static gboolean dmp_prefs_initialized = FALSE;
-
-  if (!dmp_prefs_initialized) {
-    dmp_prefs_initialized = TRUE;
-    dissector_add_uint ("s5066sis.ctl.appid", S5066_CLIENT_S4406_ANNEX_E_TMI_4_DMP, dmp_handle);
-  } else {
-    dissector_delete_uint_range ("udp.port", dmp_port_range, dmp_handle);
-    g_free (dmp_port_range);
-  }
-
-  /* Save port number for later deletion */
-  dmp_port_range = range_copy (global_dmp_port_range);
-
-  dissector_add_uint_range ("udp.port", dmp_port_range, dmp_handle);
+  dissector_add_uint ("s5066sis.ctl.appid", S5066_CLIENT_S4406_ANNEX_E_TMI_4_DMP, dmp_handle);
+  dissector_add_uint_range_with_preference("udp.port", DEFAULT_DMP_PORT_RANGE, dmp_handle);
 }
 
 /*

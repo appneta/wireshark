@@ -28,6 +28,7 @@
 #include <epan/circuit.h>
 #include <epan/conversation.h>
 #include <epan/exceptions.h>
+#include <epan/expert.h>
 #include <epan/stream.h>
 #include <epan/golay.h>
 #include <epan/iax2_codec_type.h>
@@ -116,9 +117,12 @@ static gint ett_h223_al1 = -1;
 static gint ett_h223_al2 = -1;
 static gint ett_h223_al_payload = -1;
 
+static expert_field ei_h223_al2_crc = EI_INIT;
+
 /* These are the handles of our subdissectors */
 static dissector_handle_t data_handle;
 static dissector_handle_t srp_handle;
+static dissector_handle_t h223_bitswapped;
 
 static const fragment_items h223_mux_frag_items _U_ = {
     &ett_h223_mux_fragment,
@@ -174,7 +178,7 @@ typedef struct {
     guint32 vc;                 /* child circuit */
 } circuit_chain_key;
 
-static GHashTable *circuit_chain_hashtable = NULL;
+static wmem_map_t *circuit_chain_hashtable = NULL;
 static guint circuit_chain_count = 1;
 
 /* Hash Functions */
@@ -204,12 +208,12 @@ circuit_chain_lookup(const h223_call_info* call_info, guint32 child_vc)
     guint32 circuit_id;
     key.call = call_info;
     key.vc = child_vc;
-    circuit_id = GPOINTER_TO_UINT(g_hash_table_lookup( circuit_chain_hashtable, &key ));
+    circuit_id = GPOINTER_TO_UINT(wmem_map_lookup( circuit_chain_hashtable, &key ));
     if( circuit_id == 0 ) {
         new_key = wmem_new(wmem_file_scope(), circuit_chain_key);
         *new_key = key;
         circuit_id = ++circuit_chain_count;
-        g_hash_table_insert(circuit_chain_hashtable, new_key, GUINT_TO_POINTER(circuit_id));
+        wmem_map_insert(circuit_chain_hashtable, new_key, GUINT_TO_POINTER(circuit_id));
     }
     return circuit_id;
 }
@@ -217,14 +221,7 @@ circuit_chain_lookup(const h223_call_info* call_info, guint32 child_vc)
 static void
 circuit_chain_init(void)
 {
-    circuit_chain_hashtable = g_hash_table_new(circuit_chain_hash, circuit_chain_equal);
     circuit_chain_count = 1;
-}
-
-static void
-circuit_chain_destroy(void)
-{
-    g_hash_table_destroy(circuit_chain_hashtable);
 }
 
 
@@ -697,7 +694,7 @@ dissect_mux_al_pdu( tvbuff_t *tvb, packet_info *pinfo, proto_tree *vc_tree,
             calc_checksum = h223_al2_crc8bit(tvb);
             real_checksum = tvb_get_guint8(tvb, len - 1);
 
-            proto_tree_add_checksum(al_tree, tvb, len - 1, hf_h223_al2_crc, hf_h223_al2_crc_status, NULL, pinfo, calc_checksum, ENC_NA, PROTO_CHECKSUM_VERIFY);
+            proto_tree_add_checksum(al_tree, tvb, len - 1, hf_h223_al2_crc, hf_h223_al2_crc_status, &ei_h223_al2_crc, pinfo, calc_checksum, ENC_NA, PROTO_CHECKSUM_VERIFY);
 
             if( calc_checksum != real_checksum ) {
                 /* don't pass pdus which fail checksums on to the subdissector */
@@ -1059,7 +1056,7 @@ dissect_mux_pdu( tvbuff_t *tvb, packet_info *pinfo, guint32 pkt_offset,
     }
 
     if(mpl > 0) {
-        pdu_tvb = tvb_new_subset(tvb, offset, len, mpl);
+        pdu_tvb = tvb_new_subset_length_caplen(tvb, offset, len, mpl);
         if(errors != -1) {
             dissect_mux_payload(pdu_tvb,pinfo,pkt_offset+offset,pdu_tree,call_info,mc,end_of_mux_sdu, ctype, circuit_id);
         } else {
@@ -1632,21 +1629,31 @@ void proto_register_h223 (void)
         &ett_h223_al_payload
     };
 
+    static ei_register_info ei[] = {
+        { &ei_h223_al2_crc, { "h223.bad_checksum", PI_CHECKSUM, PI_ERROR, "Bad checksum", EXPFILL }},
+    };
+
+    expert_module_t* expert_h223;
+
     proto_h223 =
         proto_register_protocol ("ITU-T Recommendation H.223", "H.223", "h223");
     /* Create a H.223 "placeholder" to remove confusion with Decode As" */
     proto_h223_bitswapped =
-        proto_register_protocol ("ITU-T Recommendation H.223 (Bitswapped)", "H.223 (Bitswapped)", "h223_bitswapped");
+        proto_register_protocol_in_name_only ("ITU-T Recommendation H.223 (Bitswapped)", "H.223 (Bitswapped)", "h223_bitswapped", proto_h223, FT_PROTOCOL);
 
     proto_register_field_array (proto_h223, hf, array_length (hf));
     proto_register_subtree_array (ett, array_length (ett));
+    expert_h223 = expert_register_protocol(proto_h223);
+    expert_register_field_array(expert_h223, ei, array_length(ei));
+
     register_dissector("h223", dissect_h223_circuit_data, proto_h223);
-    register_dissector("h223_bitswapped", dissect_h223_bitswapped, proto_h223_bitswapped);
+    h223_bitswapped = register_dissector("h223_bitswapped", dissect_h223_bitswapped, proto_h223_bitswapped);
 
     /* register our init routine to be called at the start of a capture,
        to clear out our hash tables etc */
     register_init_routine(&circuit_chain_init);
-    register_cleanup_routine(&circuit_chain_destroy);
+
+    circuit_chain_hashtable = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), circuit_chain_hash, circuit_chain_equal);
 
     h245_set_h223_set_mc_handle( &h223_set_mc );
     h245_set_h223_add_lc_handle( &h223_add_lc );
@@ -1654,12 +1661,11 @@ void proto_register_h223 (void)
 
 void proto_reg_handoff_h223(void)
 {
-    dissector_handle_t h223_bitswapped = find_dissector("h223_bitswapped");
     data_handle = find_dissector("data");
     srp_handle = find_dissector("srp");
 
-    dissector_add_for_decode_as("tcp.port", create_dissector_handle( dissect_h223, proto_h223));
-    dissector_add_for_decode_as("tcp.port", h223_bitswapped);
+    dissector_add_for_decode_as_with_preference("tcp.port", create_dissector_handle( dissect_h223, proto_h223));
+    dissector_add_for_decode_as_with_preference("tcp.port", h223_bitswapped);
     dissector_add_string("rtp_dyn_payload_type","CLEARMODE", h223_bitswapped);
     dissector_add_uint("iax2.dataformat", AST_DATAFORMAT_H223_H245, create_dissector_handle(dissect_h223_bitswapped_circuit_data, proto_h223_bitswapped));
 }

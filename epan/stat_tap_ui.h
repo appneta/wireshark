@@ -37,6 +37,7 @@ extern "C" {
 #include <epan/stat_groups.h>
 #include <epan/packet_info.h>
 #include <epan/tap.h>
+#include <epan/wmem/wmem.h>
 
 typedef enum {
     PARAM_UINT,   /* Unused? */
@@ -169,7 +170,7 @@ typedef struct _new_stat_data_t {
 WS_DLL_PUBLIC void register_stat_tap_ui(stat_tap_ui *ui, void *userdata);
 
 WS_DLL_PUBLIC void register_stat_tap_table_ui(stat_tap_table_ui *ui);
-WS_DLL_PUBLIC void new_stat_tap_iterate_tables(GFunc func, gpointer user_data);
+WS_DLL_PUBLIC void new_stat_tap_iterate_tables(wmem_foreach_func func, gpointer user_data);
 WS_DLL_PUBLIC void new_stat_tap_get_filter(stat_tap_table_ui* new_stat, const char *opt_arg, const char **filter, char** err);
 WS_DLL_PUBLIC stat_tap_table* new_stat_tap_init_table(const char *name, int num_fields, int num_elements,
                 const char *filter_string, new_stat_tap_gui_init_cb gui_callback, void* gui_data);
@@ -179,6 +180,8 @@ WS_DLL_PUBLIC void new_stat_tap_init_table_row(stat_tap_table *stat_table, guint
 WS_DLL_PUBLIC stat_tap_table_item_type* new_stat_tap_get_field_data(const stat_tap_table *stat_table, guint table_index, guint field_index);
 WS_DLL_PUBLIC void new_stat_tap_set_field_data(stat_tap_table *stat_table, guint table_index, guint field_index, stat_tap_table_item_type* field_data);
 WS_DLL_PUBLIC void reset_stat_table(stat_tap_table_ui* new_stat, new_stat_tap_gui_reset_cb gui_callback, void *callback_data);
+
+WS_DLL_PUBLIC stat_tap_table_ui *new_stat_tap_by_name(const char *name);
 
 /** Free all of the tables associated with a stat_tap_table_ui.
  *

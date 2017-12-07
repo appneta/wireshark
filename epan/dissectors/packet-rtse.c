@@ -117,7 +117,7 @@ static expert_field ei_rtse_unknown_rtse_pdu = EI_INIT;
 static expert_field ei_rtse_abstract_syntax = EI_INIT;
 
 static dissector_table_t rtse_oid_dissector_table=NULL;
-static GHashTable *oid_table=NULL;
+static dissector_handle_t rtse_handle = NULL;
 static gint ett_rtse_unknown = -1;
 
 static reassembly_table rtse_reassembly_table;
@@ -165,16 +165,10 @@ register_rtse_oid_dissector_handle(const char *oid, dissector_handle_t dissector
 {
 /* XXX: Note that this fcn is called from proto_reg_handoff in *other* dissectors ... */
 
-  static  dissector_handle_t rtse_handle = NULL;
   static  dissector_handle_t ros_handle = NULL;
 
-  if (rtse_handle == NULL)
-    rtse_handle = find_dissector("rtse");
   if (ros_handle == NULL)
     ros_handle = find_dissector("ros");
-
-  /* save the name - but not used */
-  g_hash_table_insert(oid_table, (gpointer)oid, (gpointer)name);
 
   /* register RTSE with the BER (ACSE) */
   register_ber_oid_dissector_handle(oid, rtse_handle, proto, name);
@@ -317,7 +311,8 @@ dissect_rtse_T_t61String(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offse
                                             &string);
 
   if(open_request && string)
-    col_append_fstr(actx->pinfo->cinfo, COL_INFO, " %s", tvb_format_text(string, 0, tvb_reported_length(string)));
+    col_append_fstr(actx->pinfo->cinfo, COL_INFO, " %s", tvb_get_string_enc(wmem_packet_scope(), string, 0,
+                                                                            tvb_reported_length(string), ENC_T61));
 
 
 
@@ -328,7 +323,7 @@ dissect_rtse_T_t61String(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offse
 
 static int
 dissect_rtse_T_octetString(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 132 "./asn1/rtse/rtse.cnf"
+#line 136 "./asn1/rtse/rtse.cnf"
   tvbuff_t *string = NULL;
     offset = dissect_ber_octet_string(implicit_tag, actx, tree, tvb, offset, hf_index,
                                        &string);
@@ -367,7 +362,7 @@ dissect_rtse_CallingSSuserReference(gboolean implicit_tag _U_, tvbuff_t *tvb _U_
 
 static int
 dissect_rtse_CommonReference(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 124 "./asn1/rtse/rtse.cnf"
+#line 128 "./asn1/rtse/rtse.cnf"
   tvbuff_t *string = NULL;
     offset = dissect_ber_UTCTime(implicit_tag, actx, tree, tvb, offset, hf_index);
 
@@ -519,7 +514,7 @@ static const value_string rtse_RefuseReason_vals[] = {
 
 static int
 dissect_rtse_RefuseReason(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 156 "./asn1/rtse/rtse.cnf"
+#line 160 "./asn1/rtse/rtse.cnf"
   int reason = -1;
 
     offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
@@ -579,7 +574,7 @@ static const ber_sequence_t RTORJapdu_set[] = {
 
 int
 dissect_rtse_RTORJapdu(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 148 "./asn1/rtse/rtse.cnf"
+#line 152 "./asn1/rtse/rtse.cnf"
   col_append_str(actx->pinfo->cinfo, COL_INFO, "Refuse");
 
     offset = dissect_ber_set(implicit_tag, actx, tree, tvb, offset,
@@ -595,7 +590,7 @@ dissect_rtse_RTORJapdu(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset 
 
 static int
 dissect_rtse_RTTPapdu(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 138 "./asn1/rtse/rtse.cnf"
+#line 142 "./asn1/rtse/rtse.cnf"
   int priority = -1;
 
   col_append_str(actx->pinfo->cinfo, COL_INFO, "Turn-Please");
@@ -655,7 +650,7 @@ static const value_string rtse_AbortReason_vals[] = {
 
 static int
 dissect_rtse_AbortReason(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 172 "./asn1/rtse/rtse.cnf"
+#line 176 "./asn1/rtse/rtse.cnf"
   int reason = -1;
 
     offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
@@ -703,7 +698,7 @@ static const ber_sequence_t RTABapdu_set[] = {
 
 int
 dissect_rtse_RTABapdu(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 164 "./asn1/rtse/rtse.cnf"
+#line 168 "./asn1/rtse/rtse.cnf"
   col_append_str(actx->pinfo->cinfo, COL_INFO, "Abort");
 
     offset = dissect_ber_set(implicit_tag, actx, tree, tvb, offset,
@@ -737,7 +732,7 @@ dissect_rtse_RTSE_apdus(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset
 
 
 /*--- End of included file: packet-rtse-fn.c ---*/
-#line 194 "./asn1/rtse/packet-rtse-template.c"
+#line 188 "./asn1/rtse/packet-rtse-template.c"
 
 /*
 * Dissect RTSE PDUs inside a PPDU.
@@ -853,17 +848,6 @@ dissect_rtse(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 
     top_tree = NULL;
     return tvb_captured_length(tvb);
-}
-
-static void rtse_reassemble_init (void)
-{
-    reassembly_table_init (&rtse_reassembly_table,
-                   &addresses_reassembly_table_functions);
-}
-
-static void rtse_reassemble_cleanup(void)
-{
-    reassembly_table_destroy(&rtse_reassembly_table);
 }
 
 /*--- proto_register_rtse -------------------------------------------*/
@@ -998,11 +982,11 @@ void proto_register_rtse(void) {
         NULL, HFILL }},
     { &hf_rtse_additionalReferenceInformation,
       { "additionalReferenceInformation", "rtse.additionalReferenceInformation",
-        FT_STRING, BASE_NONE, NULL, 0,
+        FT_STRING, STR_UNICODE, NULL, 0,
         NULL, HFILL }},
     { &hf_rtse_t61String,
       { "t61String", "rtse.t61String",
-        FT_STRING, BASE_NONE, NULL, 0,
+        FT_STRING, STR_UNICODE, NULL, 0,
         NULL, HFILL }},
     { &hf_rtse_octetString,
       { "octetString", "rtse.octetString",
@@ -1010,7 +994,7 @@ void proto_register_rtse(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-rtse-hfarr.c ---*/
-#line 366 "./asn1/rtse/packet-rtse-template.c"
+#line 349 "./asn1/rtse/packet-rtse-template.c"
   };
 
   /* List of subtrees */
@@ -1032,7 +1016,7 @@ void proto_register_rtse(void) {
     &ett_rtse_CallingSSuserReference,
 
 /*--- End of included file: packet-rtse-ettarr.c ---*/
-#line 375 "./asn1/rtse/packet-rtse-template.c"
+#line 358 "./asn1/rtse/packet-rtse-template.c"
   };
 
   static ei_register_info ei[] = {
@@ -1046,14 +1030,16 @@ void proto_register_rtse(void) {
 
   /* Register protocol */
   proto_rtse = proto_register_protocol(PNAME, PSNAME, PFNAME);
-  register_dissector("rtse", dissect_rtse, proto_rtse);
+  rtse_handle = register_dissector("rtse", dissect_rtse, proto_rtse);
   /* Register fields and subtrees */
   proto_register_field_array(proto_rtse, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
   expert_rtse = expert_register_protocol(proto_rtse);
   expert_register_field_array(expert_rtse, ei, array_length(ei));
-  register_init_routine (&rtse_reassemble_init);
-  register_cleanup_routine (&rtse_reassemble_cleanup);
+
+  reassembly_table_register (&rtse_reassembly_table,
+                   &addresses_reassembly_table_functions);
+
   rtse_module = prefs_register_protocol_subtree("OSI", proto_rtse, NULL);
 
   prefs_register_bool_preference(rtse_module, "reassemble",
@@ -1064,9 +1050,6 @@ void proto_register_rtse(void) {
                  " in the TCP protocol settings.", &rtse_reassemble);
 
   rtse_oid_dissector_table = register_dissector_table("rtse.oid", "RTSE OID Dissectors", proto_rtse, FT_STRING, BASE_NONE);
-  oid_table=g_hash_table_new(g_str_hash, g_str_equal);
-
-
 }
 
 

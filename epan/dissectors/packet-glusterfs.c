@@ -2245,6 +2245,7 @@ static const value_string glusterfs3_1_fop_proc_vals[] = {
 	{ GFS3_OP_SETATTR,      "SETATTR" },
 	{ GFS3_OP_FSETATTR,     "FSETATTR" },
 	{ GFS3_OP_READDIRP,     "READDIRP" },
+	{ GFS3_OP_FORGET,       "FORGET" },
 	{ GFS3_OP_RELEASE,      "RELEASE" },
 	{ GFS3_OP_RELEASEDIR,   "RELEASEDIR" },
 	{ GFS3_OP_FREMOVEXATTR, "FREMOVEXATTR" },
@@ -2386,7 +2387,7 @@ proto_register_glusterfs(void)
 				NULL, 0, NULL, HFILL }
 		},
 		{ &hf_glusterfs_namelen,
-			{ "Name Lenth", "glusterfs.namelen", FT_UINT32, BASE_DEC,
+			{ "Name Length", "glusterfs.namelen", FT_UINT32, BASE_DEC,
 				NULL, 0, NULL, HFILL }
 		},
 		{ &hf_glusterfs_linkname,

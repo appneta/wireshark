@@ -26,52 +26,9 @@ set_module_info(docsis 0 0 5 0)
 
 # The sources for the plugin
 set(DISSECTOR_SRC
-	packet-bintrngreq.c
-	packet-bpkmattr.c
-	packet-bpkmreq.c
-	packet-bpkmrsp.c
-	packet-cmctrlreq.c
-	packet-cmctrlrsp.c
-	packet-cmstatus.c
-	packet-intrngreq.c
-	packet-dbcreq.c
-	packet-dbcrsp.c
-	packet-dbcack.c
-	packet-dccack.c
-	packet-dccreq.c
-	packet-dccrsp.c
-	packet-dcd.c
-	packet-dpd.c
-	packet-dpvreq.c
-	packet-dpvrsp.c
 	packet-docsis.c
-	packet-dsaack.c
-	packet-dsareq.c
-	packet-dsarsp.c
-	packet-dscack.c
-	packet-dscreq.c
-	packet-dscrsp.c
-	packet-dsdreq.c
-	packet-dsdrsp.c
 	packet-macmgmt.c
-	packet-map.c
-	packet-mdd.c
-	packet-ocd.c
-	packet-regack.c
-	packet-regreq.c
-	packet-regreqmp.c
-	packet-regrsp.c
-	packet-regrspmp.c
-	packet-rngreq.c
-	packet-rngrsp.c
-	packet-sync.c
 	packet-tlv.c
-	packet-tlv-cmctrl.c
-	packet-type29ucd.c
-	packet-type35ucd.c
-	packet-uccreq.c
-	packet-uccrsp.c
-	packet-ucd.c
 	packet-vendor.c
 )
 
@@ -84,13 +41,11 @@ set(CLEAN_FILES
 	${PLUGIN_FILES}
 )
 
-if (WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${CLEAN_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${CLEAN_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -117,3 +72,16 @@ CHECKAPI(
 	  ${DISSECTOR_SRC}
 	  ${DISSECTOR_HEADERS}
 )
+
+#
+# Editor modelines  -  http://www.wireshark.org/tools/modelines.html
+#
+# Local variables:
+# c-basic-offset: 8
+# tab-width: 8
+# indent-tabs-mode: t
+# End:
+#
+# vi: set shiftwidth=8 tabstop=8 noexpandtab:
+# :indentSize=8:tabSize=8:noTabs=false:
+#

@@ -29,6 +29,11 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#elif __APPLE__
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#elif __linux__
+#include <sys/sysinfo.h>
 #endif
 
 #include <glib.h>
@@ -41,9 +46,10 @@
 
 #include "ws_version_info.h"
 
-#include <wsutil/ws_cpuid.h>
+#include <wsutil/cpu_info.h>
 #include <wsutil/copyright_info.h>
 #include <wsutil/os_version_info.h>
+#include <wsutil/ws_printf.h> /* ws_debug_printf */
 
 /*
  * If the string doesn't end with a newline, append one.
@@ -142,53 +148,29 @@ get_compiled_version_info(void (*prepend_info)(GString *),
 	return str;
 }
 
-/*
- * Get the CPU info, and append it to the GString
- */
 static void
-get_cpu_info(GString *str)
+get_mem_info(GString *str)
 {
-	guint32 CPUInfo[4];
-	char CPUBrandString[0x40];
-	unsigned nExIds;
+	gint64 memsize = 0;
 
-	/* http://msdn.microsoft.com/en-us/library/hskdteyh(v=vs.100).aspx */
-
-	/* Calling __cpuid with 0x80000000 as the InfoType argument*/
-	/* gets the number of valid extended IDs.*/
-	if (!ws_cpuid(CPUInfo, 0x80000000))
-		return;
-	nExIds = CPUInfo[0];
-
-	if( nExIds<0x80000005)
-		return;
-	memset(CPUBrandString, 0, sizeof(CPUBrandString));
-
-	/* Interpret CPU brand string.*/
-	ws_cpuid(CPUInfo, 0x80000002);
-	memcpy(CPUBrandString, CPUInfo, sizeof(CPUInfo));
-	ws_cpuid(CPUInfo, 0x80000003);
-	memcpy(CPUBrandString + 16, CPUInfo, sizeof(CPUInfo));
-	ws_cpuid(CPUInfo, 0x80000004);
-	memcpy(CPUBrandString + 32, CPUInfo, sizeof(CPUInfo));
-
-	g_string_append_printf(str, "\n%s", CPUBrandString);
-
-	if (ws_cpuid_sse42())
-		g_string_append(str, " (with SSE4.2)");
-}
-
-static void
-get_mem_info(GString *str _U_)
-{
 #ifdef _WIN32
 	MEMORYSTATUSEX statex;
 
 	statex.dwLength = sizeof (statex);
 
 	if (GlobalMemoryStatusEx(&statex))
-		g_string_append_printf(str, ", with ""%" G_GINT64_MODIFIER "d" "MB of physical memory.\n", statex.ullTotalPhys/(1024*1024));
+		memsize = statex.ullTotalPhys;
+#elif __APPLE__
+	size_t len = sizeof(memsize);
+	sysctlbyname("hw.memsize", &memsize, &len, NULL, 0);
+#elif __linux__
+	struct sysinfo info;
+        if (sysinfo(&info) == 0)
+		memsize = info.totalram * info.mem_unit;
 #endif
+
+	if (memsize > 0)
+		g_string_append_printf(str, ", with ""%" G_GINT64_MODIFIER "d" " MB of physical memory", memsize/(1024*1024));
 }
 
 /*
@@ -325,6 +307,12 @@ get_runtime_version_info(void (*additional_info)(GString *))
 
 	get_os_version_info(str);
 
+	/* CPU Info */
+	get_cpu_info(str);
+
+	/* Get info about installed memory */
+	get_mem_info(str);
+
 	/*
 	 * Locale.
 	 *
@@ -333,13 +321,9 @@ get_runtime_version_info(void (*additional_info)(GString *))
 	 * it doesn't happen to match the settings of any of the
 	 * locale environment variables.
 	 *
-	 * XXX - what happens on Windows?  If nobody's explicitly
-	 * overridden any of the environment variables, does this
-	 * reflect the locale settings in the OS?  If so, does
-	 * that include the code page?  (We're not using UTF-16
-	 * for output to files or the console; using code page
-	 * 65001, i.e. UTF-8, as your system code page probably
-	 * works best with Wireshark.)
+	 * On Windows get_locale returns the full language, country
+	 * name, and code page, e.g. "English_United States.1252":
+	 * https://msdn.microsoft.com/en-us/library/x99tb11d.aspx
 	 */
 	if ((lang = get_locale()) != NULL) {
 		g_string_append_printf(str, ", with locale %s", lang);
@@ -361,12 +345,6 @@ get_runtime_version_info(void (*additional_info)(GString *))
 
 	g_string_append(str, ".");
 
-	/* CPU Info */
-	get_cpu_info(str);
-
-	/* Get info about installed memory Windows only */
-	get_mem_info(str);
-
 	/* Compiler info */
 	get_compiler_info(str);
 
@@ -379,7 +357,7 @@ void
 show_version(const gchar *prog_name_str, GString *comp_info_str,
 	     GString *runtime_info_str)
 {
-	printf("%s %s\n"
+	ws_debug_printf("%s %s\n"
 	       "\n"
 	       "%s"
 	       "\n"

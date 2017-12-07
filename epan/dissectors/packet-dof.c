@@ -193,11 +193,9 @@
 #include <stdio.h>
 #include <glib.h>
 
-#ifdef HAVE_LIBGCRYPT
 #include <wsutil/wsgcrypt.h>
-#if (defined GCRYPT_VERSION_NUMBER) && (GCRYPT_VERSION_NUMBER  >= 0x010600)
+#if GCRYPT_VERSION_NUMBER >= 0x010600 /* 1.6.0 */
 #define LIBGCRYPT_OK
-#endif
 #endif
 
 #include <epan/packet.h>
@@ -207,7 +205,6 @@
 #include <epan/conversation.h>
 #include <epan/expert.h>
 #include <epan/uat.h>
-#include <wsutil/aes.h>
 #include <wsutil/str_util.h>
 #include <epan/to_str.h>
 #include "packet-tcp.h"
@@ -877,11 +874,10 @@ static void dof_packet_delete_proto_data(dof_packet_data *packet, int proto);
  * source address, and the DPS dissector is associated with that port. In this
  * way, servers on non-standard ports will automatically be decoded using DPS.
  */
-#define DOF_P2P_NEG_SEC_UDP_PORT    3567
+#define DOF_NEG_SEC_UDP_PORT_RANGE  "3567,5567" /* P2P + Multicast */
 #define DOF_P2P_NEG_SEC_TCP_PORT    3567
 /* Reserved UDP port                3568*/
 #define DOF_TUN_SEC_TCP_PORT        3568
-#define DOF_MCAST_NEG_SEC_UDP_PORT  5567
 #define DOF_P2P_SEC_TCP_PORT        5567
 /* Reserved UDP port                8567*/
 #define DOF_TUN_NON_SEC_TCP_PORT    8567
@@ -2028,7 +2024,7 @@ static expert_field ei_decode_failure = EI_INIT;
 typedef struct _ccm_session_data
 {
     guint protocol_id;
-    void *cipher_data;
+    gcry_cipher_hd_t cipher_data;
     GHashTable *cipher_data_table;
     /* Starts at 1, incrementing for each new key. */
     guint32 period;
@@ -2059,7 +2055,6 @@ static const value_string ccm_opcode_strings[] = {
 #define DOF_OBJECT_IDENTIFIER "DOF Object Identifier"
 
 static dissector_handle_t dof_oid_handle;
-static dissector_handle_t undissected_data_handle;
 
 static int oid_proto = -1;
 
@@ -2163,7 +2158,7 @@ static guint sid_buffer_hash_fn(gconstpointer key)
     /* The sid buffer is a length byte followed by data. */
     guint hash = 5381;
     const guint8 *str = (const guint8 *)key;
-    guint8 i;
+    guint16 i;
 
     for (i = 0; i <= str[0]; i++)
         hash = ((hash << 5) + hash) + str[i]; /* hash * 33 + c */
@@ -2429,6 +2424,23 @@ static const value_string dof_2008_16_security_12_m[] = {
 static int hf_security_12_count = -1;
 static int hf_security_12_permission_group_identifier = -1;
 
+static gboolean
+dof_sessions_destroy_cb(wmem_allocator_t *allocator _U_, wmem_cb_event_t event _U_, void *user_data)
+{
+    ccm_session_data *ccm_data = (ccm_session_data*) user_data;
+    gcry_cipher_close(ccm_data->cipher_data);
+    if (ccm_data->cipher_data_table) {
+        g_hash_table_destroy(ccm_data->cipher_data_table);
+    }
+    /* unregister this callback */
+    return FALSE;
+}
+
+static void dof_cipher_data_destroy (gpointer data)
+{
+    gcry_cipher_hd_t cipher_data = (gcry_cipher_hd_t) data;
+    gcry_cipher_close(cipher_data);
+}
 
 static int dissect_2008_1_dsp_1(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
@@ -2524,7 +2536,7 @@ static int dissect_2008_16_security_2(tvbuff_t *tvb, packet_info *pinfo, proto_t
     {
         proto_item *ti = proto_tree_add_item(tree, hf_security_2_permission, tvb, offset, -1, ENC_NA);
         proto_tree *subtree = proto_item_add_subtree(ti, ett_security_2_permission);
-        tvbuff_t *next_tvb = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *next_tvb = tvb_new_subset_remaining(tvb, offset);
         gint len = dissect_2008_16_security_1(next_tvb, pinfo, subtree, NULL);
         proto_item_set_len(ti, len);
         offset += len;
@@ -2566,7 +2578,7 @@ static int dissect_2008_16_security_3_1(tvbuff_t *tvb, packet_info *pinfo, proto
     /* Security Node Identifier */
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_tree *subtree;
         ti = proto_tree_add_item(tree, hf_security_3_1_security_node_identifier, tvb, offset, 0, ENC_NA);
         subtree = proto_item_add_subtree(ti, ett_security_3_1_security_node_identifier);
@@ -2643,7 +2655,7 @@ static int dissect_2008_16_security_4(tvbuff_t *tvb, packet_info *pinfo, proto_t
 
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
         dof_2008_16_security_3_1 return_3_1;
@@ -2661,7 +2673,7 @@ static int dissect_2008_16_security_4(tvbuff_t *tvb, packet_info *pinfo, proto_t
     }
 
     {
-        tvbuff_t *start = tvb_new_subset(tvb, offset, (flag & 0x0F) + 1, (flag & 0x0F) + 1);
+        tvbuff_t *start = tvb_new_subset_length_caplen(tvb, offset, (flag & 0x0F) + 1, (flag & 0x0F) + 1);
         if (return_data)
             return_data->nonce = start;
 
@@ -2671,7 +2683,7 @@ static int dissect_2008_16_security_4(tvbuff_t *tvb, packet_info *pinfo, proto_t
 
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
 
@@ -2719,7 +2731,7 @@ static int dissect_2008_16_security_6_1(tvbuff_t *tvb, packet_info *pinfo, proto
     /* Desired Security Mode */
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
 
@@ -2743,7 +2755,7 @@ static int dissect_2008_16_security_6_1(tvbuff_t *tvb, packet_info *pinfo, proto
     {
         int block_length;
         dof_2008_16_security_4 output;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
 
@@ -2776,7 +2788,7 @@ static int dissect_2008_16_security_6_2(tvbuff_t *tvb, packet_info *pinfo, proto
     {
         int block_length;
         dof_2008_16_security_4 output;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
 
@@ -2810,7 +2822,7 @@ static int dissect_2008_16_security_6_3(tvbuff_t *tvb, packet_info *pinfo, proto
     /* Session Security Scope */
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
 
@@ -2824,7 +2836,7 @@ static int dissect_2008_16_security_6_3(tvbuff_t *tvb, packet_info *pinfo, proto
     /* Initiator Validation */
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
 
@@ -2838,7 +2850,7 @@ static int dissect_2008_16_security_6_3(tvbuff_t *tvb, packet_info *pinfo, proto
     /* Responder Validation */
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         proto_item *ti;
         proto_tree *subtree;
 
@@ -2984,7 +2996,7 @@ static int dissect_2008_16_security_11(tvbuff_t *tvb, packet_info *pinfo, proto_
     {
         proto_item *ti = proto_tree_add_item(tree, hf_security_11_permission_security_scope, tvb, offset, -1, ENC_NA);
         proto_tree *subtree = proto_item_add_subtree(ti, ett_security_11_permission_security_scope);
-        tvbuff_t *next_tvb = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *next_tvb = tvb_new_subset_remaining(tvb, offset);
         gint len;
         len = dissect_2008_16_security_12(next_tvb, pinfo, subtree, NULL);
         proto_item_set_len(ti, len);
@@ -3124,7 +3136,7 @@ static gint dissect_2009_11_type_4(tvbuff_t *tvb, packet_info *pinfo, proto_tree
 
         do
         {
-            tvbuff_t *packet = tvb_new_subset(tvb, offset, -1, -1);
+            tvbuff_t *packet = tvb_new_subset_remaining(tvb, offset);
             proto_tree *attribute_tree;
             gint attribute_length;
 
@@ -3196,7 +3208,7 @@ static int dissect_2009_11_type_5(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
     case 0:
     case 2:
     {
-        tvbuff_t *packet = tvb_new_subset(tvb, offset, attribute_length_byte, attribute_length_byte);
+        tvbuff_t *packet = tvb_new_subset_length_caplen(tvb, offset, attribute_length_byte, attribute_length_byte);
         proto_tree *attribute_tree;
 
         ti = proto_tree_add_item(tree, hf_oid_attribute_oid, tvb, offset, -1, ENC_NA);
@@ -3221,8 +3233,6 @@ static dof_globals globals;
 
 static dof_packet_data* create_packet_data(packet_info *pinfo);
 static int dof_dissect_dnp_length(tvbuff_t *tvb, packet_info *pinfo, guint8 version, gint *offset);
-static void encryptInPlace(guint protocol_id, void *cipher_state, guint8 *ptct, guint8 ptct_len);
-
 #define VALIDHEX(c) ( ((c) >= '0' && (c) <= '9') || ((c) >= 'A' && (c) <= 'F') || ((c) >= 'a' && (c) <= 'f') )
 
 
@@ -3851,6 +3861,14 @@ typedef struct DOFObjectIDAttribute_t
     const guint8 *data;                         /**< Attribute data. **/
 } DOFObjectIDAttribute;
 
+/**
+* Read variable-length value from buffer.
+*
+* @param maxSize   [in]        Maximum size of value to be read
+* @param bufLength [in,out]    Input: size of buffer, output: size of value in buffer
+* @param buffer    [in]        Actual buffer
+* @return                      Uncompressed value if buffer size is valid (or 0 on error)
+*/
 static guint32 OALMarshal_UncompressValue(guint8 maxSize, guint32 *bufLength, const guint8 *buffer)
 {
     guint32 value = 0;
@@ -3884,6 +3902,10 @@ static guint32 OALMarshal_UncompressValue(guint8 maxSize, guint32 *bufLength, co
         break;
     }
 
+    /* Sanity check */
+    if (size > *bufLength)
+        return 0;
+
     value = buffer[used++] & mask;
     while (used < size)
         value = (value << 8) | buffer[used++];
@@ -3892,18 +3914,13 @@ static guint32 OALMarshal_UncompressValue(guint8 maxSize, guint32 *bufLength, co
     return (value);
 }
 
-static guint32 DOFObjectID_GetClassSize_Bytes(const guint8 *pBytes)
-{
-    guint32 size = 4;
-
-    (void)OALMarshal_UncompressValue(DOFOBJECTID_MAX_CLASS_SIZE, &size, pBytes);
-
-    return size;
-}
-
 static guint32 DOFObjectID_GetClassSize(DOFObjectID self)
 {
-    return DOFObjectID_GetClassSize_Bytes(self->oid);
+    guint32 size = self->len;
+
+    (void)OALMarshal_UncompressValue(DOFOBJECTID_MAX_CLASS_SIZE, &size, self->oid);
+
+    return size;
 }
 
 static guint32 DOFObjectID_GetDataSize(const DOFObjectID self)
@@ -5226,49 +5243,7 @@ static void learn_operation_sid(dof_2009_1_pdu_20_opid *opid, guint8 length, con
     opid->op_sid = (dof_2009_1_pdu_19_sid)key;
 }
 
-static void encryptInPlace(guint protocol_id, void *cipher_state, guint8 *ptct, guint8 ptct_len)
-{
-    switch (protocol_id)
-    {
-    case DOF_PROTOCOL_CCM: /* Encrypt is AES */
-    {
-        rijndael_ctx *ctx = (rijndael_ctx *)cipher_state;
-        guint8 ct[16];
-
-        if (ptct_len != 16)
-        {
-            memset(ptct, 0, ptct_len);
-            return;
-        }
-
-        rijndael_encrypt(ctx, ptct, ct);
-        memcpy(ptct, ct, sizeof(ct));
-    }
-        break;
-
-    case DOF_PROTOCOL_TEP: /* Encrypt is AES */
-    {
-        rijndael_ctx *ctx = (rijndael_ctx *)cipher_state;
-        guint8 ct[16];
-
-        if (ptct_len != 16)
-        {
-            memset(ptct, 0, ptct_len);
-            return;
-        }
-
-        rijndael_encrypt(ctx, ptct, ct);
-        memcpy(ptct, ct, sizeof(ct));
-    }
-        break;
-
-    default: /* Unsupported, zero the mac. */
-        memset(ptct, 0, ptct_len);
-        return;
-    }
-}
-
-static void generateMac(guint protocol_id, void *cipher_state, guint8 *nonce, const guint8 *epp, gint a_len, guint8 *data, gint len, guint8 *mac, gint mac_len)
+static void generateMac(gcry_cipher_hd_t cipher_state, guint8 *nonce, const guint8 *epp, gint a_len, guint8 *data, gint len, guint8 *mac, gint mac_len)
 {
     guint16 i;
     guint16 cnt;
@@ -5280,7 +5255,7 @@ static void generateMac(guint protocol_id, void *cipher_state, guint8 *nonce, co
     mac[14] = len >> 8;
     mac[15] = len & 0xFF;
 
-    encryptInPlace(protocol_id, cipher_state, mac, 16);
+    gcry_cipher_encrypt(cipher_state, mac, 16, NULL, 0);
 
     mac[0] ^= (a_len >> 8);
     mac[1] ^= (a_len);
@@ -5289,7 +5264,7 @@ static void generateMac(guint protocol_id, void *cipher_state, guint8 *nonce, co
     for (cnt = 0; cnt < a_len; cnt++, i++)
     {
         if (i % 16 == 0)
-            encryptInPlace(protocol_id, cipher_state, mac, 16);
+            gcry_cipher_encrypt(cipher_state, mac, 16, NULL, 0);
 
         mac[i % 16] ^= epp[cnt];
     }
@@ -5298,12 +5273,12 @@ static void generateMac(guint protocol_id, void *cipher_state, guint8 *nonce, co
     for (cnt = 0; cnt < len; cnt++, i++)
     {
         if (i % 16 == 0)
-            encryptInPlace(protocol_id, cipher_state, mac, 16);
+            gcry_cipher_encrypt(cipher_state, mac, 16, NULL, 0);
 
         mac[i % 16] ^= data[cnt];
     }
 
-    encryptInPlace(protocol_id, cipher_state, mac, 16);
+    gcry_cipher_encrypt(cipher_state, mac, 16, NULL, 0);
 }
 
 static int decrypt(ccm_session_data *session, ccm_packet_data *pdata, guint8 *nonce, const guint8 *epp, gint a_len, guint8 *data, gint len)
@@ -5359,7 +5334,7 @@ static int decrypt(ccm_session_data *session, ccm_packet_data *pdata, guint8 *no
                 ctr[14] += 1;
             ctr[15] += 1;
             memcpy(encrypted_ctr, ctr, 16);
-            encryptInPlace(session->protocol_id, session->cipher_data, encrypted_ctr, 16);
+            gcry_cipher_encrypt(session->cipher_data, encrypted_ctr, 16, NULL, 0);
         }
 
         data[i] ^= encrypted_ctr[i % 16];
@@ -5372,13 +5347,13 @@ static int decrypt(ccm_session_data *session, ccm_packet_data *pdata, guint8 *no
     ctr[14] = 0;
     ctr[15] = 0;
     memcpy(encrypted_ctr, ctr, 16);
-    encryptInPlace(session->protocol_id, session->cipher_data, encrypted_ctr, 16);
+    gcry_cipher_encrypt(session->cipher_data, encrypted_ctr, 16, NULL, 0);
 
     for (i = 0; i < session->mac_len; i++)
         mac[i] ^= encrypted_ctr[i];
 
     /* Now we have to generate the MAC... */
-    generateMac(session->protocol_id, session->cipher_data, nonce, epp, a_len, data, (gint)(len - session->mac_len), computed_mac, session->mac_len);
+    generateMac(session->cipher_data, nonce, epp, a_len, data, (gint)(len - session->mac_len), computed_mac, session->mac_len);
     if (!memcmp(mac, computed_mac, session->mac_len))
         return 1;
 
@@ -5674,7 +5649,7 @@ static int dissect_tunnel_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
         opcode = tvb_get_guint8(tvb, offset + 3);
         if (opcode == 3)
         {
-            tvbuff_t *next_tvb = tvb_new_subset(tvb, offset + 5, -1, -1);
+            tvbuff_t *next_tvb = tvb_new_subset_remaining(tvb, offset + 5);
 
             dissect_dof_common(next_tvb, pinfo, tree, &ref->api_data);
         }
@@ -5803,7 +5778,7 @@ static dof_packet_data* create_packet_data(packet_info *pinfo)
  */
 static int dissect_dof_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-    dof_api_data *api_data = (dof_api_data *)p_get_proto_data(NULL, pinfo, proto_2008_1_dof_udp, 0);
+    dof_api_data *api_data = (dof_api_data *)p_get_proto_data(wmem_file_scope(), pinfo, proto_2008_1_dof_udp, 0);
     if (api_data == NULL)
     {
         conversation_t *conversation;
@@ -5864,7 +5839,7 @@ static int dissect_dof_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
 
         api_data->transport_session = &transport_session->common;
         api_data->transport_packet = transport_packet;
-        p_add_proto_data(NULL, pinfo, proto_2008_1_dof_udp, 0, api_data);
+        p_add_proto_data(wmem_file_scope(), pinfo, proto_2008_1_dof_udp, 0, api_data);
     }
 
     return dissect_dof_common(tvb, pinfo, tree, api_data);
@@ -6021,7 +5996,7 @@ static int dissect_dof_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     if (session->not_dps)
         return 0;
 
-    packet = (tcp_packet_data *)p_get_proto_data(NULL, pinfo, proto_2008_1_dof_tcp, 0);
+    packet = (tcp_packet_data *)p_get_proto_data(wmem_file_scope(), pinfo, proto_2008_1_dof_tcp, 0);
     if (packet == NULL)
     {
         packet = (tcp_packet_data *)wmem_alloc0(wmem_file_scope(), sizeof(tcp_packet_data));
@@ -6031,7 +6006,7 @@ static int dissect_dof_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
             return 0;
         }
 
-        p_add_proto_data(NULL, pinfo, proto_2008_1_dof_tcp, 0, packet);
+        p_add_proto_data(wmem_file_scope(), pinfo, proto_2008_1_dof_tcp, 0, packet);
     }
 
     if (is_retransmission(pinfo, session, packet, tcpinfo))
@@ -6081,14 +6056,14 @@ static int dissect_dof_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
             {
                 pinfo->desegment_offset = offset;
                 pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
-                return offset;
+                return offset + available;
             }
 
             if (available < packet_length)
             {
                 pinfo->desegment_offset = offset;
                 pinfo->desegment_len = packet_length - available;
-                return offset;
+                return offset + available;
             }
 
             remember_offset(pinfo, session, packet, tcpinfo);
@@ -6099,7 +6074,7 @@ static int dissect_dof_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
              * multiple DPS packets in a single Wireshark frame.
              */
             {
-                tvbuff_t *next_tvb = tvb_new_subset(tvb, offset, packet_length, packet_length);
+                tvbuff_t *next_tvb = tvb_new_subset_length_caplen(tvb, offset, packet_length, packet_length);
                 tcp_dof_packet_ref *ref;
                 gint raw_offset = tvb_raw_offset(tvb) + offset;
                 gboolean ref_is_new = FALSE;
@@ -6191,16 +6166,16 @@ static int dissect_tunnel_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     }
 
     /* Add the packet data. */
-    packet = p_get_proto_data(pinfo->fd, proto_2012_1_tunnel, 0);
+    packet = p_get_proto_data(wmem_file_scope(), proto_2012_1_tunnel, 0);
     if (!packet)
     {
-        packet = se_alloc0(sizeof(dof_packet_data));
+        packet = wmem_alloc0(wmem_file_scope(), sizeof(dof_packet_data));
         packet->frame = pinfo->fd->num;
         packet->next = NULL;
         packet->start_offset = 0;
         packet->session_counter = &session_counter;
         packet->transport_session = udp_transport_session;
-        p_add_proto_data(pinfo->fd, proto_2012_1_tunnel, 0, packet);
+        p_add_proto_data(wmem_file_scope(), proto_2012_1_tunnel, 0, packet);
     }
 
     pinfo->private_data = packet;
@@ -6271,7 +6246,7 @@ static int dissect_tunnel_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
         conversation_add_proto_data(conversation, proto_2012_1_tunnel, session);
     }
 
-    packet = (tcp_packet_data *)p_get_proto_data(NULL, pinfo, proto_2012_1_tunnel, 0);
+    packet = (tcp_packet_data *)p_get_proto_data(wmem_file_scope(), pinfo, proto_2012_1_tunnel, 0);
     if (packet == NULL)
     {
         packet = (tcp_packet_data *)wmem_alloc0(wmem_file_scope(), sizeof(tcp_packet_data));
@@ -6281,7 +6256,7 @@ static int dissect_tunnel_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
             return 0;
         }
 
-        p_add_proto_data(NULL, pinfo, proto_2012_1_tunnel, 0, packet);
+        p_add_proto_data(wmem_file_scope(), pinfo, proto_2012_1_tunnel, 0, packet);
     }
 
     if (is_retransmission(pinfo, session, packet, tcpinfo))
@@ -6326,7 +6301,7 @@ static int dissect_tunnel_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
             * multiple DPS packets in a single Wireshark frame.
             */
             {
-                tvbuff_t *next_tvb = tvb_new_subset(tvb, offset, packet_length, packet_length);
+                tvbuff_t *next_tvb = tvb_new_subset_length_caplen(tvb, offset, packet_length, packet_length);
                 tcp_dof_packet_ref *ref;
                 gint raw_offset = tvb_raw_offset(tvb) + offset;
                 gboolean ref_is_new = FALSE;
@@ -6680,7 +6655,7 @@ static int dissect_dnp_1(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
 
         /* We have a packet. */
         {
-            tvbuff_t *next_tvb = tvb_new_subset(tvb, offset, encapsulated_length, tvb_reported_length(tvb) - offset);
+            tvbuff_t *next_tvb = tvb_new_subset_length_caplen(tvb, offset, encapsulated_length, tvb_reported_length(tvb) - offset);
             offset += dof_dissect_dpp_common(next_tvb, pinfo, proto_item_get_parent(tree), data);
         }
     }
@@ -6821,7 +6796,7 @@ static int dissect_dpp_v2_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
 
         oid_tree = proto_tree_add_subtree(opid_tree, tvb, offset, 0, ett_2009_12_dpp_2_opid, NULL, "Source Identifier");
 
-        next_tvb = tvb_new_subset(tvb, offset, -1, tvb_reported_length(tvb) - offset);
+        next_tvb = tvb_new_subset_length_caplen(tvb, offset, -1, tvb_reported_length(tvb) - offset);
         opid_len = call_dissector_only(dof_oid_handle, next_tvb, pinfo, oid_tree, NULL);
 
         learn_sender_sid(api_data, opid_len, tvb_get_ptr(next_tvb, 0, opid_len));
@@ -7006,7 +6981,7 @@ static int dissect_dpp_2(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
 
                 oid_tree = proto_tree_add_subtree(opid_tree, tvb, offset, 0, ett_2009_12_dpp_2_opid, NULL, "Source Identifier");
 
-                next_tvb = tvb_new_subset(tvb, offset, -1, tvb_reported_length(tvb) - offset);
+                next_tvb = tvb_new_subset_length_caplen(tvb, offset, -1, tvb_reported_length(tvb) - offset);
                 opid_len = call_dissector_only(dof_oid_handle, next_tvb, pinfo, oid_tree, NULL);
                 proto_item_set_len(oid_tree, opid_len);
 
@@ -7307,7 +7282,7 @@ static int dissect_dpp_2(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
                         expert_add_info(pinfo, security_tree, &ei_dpp_no_security_context);
                         {
                             tvbuff_t *data_tvb = tvb_new_subset_remaining(tvb, offset);
-                            call_dissector(undissected_data_handle, data_tvb, pinfo, tree);
+                            call_data_dissector(data_tvb, pinfo, tree);
                         }
                         proto_item_set_len(security_tree, offset - sec_offset);
                         return offset;
@@ -7366,7 +7341,7 @@ static int dissect_dpp_2(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
         */
         {
             guint16 app;
-            tvbuff_t *next_tvb = tvb_new_subset(tvb, offset, -1, tvb_reported_length(tvb) - offset);
+            tvbuff_t *next_tvb = tvb_new_subset_length_caplen(tvb, offset, -1, tvb_reported_length(tvb) - offset);
 
             read_c2(tvb, offset, &app, NULL);
             if (app == 0x7FFF)
@@ -7390,7 +7365,7 @@ static int dissect_options(tvbuff_t *tvb, gint offset, packet_info *pinfo, proto
     while (offset < (gint)tvb_captured_length(tvb))
     {
         proto_tree *subtree = proto_tree_add_subtree(tree, tvb, offset, 0, ett_2008_1_dsp_12_option, NULL, "Option");
-        tvbuff_t *next_tvb = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *next_tvb = tvb_new_subset_remaining(tvb, offset);
         gint len = dissect_2008_1_dsp_1(next_tvb, pinfo, subtree);
         proto_item_set_len(proto_tree_get_parent(subtree), len);
         offset += len;
@@ -7476,7 +7451,7 @@ static int dissect_dsp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 
     proto_tree_add_uint_format(dsp_tree, hf_2008_1_dsp_12_opcode, tvb, offset, 1, opcode, "Opcode: %s (%u)", val_to_str(opcode, strings_2008_1_dsp_opcodes, "Unknown Opcode (%d)"), opcode & 0x7F);
     offset += 1;
-    col_append_sep_fstr(pinfo->cinfo, COL_INFO, "/", "%s", val_to_str(opcode, strings_2008_1_dsp_opcodes, "Unknown Opcode (%d)"));
+    col_append_sep_str(pinfo->cinfo, COL_INFO, "/", val_to_str(opcode, strings_2008_1_dsp_opcodes, "Unknown Opcode (%d)"));
 
     switch (opcode)
     {
@@ -7606,6 +7581,7 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             ccm_data = (ccm_session_data *)wmem_alloc0(wmem_file_scope(), sizeof(ccm_session_data));
             if (!ccm_data)
                 return 0;
+            wmem_register_callback(wmem_file_scope(), dof_sessions_destroy_cb, ccm_data);
 
             key_data->security_mode_key_data = ccm_data;
 
@@ -7623,7 +7599,9 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             switch (ccm_data->protocol_id)
             {
             case DOF_PROTOCOL_CCM:
-                ccm_data->cipher_data = wmem_alloc0(wmem_file_scope(), sizeof(rijndael_ctx));
+                if (gcry_cipher_open(&ccm_data->cipher_data, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_ECB, 0)) {
+                    return 0;
+                }
                 break;
 
             default:
@@ -7636,7 +7614,11 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             switch (ccm_data->protocol_id)
             {
             case DOF_PROTOCOL_CCM:
-                rijndael_set_key((rijndael_ctx *)ccm_data->cipher_data, key_data->session_key, 256);
+                if (gcry_cipher_setkey(ccm_data->cipher_data, key_data->session_key, 32)) {
+                    gcry_cipher_close(ccm_data->cipher_data);
+                    ccm_data->cipher_data = NULL;
+                    return 0;
+                }
                 break;
 
             default:
@@ -7657,20 +7639,26 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             guint8 period = (header & 0x70) >> 4;
             if (ccm_data->cipher_data_table == NULL)
             {
-                guint8 *ekey = (guint8 *)wmem_alloc0(wmem_file_scope(), sizeof(rijndael_ctx));
+                gcry_cipher_hd_t ekey;
+                if (gcry_cipher_open(&ekey, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_ECB, 0)) {
+                    return 0;
+                }
 
-                /* TODO: This needs to be freed. */
-                ccm_data->cipher_data_table = g_hash_table_new(g_direct_hash, g_direct_equal);
+                ccm_data->cipher_data_table = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, dof_cipher_data_destroy);
                 ccm_data->period = 1;
                 ccm_data->periods[period] = ccm_data->period;
 
                 switch (ccm_data->protocol_id)
                 {
                 case DOF_PROTOCOL_CCM:
-                    rijndael_set_key((rijndael_ctx *)ekey, key_data->session_key, 256);
+                    if (gcry_cipher_setkey(ekey, key_data->session_key, 32)) {
+                        gcry_cipher_close(ekey);
+                        return 0;
+                    }
                     break;
 
                 default:
+                    gcry_cipher_close(ekey);
                     return 0;
                 }
 
@@ -7682,14 +7670,21 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 
                 if (!lookup)
                 {
-                    guint8 *ekey = (guint8 *)wmem_alloc0(wmem_file_scope(), sizeof(rijndael_ctx));
+                    gcry_cipher_hd_t ekey;
+                    if (gcry_cipher_open(&ekey, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_ECB, 0)) {
+                        return 0;
+                    }
                     switch (ccm_data->protocol_id)
                     {
                     case DOF_PROTOCOL_CCM:
-                        rijndael_set_key((rijndael_ctx *)ekey, key_data->session_key, 256);
+                        if (gcry_cipher_setkey(ekey, key_data->session_key, 32)) {
+                            gcry_cipher_close(ekey);
+                            return 0;
+                        }
                         break;
 
                     default:
+                        gcry_cipher_close(ekey);
                         return 0;
                     }
 
@@ -7702,14 +7697,21 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                     guint8 *in_table = (guint8 *)g_hash_table_lookup(ccm_data->cipher_data_table, GUINT_TO_POINTER(lookup));
                     if (memcmp(key_data->session_key, in_table, 32) != 0)
                     {
-                        guint8 *ekey = (guint8 *)wmem_alloc0(wmem_file_scope(), sizeof(rijndael_ctx));
+                        gcry_cipher_hd_t ekey;
+                        if (gcry_cipher_open(&ekey, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_ECB, 0)) {
+                            return 0;
+                        }
                         switch (ccm_data->protocol_id)
                         {
                         case DOF_PROTOCOL_CCM:
-                            rijndael_set_key((rijndael_ctx *)ekey, key_data->session_key, 256);
+                            if (gcry_cipher_setkey(ekey, key_data->session_key, 32)) {
+                                gcry_cipher_close(ekey);
+                                return 0;
+                            }
                             break;
 
                         default:
+                            gcry_cipher_close(ekey);
                             return 0;
                         }
 
@@ -7978,7 +7980,7 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                 * buffer we need to adjust the length of the existing buffer.
                 */
                 g_free(buf);
-                app = tvb_new_subset(tvb, offset, e_len - session->mac_len, e_len - session->mac_len);
+                app = tvb_new_subset_length_caplen(tvb, offset, e_len - session->mac_len, e_len - session->mac_len);
                 dof_packet->decrypted_tvb = app;
                 dof_packet->decrypted_offset = 0;
             }
@@ -8846,7 +8848,7 @@ static int dissect_sgmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
             offset = dof_dissect_pdu_as_field(dissect_2008_16_security_9, tvb, pinfo, sgmp_tree,
                                               offset, hf_initial_state, ett_initial_state, NULL);
 #if 0 /*TODO check this */
-            initial_state = tvb_new_subset(tvb, start_offset, offset - start_offset, offset - start_offset);
+            initial_state = tvb_new_subset_length_caplen(tvb, start_offset, offset - start_offset, offset - start_offset);
 #endif
         }
 
@@ -8996,7 +8998,7 @@ static int dissect_sgmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
                 offset = dof_dissect_pdu_as_field(dissect_2008_16_security_9, tvb, pinfo, sgmp_tree,
                                                   offset, hf_initial_state, ett_initial_state, NULL);
 #if 0 /*TODO check this */
-                initial_state = tvb_new_subset(tvb, start_offset, offset - start_offset, offset - start_offset);
+                initial_state = tvb_new_subset_length_caplen(tvb, start_offset, offset - start_offset, offset - start_offset);
 #endif
             }
 
@@ -9199,7 +9201,7 @@ static int dissect_sgmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
                         {
                             dof_secmode_api_data setup_data;
                             gint block_length;
-                            tvbuff_t *ntvb = tvb_new_subset(tvb, A_offset, -1, -1);
+                            tvbuff_t *ntvb = tvb_new_subset_remaining(tvb, A_offset);
 
                             setup_data.context = INITIALIZE;
                             setup_data.security_mode_offset = 0;
@@ -9302,7 +9304,7 @@ static int dissect_2008_4_tep_2_2_1(tvbuff_t *tvb, packet_info *pinfo, proto_tre
     /* Initial State */
     {
         int block_length;
-        tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+        tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
         ti = proto_tree_add_item(tree, hf_tep_2_2_1_initial_state, tvb, offset, 0, ENC_NA);
         ti = proto_item_add_subtree(ti, ett_tep_2_2_1_initial_state);
         block_length = dof_dissect_pdu(dissect_2008_16_security_9, start, pinfo, ti, NULL);
@@ -9445,7 +9447,7 @@ static int dissect_tep(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             }
         }
 
-        /* FALL THROUGH TO REQUEST */
+        /* FALL THROUGH */
 
     case TEP_PDU_REQUEST:
 
@@ -9523,7 +9525,6 @@ static int dissect_tep(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 
             if (!packet->processed && rekey_data)
             {
-                rijndael_ctx cipher_state;
                 int i;
 
                 /* Produce a (possibly empty) list of potential keys based on our
@@ -9533,6 +9534,7 @@ static int dissect_tep(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                 for (i = 0; i < globals.global_security->identity_data_count; i++)
                 {
                     dof_identity_data *identity = globals.global_security->identity_data + i;
+                    gcry_cipher_hd_t rijndael_handle;
                     int j;
 
                     if (identity->domain_length != rekey_data->domain_length)
@@ -9546,9 +9548,13 @@ static int dissect_tep(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 
                     tvb_memcpy(tvb, ticket, start_offset, 64);
 
-                    rijndael_set_key(&cipher_state, identity->secret, 256);
-                    encryptInPlace(DOF_PROTOCOL_TEP, &cipher_state, ticket, 16);
-                    encryptInPlace(DOF_PROTOCOL_TEP, &cipher_state, ticket + 16, 16);
+                    if (!gcry_cipher_open(&rijndael_handle, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_ECB, 0)) {
+                        if (!gcry_cipher_setkey(rijndael_handle, identity->secret, 32)) {
+                            gcry_cipher_encrypt(rijndael_handle, ticket, 16, NULL, 0);
+                            gcry_cipher_encrypt(rijndael_handle, ticket + 16, 16, NULL, 0);
+                        }
+                        gcry_cipher_close(rijndael_handle);
+                    }
 
                     for (j = 0; j < 32; j++)
                         ticket[j + 32] = ticket[j + 32] ^ ticket[j];
@@ -9587,7 +9593,7 @@ static int dissect_tep(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             if (rekey_data && rekey_data->is_rekey)
             {
                 int block_length;
-                tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+                tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
                 ti = proto_tree_add_item(tep_tree, hf_tep_2_2_responder_initialization, tvb, offset, 0, ENC_NA);
                 ti = proto_item_add_subtree(ti, ett_tep_2_2_responder_initialization);
                 block_length = dissect_2008_4_tep_2_2_1(start, pinfo, ti, &ssid, data);
@@ -10540,14 +10546,14 @@ static int dissect_trp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             offset = dof_dissect_pdu_as_field(dissect_2008_16_security_3_1, tvb, pinfo, trp_tree,
                                               offset, hf_identity_resolution, ett_identity_resolution, NULL);
             data_tvb = tvb_new_subset_remaining(tvb, offset);
-            call_dissector(undissected_data_handle, data_tvb, pinfo, trp_tree);
+            call_data_dissector(data_tvb, pinfo, trp_tree);
         }
         break;
 
     case TRP_RSP_VALIDATE_CREDENTIAL:
     {
         tvbuff_t *data_tvb = tvb_new_subset_remaining(tvb, offset);
-        call_dissector(undissected_data_handle, data_tvb, pinfo, trp_tree);
+        call_data_dissector(data_tvb, pinfo, trp_tree);
     }
        break;
     }
@@ -10573,7 +10579,7 @@ static void dof_tun_register(void)
     };
 
     proto_2012_1_tunnel = proto_register_protocol(TUNNEL_PROTOCOL_STACK, "DTPS", "dtps");
-    proto_register_field_array(proto_2008_1_app, hf, array_length(hf));
+    proto_register_field_array(proto_2012_1_tunnel, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
 
     register_dissector(TUNNEL_PROTOCOL_STACK, dissect_tunnel_common, proto_2012_1_tunnel);
@@ -10597,7 +10603,7 @@ static void dof_tun_handoff(void)
 
     tcp_handle = create_dissector_handle(dissect_tunnel_tcp, proto_2012_1_tunnel);
 
-    dissector_add_uint("tcp.port", DOF_TUN_NON_SEC_TCP_PORT, tcp_handle);
+    dissector_add_uint_with_preference("tcp.port", DOF_TUN_NON_SEC_TCP_PORT, tcp_handle);
 }
 
 /* Main DOF Registration Support */
@@ -10921,7 +10927,7 @@ static void dof_register(void)
     /* Security mode of operation templates. */
     static uat_field_t secmode_uat_fields[] = {
         UAT_FLD_CSTRING(secmode_list, domain, "Domain", "The domain, coded as hex digits of PDU Security.7."),
-        UAT_FLD_CSTRING(secmode_list, identity, "Group ID", "The group identifer, coded as hex digits of PDU Security.8."),
+        UAT_FLD_CSTRING(secmode_list, identity, "Group ID", "The group identifier, coded as hex digits of PDU Security.8."),
         UAT_FLD_CSTRING(secmode_list, kek, "KEK", "The KEK, coded as hex digits representing the KEK (256-bit)."),
         UAT_END_FIELDS
     };
@@ -10935,7 +10941,7 @@ static void dof_register(void)
     /* Identity secrets. */
     static uat_field_t identsecret_uat_fields[] = {
         UAT_FLD_CSTRING(identsecret_list, domain, "Domain", "The domain, coded as hex digits of PDU Security.7."),
-        UAT_FLD_CSTRING(identsecret_list, identity, "Identity", "The group identifer, coded as hex digits of PDU Security.8."),
+        UAT_FLD_CSTRING(identsecret_list, identity, "Identity", "The group identifier, coded as hex digits of PDU Security.8."),
         UAT_FLD_CSTRING_OTHER(identsecret_list, secret, "Secret", identsecret_chk_cb, "The resolved secret for a given identity, coded as hex digits representing the secret (256-bit)."),
         UAT_END_FIELDS
     };
@@ -10975,6 +10981,7 @@ static void dof_register(void)
                           secmode_list_update_cb,
                           secmode_list_free_cb,
                           secmode_list_post_update_cb,
+                          NULL,
                           secmode_uat_fields
                           );
 
@@ -10990,6 +10997,7 @@ static void dof_register(void)
                          seckey_list_update_cb,
                          seckey_list_free_cb,
                          seckey_list_post_update_cb,
+                         NULL,
                          seckey_uat_fields
                          );
 
@@ -11005,6 +11013,7 @@ static void dof_register(void)
                               identsecret_list_update_cb,
                               identsecret_list_free_cb,
                               identsecret_list_post_update_cb,
+                              NULL,
                               identsecret_uat_fields
                               );
 
@@ -11051,11 +11060,8 @@ static void dof_handoff(void)
     tcp_handle = create_dissector_handle(dissect_dof_tcp, proto_2008_1_dof);
     dof_udp_handle = create_dissector_handle(dissect_dof_udp, proto_2008_1_dof);
 
-    undissected_data_handle = find_dissector("data");
-
-    dissector_add_uint("tcp.port", DOF_P2P_NEG_SEC_TCP_PORT, tcp_handle);
-    dissector_add_uint("udp.port", DOF_P2P_NEG_SEC_UDP_PORT, dof_udp_handle);
-    dissector_add_uint("udp.port", DOF_MCAST_NEG_SEC_UDP_PORT, dof_udp_handle);
+    dissector_add_uint_with_preference("tcp.port", DOF_P2P_NEG_SEC_TCP_PORT, tcp_handle);
+    dissector_add_uint_range_with_preference("udp.port", DOF_NEG_SEC_UDP_PORT_RANGE, dof_udp_handle);
 }
 
 /* OID Registration Support */
@@ -12433,6 +12439,36 @@ static void dof_cleanup_routine(void)
     dof_trp_cleanup();
 }
 
+static void
+dof_shutdown_routine(void)
+{
+    guint i;
+
+    for (i = 0; i < global_security.identity_data_count; i++) {
+        g_free(global_security.identity_data[i].identity);
+        g_free(global_security.identity_data[i].domain);
+        g_free(global_security.identity_data[i].secret);
+    }
+    g_free(global_security.identity_data);
+
+    for (i = 0; i < global_security.group_data_count; i++) {
+        g_free(global_security.group_data[i].domain);
+        g_free(global_security.group_data[i].identity);
+        g_free(global_security.group_data[i].kek);
+    }
+
+    if (addr_port_to_id)
+        g_hash_table_destroy(addr_port_to_id);
+    if (dpp_opid_to_packet_data)
+        g_hash_table_destroy(dpp_opid_to_packet_data);
+    if (node_key_to_sid_id)
+        g_hash_table_destroy(node_key_to_sid_id);
+    if (sid_buffer_to_sid_id)
+        g_hash_table_destroy(sid_buffer_to_sid_id);
+    if (sid_id_to_sid_buffer)
+        g_hash_table_destroy(sid_id_to_sid_buffer);
+}
+
 /**
  * This is the first entry point into the dissector, called on program launch.
  */
@@ -12453,6 +12489,7 @@ void proto_register_dof(void)
 
     register_init_routine(&dof_reset_routine);
     register_cleanup_routine(&dof_cleanup_routine);
+    register_shutdown_routine(&dof_shutdown_routine);
 }
 
 /**
@@ -12603,7 +12640,7 @@ static void dof_packet_delete_proto_data(dof_packet_data *packet, int proto)
 static gint dof_dissect_pdu_as_field(dissector_t dissector, tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset, int item, int ett, void *result)
 {
     int block_length;
-    tvbuff_t *start = tvb_new_subset(tvb, offset, -1, -1);
+    tvbuff_t *start = tvb_new_subset_remaining(tvb, offset);
     proto_tree *my_tree;
     proto_item *ti = proto_tree_add_item(tree, item, tvb, offset, -1, ENC_NA);
     my_tree = proto_item_add_subtree(ti, ett);

@@ -138,7 +138,7 @@ static header_field_info hfi_dbus_value_str DBUS_HFI_INIT =
 	{ "Value", "dbus.value.str", FT_STRING, BASE_NONE, NULL, 0x00, NULL, HFILL };
 
 static header_field_info hfi_dbus_value_double DBUS_HFI_INIT =
-	{ "Value", "dbus.value.double", FT_DOUBLE, BASE_NONE, NULL, 0x00, NULL, HFILL };
+	{ "DOUBLE", "dbus.value.double", FT_DOUBLE, BASE_NONE, NULL, 0x00, NULL, HFILL };
 
 
 static int ett_dbus = -1;
@@ -324,7 +324,7 @@ dissect_dbus_sig(tvbuff_t *tvb, dbus_info_t *dinfo, proto_tree *tree, int offset
 			val = dinfo->getdouble(tvb, offset);
 			offset += 8;
 
-			proto_tree_add_double_format(tree, hfi_dbus_value_double.id, tvb, org_offset, offset - org_offset, val, "DOUBLE: %." G_STRINGIFY(DBL_DIG) "g", val);
+			proto_tree_add_double(tree, hfi_dbus_value_double.id, tvb, org_offset, offset - org_offset, val);
 			/* XXX ret */
 			return offset;
 		}
@@ -716,7 +716,7 @@ void
 proto_reg_handoff_dbus(void)
 {
 	dissector_add_uint("wtap_encap", WTAP_ENCAP_DBUS, dbus_handle);
-	dissector_add_for_decode_as("tcp.port", dbus_handle_tcp);
+	dissector_add_for_decode_as_with_preference("tcp.port", dbus_handle_tcp);
 }
 
 /*

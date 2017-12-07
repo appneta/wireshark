@@ -175,7 +175,7 @@ dissect_adb_cs(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
             adb_service_data.session_key[1] = pinfo->destport;
             adb_service_data.session_key[2] = pinfo->srcport;
 
-            next_tvb = tvb_new_subset(tvb, offset, tvb_captured_length_remaining(tvb, offset), tvb_captured_length_remaining(tvb, offset));
+            next_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_captured_length_remaining(tvb, offset), tvb_captured_length_remaining(tvb, offset));
             call_dissector_with_data(adb_service_handle, next_tvb, pinfo, tree, &adb_service_data);
 
             return tvb_captured_length(tvb);
@@ -341,7 +341,7 @@ dissect_adb_cs(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
         adb_service_data.session_key[1] = pinfo->destport;
         adb_service_data.session_key[2] = pinfo->srcport;
 
-        next_tvb = tvb_new_subset(tvb, offset, tvb_captured_length_remaining(tvb, offset), tvb_captured_length_remaining(tvb, offset));
+        next_tvb = tvb_new_subset_length_caplen(tvb, offset, tvb_captured_length_remaining(tvb, offset), tvb_captured_length_remaining(tvb, offset));
         call_dissector_with_data(adb_service_handle, next_tvb, pinfo, tree, &adb_service_data);
         offset = tvb_captured_length(tvb);
     } else {
@@ -437,7 +437,7 @@ proto_reg_handoff_adb_cs(void)
 {
     adb_service_handle = find_dissector_add_dependency("adb_service", proto_adb_cs);
 
-    dissector_add_for_decode_as("tcp.port", adb_cs_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", adb_cs_handle);
 }
 
 /*

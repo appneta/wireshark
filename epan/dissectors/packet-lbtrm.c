@@ -1847,6 +1847,7 @@ void proto_register_lbtrm(void)
         lbtrm_tag_update_cb,
         lbtrm_tag_free_cb,
         NULL,
+        NULL,
         lbtrm_tag_array);
     prefs_register_uat_preference(lbtrm_module,
         "tnw_lbtrm_tags",
@@ -1866,7 +1867,7 @@ void proto_reg_handoff_lbtrm(void)
     if (!already_registered)
     {
         lbtrm_dissector_handle = create_dissector_handle(dissect_lbtrm, proto_lbtrm);
-        dissector_add_for_decode_as("udp.port", lbtrm_dissector_handle);
+        dissector_add_for_decode_as_with_preference("udp.port", lbtrm_dissector_handle);
         heur_dissector_add("udp", test_lbtrm_packet, "LBT Reliable Multicast over UDP", "lbtrm_udp", proto_lbtrm, HEURISTIC_ENABLE);
         lbtrm_tap_handle = register_tap("lbm_lbtrm");
     }

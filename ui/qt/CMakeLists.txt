@@ -19,12 +19,16 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+ADD_CUSTOM_CMAKE_INCLUDE()
+
 # All .h files which inherit from QObject aka which use the Q_OBJECT macro
 # need to go here.
 set(WIRESHARK_QT_HEADERS
 	about_dialog.h
 	accordion_frame.h
+	additional_toolbar.h
 	address_editor_frame.h
+	apply_line_edit.h
 	bluetooth_att_server_attributes_dialog.h
 	bluetooth_device_dialog.h
 	bluetooth_devices_dialog.h
@@ -32,6 +36,7 @@ set(WIRESHARK_QT_HEADERS
 	accordion_frame.h
 	byte_view_tab.h
 	byte_view_text.h
+	cache_proxy_model.h
 	capture_file.h
 	capture_file_dialog.h
 	capture_file_properties_dialog.h
@@ -41,6 +46,7 @@ set(WIRESHARK_QT_HEADERS
 	capture_info_dialog.h
 	capture_interfaces_dialog.h
 	capture_preferences_frame.h
+	clickable_label.h
 	color_utils.h
 	coloring_rules_dialog.h
 	column_preferences_frame.h
@@ -59,6 +65,7 @@ set(WIRESHARK_QT_HEADERS
 	endpoint_dialog.h
 	expert_info_dialog.h
 	export_dissection_dialog.h
+	export_object_action.h
 	export_object_dialog.h
 	export_pdu_dialog.h
 	field_filter_edit.h
@@ -80,7 +87,13 @@ set(WIRESHARK_QT_HEADERS
 	gsm_map_summary_dialog.h
 	iax2_analysis_dialog.h
 	import_text_dialog.h
-	interface_tree.h
+	interface_toolbar.h
+	interface_toolbar_reader.h
+	interface_toolbar_lineedit.h
+	interface_tree_model.h
+	interface_tree_cache_model.h
+	interface_sort_filter_model.h
+	interface_frame.h
 	io_graph_dialog.h
 	label_stack.h
 	layout_preferences_frame.h
@@ -98,6 +111,7 @@ set(WIRESHARK_QT_HEADERS
 	manage_interfaces_dialog.h
 	module_preferences_scroll_area.h
 	mtp3_summary_dialog.h
+	numeric_value_chooser_delegate.h
 	multicast_statistics_dialog.h
 	overlay_scroll_bar.h
 	packet_comment_dialog.h
@@ -106,6 +120,7 @@ set(WIRESHARK_QT_HEADERS
 	packet_list.h
 	packet_list_model.h
 	packet_range_group_box.h
+	path_chooser_delegate.h
 	percent_bar_delegate.h
 	preference_editor_frame.h
 	preferences_dialog.h
@@ -135,7 +150,6 @@ set(WIRESHARK_QT_HEADERS
 	sequence_diagram.h
 	sequence_dialog.h
 	show_packet_bytes_dialog.h
-	simple_dialog.h
 	splash_overlay.h
 	stats_tree_dialog.h
 	service_response_time_dialog.h
@@ -143,16 +157,24 @@ set(WIRESHARK_QT_HEADERS
 	stock_icon_tool_button.h
 	supported_protocols_dialog.h
 	syntax_line_edit.h
+	tabnav_tree_widget.h
 	tap_parameter_dialog.h
 	tcp_stream_dialog.h
 	time_shift_dialog.h
+	timeline_delegate.h
 	traffic_table_dialog.h
+	uat_delegate.h
 	uat_dialog.h
+	uat_model.h
+	uat_tree_view.h
 	voip_calls_dialog.h
+	voip_calls_info_model.h
 	wireless_frame.h
+	wireless_timeline.h
 	wireshark_application.h
 	wireshark_dialog.h
 	wlan_statistics_dialog.h
+	${WIRESHARK_CUSTOM_QT_HEADERS}
 )
 
 if(HAVE_PCAP_REMOTE)
@@ -183,13 +205,16 @@ file(GLOB EXTRA_QT_HEADERS
 set(WIRESHARK_QT_SRC
 	about_dialog.cpp
 	accordion_frame.cpp
+	additional_toolbar.cpp
 	address_editor_frame.cpp
+	apply_line_edit.cpp
 	bluetooth_att_server_attributes_dialog.cpp
 	bluetooth_device_dialog.cpp
 	bluetooth_devices_dialog.cpp
 	bluetooth_hci_summary_dialog.cpp
 	byte_view_tab.cpp
 	byte_view_text.cpp
+	cache_proxy_model.cpp
 	capture_file.cpp
 	capture_file_dialog.cpp
 	capture_file_properties_dialog.cpp
@@ -199,6 +224,7 @@ set(WIRESHARK_QT_SRC
 	capture_info_dialog.cpp
 	capture_interfaces_dialog.cpp
 	capture_preferences_frame.cpp
+	clickable_label.cpp
 	color_utils.cpp
 	coloring_rules_dialog.cpp
 	column_preferences_frame.cpp
@@ -216,6 +242,7 @@ set(WIRESHARK_QT_SRC
 	enabled_protocols_dialog.cpp
 	endpoint_dialog.cpp
 	export_dissection_dialog.cpp
+	export_object_action.cpp
 	export_object_dialog.cpp
 	export_pdu_dialog.cpp
 	field_filter_edit.cpp
@@ -234,7 +261,13 @@ set(WIRESHARK_QT_SRC
 	geometry_state_dialog.cpp
 	iax2_analysis_dialog.cpp
 	import_text_dialog.cpp
-	interface_tree.cpp
+	interface_toolbar.cpp
+	interface_toolbar_reader.cpp
+	interface_toolbar_lineedit.cpp
+	interface_tree_model.cpp
+	interface_tree_cache_model.cpp
+	interface_sort_filter_model.cpp
+	interface_frame.cpp
 	label_stack.cpp
 	layout_preferences_frame.cpp
 	lbm_lbtrm_transport_dialog.cpp
@@ -251,6 +284,7 @@ set(WIRESHARK_QT_SRC
 	main_window_slots.cpp
 	manage_interfaces_dialog.cpp
 	module_preferences_scroll_area.cpp
+	numeric_value_chooser_delegate.cpp
 	overlay_scroll_bar.cpp
 	packet_comment_dialog.cpp
 	packet_dialog.cpp
@@ -259,6 +293,7 @@ set(WIRESHARK_QT_SRC
 	packet_list_model.cpp
 	packet_list_record.cpp
 	packet_range_group_box.cpp
+	path_chooser_delegate.cpp
 	percent_bar_delegate.cpp
 	preference_editor_frame.cpp
 	preferences_dialog.cpp
@@ -298,15 +333,23 @@ set(WIRESHARK_QT_SRC
 	stock_icon_tool_button.cpp
 	supported_protocols_dialog.cpp
 	syntax_line_edit.cpp
+	tabnav_tree_widget.cpp
 	tap_parameter_dialog.cpp
 	tcp_stream_dialog.cpp
 	time_shift_dialog.cpp
+	timeline_delegate.cpp
 	traffic_table_dialog.cpp
+	uat_delegate.cpp
 	uat_dialog.cpp
+	uat_model.cpp
+	uat_tree_view.cpp
 	voip_calls_dialog.cpp
+	voip_calls_info_model.cpp
 	wireless_frame.cpp
+	wireless_timeline.cpp
 	wireshark_application.cpp
 	wireshark_dialog.cpp
+	${WIRESHARK_CUSTOM_QT_SRCS}
 )
 
 if(HAVE_PCAP_REMOTE)
@@ -341,6 +384,7 @@ set(WIRESHARK_QT_TAP_SRC
 	sctp_assoc_analyse_dialog.cpp
 	stats_tree_dialog.cpp
 	wlan_statistics_dialog.cpp
+	${WIRESHARK_CUSTOM_TAP_SRC}
 )
 
 set(WIRESHARK_QT_FILES
@@ -382,6 +426,8 @@ set(WIRESHARK_QT_UI
 	gsm_map_summary_dialog.ui
 	iax2_analysis_dialog.ui
 	import_text_dialog.ui
+	interface_frame.ui
+	interface_toolbar.ui
 	io_graph_dialog.ui
 	layout_preferences_frame.ui
 	lbm_lbtrm_transport_dialog.ui
@@ -506,13 +552,11 @@ add_custom_target(
 )
 set_target_properties(translations PROPERTIES FOLDER "UI")
 
-if (WERROR_COMMON_FLAGS)
-	set_source_files_properties(
-		${WIRESHARK_QT_FILES}
-		PROPERTIES
-		COMPILE_FLAGS ${WERROR_COMMON_FLAGS}
-	)
-endif()
+set_source_files_properties(
+	${WIRESHARK_QT_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+)
 
 add_definitions(${QT_DEFINITIONS})
 
@@ -530,6 +574,7 @@ add_library(qtui STATIC
 	wireshark-tap-register.c
 )
 add_dependencies(qtui translations)
+set_target_properties(qtui PROPERTIES COMPILE_OPTIONS "${WS_WARNINGS_CXX_FLAGS}")
 set_target_properties(qtui PROPERTIES LINK_FLAGS "${WS_LINK_FLAGS}")
 set_target_properties(qtui PROPERTIES FOLDER "UI")
 

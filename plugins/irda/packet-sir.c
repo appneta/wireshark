@@ -25,10 +25,11 @@
 #include "config.h"
 
 #include <epan/packet.h>
+#include <epan/expert.h>
 #include <epan/crc16-tvb.h>
 
 /** Serial infrared port. */
-#define TCP_PORT_SIR 6417
+#define TCP_PORT_SIR 6417 /* Not IANA registered */
 
 
 /** Beginning of frame. */
@@ -48,6 +49,7 @@ void proto_register_irsir(void);
 
 /** Protocol handles. */
 static dissector_handle_t irda_handle;
+static dissector_handle_t sir_handle;
 
 /** Protocol fields. */
 static int proto_sir = -1;
@@ -59,6 +61,8 @@ static int hf_sir_fcs = -1;
 static int hf_sir_fcs_status = -1;
 static int hf_sir_length = -1;
 static int hf_sir_preamble = -1;
+
+static expert_field ei_sir_fcs = EI_INIT;
 
 /* Copied and renamed from proto.c because global value_strings don't work for plugins */
 static const value_string plugin_proto_checksum_vals[] = {
@@ -80,7 +84,7 @@ unescape_data(tvbuff_t *tvb, packet_info *pinfo)
 	} else {
 		guint length = tvb_captured_length(tvb);
 		guint offset;
-		guint8 *data = (guint8 *)g_malloc(length);
+		guint8 *data = (guint8 *)wmem_alloc(pinfo->pool, length);
 		guint8 *dst = data;
 		tvbuff_t *next_tvb;
 
@@ -93,7 +97,6 @@ unescape_data(tvbuff_t *tvb, packet_info *pinfo)
 		}
 
 		next_tvb = tvb_new_child_real_data(tvb, data, (guint) (dst-data), (guint) (dst-data));
-		tvb_set_free_cb(next_tvb, g_free);
 		add_new_data_source(pinfo, next_tvb, "Unescaped SIR");
 		return next_tvb;
 	}
@@ -102,13 +105,13 @@ unescape_data(tvbuff_t *tvb, packet_info *pinfo)
 
 /** Checksums the data. */
 static tvbuff_t *
-checksum_data(tvbuff_t *tvb, proto_tree *tree)
+checksum_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
 	int len = tvb_reported_length(tvb) - 2;
 	if (len < 0)
 		return tvb;
 
-	proto_tree_add_checksum(tree, tvb, len, hf_sir_fcs, hf_sir_fcs_status, NULL, NULL, crc16_ccitt_tvb(tvb, len),
+	proto_tree_add_checksum(tree, tvb, len, hf_sir_fcs, hf_sir_fcs_status, &ei_sir_fcs, pinfo, crc16_ccitt_tvb(tvb, len),
 								ENC_LITTLE_ENDIAN, PROTO_CHECKSUM_VERIFY);
 
 	return tvb_new_subset_length(tvb, 0, len);
@@ -137,7 +140,7 @@ dissect_sir(tvbuff_t *tvb, packet_info *pinfo, proto_tree *root, void* data _U_)
 		} else {
 			guint preamble_len = bof_offset - offset;
 			gint data_offset = bof_offset + 1;
-			tvbuff_t* next_tvb = tvb_new_subset(tvb,
+			tvbuff_t* next_tvb = tvb_new_subset_length_caplen(tvb,
 				data_offset, eof_offset - data_offset, -1);
 			next_tvb = unescape_data(next_tvb, pinfo);
 			if (root) {
@@ -154,11 +157,11 @@ dissect_sir(tvbuff_t *tvb, packet_info *pinfo, proto_tree *root, void* data _U_)
 						bof_offset, 1, ENC_BIG_ENDIAN);
 				proto_tree_add_uint(tree, hf_sir_length,
 						next_tvb, 0, data_len, data_len);
-				next_tvb = checksum_data(next_tvb, tree);
+				next_tvb = checksum_data(next_tvb, pinfo, tree);
 				proto_tree_add_item(tree, hf_sir_eof, tvb,
 						eof_offset, 1, ENC_BIG_ENDIAN);
 			} else {
-				next_tvb = checksum_data(next_tvb, NULL);
+				next_tvb = checksum_data(next_tvb, pinfo, NULL);
 			}
 			call_dissector(irda_handle, next_tvb, pinfo, root);
 		}
@@ -172,7 +175,7 @@ dissect_sir(tvbuff_t *tvb, packet_info *pinfo, proto_tree *root, void* data _U_)
 void
 proto_reg_handoff_irsir(void)
 {
-	dissector_add_uint("tcp.port", TCP_PORT_SIR, find_dissector("sir"));
+	dissector_add_uint_with_preference("tcp.port", TCP_PORT_SIR, sir_handle);
 
 	irda_handle = find_dissector("irda");
 }
@@ -217,12 +220,18 @@ proto_register_irsir(void)
 				NULL, HFILL }}
 	};
 
-	proto_sir = proto_register_protocol(
-			"Serial Infrared", "SIR", "sir");
-	register_dissector("sir", dissect_sir, proto_sir);
+	static ei_register_info ei[] = {
+		{ &ei_sir_fcs, { "sir.bad_checksum", PI_CHECKSUM, PI_ERROR, "Bad checksum", EXPFILL }},
+	};
+
+	expert_module_t* expert_sir;
+
+	proto_sir = proto_register_protocol("Serial Infrared", "SIR", "sir");
+	sir_handle = register_dissector("sir", dissect_sir, proto_sir);
 	proto_register_subtree_array(ett, array_length(ett));
-	proto_register_field_array(
-			proto_sir, hf_sir, array_length(hf_sir));
+	proto_register_field_array( proto_sir, hf_sir, array_length(hf_sir));
+	expert_sir = expert_register_protocol(proto_sir);
+	expert_register_field_array(expert_sir, ei, array_length(ei));
 }
 
 /*

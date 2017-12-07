@@ -98,9 +98,9 @@ static int hf_usb_frame_data = -1;
 static int hf_usb_urb_id = -1;
 static int hf_usb_linux_urb_type = -1;
 static int hf_usb_linux_transfer_type = -1;
-static int hf_usb_endpoint_number = -1;
+static int hf_usb_endpoint_address = -1;
 static int hf_usb_endpoint_direction = -1;
-static int hf_usb_endpoint_number_value = -1;
+static int hf_usb_endpoint_number = -1;
 static int hf_usb_device_address = -1;
 static int hf_usb_bus_id = -1;
 static int hf_usb_setup_flag = -1;
@@ -124,9 +124,9 @@ static int hf_usb_info = -1;
 static int hf_usb_usbpcap_info_reserved = -1;
 static int hf_usb_usbpcap_info_direction = -1;
 static int hf_usb_win32_device_address = -1;
-/* hf_usb_bus_id, hf_usb_endpoint_number, hf_usb_endpoint_direction,
- * hf_usb_endpoint_number_value, hf_usb_transfer_type are common with
- * Linux pseudoheader */
+/* hf_usb_bus_id, hf_usb_endpoint_address, hf_usb_endpoint_direction,
+ * hf_usb_endpoint_number, hf_usb_transfer_type are common with
+ * FreeBSD and Linux pseudoheaders */
 static int hf_usb_win32_data_len = -1;
 static int hf_usb_control_stage = -1;
 static int hf_usb_win32_iso_start_frame = -1;
@@ -235,6 +235,23 @@ static int hf_usb_src = -1;
 static int hf_usb_dst = -1;
 static int hf_usb_addr = -1;
 
+/* macOS */
+static int hf_usb_darwin_bcd_version = -1;
+static int hf_usb_darwin_header_len = -1;
+static int hf_usb_darwin_request_type = -1;
+static int hf_usb_darwin_io_len = -1;
+static int hf_usb_darwin_io_status = -1;
+static int hf_usb_darwin_iso_num_packets = -1;
+static int hf_usb_darwin_io_id = -1;
+static int hf_usb_darwin_device_location = -1;
+static int hf_usb_darwin_speed = -1;
+static int hf_usb_darwin_device_address = -1;
+static int hf_usb_darwin_endpoint_address = -1;
+static int hf_usb_darwin_endpoint_type = -1;
+static int hf_usb_darwin_iso_status = -1;
+static int hf_usb_darwin_iso_frame_number = -1;
+static int hf_usb_darwin_iso_timestamp = -1;
+
 static gint ett_usb_hdr = -1;
 static gint ett_usb_setup_hdr = -1;
 static gint ett_usb_isodesc = -1;
@@ -261,7 +278,7 @@ static int usb_address_type = -1;
 
 static const int *usb_endpoint_fields[] = {
     &hf_usb_endpoint_direction,
-    &hf_usb_endpoint_number_value,
+    &hf_usb_endpoint_number,
     NULL
 };
 
@@ -1255,6 +1272,95 @@ static const value_string usb_app_usb_test_and_measurement_protocol_vals[] = {
     {0, NULL}
 };
 static value_string_ext usb_app_usb_test_and_measurement_protocol_vals_ext = VALUE_STRING_EXT_INIT(usb_app_usb_test_and_measurement_protocol_vals);
+
+/* macOS */
+
+/* Request Type */
+#define DARWIN_IO_SUBMIT   0
+#define DARWIN_IO_COMPLETE 1
+
+
+static const value_string usb_darwin_request_type_vals[] = {
+    {DARWIN_IO_SUBMIT,   "SUBMIT"},
+    {DARWIN_IO_COMPLETE, "COMPLETE"},
+    {0, NULL}
+};
+
+/* Transfer type */
+static const value_string usb_darwin_endpoint_type_vals[] = {
+    {USB_EP_CONTROL,     "Control"},
+    {USB_EP_ISOCHRONOUS, "Isochronous"},
+    {USB_EP_BULK,        "Bulk"},
+    {USB_EP_INTERRUPT,   "Interrupt"},
+    {0, NULL}
+};
+
+/* USB speeds */
+#define DARWIN_SPEED_LOW         0
+#define DARWIN_SPEED_FULL        1
+#define DARWIN_SPEED_HIGH        2
+#define DARWIN_SPEED_SUPER       3
+#define DARWIN_SPEED_SUPERPLUS   4
+
+static const value_string usb_darwin_speed_vals[] = {
+    {DARWIN_SPEED_LOW,       "Low"},
+    {DARWIN_SPEED_FULL,      "Full"},
+    {DARWIN_SPEED_HIGH,      "High"},
+    {DARWIN_SPEED_SUPER,     "Super"},
+    {DARWIN_SPEED_SUPERPLUS, "Super+"},
+    {0, NULL}
+};
+
+static const value_string darwin_usb_status_vals[] = {
+    {0x00000000, "kIOReturnSuccess"},
+    {0xe00002bc, "kIOReturnError"},
+    {0xe00002bd, "kIOReturnNoMemory"},
+    {0xe00002be, "kIOReturnNoResources"},
+    {0xe00002bf, "kIOReturnIPCError"},
+    {0xe00002c0, "kIOReturnNoDevice"},
+    {0xe00002c1, "kIOReturnNotPrivileged"},
+    {0xe00002c2, "kIOReturnBadArgument"},
+    {0xe00002c3, "kIOReturnLockedRead"},
+    {0xe00002c4, "kIOReturnLockedWrite"},
+    {0xe00002c5, "kIOReturnExclusiveAccess"},
+    {0xe00002c6, "kIOReturnBadMessageID"},
+    {0xe00002c7, "kIOReturnUnsupported"},
+    {0xe00002c8, "kIOReturnVMError"},
+    {0xe00002c9, "kIOReturnInternalError"},
+    {0xe00002ca, "kIOReturnIOError"},
+
+    {0xe00002cc, "kIOReturnCannotLock"},
+    {0xe00002cd, "kIOReturnNotOpen"},
+    {0xe00002ce, "kIOReturnNotReadable"},
+    {0xe00002cf, "kIOReturnNotWritable"},
+    {0xe00002d0, "kIOReturnNotAligned"},
+    {0xe00002d1, "kIOReturnBadMedia"},
+    {0xe00002d2, "kIOReturnStillOpen"},
+    {0xe00002d3, "kIOReturnRLDError"},
+    {0xe00002d4, "kIOReturnDMAError"},
+    {0xe00002d5, "kIOReturnBusy"},
+    {0xe00002d6, "kIOReturnTimeout"},
+    {0xe00002d7, "kIOReturnOffline"},
+    {0xe00002d8, "kIOReturnNotReady"},
+    {0xe00002d9, "kIOReturnNotAttached"},
+    {0xe00002da, "kIOReturnNoChannels"},
+    {0xe00002db, "kIOReturnNoSpace"},
+
+    {0xe00002eb, "kIOReturnAborted"},
+    {0, NULL}
+};
+
+static const guint32 darwin_endpoint_to_linux[] =
+{
+    URB_CONTROL,
+    URB_ISOCHRONOUS,
+    URB_BULK,
+    URB_INTERRUPT,
+    URB_UNKNOWN
+};
+
+static value_string_ext usb_darwin_status_vals_ext = VALUE_STRING_EXT_INIT(darwin_usb_status_vals);
+
 
 void proto_register_usb(void);
 void proto_reg_handoff_usb(void);
@@ -3328,7 +3434,7 @@ dissect_usb_setup_request(packet_info *pinfo, proto_tree *tree,
 
     if (tvb_captured_length_remaining(tvb, offset) > 0) {
         next_tvb = tvb_new_composite();
-        tvb_composite_append(next_tvb, tvb_new_subset(tvb, setup_offset, 7, 7));
+        tvb_composite_append(next_tvb, tvb_new_subset_length_caplen(tvb, setup_offset, 7, 7));
 
         data_tvb = tvb_new_subset_remaining(tvb, offset);
         tvb_composite_append(next_tvb, data_tvb);
@@ -3340,7 +3446,7 @@ dissect_usb_setup_request(packet_info *pinfo, proto_tree *tree,
                 tvb_captured_length(next_tvb));
         add_new_data_source(pinfo, next_tvb, "USB Control");
     } else {
-        next_tvb = tvb_new_subset(tvb, setup_offset, 7, 7);
+        next_tvb = tvb_new_subset_length_caplen(tvb, setup_offset, 7, 7);
     }
 
     /* at this point, offset contains the number of bytes that we
@@ -3396,9 +3502,7 @@ dissect_linux_usb_pseudo_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *t
     /* show the urb type of this URB as string and as a character */
     urb_type = tvb_get_guint8(tvb, 8);
     usb_conv_info->is_request = (urb_type==URB_SUBMIT);
-    proto_tree_add_uint_format_value(tree, hf_usb_linux_urb_type, tvb, 8, 1,
-        urb_type, "%s ('%c')", val_to_str(urb_type, usb_linux_urb_type_vals, "Unknown %d"),
-        g_ascii_isprint(urb_type) ? urb_type : '.');
+    proto_tree_add_uint(tree, hf_usb_linux_urb_type, tvb, 8, 1, urb_type);
     proto_tree_add_item(tree, hf_usb_linux_transfer_type, tvb, 9, 1, ENC_LITTLE_ENDIAN);
 
     transfer_type = tvb_get_guint8(tvb, 9);
@@ -3415,7 +3519,7 @@ dissect_linux_usb_pseudo_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *t
     col_append_str(pinfo->cinfo, COL_INFO,
                     val_to_str(transfer_type_and_direction, usb_transfer_type_and_direction_vals, "Unknown type %x"));
 
-    proto_tree_add_bitmask(tree, tvb, 10, hf_usb_endpoint_number, ett_usb_endpoint, usb_endpoint_fields, ENC_NA);
+    proto_tree_add_bitmask(tree, tvb, 10, hf_usb_endpoint_address, ett_usb_endpoint, usb_endpoint_fields, ENC_NA);
     proto_tree_add_item(tree, hf_usb_device_address, tvb, 11, 1, ENC_LITTLE_ENDIAN);
     usb_conv_info->device_address = (guint16)tvb_get_guint8(tvb, 11);
 
@@ -3493,7 +3597,7 @@ dissect_usbpcap_buffer_packet_header(tvbuff_t *tvb, packet_info *pinfo, proto_tr
     endpoint_byte = tvb_get_guint8(tvb, 21);
     usb_conv_info->direction = endpoint_byte&URB_TRANSFER_IN ?  P2P_DIR_RECV : P2P_DIR_SENT;
     usb_conv_info->endpoint = endpoint_byte&0x7F;
-    proto_tree_add_bitmask(tree, tvb, 21, hf_usb_endpoint_number, ett_usb_endpoint, usb_endpoint_fields, ENC_LITTLE_ENDIAN);
+    proto_tree_add_bitmask(tree, tvb, 21, hf_usb_endpoint_address, ett_usb_endpoint, usb_endpoint_fields, ENC_LITTLE_ENDIAN);
 
     transfer_type = tvb_get_guint8(tvb, 22);
     usb_conv_info->transfer_type = transfer_type;
@@ -3513,6 +3617,74 @@ dissect_usbpcap_buffer_packet_header(tvbuff_t *tvb, packet_info *pinfo, proto_tr
 
     /* we don't handle the transfer-specific headers here */
     return 27;
+}
+
+
+static gint
+dissect_darwin_buffer_packet_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+        usb_conv_info_t *usb_conv_info, guint64 *id)
+{
+    guint8   transfer_type;
+    guint8   request_type;
+    guint8   endpoint_byte;
+    guint8   transfer_type_and_direction;
+    guint8   header_length;
+
+    proto_tree_add_item(tree, hf_usb_darwin_bcd_version, tvb, 0, 2, ENC_LITTLE_ENDIAN);
+
+    header_length = tvb_get_guint8(tvb, 2);
+    proto_tree_add_item(tree, hf_usb_darwin_header_len, tvb, 2, 1, ENC_LITTLE_ENDIAN);
+
+    request_type = tvb_get_guint8(tvb, 3);
+    usb_conv_info->is_request = (request_type == DARWIN_IO_SUBMIT);
+    proto_tree_add_uint(tree, hf_usb_darwin_request_type, tvb, 3, 1, request_type);
+
+    proto_tree_add_item(tree, hf_usb_darwin_io_len, tvb, 4, 4, ENC_LITTLE_ENDIAN);
+
+    proto_tree_add_item(tree, hf_usb_darwin_io_status, tvb, 8, 4, ENC_LITTLE_ENDIAN);
+
+    proto_tree_add_item(tree, hf_usb_darwin_iso_num_packets, tvb, 12, 4, ENC_LITTLE_ENDIAN);
+
+    *id = tvb_get_guint64(tvb, 16, ENC_LITTLE_ENDIAN);
+    proto_tree_add_uint64(tree, hf_usb_darwin_io_id, tvb, 16, 8, *id);
+
+    proto_tree_add_item(tree, hf_usb_darwin_device_location, tvb, 24, 4, ENC_LITTLE_ENDIAN);
+    usb_conv_info->bus_id = tvb_get_letohl(tvb, 24) >> 24;
+
+    proto_tree_add_item(tree, hf_usb_darwin_speed, tvb, 28, 1, ENC_LITTLE_ENDIAN);
+
+    usb_conv_info->device_address = (guint16)tvb_get_guint8(tvb, 29);
+    proto_tree_add_uint(tree, hf_usb_darwin_device_address, tvb, 29, 1, usb_conv_info->device_address);
+
+    endpoint_byte = tvb_get_guint8(tvb, 30);   /* direction bit | endpoint */
+    usb_conv_info->endpoint = endpoint_byte & 0x7F;
+    if (endpoint_byte & URB_TRANSFER_IN) {
+        usb_conv_info->direction = P2P_DIR_RECV;
+    }
+    else {
+        usb_conv_info->direction = P2P_DIR_SENT;
+    }
+    proto_tree_add_uint(tree, hf_usb_darwin_endpoint_address, tvb, 30, 1, endpoint_byte);
+    proto_tree_add_bitmask(tree, tvb, 30, hf_usb_endpoint_number, ett_usb_endpoint, usb_endpoint_fields, ENC_LITTLE_ENDIAN);
+
+    transfer_type = MIN(tvb_get_guint8(tvb, 31), G_N_ELEMENTS(darwin_endpoint_to_linux) - 1);
+    usb_conv_info->transfer_type = darwin_endpoint_to_linux[transfer_type];
+    proto_tree_add_uint(tree, hf_usb_darwin_endpoint_type, tvb, 31, 1, transfer_type);
+
+    transfer_type_and_direction = (darwin_endpoint_to_linux[transfer_type] & 0x7F) | (endpoint_byte & 0x80);
+    col_append_str(pinfo->cinfo, COL_INFO,
+                   val_to_str(transfer_type_and_direction, usb_transfer_type_and_direction_vals, "Unknown type %x"));
+    col_append_str(pinfo->cinfo, COL_INFO, usb_conv_info->is_request == TRUE ? " (submitted)" : " (completed)");
+
+    usb_conv_info->is_setup = FALSE;
+    if ((usb_conv_info->is_request == TRUE) && (usb_conv_info->transfer_type == URB_CONTROL)) {
+        usb_conv_info->is_setup = TRUE;
+    }
+
+    usb_conv_info->setup_requesttype = 0;
+
+    /* we don't handle the transfer-specific headers here */
+    return header_length;
 }
 
 /* Set the usb_address_t fields based on the direction of the urb */
@@ -3908,6 +4080,77 @@ dissect_usbip_iso_transfer(packet_info *pinfo _U_, proto_tree *urb_tree,
 }
 
 static gint
+dissect_darwin_usb_iso_transfer(packet_info *pinfo _U_, proto_tree *tree, usb_header_t header_type _U_,
+                    guint8 urb_type _U_, tvbuff_t *tvb, gint32 offset, usb_conv_info_t *usb_conv_info)
+{
+    guint32     frame_length;
+    guint32     frame_header_length;
+    guint32     status;
+    guint32     iso_tree_start;
+    guint32     i;
+    guint32     iso_numdesc;
+    guint32     len;
+    proto_item *tii;
+
+    len  = (gint32)tvb_captured_length(tvb);
+    len -= offset;
+
+    tii = proto_tree_add_uint(tree, hf_usb_bInterfaceClass, tvb, offset, 0, usb_conv_info->interfaceClass);
+    PROTO_ITEM_SET_GENERATED(tii);
+
+    status      = tvb_get_guint32(tvb, 8, ENC_LITTLE_ENDIAN);
+    iso_numdesc = tvb_get_guint32(tvb, 12, ENC_LITTLE_ENDIAN);
+
+    iso_tree_start = offset;
+    for (i = 0; (i < iso_numdesc) && (len > 8 /* header len + frame len */); i++) {
+        proto_item   *iso_desc_ti;
+        proto_tree   *iso_desc_tree;
+
+        /* Fetch ISO descriptor fields stored in little-endian byte order. */
+        frame_header_length = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
+        frame_length        = tvb_get_guint32(tvb, offset + 4, ENC_LITTLE_ENDIAN);
+
+        if (len < frame_header_length) {
+            break;
+        }
+
+        iso_desc_ti = proto_tree_add_protocol_format(tree, proto_usb, tvb, offset,
+                20, "Frame %u [%s]", i, val_to_str_ext(status, &usb_darwin_status_vals_ext, "Error %d"));
+
+        iso_desc_tree = proto_item_add_subtree(iso_desc_ti, ett_usb_isodesc);
+
+        proto_tree_add_item(iso_desc_tree, hf_usb_darwin_iso_frame_number, tvb, offset + 12, 8, ENC_LITTLE_ENDIAN);
+
+        proto_tree_add_item(iso_desc_tree, hf_usb_iso_len, tvb, offset + 4, 4, ENC_LITTLE_ENDIAN);
+
+        if (usb_conv_info->is_request == FALSE) {
+            proto_tree_add_item(iso_desc_tree, hf_usb_darwin_iso_timestamp, tvb, offset + 20, 8, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(iso_desc_tree, hf_usb_darwin_iso_status, tvb, offset + 8, 4, ENC_LITTLE_ENDIAN);
+
+            /* Data */
+            if (frame_length > len) {
+                frame_length = len;
+            }
+
+            proto_tree_add_item(iso_desc_tree, hf_usb_iso_data, tvb, offset + frame_header_length, frame_length, ENC_NA);
+            proto_tree_set_appendix(iso_desc_tree, tvb, (gint)iso_tree_start, (gint)(offset - iso_tree_start));
+
+            len    -= frame_length;
+            offset += frame_length;
+        }
+
+        /* Padding to align the next header */
+        offset        += frame_header_length;
+        offset         = ((offset + 3) & ~3);
+        iso_tree_start = offset;
+
+        len -= frame_header_length;
+    }
+
+    return offset;
+}
+
+static gint
 dissect_usb_payload(tvbuff_t *tvb, packet_info *pinfo,
                     proto_tree *parent, proto_tree *tree,
                     usb_conv_info_t *usb_conv_info, guint8 urb_type,
@@ -3999,7 +4242,7 @@ dissect_freebsd_usb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent, void 
     proto_tree_add_item_ret_uint(tree, hf_usb_nframes, tvb, 28, 4, ENC_LITTLE_ENDIAN, &nframes);
     proto_tree_add_item(tree, hf_usb_packet_size, tvb, 32, 4, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(tree, hf_usb_packet_count, tvb, 36, 4, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(tree, hf_usb_endpoint_number, tvb, 40, 4, ENC_LITTLE_ENDIAN);
+    proto_tree_add_bitmask(tree, tvb, 40, hf_usb_endpoint_address, ett_usb_endpoint, usb_endpoint_fields, ENC_NA);
     proto_tree_add_item(tree, hf_usb_speed, tvb, 44, 1, ENC_LITTLE_ENDIAN);
 
     offset += 128;
@@ -4044,6 +4287,7 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
     guint32               win32_data_len = 0;
     guint32               iso_numdesc = 0;
     guint32               desc_offset = 0;
+    guint32               location = 0;
     proto_item           *urb_tree_ti;
     proto_tree           *tree;
     proto_item           *item;
@@ -4091,6 +4335,14 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
         device_address = ip_header->devid;
         bus_id = ip_header->busid;
         endpoint = ip_header->ep;
+        break;
+
+    case USB_HEADER_DARWIN:
+        urb_type = tvb_get_guint8(tvb, 1);
+        endpoint = tvb_get_guint8(tvb, 30) & 0x7F;
+        device_address = (guint16)tvb_get_guint8(tvb, 29);
+        location = tvb_get_letohl(tvb, 23);
+        bus_id = location >> 24;
         break;
 
     default:
@@ -4149,6 +4401,11 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
         usb_id = 0;
         break;
 
+    case USB_HEADER_DARWIN:
+        offset = dissect_darwin_buffer_packet_header(tvb, pinfo, tree, usb_conv_info, &usb_id);
+        proto_item_set_len(urb_tree_ti, offset);
+        break;
+
     default:
         usb_id = 0;
         break;
@@ -4185,6 +4442,9 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
             break;
 
         case USB_HEADER_USBIP:
+            break;
+
+        case USB_HEADER_DARWIN:
             break;
         }
         break;
@@ -4224,6 +4484,9 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
 
                 case USB_HEADER_USBIP:
                     break;
+
+                case USB_HEADER_DARWIN:
+                    break;
                 }
             }
         } else {
@@ -4258,6 +4521,9 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
 
             case USB_HEADER_USBIP:
                 break;
+
+            case USB_HEADER_DARWIN:
+                break;
             }
 
             offset = dissect_usb_setup_response(pinfo, tree, tvb, offset,
@@ -4285,6 +4551,11 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
             offset = dissect_usbip_iso_transfer(pinfo, tree,
                     tvb, offset, iso_numdesc, desc_offset, usb_conv_info);
             break;
+
+        case USB_HEADER_DARWIN:
+            offset = dissect_darwin_usb_iso_transfer(pinfo, tree, header_type,
+                    urb_type, tvb, offset, usb_conv_info);
+            break;
         }
         break;
 
@@ -4307,6 +4578,9 @@ dissect_usb_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent,
             break;
 
         case USB_HEADER_USBIP:
+            break;
+
+        case USB_HEADER_DARWIN:
             break;
         }
         break;
@@ -4335,6 +4609,13 @@ static int
 dissect_win32_usb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent, void* data _U_)
 {
     dissect_usb_common(tvb, pinfo, parent, USB_HEADER_USBPCAP, NULL);
+    return tvb_captured_length(tvb);
+}
+
+static int
+dissect_darwin_usb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent, void* data _U_)
+{
+    dissect_usb_common(tvb, pinfo, parent, USB_HEADER_DARWIN, NULL);
     return tvb_captured_length(tvb);
 }
 
@@ -4593,7 +4874,7 @@ proto_register_usb(void)
 
         { &hf_usb_linux_urb_type,
           { "URB type", "usb.urb_type",
-            FT_UINT8, BASE_DEC, VALS(usb_linux_urb_type_vals), 0x0,
+            FT_CHAR, BASE_HEX, VALS(usb_linux_urb_type_vals), 0x0,
             NULL, HFILL }},
 
         { &hf_usb_linux_transfer_type,
@@ -4601,20 +4882,20 @@ proto_register_usb(void)
             FT_UINT8, BASE_HEX, VALS(usb_linux_transfer_type_vals), 0x0,
             NULL, HFILL }},
 
-        { &hf_usb_endpoint_number,
-          { "Endpoint", "usb.endpoint_number",
+        { &hf_usb_endpoint_address,
+          { "Endpoint", "usb.endpoint_address",
             FT_UINT8, BASE_HEX, NULL, 0x0,
-            "USB endpoint number", HFILL }},
+            "USB endpoint address", HFILL }},
 
         { &hf_usb_endpoint_direction,
-          { "Direction", "usb.endpoint_number.direction",
+          { "Direction", "usb.endpoint_address.direction",
             FT_UINT8, BASE_DEC, VALS(usb_endpoint_direction_vals), 0x80,
             "USB endpoint direction", HFILL }},
 
-        { &hf_usb_endpoint_number_value,
-          { "Endpoint value", "usb.endpoint_number.endpoint",
-            FT_UINT8, BASE_DEC, NULL, 0x7F,
-            "USB endpoint value", HFILL }},
+        { &hf_usb_endpoint_number,
+          { "Endpoint number", "usb.endpoint_address.number",
+            FT_UINT8, BASE_DEC, NULL, 0x0F,
+            "USB endpoint number", HFILL }},
 
         { &hf_usb_device_address,
           { "Device", "usb.device_address",
@@ -4762,6 +5043,81 @@ proto_register_usb(void)
             FT_UINT32, BASE_HEX | BASE_EXT_STRING, &win32_usbd_status_vals_ext, 0x0,
             NULL, HFILL }},
 
+        /* macOS usbdump pseudoheader */
+        { &hf_usb_darwin_bcd_version,
+          { "Darwin header bcdVersion", "usb.darwin.bcdVersion",
+            FT_UINT16, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_header_len,
+          { "Darwin header length", "usb.darwin.header_len",
+            FT_UINT8, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_request_type,
+          { "Request type", "usb.darwin.request_type",
+            FT_UINT8, BASE_DEC, VALS(usb_darwin_request_type_vals), 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_io_len,
+          { "I/O length [bytes]", "usb.darwin.io_len",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            "Request length in bytes", HFILL }},
+
+        { &hf_usb_darwin_io_status,
+          { "Request status", "usb.darwin.io_status",
+            FT_UINT32, BASE_HEX | BASE_EXT_STRING, &usb_darwin_status_vals_ext, 0x0,
+            "USB request status", HFILL }},
+
+        { &hf_usb_darwin_iso_num_packets,
+          { "Isochronous transfer number of frames", "usb.darwin.io_frame_count",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_io_id,
+          { "I/O ID", "usb.darwin.io_id",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_device_location,
+          { "Device location ID", "usb.darwin.location_id",
+            FT_UINT32, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_speed,
+          { "Device speed", "usb.darwin_device_speed",
+            FT_UINT8, BASE_DEC, VALS(usb_darwin_speed_vals), 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_device_address,
+          { "USB device index", "usb.darwin.device_address",
+            FT_UINT8, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_endpoint_address,
+          { "Endpoint address", "usb.darwin.endpoint_address",
+            FT_UINT8, BASE_HEX, NULL, 0x0,
+            "Endpoint address and direction", HFILL }},
+
+        { &hf_usb_darwin_endpoint_type,
+          { "Endpoint transfer type", "usb.darwin.endpoint_type",
+            FT_UINT8, BASE_DEC, VALS(usb_darwin_endpoint_type_vals), 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_iso_status,
+          { "Frame status", "usb.darwin.iso.status",
+            FT_UINT32, BASE_HEX | BASE_EXT_STRING, &usb_darwin_status_vals_ext, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_iso_timestamp,
+          { "Frame timestamp", "usb.darwin.iso.timestamp",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }},
+
+        { &hf_usb_darwin_iso_frame_number,
+          { "Frame number", "usb.darwin.iso.frame_number",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }},
 
         { &hf_usb_bmRequestType,
           { "bmRequestType", "usb.bmRequestType",
@@ -5327,17 +5683,20 @@ proto_reg_handoff_usb(void)
     dissector_handle_t  linux_usb_mmapped_handle;
     dissector_handle_t  win32_usb_handle;
     dissector_handle_t  freebsd_usb_handle;
+    dissector_handle_t  darwin_usb_handle;
 
     linux_usb_handle = create_dissector_handle(dissect_linux_usb, proto_usb);
     linux_usb_mmapped_handle = create_dissector_handle(dissect_linux_usb_mmapped,
                                                        proto_usb);
     win32_usb_handle = create_dissector_handle(dissect_win32_usb, proto_usb);
     freebsd_usb_handle = create_dissector_handle(dissect_freebsd_usb, proto_usb);
+    darwin_usb_handle = create_dissector_handle(dissect_darwin_usb, proto_usb);
 
     dissector_add_uint("wtap_encap", WTAP_ENCAP_USB_LINUX, linux_usb_handle);
     dissector_add_uint("wtap_encap", WTAP_ENCAP_USB_LINUX_MMAPPED, linux_usb_mmapped_handle);
     dissector_add_uint("wtap_encap", WTAP_ENCAP_USBPCAP, win32_usb_handle);
     dissector_add_uint("wtap_encap", WTAP_ENCAP_USB_FREEBSD, freebsd_usb_handle);
+    dissector_add_uint("wtap_encap", WTAP_ENCAP_USB_DARWIN, darwin_usb_handle);
 }
 
 /*

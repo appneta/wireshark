@@ -51,7 +51,6 @@
 
 #include <stdio.h>
 #include <epan/packet.h>
-#include <epan/prefs.h>
 #include <epan/reassemble.h>
 #include <epan/expert.h>
 #include "packet-dtn.h"
@@ -289,8 +288,7 @@ static expert_field ei_tcp_convergence_ack_length = EI_INIT;
 
 static dissector_handle_t bundle_handle;
 
-static guint bundle_tcp_port = 4556;
-static guint bundle_udp_port = 4556;
+#define BUNDLE_PORT            4556
 
 typedef struct dictionary_data {
     int bundle_header_dict_length;
@@ -2391,17 +2389,6 @@ dissect_bundle(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
     return(offset);
 }
 
-static void
-bundle_defragment_init(void) {
-    reassembly_table_init(&msg_reassembly_table,
-                          &addresses_reassembly_table_functions);
-}
-
-static void
-bundle_defragment_cleanup(void) {
-    reassembly_table_destroy(&msg_reassembly_table);
-}
-
 
 void proto_reg_handoff_bundle(void);
 void proto_register_bundle(void);
@@ -3051,26 +3038,12 @@ proto_register_bundle(void)
         },
     };
 
-    module_t *bundle_module;
     expert_module_t *expert_bundle, *expert_tcpcl;
 
     proto_bundle  = proto_register_protocol("Bundle Protocol", "Bundle", "bundle");
     bundle_handle = register_dissector("bundle", dissect_bundle, proto_bundle);
-    bundle_module = prefs_register_protocol(proto_bundle, proto_reg_handoff_bundle);
 
     proto_tcp_conv = proto_register_protocol ("DTN TCP Convergence Layer Protocol", "TCPCL", "tcpcl");
-
-    prefs_register_uint_preference(bundle_module, "tcp.port",
-                                   "Bundle Protocol TCP Port",
-                                   "TCP Port to Accept Bundle Protocol Connections",
-                                   10,
-                                   &bundle_tcp_port);
-
-    prefs_register_uint_preference(bundle_module, "udp.port",
-                                   "Bundle Protocol UDP Port",
-                                   "UDP Port to Accept Bundle Protocol Connections",
-                                   10,
-                                   &bundle_udp_port);
 
     proto_register_field_array(proto_bundle, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
@@ -3082,31 +3055,18 @@ proto_register_bundle(void)
     expert_tcpcl = expert_register_protocol(proto_tcp_conv);
     expert_register_field_array(expert_tcpcl, ei_tcpcl, array_length(ei_tcpcl));
 
-    register_init_routine(bundle_defragment_init);
-    register_cleanup_routine(bundle_defragment_cleanup);
+    reassembly_table_register(&msg_reassembly_table,
+                          &addresses_reassembly_table_functions);
 }
 
 void
 proto_reg_handoff_bundle(void)
 {
-    static dissector_handle_t tcpcl_handle;
-    static guint tcp_port;
-    static guint udp_port;
+    dissector_handle_t tcpcl_handle;
 
-    static int Initialized = FALSE;
-
-    if (!Initialized) {
-        tcpcl_handle = create_dissector_handle(dissect_tcpcl, proto_bundle);
-        Initialized  = TRUE;
-    }
-    else {
-        dissector_delete_uint("tcp.port", tcp_port, tcpcl_handle);
-        dissector_delete_uint("udp.port", udp_port, bundle_handle);
-    }
-    tcp_port = bundle_tcp_port;
-    udp_port = bundle_udp_port;
-    dissector_add_uint("tcp.port", tcp_port, tcpcl_handle);
-    dissector_add_uint("udp.port", udp_port, bundle_handle);
+    tcpcl_handle = create_dissector_handle(dissect_tcpcl, proto_bundle);
+    dissector_add_uint_with_preference("tcp.port", BUNDLE_PORT, tcpcl_handle);
+    dissector_add_uint_with_preference("udp.port", BUNDLE_PORT, bundle_handle);
 }
 
 /*

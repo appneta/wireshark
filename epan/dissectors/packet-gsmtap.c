@@ -42,142 +42,12 @@
 
 #include <epan/packet.h>
 
+#include "packet-gsmtap.h"
+#include "packet-lapdm.h"
 #include "packet-tetra.h"
 
 void proto_register_gsmtap(void);
 void proto_reg_handoff_gsmtap(void);
-
-/* ====== DO NOT MAKE UNAPPROVED MODIFICATIONS HERE ===== */
-/* The following types and definitions are imported from libosmocore,
- * the original source of the GSMTAP format.
- *
- * prior to getting them accepted/included into the official Osmocom
- * GSMTAP definition, available from
- * http://cgit.osmocom.org/cgit/libosmocore/tree/include/osmocom/core/gsmtap.h
- *
- * The GSMTAP maintainer can be contacted via the
- * openbsc@lists.osmocom.org mailing list, or by private e-mail
- * to laforge@gnumonks.org
- */
-/* ====== DO NOT MAKE UNAPPROVED MODIFICATIONS HERE ===== */
-#define GSMTAP_TYPE_UM				0x01
-#define GSMTAP_TYPE_ABIS			0x02
-#define GSMTAP_TYPE_UM_BURST		0x03	/* raw burst bits */
-#define GSMTAP_TYPE_SIM				0x04
-#define GSMTAP_TYPE_TETRA_I1		0x05	/* tetra air interface */
-#define GSMTAP_TTPE_TETRA_I1_BURST	0x06	/* tetra air interface */
-#define GSMTAP_TYPE_WMX_BURST		0x07	/* WiMAX burst */
-#define GSMTAP_TYPE_GB_LLC			0x08 /* GPRS Gb interface: LLC */
-#define GSMTAP_TYPE_GB_SNDCP		0x09 /* GPRS Gb interface: SNDCP */
-#define GSMTAP_TYPE_GMR1_UM				0x0a	/* GMR-1 L2 packets */
-#define GSMTAP_TYPE_UMTS_RLC_MAC	0x0b
-#define GSMTAP_TYPE_UMTS_RRC		0x0c
-
-/* ====== DO NOT MAKE UNAPPROVED MODIFICATIONS HERE ===== */
-#define GSMTAP_BURST_UNKNOWN		0x00
-#define GSMTAP_BURST_FCCH			0x01
-#define GSMTAP_BURST_PARTIAL_SCH	0x02
-#define GSMTAP_BURST_SCH			0x03
-#define GSMTAP_BURST_CTS_SCH		0x04
-#define GSMTAP_BURST_COMPACT_SCH	0x05
-#define GSMTAP_BURST_NORMAL			0x06
-#define GSMTAP_BURST_DUMMY			0x07
-#define GSMTAP_BURST_ACCESS			0x08
-#define GSMTAP_BURST_NONE			0x09
-/* WiMAX bursts */
-#define GSMTAP_BURST_CDMA_CODE          0x10	/* WiMAX CDMA Code Attribute burst */
-#define GSMTAP_BURST_FCH                0x11	/* WiMAX FCH burst */
-#define GSMTAP_BURST_FFB                0x12	/* WiMAX Fast Feedback burst */
-#define GSMTAP_BURST_PDU                0x13	/* WiMAX PDU burst */
-#define GSMTAP_BURST_HACK               0x14	/* WiMAX HARQ ACK burst */
-#define GSMTAP_BURST_PHY_ATTRIBUTES     0x15	/* WiMAX PHY Attributes burst */
-
-/* ====== DO NOT MAKE UNAPPROVED MODIFICATIONS HERE ===== */
-/* sub-types for TYPE_UM */
-#define GSMTAP_CHANNEL_UNKNOWN    0x00
-#define GSMTAP_CHANNEL_BCCH       0x01
-#define GSMTAP_CHANNEL_CCCH       0x02
-#define GSMTAP_CHANNEL_RACH       0x03
-#define GSMTAP_CHANNEL_AGCH       0x04
-#define GSMTAP_CHANNEL_PCH        0x05
-#define GSMTAP_CHANNEL_SDCCH      0x06
-#define GSMTAP_CHANNEL_SDCCH4     0x07
-#define GSMTAP_CHANNEL_SDCCH8     0x08
-#define GSMTAP_CHANNEL_TCH_F      0x09
-#define GSMTAP_CHANNEL_TCH_H      0x0a
-#define GSMTAP_CHANNEL_PACCH      0x0b
-#define GSMTAP_CHANNEL_CBCH52     0x0c
-#define GSMTAP_CHANNEL_PDCH       0x0d
-#define GSMTAP_CHANNEL_PTCCH      0x0e
-#define GSMTAP_CHANNEL_CBCH51     0x0f
-
-/* GPRS Coding Scheme CS1..4 */
-#define GSMTAP_GPRS_CS_BASE	0x20
-#define GSMTAP_GPRS_CS(N)	(GSMTAP_GPRS_CS_BASE + N)
-/* (E) GPRS Coding Scheme MCS0..9 */
-#define GSMTAP_GPRS_MCS_BASE	0x30
-#define GSMTAP_GPRS_MCS(N)	(GSMTAP_GPRS_MCS_BASE + N)
-
-#define GSMTAP_CHANNEL_ACCH       0x80
-
-/* ====== DO NOT MAKE UNAPPROVED MODIFICATIONS HERE ===== */
-/* sub-types for TYPE_TETRA_AIR */
-#define GSMTAP_TETRA_BSCH			0x01
-#define GSMTAP_TETRA_AACH			0x02
-#define GSMTAP_TETRA_SCH_HU			0x03
-#define GSMTAP_TETRA_SCH_HD			0x04
-#define GSMTAP_TETRA_SCH_F			0x05
-#define GSMTAP_TETRA_BNCH			0x06
-#define GSMTAP_TETRA_STCH			0x07
-#define GSMTAP_TETRA_TCH_F			0x08
-
-/* ====== DO NOT MAKE UNAPPROVED MODIFICATIONS HERE ===== */
-/* sub-types for TYPE_GMR1 */
-#define GSMTAP_GMR1_UNKNOWN			0x00
-#define GSMTAP_GMR1_BCCH			0x01
-#define GSMTAP_GMR1_CCCH			0x02	/* either AGCH or PCH */
-#define GSMTAP_GMR1_PCH				0x03
-#define GSMTAP_GMR1_AGCH			0x04
-#define GSMTAP_GMR1_BACH			0x05
-#define GSMTAP_GMR1_RACH			0x06
-#define GSMTAP_GMR1_CBCH			0x07
-#define GSMTAP_GMR1_SDCCH			0x08
-#define GSMTAP_GMR1_TACCH			0x09
-#define GSMTAP_GMR1_GBCH			0x0a
-
-#define GSMTAP_GMR1_SACCH			0x01	/* to be combined with _TCH{6,9}   */
-#define GSMTAP_GMR1_FACCH			0x02	/* to be combines with _TCH{3,6,9} */
-#define GSMTAP_GMR1_DKAB			0x03	/* to be combined with _TCH3 */
-#define GSMTAP_GMR1_TCH3			0x10
-#define GSMTAP_GMR1_TCH6			0x14
-#define GSMTAP_GMR1_TCH9			0x18
-
-#define GSMTAP_ARFCN_F_PCS			0x8000
-#define GSMTAP_ARFCN_F_UPLINK		0x4000
-#define GSMTAP_ARFCN_MASK			0x3fff
-
-#define GSMTAP_UDP_PORT				4729
-
-/* This is the header as it is used by gsmtap-generating software.
- * It is not used by the wireshark dissector and provided for reference only.
-struct gsmtap_hdr {
-	guint8 version;		// version, set to 0x01 currently
-	guint8 hdr_len;		// length in number of 32bit words
-	guint8 type;		// see GSMTAP_TYPE_*
-	guint8 timeslot;	// timeslot (0..7 on Um)
-
-	guint16 arfcn;		// ARFCN (frequency)
-	gint8 signal_dbm;	// signal level in dBm
-	gint8 snr_db;		// signal/noise ratio in dB
-
-	guint32 frame_number;	// GSM Frame Number (FN)
-
-	guint8 sub_type;	// Type of burst/channel, see above
-	guint8 antenna_nr;	// Antenna Number
-	guint8 sub_slot;	// sub-slot within timeslot
-	guint8 res;		// reserved for future use (RFU)
-}
- */
 
 static int proto_gsmtap = -1;
 
@@ -421,6 +291,7 @@ static const value_string gsmtap_types[] = {
 	{ GSMTAP_TYPE_GMR1_UM, "GMR-1 air interfeace (MES-MS<->GTS)" },
 	{ GSMTAP_TYPE_UMTS_RLC_MAC,	"UMTS RLC/MAC" },
 	{ GSMTAP_TYPE_UMTS_RRC,		"UMTS RRC" },
+	{ GSMTAP_TYPE_OSMOCORE_LOG,	"libosmocore logging" },
 	{ 0,			NULL },
 };
 
@@ -448,6 +319,17 @@ dissect_sacch_l1h(tvbuff_t *tvb, proto_tree *tree)
 	proto_tree_add_item(l1h_tree, hf_sacch_l1h_ta, tvb, 1, 1, ENC_BIG_ENDIAN);
 }
 
+static void
+handle_lapdm(guint8 sub_type, tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+{
+	lapdm_data_t ld;
+
+	ld.hdr_type = LAPDM_HDR_FMT_B;
+	/* only downlink SACCH frames use B4 header format */
+	if (sub_type & GSMTAP_CHANNEL_ACCH && pinfo->p2p_dir == P2P_DIR_RECV)
+		ld.hdr_type = LAPDM_HDR_FMT_B4;
+	call_dissector_with_data(sub_handles[GSMTAP_SUB_UM_LAPDM], tvb, pinfo, tree, &ld);
+}
 
 static void
 handle_tetra(int channel _U_, tvbuff_t *payload_tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
@@ -553,9 +435,8 @@ dissect_gsmtap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 		gsmtap_tree = proto_item_add_subtree(ti, ett_gsmtap);
 		proto_tree_add_item(gsmtap_tree, hf_gsmtap_version,
 				    tvb, offset, 1, ENC_BIG_ENDIAN);
-		proto_tree_add_uint_format_value(gsmtap_tree, hf_gsmtap_hdrlen,
-				    tvb, offset+1, 1, hdr_len,
-				    "%u bytes", hdr_len);
+		proto_tree_add_uint(gsmtap_tree, hf_gsmtap_hdrlen,
+				    tvb, offset+1, 1, hdr_len);
 		proto_tree_add_item(gsmtap_tree, hf_gsmtap_type,
 				    tvb, offset+2, 1, ENC_BIG_ENDIAN);
 		proto_tree_add_item(gsmtap_tree, hf_gsmtap_timeslot,
@@ -620,8 +501,8 @@ dissect_gsmtap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 		case GSMTAP_CHANNEL_SDCCH8:
 		case GSMTAP_CHANNEL_TCH_F:
 		case GSMTAP_CHANNEL_TCH_H:
-			sub_handle = GSMTAP_SUB_UM_LAPDM;
-			break;
+			handle_lapdm(sub_type, payload_tvb, pinfo, tree);
+			return tvb_captured_length(tvb);
 		case GSMTAP_CHANNEL_PACCH:
 			if (pinfo->p2p_dir == P2P_DIR_SENT) {
 				sub_handle = GSMTAP_SUB_UM_RLC_MAC_UL;
@@ -730,7 +611,7 @@ proto_register_gsmtap(void)
 		{ &hf_gsmtap_version, { "Version", "gsmtap.version",
 		  FT_UINT8, BASE_DEC, NULL, 0, NULL, HFILL } },
 		{ &hf_gsmtap_hdrlen, { "Header Length", "gsmtap.hdr_len",
-		  FT_UINT8, BASE_DEC, NULL, 0, NULL, HFILL } },
+		  FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0, NULL, HFILL } },
 		{ &hf_gsmtap_type, { "Payload Type", "gsmtap.type",
 		  FT_UINT8, BASE_DEC, VALS(gsmtap_types), 0, NULL, HFILL } },
 		{ &hf_gsmtap_timeslot, { "Time Slot", "gsmtap.ts",
@@ -869,7 +750,7 @@ proto_reg_handoff_gsmtap(void)
 	rrc_sub_handles[GSMTAP_RRC_SUB_TargetRNC_ToSourceRNC_Container] = find_dissector_add_dependency("rrc.t_to_srnc_cont", proto_gsmtap);
 
 	gsmtap_handle = create_dissector_handle(dissect_gsmtap, proto_gsmtap);
-	dissector_add_uint("udp.port", GSMTAP_UDP_PORT, gsmtap_handle);
+	dissector_add_uint_with_preference("udp.port", GSMTAP_UDP_PORT, gsmtap_handle);
 }
 
 /*

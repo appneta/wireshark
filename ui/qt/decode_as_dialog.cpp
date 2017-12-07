@@ -25,6 +25,8 @@
 #include "epan/decode_as.h"
 #include "epan/dissectors/packet-dcerpc.h"
 #include "epan/epan_dissect.h"
+#include "epan/prefs.h"
+#include "epan/prefs-int.h"
 
 #include "ui/decode_as_utils.h"
 #include "ui/simple_dialog.h"
@@ -32,6 +34,8 @@
 
 #include "qt_ui_utils.h"
 #include "wireshark_application.h"
+
+#include <ui/qt/variant_pointer.h>
 
 #include <QComboBox>
 #include <QFont>
@@ -333,7 +337,7 @@ void DecodeAsDialog::buildChangedList(const gchar *table_name, ftenum_t, gpointe
     dissector_info_t  *dissector_info = new dissector_info_t();
     dissector_info->proto_name = current_proto_name;
     dissector_info->dissector_handle = current_dh;
-    item->setData(proto_col_, Qt::UserRole, QVariant::fromValue<dissector_info_t *>(dissector_info));
+    item->setData(proto_col_, Qt::UserRole, VariantPointer<dissector_info_t>::asQVariant(dissector_info));
 
     da_dlg->ui->decodeAsTreeWidget->addTopLevelItem(item);
 }
@@ -494,7 +498,7 @@ void DecodeAsDialog::tableNamesCurrentIndexChanged(const QString &text)
     while (i.hasNext()) {
         dissector_info_t  *dissector_info = i.next();
 
-        cur_proto_combo_box_->addItem(dissector_info->proto_name, QVariant::fromValue<dissector_info_t *>(dissector_info));
+        cur_proto_combo_box_->addItem(dissector_info->proto_name, VariantPointer<dissector_info_t>::asQVariant(dissector_info));
     }
 
     cur_proto_combo_box_->model()->sort(0);
@@ -563,6 +567,10 @@ void DecodeAsDialog::gatherChangedEntries(const gchar *table_name,
 
 void DecodeAsDialog::applyChanges()
 {
+    dissector_table_t sub_dissectors;
+    module_t *module;
+    pref_t* pref_value;
+    dissector_handle_t handle;
     // Reset all dissector tables, then apply all rules from GUI.
 
     // We can't call g_hash_table_removed from g_hash_table_foreach, which
@@ -574,6 +582,18 @@ void DecodeAsDialog::applyChanges()
     // instead.
     dissector_all_tables_foreach_changed(gatherChangedEntries, this);
     foreach (UintPair uint_entry, changed_uint_entries_) {
+        /* Set "Decode As preferences" to default values */
+        sub_dissectors = find_dissector_table(uint_entry.first);
+        handle = dissector_get_uint_handle(sub_dissectors, uint_entry.second);
+        if (handle != NULL) {
+            module = prefs_find_module(proto_get_protocol_filter_name(dissector_handle_get_protocol_index(handle)));
+            pref_value = prefs_find_preference(module, uint_entry.first);
+            if (pref_value != NULL) {
+                module->prefs_changed = TRUE;
+                reset_pref(pref_value);
+            }
+        }
+
         dissector_reset_uint(uint_entry.first, uint_entry.second);
     }
     changed_uint_entries_.clear();
@@ -593,7 +613,7 @@ void DecodeAsDialog::applyChanges()
             continue;
         }
 
-        dissector_info = variant.value<dissector_info_t *>();
+        dissector_info = VariantPointer<dissector_info_t>::asPtr(variant);
 
         for (GList *cur = decode_as_list; cur; cur = cur->next) {
             decode_as_entry = (decode_as_t *) cur->data;
@@ -622,9 +642,33 @@ void DecodeAsDialog::applyChanges()
 
                 if (item->text(proto_col_) == DECODE_AS_NONE || !dissector_info->dissector_handle) {
                     decode_as_entry->reset_value(decode_as_entry->table_name, selector_value);
+                    sub_dissectors = find_dissector_table(decode_as_entry->table_name);
+
+                    /* For now, only numeric dissector tables can use preferences */
+                    if (IS_FT_UINT(dissector_table_get_type(sub_dissectors))) {
+                        if (dissector_info->dissector_handle != NULL) {
+                            module = prefs_find_module(proto_get_protocol_filter_name(dissector_handle_get_protocol_index(dissector_info->dissector_handle)));
+                            pref_value = prefs_find_preference(module, decode_as_entry->table_name);
+                            if (pref_value != NULL) {
+                                module->prefs_changed = TRUE;
+                                prefs_remove_decode_as_value(pref_value, GPOINTER_TO_UINT(selector_value), TRUE);
+                            }
+                        }
+                    }
                     break;
                 } else {
                     decode_as_entry->change_value(decode_as_entry->table_name, selector_value, &dissector_info->dissector_handle, (char *) item->text(proto_col_).toUtf8().constData());
+                    sub_dissectors = find_dissector_table(decode_as_entry->table_name);
+
+                    /* For now, only numeric dissector tables can use preferences */
+                    if (IS_FT_UINT(dissector_table_get_type(sub_dissectors))) {
+                        module = prefs_find_module(proto_get_protocol_filter_name(dissector_handle_get_protocol_index(dissector_info->dissector_handle)));
+                        pref_value = prefs_find_preference(module, decode_as_entry->table_name);
+                        if (pref_value != NULL) {
+                            module->prefs_changed = TRUE;
+                            prefs_add_decode_as_value(pref_value, GPOINTER_TO_UINT(selector_value), FALSE);
+                        }
+                    }
                     break;
                 }
             }

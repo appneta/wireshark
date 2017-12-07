@@ -34,6 +34,8 @@
 #include "qt_ui_utils.h"
 #include "wireshark_application.h"
 
+#include <ui/qt/variant_pointer.h>
+
 #include <QPushButton>
 #include <QDialogButtonBox>
 #include <QListWidgetItem>
@@ -57,10 +59,9 @@ enum {
     ge_op_,
     le_op_,
     contains_op_,
-    matches_op_
+    matches_op_,
+    in_op_
 };
-
-Q_DECLARE_METATYPE(header_field_info *)
 
 DisplayFilterExpressionDialog::DisplayFilterExpressionDialog(QWidget *parent) :
     GeometryStateDialog(parent),
@@ -93,6 +94,7 @@ DisplayFilterExpressionDialog::DisplayFilterExpressionDialog(QWidget *parent) :
     new QListWidgetItem("<=", ui->relationListWidget, le_op_);
     new QListWidgetItem("contains", ui->relationListWidget, contains_op_);
     new QListWidgetItem("matches", ui->relationListWidget, matches_op_);
+    new QListWidgetItem("in", ui->relationListWidget, in_op_);
 
     value_label_pfx_ = ui->valueLabel->text();
 
@@ -148,7 +150,7 @@ void DisplayFilterExpressionDialog::fillTree()
             QTreeWidgetItem *field_ti = new QTreeWidgetItem(field_type_);
             QString label = QString("%1 " UTF8_MIDDLE_DOT " %3").arg(hfinfo->abbrev).arg(hfinfo->name);
             field_ti->setText(0, label);
-            field_ti->setData(0, Qt::UserRole, qVariantFromValue(hfinfo));
+            field_ti->setData(0, Qt::UserRole, VariantPointer<header_field_info>::asQVariant(hfinfo));
             field_list << field_ti;
 
             field_count++;
@@ -174,10 +176,11 @@ void DisplayFilterExpressionDialog::updateWidgets()
 
     bool value_enable = false;
     bool enum_enable = false;
+    bool enum_multi_enable = false;
     bool range_enable = false;
 
     QString filter;
-    if (field_ && rel_enable) {
+    if (field_) {
         filter = field_;
         QListWidgetItem *rli = ui->relationListWidget->currentItem();
         if (rli && rli->type() != present_op_) {
@@ -189,10 +192,15 @@ void DisplayFilterExpressionDialog::updateWidgets()
             filter.append(QString(" %1").arg(rli->text()));
         }
         if (value_enable && !ui->valueLineEdit->text().isEmpty()) {
-            if (ftype_ == FT_STRING) {
-                filter.append(QString(" \"%1\"").arg(ui->valueLineEdit->text()));
+            if (rli && rli->type() == in_op_) {
+                filter.append(QString(" {%1}").arg(ui->valueLineEdit->text()));
+                enum_multi_enable = enum_enable;
             } else {
-                filter.append(QString(" %1").arg(ui->valueLineEdit->text()));
+                if (ftype_ == FT_STRING) {
+                    filter.append(QString(" \"%1\"").arg(ui->valueLineEdit->text()));
+                } else {
+                    filter.append(QString(" %1").arg(ui->valueLineEdit->text()));
+                }
             }
         }
     }
@@ -202,6 +210,8 @@ void DisplayFilterExpressionDialog::updateWidgets()
 
     ui->enumLabel->setEnabled(enum_enable);
     ui->enumListWidget->setEnabled(enum_enable);
+    ui->enumListWidget->setSelectionMode(enum_multi_enable ?
+        QAbstractItemView::ExtendedSelection : QAbstractItemView::SingleSelection);
 
     ui->rangeLabel->setEnabled(range_enable);
     ui->rangeLineEdit->setEnabled(range_enable);
@@ -294,7 +304,7 @@ void DisplayFilterExpressionDialog::on_fieldTreeWidget_itemSelectionChanged()
         ftype_ = FT_PROTOCOL;
         field_ = proto_get_protocol_filter_name(cur_fti->data(0, Qt::UserRole).toInt());
     } else if (cur_fti && cur_fti->type() == field_type_) {
-        header_field_info *hfinfo = cur_fti->data(0, Qt::UserRole).value<header_field_info*>();
+        header_field_info *hfinfo = VariantPointer<header_field_info>::asPtr(cur_fti->data(0, Qt::UserRole));
         if (hfinfo) {
             ftype_ = hfinfo->type;
             field_ = hfinfo->abbrev;
@@ -357,6 +367,7 @@ void DisplayFilterExpressionDialog::on_fieldTreeWidget_itemSelectionChanged()
         QListWidgetItem *li = ui->relationListWidget->item(i);
         switch (li->type()) {
         case eq_op_:
+        case in_op_:
             li->setHidden(!ftype_can_eq(ftype_) && !(ftype_can_slice(ftype_) && ftype_can_eq(FT_BYTES)));
             break;
         case ne_op_:
@@ -409,10 +420,17 @@ void DisplayFilterExpressionDialog::on_relationListWidget_itemSelectionChanged()
 
 void DisplayFilterExpressionDialog::on_enumListWidget_itemSelectionChanged()
 {
-    if (ui->enumListWidget->selectedItems().count() > 0) {
-        QListWidgetItem *eli = ui->enumListWidget->selectedItems()[0];
-        ui->valueLineEdit->setText(eli->data(Qt::UserRole).toString());
+    QStringList values;
+    QList<QListWidgetItem *> items = ui->enumListWidget->selectedItems();
+    QList<QListWidgetItem *>::const_iterator it = items.constBegin();
+    while (it != items.constEnd())
+    {
+        values << (*it)->data(Qt::UserRole).toString();
+        ++it;
     }
+
+    ui->valueLineEdit->setText(values.join(" "));
+
     updateWidgets();
 }
 

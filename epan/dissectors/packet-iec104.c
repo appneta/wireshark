@@ -76,7 +76,8 @@ typedef struct {
 	gboolean SE;      /* Select (1) / Execute (0) */
 } td_CmdInfo;
 
-static guint iec104_port = 2404;
+#define IEC104_PORT     2404
+static guint iec104_port = IEC104_PORT;
 
 /* Define the iec104 proto */
 static int proto_iec104apci = -1;
@@ -597,6 +598,7 @@ static int hf_asdu_bitstring = -1;
 static int hf_asdu_float = -1;
 static int hf_asdu_normval = -1;
 static int hf_asdu_scalval = -1;
+static int hf_asdu_raw_data = -1;
 
 static gint ett_apci = -1;
 static gint ett_asdu = -1;
@@ -613,6 +615,7 @@ static gint ett_cp56time = -1;
 
 static expert_field ei_iec104_short_asdu = EI_INIT;
 static expert_field ei_iec104_apdu_min_len = EI_INIT;
+static expert_field ei_iec104_apdu_invalid_len = EI_INIT;
 
 /* Misc. functions for dissection of signal values */
 
@@ -1369,8 +1372,20 @@ static int dissect_iec104asdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 			break;
 		default:
 			proto_tree_add_item(it104tree, hf_ioa, tvb, offset, 3, ENC_LITTLE_ENDIAN);
+			offset += 3;
+
+			if (Len - offset > 0)
+				proto_tree_add_item(it104tree, hf_asdu_raw_data, tvb, offset, Len - offset, ENC_NA);
+			offset = Len;
+
 			break;
 	} /* end 'switch (asdu_typeid)' */
+
+	/* check correct apdu length */
+	if (Len != offset) {
+		expert_add_info(pinfo, it104tree, &ei_iec104_apdu_invalid_len);
+		return offset;
+	}
 
 	return tvb_captured_length(tvb);
 }
@@ -1463,7 +1478,7 @@ static int dissect_iec104apci(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 			proto_item_append_text(it104, ": %s", wmem_strbuf_get_str(res));
 
 			if (type == I_TYPE)
-				call_dissector(iec104asdu_handle, tvb_new_subset(tvb, Off + APCI_LEN, -1, len - APCI_DATA_LEN), pinfo, tree);
+				call_dissector(iec104asdu_handle, tvb_new_subset_length_caplen(tvb, Off + APCI_LEN, -1, len - APCI_DATA_LEN), pinfo, tree);
 
 			/* Don't search more the APCI_START */
 			break;
@@ -1486,6 +1501,13 @@ static int dissect_iec104reas(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 	tcp_dissect_pdus(tvb, pinfo, tree, TRUE, APCI_LEN,
 			get_iec104apdu_len, dissect_iec104apci, data);
 	return tvb_captured_length(tvb);
+}
+
+static void
+apply_iec104_prefs(void)
+{
+  /* IEC104 uses the port preference to determine direction */
+  iec104_port = prefs_get_uint_value("104apci", "tcp.port");
 }
 
 /* The protocol has two subprotocols: Register APCI */
@@ -1523,22 +1545,12 @@ proto_register_iec104apci(void)
 		&ett_apci,
 	};
 
-	module_t *iec104_module;
+	proto_iec104apci = proto_register_protocol("IEC 60870-5-104-Apci", "104apci", "104apci");
 
-	proto_iec104apci = proto_register_protocol(
-		"IEC 60870-5-104-Apci",
-		"104apci",
-		"104apci"
-		);
 	proto_register_field_array(proto_iec104apci, hf_ap, array_length(hf_ap));
 	proto_register_subtree_array(ett_ap, array_length(ett_ap));
 
-	iec104_module = prefs_register_protocol(proto_iec104apci, proto_reg_handoff_iec104);
-
-	prefs_register_uint_preference(iec104_module, "tcp.port",
-									"IEC104 TCP port used by source",
-									"TCP port used by source of IEC104, usually 2404",
-									10, &iec104_port);
+	prefs_register_protocol(proto_iec104apci, apply_iec104_prefs);
 }
 
 
@@ -1823,6 +1835,10 @@ proto_register_iec104asdu(void)
 		{ &hf_asdu_scalval,
 		  { "Value", "104asdu.scalval", FT_INT16, BASE_DEC, NULL, 0x0,
 		    "Scaled value", HFILL }},
+
+		{ &hf_asdu_raw_data,
+		  { "Raw Data", "104asdu.rawdata", FT_BYTES, BASE_NONE, NULL, 0x0,
+		    "Information object raw data", HFILL }},
 	};
 
 	static gint *ett_as[] = {
@@ -1842,15 +1858,12 @@ proto_register_iec104asdu(void)
 	static ei_register_info ei[] = {
 		{ &ei_iec104_short_asdu, { "iec104.short_asdu", PI_MALFORMED, PI_ERROR, "<ERR Short Asdu>", EXPFILL }},
 		{ &ei_iec104_apdu_min_len, { "iec104.apdu_min_len", PI_MALFORMED, PI_ERROR, "APDU less than bytes", EXPFILL }},
+		{ &ei_iec104_apdu_invalid_len, { "iec104.apdu_invalid_len", PI_MALFORMED, PI_ERROR, "Invalid ApduLen", EXPFILL }},
 	};
 
 	expert_module_t* expert_iec104;
 
-	proto_iec104asdu = proto_register_protocol(
-		"IEC 60870-5-104-Asdu",
-		"104asdu",
-		"104asdu"
-		);
+	proto_iec104asdu = proto_register_protocol("IEC 60870-5-104-Asdu", "104asdu", "104asdu");
 
 	proto_register_field_array(proto_iec104asdu, hf_as, array_length(hf_as));
 	proto_register_subtree_array(ett_as, array_length(ett_as));
@@ -1864,22 +1877,12 @@ proto_register_iec104asdu(void)
 void
 proto_reg_handoff_iec104(void)
 {
-	static dissector_handle_t iec104apci_handle;
-	static gboolean iec104_prefs_initialized = FALSE;
-	static guint saved_iec104_port;
+	dissector_handle_t iec104apci_handle;
 
-	if (!iec104_prefs_initialized) {
-		iec104apci_handle = create_dissector_handle(dissect_iec104reas, proto_iec104apci);
-		iec104asdu_handle = create_dissector_handle(dissect_iec104asdu, proto_iec104asdu);
-		dissector_add_uint("tcp.port", iec104_port, iec104apci_handle);
-	} else {
-		dissector_delete_uint("tcp.port", saved_iec104_port, iec104apci_handle);
-	}
+	iec104apci_handle = create_dissector_handle(dissect_iec104reas, proto_iec104apci);
+	iec104asdu_handle = create_dissector_handle(dissect_iec104asdu, proto_iec104asdu);
 
-	saved_iec104_port = iec104_port;
-	if (iec104_port != 0) {
-		dissector_add_uint("tcp.port", iec104_port, iec104apci_handle);
-	}
+	dissector_add_uint_with_preference("tcp.port", IEC104_PORT, iec104apci_handle);
 }
 
 /*

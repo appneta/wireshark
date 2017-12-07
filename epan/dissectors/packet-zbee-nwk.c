@@ -36,6 +36,7 @@
 #include "packet-zbee.h"
 #include "packet-zbee-nwk.h"
 #include "packet-zbee-security.h"
+#include <wsutil/glib-compat.h>
 
 /*************************/
 /* Function Declarations */
@@ -313,7 +314,7 @@ static const value_string zbee_nwk_stack_profiles[] = {
 /* ED Requested Timeout Enumerated Values */
 static const value_string zbee_nwk_end_device_timeout_request[] = {
     { 0, "10 sec" },
-    { 1, "1 min" },
+    { 1, "2 min" },
     { 2, "4 min" },
     { 3, "8 min" },
     { 4, "16 min" },
@@ -340,7 +341,7 @@ static const value_string zbee_nwk_end_device_timeout_resp_status[] = {
 
 /* Names of IEEE 802.15.4 IEs (Information Elements) for ZigBee */
 static const value_string ieee802154_zigbee_ie_names[] = {
-    { ZBEE_ZIGBEE_IE_REJOIN,                    "ReJoin"   },
+    { ZBEE_ZIGBEE_IE_REJOIN,                    "Rejoin"   },
     { ZBEE_ZIGBEE_IE_TX_POWER,                  "Tx Power" },
     { ZBEE_ZIGBEE_IE_BEACON_PAYLOAD,            "Extended Beacon Payload" },
     { 0, NULL }
@@ -1446,6 +1447,7 @@ dissect_zbee_beacon_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
     /* All ZigBee frames must always have a 16-bit source address. */
     if (!packet) return FALSE;
     if (packet->src_addr_mode != IEEE802154_FCF_ADDR_SHORT) return FALSE;
+    if (tvb_captured_length(tvb) == 0) return FALSE;
 
     /* ZigBee beacons begin with a protocol identifier. */
     if (tvb_get_guint8(tvb, 0) != ZBEE_NWK_BEACON_PROTOCOL_ID) return FALSE;
@@ -1549,6 +1551,7 @@ dissect_zbip_beacon_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
     /* All ZigBee frames must always have a 16-bit source address. */
     if (!packet) return FALSE;
     if (packet->src_addr_mode != IEEE802154_FCF_ADDR_SHORT) return FALSE;
+    if (tvb_captured_length(tvb) == 0) return FALSE;
 
     /* ZigBee beacons begin with a protocol identifier. */
     if (tvb_get_guint8(tvb, 0) != ZBEE_IP_BEACON_PROTOCOL_ID) return FALSE;
@@ -2194,9 +2197,6 @@ void proto_register_zbee_nwk(void)
 
     expert_module_t* expert_zbee_nwk;
 
-    expert_zbee_nwk = expert_register_protocol(proto_zbee_nwk);
-    expert_register_field_array(expert_zbee_nwk, ei, array_length(ei));
-
     register_init_routine(proto_init_zbee_nwk);
     register_cleanup_routine(proto_cleanup_zbee_nwk);
 
@@ -2207,6 +2207,9 @@ void proto_register_zbee_nwk(void)
     proto_zbee_ie = proto_register_protocol("ZigBee IE", "ZigBee IE", "zbee_ie");
     proto_register_field_array(proto_zbee_nwk, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
+
+    expert_zbee_nwk = expert_register_protocol(proto_zbee_nwk);
+    expert_register_field_array(expert_zbee_nwk, ei, array_length(ei));
 
     /* Register the dissectors with Wireshark. */
     register_dissector(ZBEE_PROTOABBREV_NWK, dissect_zbee_nwk, proto_zbee_nwk);
@@ -2243,12 +2246,7 @@ static void free_keyring_key(gpointer key)
 static void free_keyring_val(gpointer a)
 {
     GSList **slist = (GSList **)a;
-#if GLIB_CHECK_VERSION(2, 28, 0)
     g_slist_free_full(*slist, g_free);
-#else
-    g_slist_foreach(*slist, (GFunc)g_free, NULL);
-    g_slist_free(*slist);
-#endif /* GLIB_CHECK_VERSION(2, 28, 0) */
     g_free(slist);
 }
 

@@ -459,7 +459,7 @@ dissect_management_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
       }
       else
       {
-        col_append_sep_fstr(pinfo->cinfo, COL_INFO, ",", "%s", tvb_get_string_enc(wmem_packet_scope(), tvb, offset, linelen, ENC_ASCII));
+        col_append_sep_str(pinfo->cinfo, COL_INFO, ",", tvb_get_string_enc(wmem_packet_scope(), tvb, offset, linelen, ENC_ASCII));
       }
     }
 
@@ -551,7 +551,7 @@ proto_reg_handoff_gearman(void)
   dissector_handle_t gearman_handle;
 
   gearman_handle = create_dissector_handle(dissect_gearman, proto_gearman);
-  dissector_add_uint("tcp.port", GEARMAN_PORT, gearman_handle);
+  dissector_add_uint_with_preference("tcp.port", GEARMAN_PORT, gearman_handle);
 }
 
 /*

@@ -247,13 +247,13 @@ proto_register_i2c(void)
 	static decode_as_t i2c_da = {"i2c", "I2C Message", "i2c.message", 1, 0, &i2c_da_values, NULL, NULL,
 									decode_as_default_populate_list, decode_as_default_reset, decode_as_default_change, NULL};
 
-	/* Placeholders for capture statistics */
-	proto_i2c_event = proto_register_protocol("I2C Events", "I2C Events", "i2c_event");
-	proto_i2c_data = proto_register_protocol("I2C Data", "I2C Data", "i2c_data");
-
 	proto_i2c = proto_register_protocol("Inter-Integrated Circuit", "I2C", "i2c");
 	proto_register_field_array(proto_i2c, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
+
+	/* Placeholders for capture statistics */
+	proto_i2c_event = proto_register_protocol_in_name_only("I2C Events", "I2C Events", "i2c_event", proto_i2c, FT_PROTOCOL);
+	proto_i2c_data = proto_register_protocol_in_name_only("I2C Data", "I2C Data", "i2c_data", proto_i2c, FT_PROTOCOL);
 
 	subdissector_table = register_dissector_table("i2c.message", "I2C messages dissector", proto_i2c, FT_UINT32, BASE_DEC);
 
@@ -267,10 +267,12 @@ void
 proto_reg_handoff_i2c(void)
 {
 	dissector_handle_t i2c_handle;
+	capture_dissector_handle_t i2c_cap_handle;
 
 	i2c_handle = create_dissector_handle(dissect_i2c, proto_i2c);
 	dissector_add_uint("wtap_encap", WTAP_ENCAP_I2C, i2c_handle);
-	register_capture_dissector("wtap_encap", WTAP_ENCAP_I2C, capture_i2c, proto_i2c);
+	i2c_cap_handle = create_capture_dissector_handle(capture_i2c, proto_i2c);
+	capture_dissector_add_uint("wtap_encap", WTAP_ENCAP_I2C, i2c_cap_handle);
 }
 
 /*

@@ -23,6 +23,8 @@
 #include <ui_sctp_chunk_statistics_dialog.h>
 #include "uat_dialog.h"
 
+#include <wsutil/strtoi.h>
+
 #include <string>
 
 
@@ -96,7 +98,7 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
     FILE* fp = NULL;
 
     pref_t *pref = prefs_find_preference(prefs_find_module("sctp"),"statistics_chunk_types");
-    uat_t *uat = pref->varp.uat;
+    uat_t *uat = prefs_get_uat_value(pref);
     gchar* fname = uat_get_actual_filename(uat,TRUE);
     bool init = false;
 
@@ -112,9 +114,9 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
     g_free (fname);
 
     if (init || all) {
-        int j = 0;
+        int i, j = 0;
 
-        for (int i = 0; i < chunks.size(); i++) {
+        for (i = 0; i < chunks.size(); i++) {
             if (!chunks.value(i).hide) {
                 ui->tableWidget->setRowCount(ui->tableWidget->rowCount()+1);
                 ui->tableWidget->setVerticalHeaderItem(j, new QTableWidgetItem(QString("%1").arg(chunks.value(i).name)));
@@ -124,7 +126,7 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
                 j++;
             }
         }
-        for (int i = 0; i < chunks.size(); i++) {
+        for (i = 0; i < chunks.size(); i++) {
             if (chunks.value(i).hide) {
                 ui->tableWidget->setRowCount(ui->tableWidget->rowCount()+1);
                 ui->tableWidget->setVerticalHeaderItem(j, new QTableWidgetItem(QString("%1").arg(chunks.value(i).name)));
@@ -148,7 +150,8 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
             /* Get rid of the quotation marks */
             QString ch = QString(token).mid(1, (int)strlen(token)-2);
             g_strlcpy(id, qPrintable(ch), sizeof id);
-            temp.id = atoi(id);
+            if (!ws_strtoi32(id, NULL, &temp.id))
+                continue;
             temp.hide = 0;
             temp.name[0] = '\0';
             while(token != NULL) {
@@ -159,8 +162,8 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
                     } else if ((strstr(token, "Show"))) {
                         temp.hide = 0;
                     } else {
-                        QString ch = QString(token).mid(1, (int)strlen(token)-2);
-                        g_strlcpy(temp.name, qPrintable(ch), sizeof temp.name);
+                        QString ch2 = QString(token).mid(1, (int)strlen(token)-2);
+                        g_strlcpy(temp.name, qPrintable(ch2), sizeof temp.name);
                     }
                 }
             }
@@ -176,7 +179,7 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
             i++;
         }
         j = ui->tableWidget->rowCount();
-        for (int i = 0; i < chunks.size(); i++) {
+        for (i = 0; i < chunks.size(); i++) {
             if (chunks.value(i).hide) {
                 ui->tableWidget->setRowCount(ui->tableWidget->rowCount()+1);
                 ui->tableWidget->setVerticalHeaderItem(j, new QTableWidgetItem(QString("%1").arg(chunks.value(i).name)));
@@ -209,7 +212,7 @@ void SCTPChunkStatisticsDialog::on_pushButton_clicked()
 
     pref_t *pref = prefs_find_preference(prefs_find_module("sctp"),"statistics_chunk_types");
 
-    uat_t *uat = pref->varp.uat;
+    uat_t *uat = prefs_get_uat_value(pref);
 
     gchar* fname = uat_get_actual_filename(uat,TRUE);
 
@@ -260,9 +263,9 @@ void SCTPChunkStatisticsDialog::on_actionHideChunkType_triggered()
 {
     int row;
 
-    QTableWidgetItem *item = ui->tableWidget->itemAt(selected_point.x(), selected_point.y()-60);
-    if (item) {
-        row = item->row();
+    QTableWidgetItem *itemPoint = ui->tableWidget->itemAt(selected_point.x(), selected_point.y()-60);
+    if (itemPoint) {
+        row = itemPoint->row();
         ui->tableWidget->hideRow(row);
         QTableWidgetItem *item = ui->tableWidget->verticalHeaderItem(row);
         QMap<int, struct chunkTypes>::iterator iter;
@@ -281,19 +284,19 @@ void SCTPChunkStatisticsDialog::on_actionChunkTypePreferences_triggered()
     gchar* err = NULL;
 
     pref_t *pref = prefs_find_preference(prefs_find_module("sctp"),"statistics_chunk_types");
-    uat_t *uat = pref->varp.uat;
+    uat_t *uat = prefs_get_uat_value(pref);
     uat_clear(uat);
 
-    if (!uat_load(pref->varp.uat, &err)) {
+    if (!uat_load(uat, &err)) {
         /* XXX - report this through the GUI */
-        printf("Error loading table '%s': %s",pref->varp.uat->name,err);
+        printf("Error loading table '%s': %s", uat->name,err);
         g_free(err);
     }
 
-    UatDialog *uatdialog = new UatDialog(this, pref->varp.uat);
+    UatDialog *uatdialog = new UatDialog(this, uat);
     uatdialog->exec();
     // Emitting PacketDissectionChanged directly from a QDialog can cause
-    // problems on OS X.
+    // problems on macOS.
     wsApp->flushAppSignals();
 
     ui->tableWidget->clear();

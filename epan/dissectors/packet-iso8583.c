@@ -38,6 +38,7 @@
 #include <epan/wmem/wmem.h>
 #include <epan/dissectors/packet-tcp.h>
 
+#include <wsutil/strtoi.h>
 
 /* bitmap length */
 #define BM_LEN 8
@@ -372,9 +373,6 @@ static expert_field ei_iso8583_MALFORMED = EI_INIT;
 
 static struct iso_type *data_array = NULL;
 
-/* Global port preference */
-#define iso8583_TCP_PORT 0
-
 /* Types definitions */
 #define ASCII_CHARSET 1
 #define NUM_NIBBLE_CHARSET 2
@@ -382,11 +380,9 @@ static struct iso_type *data_array = NULL;
 #define BIN_BIN_ENC 2
 
 /* Global preference */
-static guint tcp_port_pref = iso8583_TCP_PORT;
 static gint charset_pref = ASCII_CHARSET;
 static gint bin_encode_pref = BIN_ASCII_ENC;
 
-static gint iso8583_len=-1; /* # of bytes captured by the dissector */
 static gint len_byte_order = LITEND;
 
 /*
@@ -536,8 +532,7 @@ static guint get_iso8583_msg_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offs
 {
   const guint enc = (len_byte_order == BIGEND)?ENC_BIG_ENDIAN:ENC_LITTLE_ENDIAN;
 
-  iso8583_len = tvb_get_guint16(tvb, offset, enc) + 2;
-  return iso8583_len;
+  return tvb_get_guint16(tvb, offset, enc) + 2;
 }
 
 #define NIBBLE_2_ASCHEX(nibble)\
@@ -605,12 +600,12 @@ static guint64 hex2bin(const char* hexstr, int len)
       if((offset -2 + len) > iso8583_len)\
         return NULL
 
-static gchar *get_bit(guint ind, tvbuff_t *tvb, gint *off_set, proto_tree *tree, proto_item **exp, gint *length )
+static gchar *get_bit(guint ind, tvbuff_t *tvb, guint *off_set, proto_tree *tree, proto_item **exp, gint *length, guint32 iso8583_len)
 {
   gchar aux[1024];
   gchar* ret=NULL;
-  gint len;
-  gint offset = *off_set;
+  guint32 len;
+  guint offset = *off_set;
   gboolean str_input = FALSE;
 
   /* Check if it is a fixed or variable length
@@ -627,17 +622,13 @@ static gchar *get_bit(guint ind, tvbuff_t *tvb, gint *off_set, proto_tree *tree,
     {
       case ASCII_CHARSET:
       {
-        gchar* sizestr;
+        guint8* sizestr;
         checksize(len);
 
-        sizestr = (gchar *)tvb_get_string_enc(wmem_packet_scope(), tvb, offset,
-              len , ENC_ASCII);
-        if(!isnum_str(sizestr,len))
-        {
+        sizestr = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, len , ENC_ASCII);
+        offset += len;
+        if (!ws_strtou32(sizestr, NULL, &len))
           return NULL;
-        }
-        offset+=len;
-        len = atoi(sizestr);
         break;
       }
       case NUM_NIBBLE_CHARSET:
@@ -743,7 +734,7 @@ static gchar *get_bit(guint ind, tvbuff_t *tvb, gint *off_set, proto_tree *tree,
 }
 
 
-static int get_bitmap(tvbuff_t *tvb, guint64* bitmap, gint offset, gint* nbitmaps)
+static int get_bitmap(tvbuff_t *tvb, guint64* bitmap, guint offset, gint* nbitmaps, guint32 iso8583_len)
 {
   gchar* hexbit;
   gint i;
@@ -790,7 +781,7 @@ static int get_bitmap(tvbuff_t *tvb, guint64* bitmap, gint offset, gint* nbitmap
 }
 
 static int dissect_databits(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
-    int offset, int nofbitmaps, guint64 *bitmap)
+    int offset, int nofbitmaps, guint64 *bitmap, guint32 iso8583_len)
 {
   proto_item *exp;
   gint nofbits = nofbitmaps*64, i;
@@ -810,7 +801,7 @@ static int dissect_databits(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
     if(bitmap[i/64] & (((guint64)1)<< (63 -bit)))
     {
-      cod = get_bit(i, tvb, &offset, tree, &exp, &len);
+      cod = get_bit(i, tvb, &offset, tree, &exp, &len, iso8583_len);
       if(cod == NULL || ! isstrtype_ok(data_array[i].type, cod, len ))
       {
         if(!exp)
@@ -846,6 +837,7 @@ static int dissect_iso8583_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
   guint64 bitmap[3]= {0,0,0};
   int nofbitmaps=0;
   guint ret;
+  guint32 iso8583_len;
 
 
   /* Check that the packet is long enough for it to belong to ISO 8583-1. */
@@ -920,9 +912,12 @@ static int dissect_iso8583_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
 
   /*Length of the package*/
   len=2;
-  proto_tree_add_item(iso8583_tree, hf_iso8583_len, tvb,
-      offset, len, (len_byte_order == BIGEND)?ENC_BIG_ENDIAN:ENC_LITTLE_ENDIAN);
+  proto_tree_add_item_ret_uint(iso8583_tree, hf_iso8583_len, tvb,
+      offset, len, (len_byte_order == BIGEND)?ENC_BIG_ENDIAN:ENC_LITTLE_ENDIAN,
+      &iso8583_len);
   offset += len;
+
+  iso8583_len += 2;
 
   /*MTI*/
   /* TODO: check BCD or ASCII */
@@ -941,7 +936,7 @@ static int dissect_iso8583_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
   /*BITMAPS*/
   offset+=len;
 
-  get_bitmap(tvb, bitmap, offset, &nofbitmaps);
+  get_bitmap(tvb, bitmap, offset, &nofbitmaps, iso8583_len);
 
   if(nofbitmaps == 0)
   {
@@ -999,7 +994,8 @@ static int dissect_iso8583_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
   }
 
   /*DISSECT BITS*/
-  ret = dissect_databits(tvb, pinfo, iso8583_tree, offset, nofbitmaps, bitmap);
+  ret = dissect_databits(tvb, pinfo, iso8583_tree, offset, nofbitmaps, bitmap,
+    iso8583_len);
 
   return ret;
 }
@@ -1346,20 +1342,13 @@ proto_register_iso8583(void)
   expert_register_field_array(expert_iso8583, ei, array_length(ei));
 
   /* Register preferences module */
-  iso8583_module = prefs_register_protocol(proto_iso8583,
-      proto_reg_handoff_iso8583);
+  iso8583_module = prefs_register_protocol(proto_iso8583, NULL);
 
   prefs_register_enum_preference(iso8583_module, "len_endian",
       "Length field endian",
       "Endian of the length field. Big endian or Little endian",
       &len_byte_order,
       enumendians, TRUE);
-
-  /* Register port preference */
-  prefs_register_uint_preference(iso8583_module, "tcp.port",
-      "iso8583 TCP Port",
-      " iso8583 TCP port",
-      10, &tcp_port_pref);
 
   prefs_register_enum_preference(iso8583_module, "charset",
       "Charset for numbers",
@@ -1374,22 +1363,11 @@ proto_register_iso8583(void)
 
 void proto_reg_handoff_iso8583(void)
 {
-  static gboolean initialized = FALSE;
-  static dissector_handle_t iso8583_handle;
-  static int current_port;
+  dissector_handle_t iso8583_handle;
 
-  if (!initialized) {
-    iso8583_handle = create_dissector_handle(dissect_iso8583,
-        proto_iso8583);
-    initialized = TRUE;
+  iso8583_handle = create_dissector_handle(dissect_iso8583, proto_iso8583);
 
-  } else {
-    dissector_delete_uint("tcp.port", current_port, iso8583_handle);
-  }
-
-  current_port = tcp_port_pref;
-
-  dissector_add_uint("tcp.port", current_port, iso8583_handle);
+  dissector_add_for_decode_as_with_preference("tcp.port", iso8583_handle);
 }
 
 /*

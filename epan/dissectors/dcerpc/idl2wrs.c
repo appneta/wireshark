@@ -92,6 +92,7 @@ TODO
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <wsutil/strtoi.h>
 
 #undef IDL2WRS_DEBUG
 
@@ -1489,7 +1490,7 @@ static void parsetypedefstruct(int pass)
 	pointer_item_t *pi;
 	const char *pointer_type;
 	char *field_name;
-	int fixed_array_size;
+	guint32 fixed_array_size;
 	int is_array_of_pointers;
 	int empty_struct = 0;
 
@@ -1675,7 +1676,10 @@ static void parsetypedefstruct(int pass)
 			/* this might be a fixed array */
 			ti=ti->next;
 
-			fixed_array_size=atoi(ti->str);
+			if (!ws_strtou32(ti->str, NULL, &fixed_array_size)) {
+				FPRINTF(stderr, "ERROR: invalid integer: %s\n", ti->str);
+				Exit(10);
+			}
 			g_snprintf(fss, BASE_BUFFER_SIZE, "%d", fixed_array_size);
 
 			if(!g_strcmp0("]", ti->str)){
@@ -3157,10 +3161,10 @@ readcnffile(FILE *fh)
 			str=str_read_string(str, &mask);
 			str=str_read_string(str, &valsstring);
 			str_read_string(str, &al);
-			alignment=atoi(al);
-
-			FPRINTF(NULL, "TYPE : X%s,%sX\n", name, dissectorname);
-			register_new_type(name, dissectorname, ft_type, base_type, mask, valsstring, alignment);
+			if (ws_strtoi32(al, NULL, &alignment)) {
+				FPRINTF(NULL, "TYPE : X%s,%sX\n", name, dissectorname);
+				register_new_type(name, dissectorname, ft_type, base_type, mask, valsstring, alignment);
+			}
 		} else if(!strncmp(cnfline, "PARAM_VALUE", 11)){
 			char *dissectorname, *value;
 			char *str;
@@ -3198,14 +3202,17 @@ readcnffile(FILE *fh)
 			register_hf_rename(old_name, new_name);
 		} else if(!strncmp(cnfline, "UNION_TAG_SIZE", 14)){
 			char *union_name, *union_tag;
-			int union_tag_size;
+			gint32 union_tag_size;
 			union_tag_size_item_t *utsi;
 			char *str;
 
 			str=cnfline+14;
 			str=str_read_string(str, &union_name);
 			str_read_string(str, &union_tag);
-			union_tag_size=atoi(union_tag);
+			if (!ws_strtoi32(union_tag, NULL, &union_tag_size)) {
+				FPRINTF(NULL, "UNION_TAG_SIZE: invalid string: %s\n", union_tag);
+				exit(10);
+			}
 			FPRINTF(NULL, "UNION_TAG_SIZE: %s == %d\n", union_name, union_tag_size);
 			utsi=g_new0(union_tag_size_item_t, 1);
 			if (!utsi) {

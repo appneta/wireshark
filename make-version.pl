@@ -84,7 +84,7 @@ my $set_version = 0;
 my $set_release = 0;
 my %version_pref = (
 	"version_major" => 2,
-	"version_minor" => 2,
+	"version_minor" => 4,
 	"version_micro" => 4,
 	"version_build" => 0,
 
@@ -420,15 +420,15 @@ sub update_cmakelists_txt
 
 	open(CFGIN, "< $filepath") || die "Can't read $filepath!";
 	while ($line = <CFGIN>) {
-		if ($line =~ /^set *\( *GIT_REVISION .*([\r\n]+)$/) {
+		if ($line =~ /^set *\( *GIT_REVISION .*?([\r\n]+)$/) {
 			$line = sprintf("set(GIT_REVISION %d)$1", $num_commits);
-		} elsif ($line =~ /^set *\( *PROJECT_MAJOR_VERSION .*([\r\n]+)$/) {
+		} elsif ($line =~ /^set *\( *PROJECT_MAJOR_VERSION .*?([\r\n]+)$/) {
 			$line = sprintf("set(PROJECT_MAJOR_VERSION %d)$1", $version_pref{"version_major"});
-		} elsif ($line =~ /^set *\( *PROJECT_MINOR_VERSION .*([\r\n]+)$/) {
+		} elsif ($line =~ /^set *\( *PROJECT_MINOR_VERSION .*?([\r\n]+)$/) {
 			$line = sprintf("set(PROJECT_MINOR_VERSION %d)$1", $version_pref{"version_minor"});
-		} elsif ($line =~ /^set *\( *PROJECT_PATCH_VERSION .*([\r\n]+)$/) {
+		} elsif ($line =~ /^set *\( *PROJECT_PATCH_VERSION .*?([\r\n]+)$/) {
 			$line = sprintf("set(PROJECT_PATCH_VERSION %d)$1", $version_pref{"version_micro"});
-		} elsif ($line =~ /^set *\( *PROJECT_VERSION_EXTENSION .*([\r\n]+)$/) {
+		} elsif ($line =~ /^set *\( *PROJECT_VERSION_EXTENSION .*?([\r\n]+)$/) {
 			$line = sprintf("set(PROJECT_VERSION_EXTENSION \"%s\")$1", $package_string);
 		}
 		$contents .= $line
@@ -453,13 +453,13 @@ sub update_configure_ac
 
 	open(CFGIN, "< $filepath") || die "Can't read $filepath!";
 	while ($line = <CFGIN>) {
-		if ($line =~ /^m4_define\( *\[?version_major\]? *,.*([\r\n]+)$/) {
+		if ($line =~ /^m4_define\( *\[?version_major\]? *,.*?([\r\n]+)$/) {
 			$line = sprintf("m4_define([version_major], [%d])$1", $version_pref{"version_major"});
-		} elsif ($line =~ /^m4_define\( *\[?version_minor\]? *,.*([\r\n]+)$/) {
+		} elsif ($line =~ /^m4_define\( *\[?version_minor\]? *,.*?([\r\n]+)$/) {
 			$line = sprintf("m4_define([version_minor], [%d])$1", $version_pref{"version_minor"});
-		} elsif ($line =~ /^m4_define\( *\[?version_micro\]? *,.*([\r\n]+)$/) {
+		} elsif ($line =~ /^m4_define\( *\[?version_micro\]? *,.*?([\r\n]+)$/) {
 			$line = sprintf("m4_define([version_micro], [%d])$1", $version_pref{"version_micro"});
-		} elsif ($line =~ /^m4_define\( *\[?version_extra\]? *,.*([\r\n]+)$/) {
+		} elsif ($line =~ /^m4_define\( *\[?version_extra\]? *,.*?([\r\n]+)$/) {
 			$line = sprintf("m4_define([version_extra], [%s])$1", $package_string);
 		}
 		$contents .= $line
@@ -471,25 +471,25 @@ sub update_configure_ac
 	print "$filepath has been updated.\n";
 }
 
-# Read docbook/asciidoc.conf, then write it back out with an updated
+# Read docbook/attributes.asciidoc, then write it back out with an updated
 # wireshark-version replacement line.
-sub update_release_notes
+sub update_attributes_asciidoc
 {
 	my $line;
 	my $contents = "";
 	my $version = "";
-	my $filepath = "$srcdir/docbook/asciidoc.conf";
+	my $filepath = "$srcdir/docbook/attributes.asciidoc";
 
 	open(ADOC_CONF, "< $filepath") || die "Can't read $filepath!";
 	while ($line = <ADOC_CONF>) {
-		# wireshark-version:\[\]=1.9.1
+		# :wireshark-version: 2.3.1
 
-		if ($line =~ /^wireshark-version=.*([\r\n]+)$/) {
-			$line = sprintf("wireshark-version=%d.%d.%d$1",
+		if ($line =~ /^:wireshark-version:.*?([\r\n]+)$/) {
+			$line = sprintf(":wireshark-version: %d.%d.%d$1",
 					$version_pref{"version_major"},
 					$version_pref{"version_minor"},
 					$version_pref{"version_micro"},
-				       );
+					);
 		}
 		$contents .= $line
 	}
@@ -511,7 +511,8 @@ sub update_debian_changelog
 	open(CHANGELOG, "< $filepath") || die "Can't read $filepath!";
 	while ($line = <CHANGELOG>) {
 		if ($set_version && CHANGELOG->input_line_number() == 1) {
-			$line = sprintf("wireshark (%d.%d.%d) unstable; urgency=low\n",
+			$line =~ /^.*?([\r\n]+)$/;
+			$line = sprintf("wireshark (%d.%d.%d) unstable; urgency=low$1",
 					$version_pref{"version_major"},
 					$version_pref{"version_minor"},
 					$version_pref{"version_micro"},
@@ -542,15 +543,15 @@ sub update_automake_lib_releases
 	# changes with *most* releases.
 	#
 	# http://www.gnu.org/software/libtool/manual/libtool.html#Updating-version-info
-	for $filedir ("epan", "wiretap") {	# "wsutil"
+	for $filedir ("$srcdir/epan", "$srcdir/wiretap") {	# "$srcdir/wsutil"
 		$contents = "";
 		$filepath = $filedir . "/Makefile.am";
 		open(MAKEFILE_AM, "< $filepath") || die "Can't read $filepath!";
 		while ($line = <MAKEFILE_AM>) {
 			# libwireshark_la_LDFLAGS = -version-info 2:1:1 -export-symbols
 
-			if ($line =~ /^(lib\w+_la_LDFLAGS.*version-info\s+\d+:)\d+(:\d+.*)/) {
-				$line = sprintf("$1%d$2\n", $version_pref{"version_micro"});
+			if ($line =~ /^(lib\w+_la_LDFLAGS.*version-info\s+\d+:)\d+(:\d+.*[\r\n]+)$/) {
+				$line = sprintf("$1%d$2", $version_pref{"version_micro"});
 			}
 			$contents .= $line
 		}
@@ -571,15 +572,15 @@ sub update_cmake_lib_releases
 	my $filedir;
 	my $filepath;
 
-	for $filedir ("epan", "wiretap") {	# "wsutil"
+	for $filedir ("$srcdir/epan", "$srcdir/wiretap") {	# "$srcdir/wsutil"
 		$contents = "";
 		$filepath = $filedir . "/CMakeLists.txt";
 		open(CMAKELISTS_TXT, "< $filepath") || die "Can't read $filepath!";
 		while ($line = <CMAKELISTS_TXT>) {
 			# set(FULL_SO_VERSION "0.0.0")
 
-			if ($line =~ /^(set\s*\(\s*FULL_SO_VERSION\s+"\d+\.\d+\.)\d+(".*)/) {
-				$line = sprintf("$1%d$2\n", $version_pref{"version_micro"});
+			if ($line =~ /^(set\s*\(\s*FULL_SO_VERSION\s+"\d+\.\d+\.)\d+(".*[\r\n]+)$/) {
+				$line = sprintf("$1%d$2", $version_pref{"version_micro"});
 			}
 			$contents .= $line
 		}
@@ -602,7 +603,7 @@ sub update_versioned_files
 	&update_cmakelists_txt;
 	&update_configure_ac;
 	if ($set_version) {
-		&update_release_notes;
+		&update_attributes_asciidoc;
 		&update_debian_changelog;
 		&update_automake_lib_releases;
 		&update_cmake_lib_releases;
@@ -755,7 +756,7 @@ make-version.pl [options] [source directory]
     --print-vcs                Print the vcs version to standard output
     --set-version, -v          Set the major, minor, and micro versions in
                                the top-level CMakeLists.txt, configure.ac,
-                               docbook/asciidoc.conf, debian/changelog,
+                               docbook/attributes.asciidoc, debian/changelog,
                                the Makefile.am for all libraries, and the
                                CMakeLists.txt for all libraries.
                                Resets the release information when used by

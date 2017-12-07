@@ -26,6 +26,7 @@
 #include <epan/prefs.h>
 
 #include "ui/capture_globals.h"
+#include "ui/help_url.h"
 
 #include "ws_version_info.h"
 
@@ -33,19 +34,21 @@
 #include <ui_main_welcome.h>
 #include "tango_colors.h"
 
+#include "color_utils.h"
 #include "qt_ui_utils.h"
 #include "wireshark_application.h"
-#include "interface_tree.h"
 
 #include <QClipboard>
+#include <QDesktopServices>
 #include <QDir>
 #include <QListWidget>
 #include <QMenu>
 #include <QResizeEvent>
 #include <QTreeWidgetItem>
+#include <QUrl>
 #include <QWidget>
 
-#if !defined(Q_OS_MAC) || QT_VERSION > QT_VERSION_CHECK(5, 0, 0)
+#if QT_VERSION > QT_VERSION_CHECK(5, 0, 0)
 #include <QGraphicsBlurEffect>
 #endif
 
@@ -60,6 +63,12 @@
 MainWelcome::MainWelcome(QWidget *parent) :
     QFrame(parent),
     welcome_ui_(new Ui::MainWelcome),
+    flavor_(tr(VERSION_FLAVOR)),
+    #ifdef Q_OS_MAC
+    show_in_str_(tr("Show in Finder")),
+    #else
+    show_in_str_(tr("Show in Folder")),
+    #endif
     splash_overlay_(NULL)
 
 {
@@ -67,52 +76,61 @@ MainWelcome::MainWelcome(QWidget *parent) :
 
     recent_files_ = welcome_ui_->recentList;
 
-    welcome_ui_->interfaceTree->resetColumnCount();
-
     welcome_ui_->captureFilterComboBox->setEnabled(false);
 
-    setStyleSheet(QString(
-                      "MainWelcome {"
-                      "  padding: 2em;"
-                      " }"
-                      "MainWelcome, QAbstractItemView {"
-                      "  background-color: palette(base);"
-                      "  color: palette(text);"
-                      " }"
-                      "QListWidget {"
-                      "  border: 0;"
-                      "}"
-                      "QTreeWidget {"
-                      "  border: 0;"
-                      "}"
-                      )
-                );
+    QColor hover_color = ColorUtils::alphaBlend(palette().window(), palette().highlight(), 0.5);
 
     QString welcome_ss = QString(
+                "MainWelcome {"
+                "  padding: 1em;"
+                " }"
+                "MainWelcome, QAbstractItemView {"
+                "  background-color: palette(base);"
+                "  color: palette(text);"
+                " }"
+                "QAbstractItemView {"
+                "  border: 0;"
+                "}"
+                );
+#if !defined(Q_OS_WIN)
+    welcome_ss += QString(
+                "QAbstractItemView:item:hover {"
+                "  background-color: %1;"
+                "  color: palette(text);"
+                "}"
+                )
+            .arg(hover_color.name());
+#endif
+    setStyleSheet(welcome_ss);
+
+    QString banner_ss = QString(
                 "QLabel {"
                 "  border-radius: 0.33em;"
-                "  color: #%1;"
-                "  background-color: #%2;"
+                "  color: %1;"
+                "  background-color: %2;"
                 "  padding: 0.33em;"
                 "}"
                 )
-            .arg(tango_aluminium_6, 6, 16, QChar('0'))   // Text color
-            .arg(tango_sky_blue_2, 6, 16, QChar('0'));   // Background color
-    welcome_ui_->mainWelcomeBanner->setStyleSheet(welcome_ss);
+            .arg(QColor(tango_aluminium_6).name())   // Text color
+            .arg(QColor(tango_sky_blue_2).name());   // Background color
+    welcome_ui_->mainWelcomeBanner->setStyleSheet(banner_ss);
 
-    QString title_ss = QString(
-                "QLabel {"
-                "  color: #%1;"
-                "}"
-                )
-            .arg(tango_aluminium_4, 6, 16, QChar('0'));   // Text color
+    QString title_button_ss = QString(
+            "QLabel {"
+            "  color: %1;"
+            "}"
+            "QLabel::hover {"
+            "  color: %2;"
+            "}"
+            )
+            .arg(QColor(tango_aluminium_4).name())   // Text color
+            .arg(QColor(tango_sky_blue_4).name());   // Hover color
 
     // XXX Is there a better term than "flavor"? Provider? Admonition (a la DocBook)?
     // Release_source?
     // Typical use cases are automated builds from wireshark.org and private,
     // not-for-redistribution packages.
-    QString flavor = VERSION_FLAVOR;
-    if (flavor.isEmpty()) {
+    if (flavor_.isEmpty()) {
         welcome_ui_->flavorBanner->hide();
     } else {
         // If needed there are a couple of ways we can make this customizable.
@@ -129,18 +147,17 @@ MainWelcome::MainWelcome(QWidget *parent) :
                     )
                 .arg("white") //   Text color
                 .arg("#2c4bc4"); // Background color. Matches capture start button.
-        //            .arg(tango_butter_5, 6, 16, QChar('0'));      // "Warning" background
+        //            .arg(QColor(tango_butter_5).name());      // "Warning" background
 
-        welcome_ui_->flavorBanner->setText(flavor);
+        welcome_ui_->flavorBanner->setText(flavor_);
         welcome_ui_->flavorBanner->setStyleSheet(flavor_ss);
     }
-    welcome_ui_->captureLabel->setStyleSheet(title_ss);
-    welcome_ui_->recentLabel->setStyleSheet(title_ss);
-    welcome_ui_->helpLabel->setStyleSheet(title_ss);
+    welcome_ui_->captureLabel->setStyleSheet(title_button_ss);
+    welcome_ui_->recentLabel->setStyleSheet(title_button_ss);
+    welcome_ui_->helpLabel->setStyleSheet(title_button_ss);
 
 #ifdef Q_OS_MAC
     recent_files_->setAttribute(Qt::WA_MacShowFocusRect, false);
-    welcome_ui_->interfaceTree->setAttribute(Qt::WA_MacShowFocusRect, false);
 #endif
 
     welcome_ui_->openFrame->hide();
@@ -163,17 +180,14 @@ MainWelcome::MainWelcome(QWidget *parent) :
     connect(recent_files_, SIGNAL(customContextMenuRequested(QPoint)),
             this, SLOT(showRecentContextMenu(QPoint)));
 
-    connect(wsApp, SIGNAL(updateRecentItemStatus(const QString &, qint64, bool)), this, SLOT(updateRecentFiles()));
+    connect(wsApp, SIGNAL(updateRecentCaptureStatus(const QString &, qint64, bool)), this, SLOT(updateRecentCaptures()));
     connect(wsApp, SIGNAL(appInitialized()), this, SLOT(appInitialized()));
-    connect(welcome_ui_->interfaceTree, SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)),
-            this, SLOT(interfaceDoubleClicked(QTreeWidgetItem*,int)));
-#ifdef HAVE_EXTCAP
-    connect(welcome_ui_->interfaceTree, SIGNAL(itemClicked(QTreeWidgetItem*,int)),
-            this, SLOT(interfaceClicked(QTreeWidgetItem*,int)));
-#endif
-    connect(welcome_ui_->interfaceTree, SIGNAL(itemSelectionChanged()),
+    connect(wsApp, SIGNAL(localInterfaceListChanged()), this, SLOT(interfaceListChanged()));
+    connect(welcome_ui_->interfaceFrame, SIGNAL(itemSelectionChanged()),
             welcome_ui_->captureFilterComboBox, SIGNAL(interfacesChanged()));
-    connect(welcome_ui_->interfaceTree, SIGNAL(itemSelectionChanged()), this, SLOT(interfaceSelected()));
+    connect(welcome_ui_->interfaceFrame, SIGNAL(typeSelectionChanged()),
+                    this, SLOT(interfaceListChanged()));
+    connect(welcome_ui_->interfaceFrame, SIGNAL(itemSelectionChanged()), this, SLOT(interfaceSelected()));
     connect(welcome_ui_->captureFilterComboBox->lineEdit(), SIGNAL(textEdited(QString)),
             this, SLOT(captureFilterTextEdited(QString)));
     connect(welcome_ui_->captureFilterComboBox, SIGNAL(pushFilterSyntaxStatus(const QString&)),
@@ -185,10 +199,9 @@ MainWelcome::MainWelcome(QWidget *parent) :
     connect(welcome_ui_->captureFilterComboBox, SIGNAL(startCapture()),
             this, SIGNAL(startCapture()));
     connect(recent_files_, SIGNAL(itemActivated(QListWidgetItem *)), this, SLOT(openRecentItem(QListWidgetItem *)));
-    updateRecentFiles();
+    updateRecentCaptures();
 
-#if !defined(Q_OS_MAC) || QT_VERSION > QT_VERSION_CHECK(5, 0, 0)
-    // This crashes with Qt 4.8.3 on OS X.
+#if QT_VERSION > QT_VERSION_CHECK(5, 0, 0)
     QGraphicsBlurEffect *blur = new QGraphicsBlurEffect(welcome_ui_->childContainer);
     blur->setBlurRadius(2);
     welcome_ui_->childContainer->setGraphicsEffect(blur);
@@ -202,9 +215,9 @@ MainWelcome::~MainWelcome()
     delete welcome_ui_;
 }
 
-InterfaceTree *MainWelcome::getInterfaceTree()
+InterfaceFrame *MainWelcome::getInterfaceFrame()
 {
-    return welcome_ui_->interfaceTree;
+    return welcome_ui_->interfaceFrame;
 }
 
 const QString MainWelcome::captureFilter()
@@ -218,6 +231,18 @@ void MainWelcome::setCaptureFilter(const QString capture_filter)
     // CaptureInterfacesDialog. We need to find a good way to handle
     // multiple filters.
     welcome_ui_->captureFilterComboBox->lineEdit()->setText(capture_filter);
+}
+
+void MainWelcome::interfaceListChanged()
+{
+    QString btnText = tr("All interfaces shown");
+    if (welcome_ui_->interfaceFrame->interfacesHidden() > 0) {
+        btnText = tr("%n interface(s) shown, %1 hidden", "",
+                     welcome_ui_->interfaceFrame->interfacesPresent())
+                .arg(welcome_ui_->interfaceFrame->interfacesHidden());
+    }
+    welcome_ui_->btnInterfaceType->setText(btnText);
+    welcome_ui_->btnInterfaceType->setMenu(welcome_ui_->interfaceFrame->getSelectionMenu());
 }
 
 void MainWelcome::appInitialized()
@@ -239,7 +264,7 @@ void MainWelcome::appInitialized()
 #endif
     welcome_ui_->fullReleaseLabel->setText(full_release);
 
-#if !defined(Q_OS_MAC) || QT_VERSION > QT_VERSION_CHECK(5, 0, 0)
+#if QT_VERSION > QT_VERSION_CHECK(5, 0, 0)
     welcome_ui_->childContainer->setGraphicsEffect(NULL);
 #endif
 
@@ -247,10 +272,11 @@ void MainWelcome::appInitialized()
     welcome_ui_->captureFilterComboBox->lineEdit()->setText(global_capture_opts.default_options.cfilter);
 #endif // HAVE_LIBPCAP
 
-    // Trigger interfacesUpdated.
-    welcome_ui_->interfaceTree->selectedInterfaceChanged();
-
     welcome_ui_->captureFilterComboBox->setEnabled(true);
+
+    interfaceListChanged();
+
+    welcome_ui_->interfaceFrame->ensureSelectedInterface();
 
     delete splash_overlay_;
     splash_overlay_ = NULL;
@@ -286,7 +312,6 @@ void MainWelcome::captureFilterTextEdited(const QString capture_filter)
             //                update_filter_string(device.name, filter_text);
         }
     }
-    welcome_ui_->interfaceTree->updateToolTips();
 }
 #else
 // No-op if we don't have capturing.
@@ -312,44 +337,24 @@ void MainWelcome::interfaceSelected()
     } else {
         welcome_ui_->captureFilterComboBox->lineEdit()->setText(user_filter);
     }
-}
 
-void MainWelcome::interfaceDoubleClicked(QTreeWidgetItem *item, int)
-{
-    if (item) {
-#ifdef HAVE_EXTCAP
-        QString extcap_string = QVariant(item->data(IFTREE_COL_EXTCAP, Qt::UserRole)).toString();
-        /* We trust the string here. If this interface is really extcap, the string is
-         * being checked immediatly before the dialog is being generated */
-        if (extcap_string.length() > 0) {
-            QString device_name = QVariant(item->data(IFTREE_COL_NAME, Qt::UserRole)).toString();
-            /* this checks if configuration is required and not yet provided or saved via prefs */
-            if (extcap_has_configuration((const char *)(device_name.toStdString().c_str()), TRUE)) {
-                emit showExtcapOptions(device_name);
-                return;
-            }
-        }
-#endif
-        emit startCapture();
-    }
+    // Notify others (capture interfaces dialog) that the selection has changed.
+    emit interfacesChanged();
 }
 
 #ifdef HAVE_EXTCAP
-void MainWelcome::interfaceClicked(QTreeWidgetItem *item, int column)
+void MainWelcome::on_interfaceFrame_showExtcapOptions(QString device_name)
 {
-    if (column == IFTREE_COL_EXTCAP) {
-        QString extcap_string = QVariant(item->data(IFTREE_COL_EXTCAP, Qt::UserRole)).toString();
-        /* We trust the string here. If this interface is really extcap, the string is
-         * being checked immediatly before the dialog is being generated */
-        if (extcap_string.length() > 0) {
-            QString device_name = QVariant(item->data(IFTREE_COL_NAME, Qt::UserRole)).toString();
-            emit showExtcapOptions(device_name);
-        }
-    }
+    emit showExtcapOptions(device_name);
 }
 #endif
 
-void MainWelcome::updateRecentFiles() {
+void MainWelcome::on_interfaceFrame_startCapture()
+{
+    emit startCapture();
+}
+
+void MainWelcome::updateRecentCaptures() {
     QString itemLabel;
     QListWidgetItem *rfItem;
     QFont rfFont;
@@ -404,7 +409,7 @@ void MainWelcome::updateRecentFiles() {
     }
 
     int row = recent_files_->count();
-    while (row > 0 && row > (int) prefs.gui_recent_files_count_max) {
+    while (row > 0 && (row > (int) prefs.gui_recent_files_count_max || row > rfRow)) {
         row--;
         delete recent_files_->item(row);
     }
@@ -443,6 +448,8 @@ void MainWelcome::changeEvent(QEvent* event)
         {
         case QEvent::LanguageChange:
             welcome_ui_->retranslateUi(this);
+            welcome_ui_->flavorBanner->setText(flavor_);
+            interfaceListChanged();
             break;
         default:
             break;
@@ -451,11 +458,6 @@ void MainWelcome::changeEvent(QEvent* event)
     QFrame::changeEvent(event);
 }
 
-#ifdef Q_OS_MAC
-static const QString show_in_str_ = QObject::tr("Show in Finder");
-#else
-static const QString show_in_str_ = QObject::tr("Show in Folder");
-#endif
 void MainWelcome::showRecentContextMenu(QPoint pos)
 {
     QListWidgetItem *li = recent_files_->itemAt(pos);
@@ -464,14 +466,20 @@ void MainWelcome::showRecentContextMenu(QPoint pos)
     recent_ctx_menu_->clear();
 
     QString cf_path = li->data(Qt::UserRole).toString();
-    QAction *show_action = recent_ctx_menu_->addAction(show_in_str_);
 
+    QAction *show_action = recent_ctx_menu_->addAction(show_in_str_);
     show_action->setData(cf_path);
     connect(show_action, SIGNAL(triggered(bool)), this, SLOT(showRecentFolder()));
 
     QAction *copy_action = recent_ctx_menu_->addAction(tr("Copy file path"));
     copy_action->setData(cf_path);
     connect(copy_action, SIGNAL(triggered(bool)), this, SLOT(copyRecentPath()));
+
+    recent_ctx_menu_->addSeparator();
+
+    QAction *remove_action = recent_ctx_menu_->addAction(tr("Remove"));
+    remove_action->setData(cf_path);
+    connect(remove_action, SIGNAL(triggered(bool)), this, SLOT(removeRecentPath()));
 
     recent_ctx_menu_->exec(recent_files_->mapToGlobal(pos));
 }
@@ -494,6 +502,32 @@ void MainWelcome::copyRecentPath()
     if (cf_path.isEmpty()) return;
 
     wsApp->clipboard()->setText(cf_path);
+}
+
+void MainWelcome::removeRecentPath()
+{
+    QAction *ria = qobject_cast<QAction*>(sender());
+    if (!ria) return;
+
+    QString cf_path = ria->data().toString();
+    if (cf_path.isEmpty()) return;
+
+    wsApp->removeRecentItem(cf_path);
+}
+
+void MainWelcome::on_captureLabel_clicked()
+{
+    wsApp->doTriggerMenuItem(WiresharkApplication::CaptureOptionsDialog);
+}
+
+void MainWelcome::on_helpLabel_clicked()
+{
+    QDesktopServices::openUrl(QUrl(topic_online_url(ONLINEPAGE_DOCS)));
+}
+
+void MainWelcome::on_recentLabel_clicked()
+{
+    wsApp->doTriggerMenuItem(WiresharkApplication::FileOpenDialog);
 }
 
 /*

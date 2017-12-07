@@ -28,7 +28,7 @@
 #include <epan/epan.h>
 
 #include <epan/print.h>
-#include <epan/packet-range.h>
+#include <ui/packet_range.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,6 +73,8 @@ typedef enum {
     cf_cb_file_rescan_finished,
     cf_cb_file_retap_started,
     cf_cb_file_retap_finished,
+    cf_cb_file_merge_started, /* Qt only */
+    cf_cb_file_merge_finished, /* Qt only */
     cf_cb_file_fast_save_finished, /* GTK+ only? */
     cf_cb_packet_selected, /* GTK+ only. */
     cf_cb_packet_unselected, /* GTK+ only. */
@@ -415,6 +417,31 @@ cf_read_status_t cf_retap_packets(capture_file *cf);
  */
 void cf_timestamp_auto_precision(capture_file *cf);
 
+/* print_range, enum which frames should be printed */
+typedef enum {
+    print_range_selected_only,    /* selected frame(s) only (currently only one) */
+    print_range_marked_only,      /* marked frames only */
+    print_range_all_displayed,    /* all frames currently displayed */
+    print_range_all_captured      /* all frames in capture */
+} print_range_e;
+
+typedef struct {
+    print_stream_t *stream;       /* the stream to which we're printing */
+    print_format_e format;        /* plain text or PostScript */
+    gboolean to_file;             /* TRUE if we're printing to a file */
+    char *file;                   /* file output pathname */
+    char *cmd;                    /* print command string (not win32) */
+    packet_range_t range;
+
+    gboolean print_summary;       /* TRUE if we should print summary line. */
+    gboolean print_col_headings;  /* TRUE if we should print column headings */
+    print_dissections_e print_dissections;
+    gboolean print_hex;           /* TRUE if we should print hex data;
+                                   * FALSE if we should print only if not dissected. */
+    gboolean print_formfeed;      /* TRUE if a formfeed should be printed before
+                                   * each new packet */
+} print_args_t;
+
 /**
  * Print the capture file.
  *
@@ -558,20 +585,6 @@ gboolean cf_find_packet_marked(capture_file *cf, search_direction dir);
 gboolean cf_find_packet_time_reference(capture_file *cf, search_direction dir);
 
 /**
- * GoTo Packet in first row.
- *
- * @return TRUE if the first row exists, FALSE otherwise
- */
-gboolean cf_goto_top_frame(void);
-
-/**
- * GoTo Packet in last row.
- *
- * @return TRUE if last row exists, FALSE otherwise
- */
-gboolean cf_goto_bottom_frame(void);
-
-/**
  * GoTo Packet with the given row.
  *
  * @param cf the capture file
@@ -645,12 +658,12 @@ void cf_ignore_frame(capture_file *cf, frame_data *frame);
 void cf_unignore_frame(capture_file *cf, frame_data *frame);
 
 /**
- * Merge two (or more) capture files into one.
+ * Merge two or more capture files into a temporary file.
  * @todo is this the right place for this function? It doesn't have to do a lot with capture_file.
  *
- * @param out_filename pointer to output filename; if output filename is
- * NULL, a temporary file name is generated and *out_filename is set
- * to point to the generated file name
+ * @param pd_window Window pointer suitable for use by delayed_create_progress_dlg.
+ * @param out_filenamep Points to a pointer that's set to point to the
+ *        pathname of the temporary file; it's allocated with g_malloc()
  * @param in_file_count the number of input files to merge
  * @param in_filenames array of input filenames
  * @param file_type the output filetype
@@ -658,26 +671,37 @@ void cf_unignore_frame(capture_file *cf, frame_data *frame);
  * @return one of cf_status_t
  */
 cf_status_t
-cf_merge_files(char **out_filename, int in_file_count,
-               char *const *in_filenames, int file_type, gboolean do_append);
+cf_merge_files_to_tempfile(gpointer pd_window, char **out_filenamep,
+                           int in_file_count, char *const *in_filenames,
+                           int file_type, gboolean do_append);
 
 
 /**
  * Get the comment on a capture from the SHB data block
+ * XXX - should support multiple sections.
  *
  * @param cf the capture file
  */
-const gchar* cf_read_shb_comment(capture_file *cf);
+const gchar* cf_read_section_comment(capture_file *cf);
 
 /**
  * Update(replace) the comment on a capture from the SHB data block
+ * XXX - should support multiple sections.
  *
  * @param cf the capture file
  * @param comment the string replacing the old comment
  */
-void cf_update_capture_comment(capture_file *cf, gchar *comment);
+void cf_update_section_comment(capture_file *cf, gchar *comment);
 
-char *cf_get_comment(capture_file *cf, const frame_data *fd);
+/*
+ * Get the comment on a packet (record).
+ * If the comment has been edited, it returns the result of the edit,
+ * otherwise it returns the comment from the file.
+ *
+ * @param cf the capture file
+ * @param fd the frame_data structure for the frame
+ */
+char *cf_get_packet_comment(capture_file *cf, const frame_data *fd);
 
 /**
  * Update(replace) the comment on a capture from a frame

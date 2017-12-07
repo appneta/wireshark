@@ -39,7 +39,7 @@
 
 // To do:
 // - Elide really long items?
-// - Handle PREF_FILENAME and PREF_DIRNAME.
+// - Handle PREF_SAVE_FILENAME, PREF_OPEN_FILENAME and PREF_DIRNAME.
 // - Handle color prefs.
 
 class BoolPreferenceAction : public QAction
@@ -49,13 +49,13 @@ public:
         QAction(NULL),
         pref_(pref)
     {
-        setText(pref_->title);
+        setText(prefs_get_title(pref_));
         setCheckable(true);
-        setChecked(*pref->varp.boolp);
+        setChecked(prefs_get_bool_value(pref_, pref_current));
     }
 
     void setBoolValue() {
-        *pref_->varp.boolp = isChecked();
+        prefs_set_bool_value(pref_, isChecked(), pref_current);
     }
 
 private:
@@ -76,11 +76,7 @@ public:
     }
 
     bool setEnumValue() {
-        if (*pref_->varp.enump != enumval_) {
-            *pref_->varp.enump = enumval_;
-            return true;
-        }
-        return false;
+        return prefs_set_enum_value(pref_, enumval_, pref_current);
     }
 
 private:
@@ -95,14 +91,14 @@ public:
         QAction(NULL),
         pref_(pref)
     {
-        setText(QString("%1" UTF8_HORIZONTAL_ELLIPSIS).arg(pref_->title));
+        setText(QString("%1" UTF8_HORIZONTAL_ELLIPSIS).arg(prefs_get_title(pref_)));
     }
 
     void showUatDialog() {
-        UatDialog uat_dlg(parentWidget(), pref_->varp.uat);
+        UatDialog uat_dlg(parentWidget(), prefs_get_uat_value(pref_));
         uat_dlg.exec();
         // Emitting PacketDissectionChanged directly from a QDialog can cause
-        // problems on OS X.
+        // problems on macOS.
         wsApp->flushAppSignals();
     }
 
@@ -118,35 +114,9 @@ public:
         QAction(NULL),
         pref_(pref)
     {
-        QString title = pref_->title;
+        QString title = prefs_get_title(pref_);
 
-        switch(pref_->type) {
-        case PREF_UINT:
-        {
-            int base = 10;
-            switch(pref_->info.base) {
-            case 8:
-                base = 8;
-                break;
-            case 16:
-                base = 16;
-                break;
-            default:
-                break;
-            }
-            title.append(QString(": %1" UTF8_HORIZONTAL_ELLIPSIS).arg(QString::number(*pref->varp.uint, base)));
-            break;
-        }
-        case PREF_STRING:
-            title.append(QString(": %1" UTF8_HORIZONTAL_ELLIPSIS).arg(*pref->varp.string));
-            break;
-        case PREF_RANGE:
-            title.append(QString(": %1" UTF8_HORIZONTAL_ELLIPSIS).arg(range_to_qstring(*pref->varp.range)));
-            break;
-        default:
-            // We shouldn't be here.
-            break;
-        }
+        title.append(QString(": %1" UTF8_HORIZONTAL_ELLIPSIS).arg(gchar_free_to_qstring(prefs_pref_to_str(pref_, pref_current))));
 
         setText(title);
     }
@@ -202,6 +172,7 @@ void ProtocolPreferencesMenu::setModule(const char *module_name)
 
     QAction *disable_action = new QAction(tr("Disable %1" UTF8_HORIZONTAL_ELLIPSIS).arg(short_name), this);
     connect(disable_action, SIGNAL(triggered(bool)), this, SLOT(disableProtocolTriggered()));
+    disable_action->setDisabled(!proto_can_toggle_protocol(proto_id));
 
     module_ = prefs_find_module(module_name);
     if (!module_ || !prefs_is_registered_protocol(module_name)) {
@@ -229,7 +200,7 @@ void ProtocolPreferencesMenu::setModule(const char *module_name)
 
 void ProtocolPreferencesMenu::addMenuItem(preference *pref)
 {
-    switch (pref->type) {
+    switch (prefs_get_type(pref)) {
     case PREF_BOOL:
     {
         BoolPreferenceAction *bpa = new BoolPreferenceAction(pref);
@@ -240,10 +211,10 @@ void ProtocolPreferencesMenu::addMenuItem(preference *pref)
     case PREF_ENUM:
     {
         QActionGroup *ag = new QActionGroup(this);
-        QMenu *enum_menu = addMenu(pref->title);
-        for (const enum_val_t *enum_valp = pref->info.enum_info.enumvals; enum_valp->name; enum_valp++) {
+        QMenu *enum_menu = addMenu(prefs_get_title(pref));
+        for (const enum_val_t *enum_valp = prefs_get_enumvals(pref); enum_valp->name; enum_valp++) {
             EnumPreferenceAction *epa = new EnumPreferenceAction(pref, enum_valp->description, enum_valp->value, ag);
-            if (*pref->varp.enump == enum_valp->value) {
+            if (prefs_get_enum_value(pref, pref_current) == enum_valp->value) {
                 epa->setChecked(true);
             }
             enum_menu->addAction(epa);
@@ -254,6 +225,8 @@ void ProtocolPreferencesMenu::addMenuItem(preference *pref)
     case PREF_UINT:
     case PREF_STRING:
     case PREF_RANGE:
+    case PREF_DECODE_AS_UINT:
+    case PREF_DECODE_AS_RANGE:
     {
         EditorPreferenceAction *epa = new EditorPreferenceAction(pref);
         addAction(epa);
@@ -272,9 +245,9 @@ void ProtocolPreferencesMenu::addMenuItem(preference *pref)
     case PREF_OBSOLETE:
         break;
     default:
-        // A type we currently don't handle (e.g. PREF_FILENAME). Just open
+        // A type we currently don't handle (e.g. PREF_SAVE_FILENAME). Just open
         // the prefs dialog.
-        QString title = QString("%1" UTF8_HORIZONTAL_ELLIPSIS).arg(pref->title);
+        QString title = QString("%1" UTF8_HORIZONTAL_ELLIPSIS).arg(prefs_get_title(pref));
         QAction *mpa = addAction(title);
         connect(mpa, SIGNAL(triggered(bool)), this, SLOT(modulePreferencesTriggered()));
         break;
@@ -287,6 +260,10 @@ void ProtocolPreferencesMenu::disableProtocolTriggered()
     enable_proto_dialog.selectProtocol(protocol_);
     hide();
     enable_proto_dialog.exec();
+
+    // Emitting PacketDissectionChanged directly from a QDialog can cause
+    // problems on macOS.
+    wsApp->flushAppSignals();
 }
 
 void ProtocolPreferencesMenu::modulePreferencesTriggered()
@@ -312,6 +289,7 @@ void ProtocolPreferencesMenu::boolPreferenceTriggered()
     if (!bpa) return;
 
     bpa->setBoolValue();
+    module_->prefs_changed = TRUE;
 
     prefs_apply(module_);
     if (!prefs.gui_use_pref_save) {
@@ -327,6 +305,7 @@ void ProtocolPreferencesMenu::enumPreferenceTriggered()
     if (!epa) return;
 
     if (epa->setEnumValue()) { // Changed
+        module_->prefs_changed = TRUE;
         prefs_apply(module_);
         if (!prefs.gui_use_pref_save) {
             prefs_main_write();

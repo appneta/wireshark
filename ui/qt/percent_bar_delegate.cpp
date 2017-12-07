@@ -35,6 +35,8 @@ void PercentBarDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
     QStyleOptionViewItem option_vi = option;
     QStyledItemDelegate::initStyleOption(&option_vi, index);
 
+    // Paint our rect with no text using the current style, then draw our
+    // bar and text over it.
     QStyledItemDelegate::paint(painter, option, index);
 
     bool ok = false;
@@ -45,7 +47,15 @@ void PercentBarDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
         return;
     }
 
-    painter->save();
+    // If our value is out range our caller has a bug. Clamp the graph and
+    // Print the numeric value so that the bug is obvious.
+    QString pct_str = QString::number(value, 'f', 1);
+    if (value < 0) {
+        value = 0;
+    }
+    if (value > 100.0) {
+        value = 100.0;
+    }
 
     if (QApplication::style()->objectName().contains("vista")) {
         // QWindowsVistaStyle::drawControl does this internally. Unfortunately there
@@ -54,29 +64,34 @@ void PercentBarDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
                                option_vi.palette.color(QPalette::Active, QPalette::Text));
     }
 
-    QColor bar_color = ColorUtils::alphaBlend(option_vi.palette.windowText(),
-                                              option_vi.palette.window(), bar_blend_);
     QPalette::ColorGroup cg = option_vi.state & QStyle::State_Enabled
                               ? QPalette::Normal : QPalette::Disabled;
+    QColor text_color = option_vi.palette.color(cg, QPalette::Text);
+    QColor bar_color = ColorUtils::alphaBlend(option_vi.palette.windowText(),
+                                              option_vi.palette.window(), bar_blend_);
+
     if (cg == QPalette::Normal && !(option_vi.state & QStyle::State_Active))
         cg = QPalette::Inactive;
     if (option_vi.state & QStyle::State_Selected) {
-        painter->setPen(option_vi.palette.color(cg, QPalette::HighlightedText));
+        text_color = option_vi.palette.color(cg, QPalette::HighlightedText);
         bar_color = ColorUtils::alphaBlend(option_vi.palette.color(cg, QPalette::Window),
                                            option_vi.palette.color(cg, QPalette::Highlight),
                                            bar_blend_);
-    } else {
-        painter->setPen(option_vi.palette.color(cg, QPalette::Text));
     }
 
+    painter->save();
+    int border_radius = 3; // We use 3 px elsewhere, e.g. filter combos.
     QRect pct_rect = option.rect;
     pct_rect.adjust(1, 1, -1, -1);
     pct_rect.setWidth(((pct_rect.width() * value) / 100.0) + 0.5);
-    painter->fillRect(pct_rect, bar_color);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(bar_color);
+    painter->drawRoundedRect(pct_rect, border_radius, border_radius);
+    painter->restore();
 
-    QString pct_str = QString::number(value, 'f', 1);
+    painter->save();
+    painter->setPen(text_color);
     painter->drawText(option.rect, Qt::AlignCenter, pct_str);
-
     painter->restore();
 }
 

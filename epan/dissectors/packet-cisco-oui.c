@@ -33,11 +33,11 @@ static int hf_llc_cisco_pid = -1;
 /*
  * See various Cisco documents, including
  *
- *	http://www.cisco.com/univercd/cc/td/doc/product/lan/trsrb/vlan.htm
+ *	http://docstore.mik.ua/univercd/cc/td/doc/product/lan/trsrb/vlan.htm
  *
- * and
+ *	http://docstore.mik.ua/univercd/cc/td/doc/product/lan/trsrb/frames.htm
  *
- *	http://www.cisco.com/en/US/products/hw/switches/ps663/products_tech_note09186a0080094713.shtml
+ *	http://web.archive.org/web/20110407152854/http://www.cisco.com/en/US/products/hw/switches/ps663/products_tech_note09186a0080094713.shtml
  *
  * for various PID values - and for a DRIP frame format.
  */
@@ -45,6 +45,8 @@ static const value_string cisco_pid_vals[] = {
 	{ 0x0102,	"DRIP" },
 	{ 0x0104,	"PAgP" },	/* Port Aggregation Protocol */
 	{ 0x0105,	"MLS Hello" },	/* from a mail message found on the Web */
+	{ 0x0108,	"RLQ BPDUs (request)" }, /* Root Link Query, see Bug: 12772 */
+	{ 0x0109,	"RLQ BPDUs (response)" }, /* Root Link Query, see Bug: 12772 */
 	{ 0x010b,	"PVSTP+" },	/* Per-VLAN Spanning Tree Protocol */
 	{ 0x010c,	"VLAN Bridge" },
 	{ 0x0111,	"UDLD" },	/* Unidirectional Link Detection */

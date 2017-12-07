@@ -270,6 +270,7 @@ typedef struct _rtps_dissector_data {
 #define PID_ROLE_NAME                           (0x800a)
 #define PID_ACK_KIND                            (0x800b)
 #define PID_PEER_HOST_EPOCH                     (0x800e)
+#define PID_RELATED_ORIGINAL_WRITER_INFO        (0x800f)/* inline QoS */
 #define PID_DOMAIN_ID                           (0x800f)
 #define PID_RELATED_READER_GUID                 (0x8010)/* inline QoS */
 #define PID_TRANSPORT_INFO_LIST                 (0x8010)
@@ -281,6 +282,7 @@ typedef struct _rtps_dissector_data {
 #define PID_ENDPOINT_PROPERTY_CHANGE_EPOCH      (0x8015)
 #define PID_REACHABILITY_LEASE_DURATION         (0x8016)
 #define PID_VENDOR_BUILTIN_ENDPOINT_SET         (0x8017)
+#define PID_ENDPOINT_SECURITY_ATTRIBUTES        (0x8018)
 #define PID_EXTENDED                            (0x3f01)
 #define PID_LIST_END                            (0x3f02)
 
@@ -416,7 +418,11 @@ typedef struct _rtps_dissector_data {
 #define SUBMESSAGE_APP_ACK                              (0x1c)
 #define SUBMESSAGE_APP_ACK_CONF                         (0x1d)
 #define SUBMESSAGE_HEARTBEAT_VIRTUAL                    (0x1e)
-#define SUBMESSAGE_SECURE                               (0x30)
+#define SUBMESSAGE_SECURE_BODY                          (0x30)
+#define SUBMESSAGE_SECURE_PREFIX                        (0x31)
+#define SUBMESSAGE_SECURE_POSTFIX                       (0x32)
+#define SUBMESSAGE_SECURE_RTPS_PREFIX                   (0x33)
+#define SUBMESSAGE_SECURE_RTPS_POSTFIX                  (0x34)
 
 #define SUBMESSAGE_RTI_CRC                              (0x80)
 
@@ -495,6 +501,7 @@ typedef struct _rtps_dissector_data {
 #define LOCATOR_KIND_UDPV4              (1)
 #define LOCATOR_KIND_UDPV6              (2)
 /* Vendor specific - rti */
+#define LOCATOR_KIND_DTLS               (6)
 #define LOCATOR_KIND_TCPV4_LAN          (8)
 #define LOCATOR_KIND_TCPV4_WAN          (9)
 #define LOCATOR_KIND_TLSV4_LAN          (10)
@@ -553,48 +560,48 @@ typedef struct _rtps_dissector_data {
 extern guint16 rtps_util_add_protocol_version(proto_tree *tree, tvbuff_t* tvb, gint offset);
 extern guint16 rtps_util_add_vendor_id(proto_tree *tree, tvbuff_t * tvb, gint offset);
 extern void rtps_util_add_locator_t(proto_tree *tree, packet_info *pinfo, tvbuff_t * tvb, gint offset,
-                             gboolean little_endian, const guint8 * label);
+                             const guint encoding, const guint8 * label);
 extern int rtps_util_add_locator_list(proto_tree *tree, packet_info *pinfo, tvbuff_t * tvb,
-                                gint offset, const guint8* label, gboolean little_endian);
+                                gint offset, const guint8* label, const guint encoding);
 extern void rtps_util_add_ipv4_address_t(proto_tree *tree, packet_info *pinfo, tvbuff_t * tvb, gint offset,
-                                         gboolean little_endian, int hf_item);
+                                         const guint encoding, int hf_item);
 extern void rtps_util_add_locator_udp_v4(proto_tree *tree, packet_info *pinfo, tvbuff_t * tvb,
-                                  gint offset, const guint8 * label, gboolean little_endian);
+                                  gint offset, const guint8 * label, const guint encoding);
 extern int rtps_util_add_entity_id(proto_tree *tree, tvbuff_t * tvb, gint offset,
                             int hf_item, int hf_item_entity_key, int hf_item_entity_kind,
                             int subtree_entity_id, const char *label, guint32* entity_id_out);
 extern void rtps_util_add_generic_entity_id(proto_tree *tree, tvbuff_t * tvb, gint offset, const char* label,
                                      int hf_item, int hf_item_entity_key, int hf_item_entity_kind,
                                      int subtree_entity_id);
-extern guint64 rtps_util_add_seq_number(proto_tree *, tvbuff_t *,
-                        gint, int, const char *);
+extern guint64 rtps_util_add_seq_number(proto_tree *tree, tvbuff_t *tvb, gint offset, const guint encoding,
+                                 const char *label);
 extern void rtps_util_add_ntp_time(proto_tree *tree, tvbuff_t * tvb, gint offset,
-                                   gboolean little_endian, int hf_time);
+                                   const guint encoding, int hf_time);
 extern gint rtps_util_add_string(proto_tree *tree, tvbuff_t* tvb, gint offset,
-                          int hf_item, gboolean little_endian);
+                          int hf_item, const guint encoding);
 extern void rtps_util_add_port(proto_tree *tree, packet_info *pinfo, tvbuff_t * tvb,
-                        gint offset, gboolean little_endian, int hf_item);
+                        gint offset, const guint encoding, int hf_item);
 extern void rtps_util_add_durability_service_qos(proto_tree *tree, tvbuff_t * tvb,
-                                                 gint offset, gboolean little_endian);
+                                                 gint offset, const guint encoding);
 extern void rtps_util_add_liveliness_qos(proto_tree *tree, tvbuff_t * tvb, gint offset,
-                                         gboolean little_endian);
+                                         const guint encoding);
 extern gint rtps_util_add_seq_string(proto_tree *tree, tvbuff_t* tvb, gint offset,
-                              gboolean little_endian, int param_length, int hf_numstring,
+                              const guint encoding, int hf_numstring,
                               int hf_string, const char *label);
 extern gint rtps_util_add_seq_octets(proto_tree *tree, packet_info *pinfo, tvbuff_t* tvb,
-                              gint offset, gboolean little_endian, int param_length, int hf_id);
+                              gint offset, const guint encoding, int param_length, int hf_id);
 extern gint rtps_util_add_seq_ulong(proto_tree *tree, tvbuff_t * tvb, gint offset, int hf_item,
-                        gboolean little_endian, int param_length, const char *label);
+                        const guint encoding, int param_length, const char *label);
 
 extern gboolean rtps_is_ping(tvbuff_t *tvb, packet_info *pinfo, gint offset);
 
 /* Shared submessage dissection */
 extern void dissect_PAD(tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 flags,
-                        gboolean little_endian, int octects_to_next_header, proto_tree *tree);
+                        const guint encoding, int octects_to_next_header, proto_tree *tree);
 extern void dissect_INFO_SRC(tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 flags,
-                        gboolean little_endian, int octets_to_next_header, proto_tree *tree, guint16 rtps_version);
+                        const guint encoding, int octets_to_next_header, proto_tree *tree, guint16 rtps_version);
 extern void dissect_INFO_TS(tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 flags,
-                        gboolean little_endian, int octets_to_next_header, proto_tree *tree);
+                        const guint encoding, int octets_to_next_header, proto_tree *tree);
 
 
 #ifdef __cplusplus

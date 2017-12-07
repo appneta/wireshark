@@ -25,7 +25,7 @@
 
 #include <epan/dfilter/dfilter.h>
 
-#include <filter_files.h>
+#include <ui/filter_files.h>
 
 #include <wsutil/utf8_entities.h>
 
@@ -218,9 +218,7 @@ void DisplayFilterEdit::setDefaultPlaceholderText()
         placeholder_text_ = QString(tr("Apply a read filter %1")).arg(UTF8_HORIZONTAL_ELLIPSIS);
         break;
     }
-#if QT_VERSION >= QT_VERSION_CHECK(4, 7, 0)
     setPlaceholderText(placeholder_text_);
-#endif
 }
 
 void DisplayFilterEdit::paintEvent(QPaintEvent *evt) {
@@ -240,30 +238,6 @@ void DisplayFilterEdit::paintEvent(QPaintEvent *evt) {
         QSize bksz = bookmark_button_->size();
         painter.drawLine(bksz.width(), cr.top(), bksz.width(), cr.bottom());
     }
-
-#if QT_VERSION < QT_VERSION_CHECK(4, 7, 0)
-    // http://wiki.forum.nokia.com/index.php/Custom_QLineEdit
-    if (text().isEmpty() && ! this->hasFocus()) {
-        QPainter p(this);
-        QFont f = font();
-        f.setItalic(true);
-        p.setFont(f);
-
-        QColor color(palette().color(foregroundRole()));
-        color.setAlphaF(0.5);
-        p.setPen(color);
-
-        QStyleOptionFrame opt;
-        initStyleOption(&opt);
-        QRect cr = style()->subElementRect(QStyle::SE_LineEditContents, &opt, this);
-        cr.setLeft(cr.left() + 2);
-        cr.setRight(cr.right() - 2);
-
-        p.drawText(cr, Qt::AlignLeft|Qt::AlignVCenter, placeholder_text_);
-    }
-    // else check filter syntax and set the background accordingly
-    // XXX - Should we add little warning/error icons as well?
-#endif // QT < 4.7
 }
 
 void DisplayFilterEdit::resizeEvent(QResizeEvent *)
@@ -405,7 +379,7 @@ void DisplayFilterEdit::updateBookmarkMenu()
 
         QAction *prep_action = bb_menu->addAction(prep_text);
         prep_action->setData(df_def->strval);
-        connect(prep_action, SIGNAL(triggered(bool)), this, SLOT(prepareFilter()));
+        connect(prep_action, SIGNAL(triggered(bool)), this, SLOT(applyOrPrepareFilter()));
     }
 
     checkFilter();
@@ -563,18 +537,7 @@ void DisplayFilterEdit::removeFilter()
         }
     }
 
-    char *f_path;
-    int f_save_errno;
-
-    save_filter_list(DFILTER_LIST, &f_path, &f_save_errno);
-    if (f_path != NULL) {
-        // We had an error saving the filter.
-        QString warning_title = tr("Unable to save display filter settings.");
-        QString warning_msg = tr("Could not save to your display filter file\n\"%1\": %2.").arg(f_path).arg(g_strerror(f_save_errno));
-
-        QMessageBox::warning(this, warning_title, warning_msg, QMessageBox::Ok);
-        g_free(f_path);
-    }
+    save_filter_list(DFILTER_LIST);
 
     updateBookmarkMenu();
 }
@@ -590,12 +553,17 @@ void DisplayFilterEdit::showExpressionPrefs()
     emit showPreferencesDialog(PreferencesDialog::ppFilterExpressions);
 }
 
-void DisplayFilterEdit::prepareFilter()
+void DisplayFilterEdit::applyOrPrepareFilter()
 {
     QAction *pa = qobject_cast<QAction*>(sender());
     if (!pa || pa->data().toString().isEmpty()) return;
 
     setText(pa->data().toString());
+
+    // Holding down the Alt key will only prepare filter.
+    if (!(QApplication::keyboardModifiers() & Qt::AltModifier)) {
+        applyDisplayFilter();
+    }
 }
 
 /*

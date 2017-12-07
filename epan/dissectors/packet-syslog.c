@@ -352,8 +352,8 @@ void proto_register_syslog(void)
 void
 proto_reg_handoff_syslog(void)
 {
-  dissector_add_uint("udp.port", UDP_PORT_SYSLOG, syslog_handle);
-  dissector_add_for_decode_as("tcp.port", syslog_handle);
+  dissector_add_uint_with_preference("udp.port", UDP_PORT_SYSLOG, syslog_handle);
+  dissector_add_for_decode_as_with_preference("tcp.port", syslog_handle);
 
   /* Find the mtp3 dissector */
   mtp_handle = find_dissector_add_dependency("mtp3", proto_syslog);

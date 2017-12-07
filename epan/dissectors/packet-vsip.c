@@ -318,7 +318,6 @@ const value_string EVsipConfigItem_vals[] =
    {4215, "CONFIG_VIDEO_DEBLOCKING_FILTER"},
    {4216, "CONFIG_VIDEO_DEINTERLACING_MODE"},
    {4217, "CONFIG_VIDEO_DECODER_QUAD_DISCOVERY_MODE"},
-   {4224, "CONFIG_VIDEO_ECODER_POWER"},
    {4224, "CONFIG_VIDEO_ENCODER_POWER"},
    {4225, "CONFIG_VIDEO_ENCODER_MAX_STREAMS"},
    {4226, "CONFIG_VIDEO_ENCODER_MOTD_SUPPORTED"},
@@ -2081,8 +2080,8 @@ void proto_reg_handoff_vsip(void)
     dissector_handle_t vsip_handle;
 
     vsip_handle = create_dissector_handle(dissect_vsip, proto_vsip);
-    dissector_add_for_decode_as("udp.port", vsip_handle);
-    dissector_add_for_decode_as("tcp.port", vsip_handle);
+    dissector_add_for_decode_as_with_preference("udp.port", vsip_handle);
+    dissector_add_for_decode_as_with_preference("tcp.port", vsip_handle);
 }
 
 /*

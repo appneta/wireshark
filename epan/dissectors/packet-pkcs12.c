@@ -102,8 +102,6 @@ static int hf_pkcs12_macData = -1;                /* MacData */
 static int hf_pkcs12_mac = -1;                    /* DigestInfo */
 static int hf_pkcs12_macSalt = -1;                /* OCTET_STRING */
 static int hf_pkcs12_iterations = -1;             /* INTEGER */
-static int hf_pkcs12_digestAlgorithm = -1;        /* DigestAlgorithmIdentifier */
-static int hf_pkcs12_digest = -1;                 /* Digest */
 static int hf_pkcs12_AuthenticatedSafe_item = -1;  /* ContentInfo */
 static int hf_pkcs12_SafeContents_item = -1;      /* SafeBag */
 static int hf_pkcs12_bagId = -1;                  /* T_bagId */
@@ -146,7 +144,6 @@ static int hf_pkcs12_messageAuthScheme = -1;      /* AlgorithmIdentifier */
 #line 1 "./asn1/pkcs12/packet-pkcs12-ett.c"
 static gint ett_pkcs12_PFX = -1;
 static gint ett_pkcs12_MacData = -1;
-static gint ett_pkcs12_DigestInfo = -1;
 static gint ett_pkcs12_AuthenticatedSafe = -1;
 static gint ett_pkcs12_SafeContents = -1;
 static gint ett_pkcs12_SafeBag = -1;
@@ -175,8 +172,6 @@ static void append_oid(proto_tree *tree, const char *oid)
 	name = oid_resolved_from_string(wmem_packet_scope(), oid);
 	proto_item_append_text(tree, " (%s)", name ? name : oid);
 }
-
-#ifdef HAVE_LIBGCRYPT
 
 static int
 generate_key_or_iv(unsigned int id, tvbuff_t *salt_tvb, unsigned int iter,
@@ -300,17 +295,14 @@ generate_key_or_iv(unsigned int id, tvbuff_t *salt_tvb, unsigned int iter,
   }
 }
 
-#endif
-
 void PBE_reset_parameters(void)
 {
 	iteration_count = 0;
 	salt = NULL;
 }
 
-int PBE_decrypt_data(const char *object_identifier_id_param _U_, tvbuff_t *encrypted_tvb _U_, asn1_ctx_t *actx _U_, proto_item *item _U_)
+int PBE_decrypt_data(const char *object_identifier_id_param _U_, tvbuff_t *encrypted_tvb _U_, packet_info *pinfo _U_, asn1_ctx_t *actx _U_, proto_item *item _U_)
 {
-#ifdef HAVE_LIBGCRYPT
 	const char	*encryption_algorithm;
 	gcry_cipher_hd_t cipher;
 	gcry_error_t	err;
@@ -398,7 +390,7 @@ int PBE_decrypt_data(const char *object_identifier_id_param _U_, tvbuff_t *encry
 	}
 
 	datalen = tvb_captured_length(encrypted_tvb);
-	clear_data = (char *)g_malloc(datalen);
+	clear_data = (char *)wmem_alloc(pinfo->pool, datalen);
 
 	err = gcry_cipher_decrypt (cipher, clear_data, datalen, (char *)tvb_memdup(wmem_packet_scope(), encrypted_tvb, 0, datalen), datalen);
 	if (gcry_err_code (err)) {
@@ -406,7 +398,6 @@ int PBE_decrypt_data(const char *object_identifier_id_param _U_, tvbuff_t *encry
 		proto_item_append_text(item, " [Failed to decrypt with password preference]");
 
 		gcry_cipher_close (cipher);
-		g_free(clear_data);
 		return FALSE;
 	}
 
@@ -439,7 +430,6 @@ int PBE_decrypt_data(const char *object_identifier_id_param _U_, tvbuff_t *encry
 	}
 
 	if(!decrypt_ok) {
-		g_free(clear_data);
 		proto_item_append_text(item, " [Failed to decrypt with supplied password]");
 
 		return FALSE;
@@ -452,7 +442,6 @@ int PBE_decrypt_data(const char *object_identifier_id_param _U_, tvbuff_t *encry
 	/* OK - so now clear_data contains the decrypted data */
 
 	clear_tvb = tvb_new_child_real_data(encrypted_tvb,(const guint8 *)clear_data, datalen, datalen);
-	tvb_set_free_cb(clear_tvb, g_free);
 
 	name = g_string_new("");
 	oidname = oid_resolved_from_string(wmem_packet_scope(), object_identifier_id_param);
@@ -467,11 +456,6 @@ int PBE_decrypt_data(const char *object_identifier_id_param _U_, tvbuff_t *encry
 	call_ber_oid_callback(object_identifier_id_param, clear_tvb, 0, actx->pinfo, tree, NULL);
 
 	return TRUE;
-#else
-	/* we cannot decrypt */
-	return FALSE;
-
-#endif
 }
 
 
@@ -488,21 +472,6 @@ static int
 dissect_pkcs12_T_version(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 NULL);
-
-  return offset;
-}
-
-
-static const ber_sequence_t DigestInfo_sequence[] = {
-  { &hf_pkcs12_digestAlgorithm, BER_CLASS_UNI, BER_UNI_TAG_SEQUENCE, BER_FLAGS_NOOWNTAG, dissect_cms_DigestAlgorithmIdentifier },
-  { &hf_pkcs12_digest       , BER_CLASS_UNI, BER_UNI_TAG_OCTETSTRING, BER_FLAGS_NOOWNTAG, dissect_cms_Digest },
-  { NULL, 0, 0, 0, NULL }
-};
-
-static int
-dissect_pkcs12_DigestInfo(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-  offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
-                                   DigestInfo_sequence, hf_index, ett_pkcs12_DigestInfo);
 
   return offset;
 }
@@ -529,7 +498,7 @@ dissect_pkcs12_INTEGER(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset 
 
 
 static const ber_sequence_t MacData_sequence[] = {
-  { &hf_pkcs12_mac          , BER_CLASS_UNI, BER_UNI_TAG_SEQUENCE, BER_FLAGS_NOOWNTAG, dissect_pkcs12_DigestInfo },
+  { &hf_pkcs12_mac          , BER_CLASS_UNI, BER_UNI_TAG_SEQUENCE, BER_FLAGS_NOOWNTAG, dissect_cms_DigestInfo },
   { &hf_pkcs12_macSalt      , BER_CLASS_UNI, BER_UNI_TAG_OCTETSTRING, BER_FLAGS_NOOWNTAG, dissect_pkcs12_OCTET_STRING },
   { &hf_pkcs12_iterations   , BER_CLASS_UNI, BER_UNI_TAG_INTEGER, BER_FLAGS_OPTIONAL|BER_FLAGS_NOOWNTAG, dissect_pkcs12_INTEGER },
   { NULL, 0, 0, 0, NULL }
@@ -802,7 +771,7 @@ dissect_pkcs12_EncryptedData(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int o
 	dissector_handle=create_dissector_handle(dissect_PrivateKeyInfo_PDU, proto_pkcs12);
 	dissector_change_string("ber.oid", object_identifier_id, dissector_handle);
 
-	PBE_decrypt_data(object_identifier_id, encrypted_tvb, actx, actx->created_item);
+	PBE_decrypt_data(object_identifier_id, encrypted_tvb, actx->pinfo, actx, actx->created_item);
 
 	/* restore the original dissector */
 	dissector_reset_string("ber.oid", object_identifier_id);
@@ -1150,7 +1119,7 @@ static int dissect_PBMAC1Params_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, p
 
 
 /*--- End of included file: packet-pkcs12-fn.c ---*/
-#line 387 "./asn1/pkcs12/packet-pkcs12-template.c"
+#line 374 "./asn1/pkcs12/packet-pkcs12-template.c"
 
 static int strip_octet_string(tvbuff_t *tvb)
 {
@@ -1305,14 +1274,6 @@ void proto_register_pkcs12(void) {
       { "iterations", "pkcs12.iterations",
         FT_INT32, BASE_DEC, NULL, 0,
         "INTEGER", HFILL }},
-    { &hf_pkcs12_digestAlgorithm,
-      { "digestAlgorithm", "pkcs12.digestAlgorithm_element",
-        FT_NONE, BASE_NONE, NULL, 0,
-        "DigestAlgorithmIdentifier", HFILL }},
-    { &hf_pkcs12_digest,
-      { "digest", "pkcs12.digest",
-        FT_BYTES, BASE_NONE, NULL, 0,
-        NULL, HFILL }},
     { &hf_pkcs12_AuthenticatedSafe_item,
       { "ContentInfo", "pkcs12.ContentInfo_element",
         FT_NONE, BASE_NONE, NULL, 0,
@@ -1443,7 +1404,7 @@ void proto_register_pkcs12(void) {
         "AlgorithmIdentifier", HFILL }},
 
 /*--- End of included file: packet-pkcs12-hfarr.c ---*/
-#line 463 "./asn1/pkcs12/packet-pkcs12-template.c"
+#line 450 "./asn1/pkcs12/packet-pkcs12-template.c"
   };
 
   /* List of subtrees */
@@ -1454,7 +1415,6 @@ void proto_register_pkcs12(void) {
 #line 1 "./asn1/pkcs12/packet-pkcs12-ettarr.c"
     &ett_pkcs12_PFX,
     &ett_pkcs12_MacData,
-    &ett_pkcs12_DigestInfo,
     &ett_pkcs12_AuthenticatedSafe,
     &ett_pkcs12_SafeContents,
     &ett_pkcs12_SafeBag,
@@ -1474,7 +1434,7 @@ void proto_register_pkcs12(void) {
     &ett_pkcs12_PBMAC1Params,
 
 /*--- End of included file: packet-pkcs12-ettarr.c ---*/
-#line 469 "./asn1/pkcs12/packet-pkcs12-template.c"
+#line 456 "./asn1/pkcs12/packet-pkcs12-template.c"
   };
   static ei_register_info ei[] = {
       { &ei_pkcs12_octet_string_expected, { "pkcs12.octet_string_expected", PI_PROTOCOL, PI_WARN, "BER Error: OCTET STRING expected", EXPFILL }},
@@ -1542,7 +1502,7 @@ void proto_reg_handoff_pkcs12(void) {
 
 
 /*--- End of included file: packet-pkcs12-dis-tab.c ---*/
-#line 508 "./asn1/pkcs12/packet-pkcs12-template.c"
+#line 495 "./asn1/pkcs12/packet-pkcs12-template.c"
 
 	register_ber_oid_dissector("1.2.840.113549.1.9.22.1", dissect_X509Certificate_OCTETSTRING_PDU, proto_pkcs12, "x509Certificate");
 

@@ -35,12 +35,10 @@
 #include "tango_colors.h"
 
 #include <QAudio>
+#include <QAudioDeviceInfo>
 #include <QFrame>
 #include <QMenu>
 #include <QVBoxLayout>
-
-Q_DECLARE_METATYPE(RtpAudioStream *)
-Q_DECLARE_METATYPE(QCPGraph *)
 
 #endif // QT_MULTIMEDIA_LIB
 
@@ -96,6 +94,11 @@ enum {
     graph_data_col_ = src_port_col_ // QCPGraph
 };
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+Q_DECLARE_METATYPE(RtpAudioStream *)
+Q_DECLARE_METATYPE(QCPGraph *)
+#endif
+
 #ifdef QT_MULTIMEDIA_LIB
 static const double wf_graph_normal_width_ = 0.5;
 static const double wf_graph_selected_width_ = 2.0;
@@ -131,10 +134,10 @@ RtpPlayerDialog::RtpPlayerDialog(QWidget &parent, CaptureFile &cf) :
     ctx_menu_->addSeparator();
     ctx_menu_->addAction(ui->actionDragZoom);
     ctx_menu_->addAction(ui->actionToggleTimeOrigin);
-    ctx_menu_->addAction(ui->actionCrosshairs);
+//    ctx_menu_->addAction(ui->actionCrosshairs);
 
     connect(ui->audioPlot, SIGNAL(mouseMove(QMouseEvent*)),
-            this, SLOT(mouseMoved(QMouseEvent*)));
+            this, SLOT(updateHintLabel()));
     connect(ui->audioPlot, SIGNAL(mousePress(QMouseEvent*)),
             this, SLOT(graphClicked(QMouseEvent*)));
 
@@ -149,6 +152,28 @@ RtpPlayerDialog::RtpPlayerDialog(QWidget &parent, CaptureFile &cf) :
 
     ui->playButton->setIcon(StockIcon("media-playback-start"));
     ui->stopButton->setIcon(StockIcon("media-playback-stop"));
+
+    // Ordered, unique device names starting with the system default
+    QMap<QString, bool> out_device_map; // true == default device
+    out_device_map.insert(QAudioDeviceInfo::defaultOutputDevice().deviceName(), true);
+    foreach (QAudioDeviceInfo out_device, QAudioDeviceInfo::availableDevices(QAudio::AudioOutput)) {
+        if (!out_device_map.contains(out_device.deviceName())) {
+            out_device_map.insert(out_device.deviceName(), false);
+        }
+    }
+
+    foreach (QString out_name, out_device_map.keys()) {
+        ui->outputDeviceComboBox->addItem(out_name);
+        if (out_device_map.value(out_name)) {
+            ui->outputDeviceComboBox->setCurrentIndex(ui->outputDeviceComboBox->count() - 1);
+        }
+    }
+    if (ui->outputDeviceComboBox->count() < 1) {
+        ui->outputDeviceComboBox->setEnabled(false);
+        ui->playButton->setEnabled(false);
+        ui->stopButton->setEnabled(false);
+        ui->outputDeviceComboBox->addItem(tr("No devices available"));
+    }
 
     ui->audioPlot->setMouseTracking(true);
     ui->audioPlot->setEnabled(true);
@@ -379,6 +404,7 @@ void RtpPlayerDialog::addRtpStream(struct _rtp_stream_info *rtp_stream)
 
         connect(audio_stream, SIGNAL(startedPlaying()), this, SLOT(updateWidgets()));
         connect(audio_stream, SIGNAL(finishedPlaying()), this, SLOT(updateWidgets()));
+        connect(audio_stream, SIGNAL(playbackError(QString)), this, SLOT(setPlaybackError(QString)));
         connect(audio_stream, SIGNAL(processedSecs(double)), this, SLOT(setPlayPosition(double)));
     }
     audio_stream->addRtpStream(rtp_stream);
@@ -392,7 +418,7 @@ void RtpPlayerDialog::addRtpStream(struct _rtp_stream_info *rtp_stream)
                      ui->streamTreeWidget->topLevelItemCount(),
                      rtp_stream->packet_count,
                      g_list_length(rtp_stream->rtp_packet_list),
-                     rtp_stream->start_fd->num);
+                     rtp_stream->start_fd ? rtp_stream->start_fd->num : 0);
 }
 
 void RtpPlayerDialog::showEvent(QShowEvent *)
@@ -473,6 +499,7 @@ void RtpPlayerDialog::updateWidgets()
     }
 
     ui->playButton->setEnabled(enable_play);
+    ui->outputDeviceComboBox->setEnabled(enable_play);
     ui->stopButton->setEnabled(enable_stop);
     cur_play_pos_->setVisible(enable_stop);
 
@@ -480,6 +507,7 @@ void RtpPlayerDialog::updateWidgets()
     ui->timingComboBox->setEnabled(enable_timing);
     ui->todCheckBox->setEnabled(enable_timing);
 
+    updateHintLabel();
     ui->audioPlot->replot();
 }
 
@@ -492,7 +520,7 @@ void RtpPlayerDialog::graphClicked(QMouseEvent *event)
     ui->audioPlot->setFocus();
 }
 
-void RtpPlayerDialog::mouseMoved(QMouseEvent *)
+void RtpPlayerDialog::updateHintLabel()
 {
     int packet_num = getHoveredPacket();
     QString hint = "<small><i>";
@@ -501,6 +529,8 @@ void RtpPlayerDialog::mouseMoved(QMouseEvent *)
         hint += tr("%1. Press \"G\" to go to packet %2")
                 .arg(getHoveredTime())
                 .arg(packet_num);
+    } else if (!playback_error_.isEmpty()) {
+        hint += playback_error_;
     }
 
     hint += "</i></small>";
@@ -603,6 +633,7 @@ void RtpPlayerDialog::on_playButton_clicked()
     cur_play_pos_->point1->setCoords(left, 0.0);
     cur_play_pos_->point2->setCoords(left, 1.0);
     cur_play_pos_->setVisible(true);
+    playback_error_.clear();
     ui->audioPlot->replot();
 }
 
@@ -707,6 +738,18 @@ int RtpPlayerDialog::getHoveredPacket()
     double ts = ui->audioPlot->xAxis->pixelToCoord(ui->audioPlot->mapFromGlobal(QCursor::pos()).x());
 
     return audio_stream->nearestPacket(ts, !ui->todCheckBox->isChecked());
+}
+
+// Used by RtpAudioStreams to initialize QAudioOutput. We could alternatively
+// pass the corresponding QAudioDeviceInfo directly.
+QString RtpPlayerDialog::currentOutputDeviceName()
+{
+    return ui->outputDeviceComboBox->currentText();
+}
+
+void RtpPlayerDialog::on_outputDeviceComboBox_currentIndexChanged(const QString &)
+{
+    rescanPackets();
 }
 
 void RtpPlayerDialog::on_jitterSpinBox_valueChanged(double)

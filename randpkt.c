@@ -27,6 +27,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <wsutil/clopts_common.h>
+#include <wsutil/cmdarg_err.h>
 #include <wsutil/unicode-utils.h>
 #include <wsutil/file_util.h>
 #include <wsutil/filesystem.h>
@@ -36,7 +38,7 @@
 #include <wsutil/plugins.h>
 #endif
 
-#include <wsutil/report_err.h>
+#include <wsutil/report_message.h>
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
 #endif
@@ -47,18 +49,31 @@
 
 #include "randpkt_core/randpkt_core.h"
 
-#ifdef HAVE_PLUGINS
+#define INVALID_OPTION 1
+#define INVALID_TYPE 2
+#define CLOSE_ERROR 2
+
 /*
- *  Don't report failures to load plugins because most (non-wiretap) plugins
- *  *should* fail to load (because we're not linked against libwireshark and
- *  dissector plugins need libwireshark).
+ * General errors and warnings are reported with an console message
+ * in randpkt.
  */
 static void
-failure_message(const char *msg_format _U_, va_list ap _U_)
+failure_warning_message(const char *msg_format, va_list ap)
 {
-  return;
+	fprintf(stderr, "randpkt: ");
+	vfprintf(stderr, msg_format, ap);
+	fprintf(stderr, "\n");
 }
-#endif
+
+/*
+ * Report additional information for an error in command-line arguments.
+ */
+static void
+failure_message_cont(const char *msg_format, va_list ap)
+{
+	vfprintf(stderr, msg_format, ap);
+	fprintf(stderr, "\n");
+}
 
 /* Print usage statement and exit program */
 static void
@@ -94,9 +109,8 @@ usage(gboolean is_error)
 	g_strfreev(longname_list);
 
 	fprintf(output, "\nIf type is not specified, a random packet will be chosen\n\n");
-
-	exit(is_error ? 1 : 0);
 }
+
 int
 main(int argc, char **argv)
 {
@@ -110,6 +124,7 @@ main(int argc, char **argv)
 	guint8*			type = NULL;
 	int 			allrandom = FALSE;
 	wtap_dumper		*savedump;
+	int 			 ret = EXIT_SUCCESS;
 	static const struct option long_options[] = {
 		{"help", no_argument, NULL, 'h'},
 		{0, 0, 0, 0 }
@@ -131,8 +146,15 @@ main(int argc, char **argv)
 		    init_progfile_dir_error);
 		g_free(init_progfile_dir_error);
 	}
+<<<<<<< HEAD
 
 	wtap_init();
+=======
+
+	wtap_init();
+
+	cmdarg_err_init(failure_warning_message, failure_message_cont);
+>>>>>>> upstream/master-2.4
 
 #ifdef _WIN32
 	arg_list_utf_16to8(argc, argv);
@@ -141,12 +163,27 @@ main(int argc, char **argv)
 
 #ifdef HAVE_PLUGINS
 	/* Register wiretap plugins */
+<<<<<<< HEAD
 	init_report_err(failure_message,NULL,NULL,NULL);
 
 	/* Scan for plugins.  This does *not* call their registration routines;
 		that's done later. */
 	scan_plugins();
 
+=======
+	init_report_message(failure_warning_message, failure_warning_message,
+	    NULL, NULL, NULL);
+
+	/* Scan for plugins.  This does *not* call their registration routines;
+	   that's done later.
+
+	   Don't report failures to load plugins because most
+	   (non-wiretap) plugins *should* fail to load (because
+	   we're not linked against libwireshark and dissector
+	   plugins need libwireshark). */
+	scan_plugins(DONT_REPORT_LOAD_FAILURE);
+
+>>>>>>> upstream/master-2.4
 	/* Register all libwiretap plugin modules. */
 	register_all_wiretap_modules();
 #endif
@@ -154,15 +191,16 @@ main(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, "b:c:ht:r", long_options, NULL)) != -1) {
 		switch (opt) {
 			case 'b':	/* max bytes */
-				produce_max_bytes = atoi(optarg);
+				produce_max_bytes = get_positive_int(optarg, "max bytes");
 				if (produce_max_bytes > 65536) {
-					fprintf(stderr, "randpkt: Max bytes is 65536\n");
-					return 1;
+					cmdarg_err("max bytes is > 65536");
+					ret = INVALID_OPTION;
+					goto clean_exit;
 				}
 				break;
 
 			case 'c':	/* count */
-				produce_count = atoi(optarg);
+				produce_count = get_positive_int(optarg, "count");
 				break;
 
 			case 't':	/* type of packet to produce */
@@ -171,6 +209,7 @@ main(int argc, char **argv)
 
 			case 'h':
 				usage(FALSE);
+				goto clean_exit;
 				break;
 
 			case 'r':
@@ -179,6 +218,8 @@ main(int argc, char **argv)
 
 			default:
 				usage(TRUE);
+				ret = INVALID_OPTION;
+				goto clean_exit;
 				break;
 		}
 	}
@@ -189,6 +230,8 @@ main(int argc, char **argv)
 	}
 	else {
 		usage(TRUE);
+		ret = INVALID_OPTION;
+		goto clean_exit;
 	}
 
 	if (!allrandom) {
@@ -196,22 +239,31 @@ main(int argc, char **argv)
 		g_free(type);
 
 		example = randpkt_find_example(produce_type);
-		if (!example)
-			return 1;
+		if (!example) {
+			ret = INVALID_OPTION;
+			goto clean_exit;
+		}
 
-		randpkt_example_init(example, produce_filename, produce_max_bytes);
+		ret = randpkt_example_init(example, produce_filename, produce_max_bytes);
+		if (ret != EXIT_SUCCESS)
+			goto clean_exit;
 		randpkt_loop(example, produce_count);
 	} else {
 		if (type) {
 			fprintf(stderr, "Can't set type in random mode\n");
-			return 2;
+			ret = INVALID_TYPE;
+			goto clean_exit;
 		}
 
 		produce_type = randpkt_parse_type(NULL);
 		example = randpkt_find_example(produce_type);
-		if (!example)
-			return 1;
-		randpkt_example_init(example, produce_filename, produce_max_bytes);
+		if (!example) {
+			ret = INVALID_OPTION;
+			goto clean_exit;
+		}
+		ret = randpkt_example_init(example, produce_filename, produce_max_bytes);
+		if (ret != EXIT_SUCCESS)
+			goto clean_exit;
 
 		while (produce_count-- > 0) {
 			randpkt_loop(example, 1);
@@ -220,15 +272,20 @@ main(int argc, char **argv)
 			savedump = example->dump;
 
 			example = randpkt_find_example(produce_type);
-			if (!example)
-				return 1;
+			if (!example) {
+				ret = INVALID_OPTION;
+				goto clean_exit;
+			}
 			example->dump = savedump;
 		}
 	}
-	if (!randpkt_example_close(example))
-		return 2;
-	return 0;
+	if (!randpkt_example_close(example)) {
+		ret = CLOSE_ERROR;
+	}
 
+clean_exit:
+	wtap_cleanup();
+	return ret;
 }
 
 /*

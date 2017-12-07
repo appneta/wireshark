@@ -26,21 +26,11 @@
 #include "config.h"
 
 #include <epan/packet.h>
-#include <epan/prefs.h>
 
 void proto_register_bvlc(void);
 void proto_reg_handoff_bvlc(void);
 
-/* Taken from add-135a (BACnet-IP-standard paper):
- *
- * The default UDP port for both directed messages and broadcasts shall
- * be X'BAC0' and all B/IP devices shall support it. In some cases,
- * e.g., a situation where it is desirable for two groups of BACnet devices
- * to coexist independently on the same IP subnet, the UDP port may be
- * configured locally to a different value without it being considered
- * a violation of this protocol.
- */
-static guint global_additional_bvlc_udp_port = 0;
+#define BVLC_UDP_PORT 0xBAC0
 
 static int proto_bvlc = -1;
 static int hf_bvlc_type = -1;
@@ -59,6 +49,7 @@ static int hf_bvlc_fwd_ip = -1;
 static int hf_bvlc_fwd_port = -1;
 
 static dissector_table_t bvlc_dissector_table;
+static dissector_handle_t bvlc_handle = NULL;
 
 static const value_string bvlc_function_names[] = {
 	{ 0x00, "BVLC-Result", },
@@ -295,7 +286,7 @@ dissect_bvlc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_
  * BACnet NPDU
  */
 	npdu_length = packet_length - bvlc_length;
-	next_tvb = tvb_new_subset(tvb,bvlc_length,-1,npdu_length);
+	next_tvb = tvb_new_subset_length_caplen(tvb,bvlc_length,-1,npdu_length);
 	/* Code from Guy Harris */
 	if (!dissector_try_uint(bvlc_dissector_table,
 	    bvlc_function, next_tvb, pinfo, tree)) {
@@ -389,21 +380,13 @@ proto_register_bvlc(void)
 		&ett_fdt,
 	};
 
-	module_t *bvlc_module;
 
-	proto_bvlc = proto_register_protocol("BACnet Virtual Link Control",
-	    "BVLC", "bvlc");
+	proto_bvlc = proto_register_protocol("BACnet Virtual Link Control", "BVLC", "bvlc");
 
 	proto_register_field_array(proto_bvlc, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 
-	bvlc_module = prefs_register_protocol(proto_bvlc, proto_reg_handoff_bvlc);
-	prefs_register_uint_preference(bvlc_module, "additional_udp_port",
-					"Additional UDP port", "Set an additional UDP port, "
-					"besides the standard X'BAC0' (47808) port.",
-					10, &global_additional_bvlc_udp_port);
-
-	register_dissector("bvlc", dissect_bvlc, proto_bvlc);
+	bvlc_handle = register_dissector("bvlc", dissect_bvlc, proto_bvlc);
 
 	bvlc_dissector_table = register_dissector_table("bvlc.function",
 	    "BVLC Function", proto_bvlc, FT_UINT8, BASE_HEX);
@@ -412,27 +395,7 @@ proto_register_bvlc(void)
 void
 proto_reg_handoff_bvlc(void)
 {
-	static gboolean bvlc_initialized = FALSE;
-	static dissector_handle_t bvlc_handle;
-	static guint additional_bvlc_udp_port;
-
-	if (!bvlc_initialized)
-	{
-		bvlc_handle = find_dissector("bvlc");
-		dissector_add_uint("udp.port", 0xBAC0, bvlc_handle);
-		bvlc_initialized = TRUE;
-	}
-	else
-	{
-		if (additional_bvlc_udp_port != 0) {
-			dissector_delete_uint("udp.port", additional_bvlc_udp_port, bvlc_handle);
-		}
-	}
-
-	if (global_additional_bvlc_udp_port != 0) {
-		dissector_add_uint("udp.port", global_additional_bvlc_udp_port, bvlc_handle);
-	}
-	additional_bvlc_udp_port = global_additional_bvlc_udp_port;
+	dissector_add_uint_with_preference("udp.port", BVLC_UDP_PORT, bvlc_handle);
 }
 
 /*

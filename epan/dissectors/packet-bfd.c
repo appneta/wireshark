@@ -43,8 +43,7 @@
 void proto_register_bfd(void);
 void proto_reg_handoff_bfd(void);
 
-#define UDP_PORT_BFD_1HOP_CONTROL 3784 /* draft-katz-ward-bfd-v4v6-1hop-00.txt */
-#define UDP_PORT_BFD_MULTIHOP_CONTROL 4784 /* draft-ietf-bfd-multihop-05.txt */
+#define UDP_PORT_RANGE_BFD  "3784,4784" /* draft-katz-ward-bfd-v4v6-1hop-00.txt */ /* draft-ietf-bfd-multihop-05.txt */
 
 /* As per RFC 6428 : http://tools.ietf.org/html/rfc6428
    Section: 3.5 */
@@ -154,6 +153,8 @@ static gint ett_bfd_auth = -1;
 static expert_field ei_bfd_auth_len_invalid = EI_INIT;
 static expert_field ei_bfd_auth_no_data = EI_INIT;
 
+static dissector_handle_t bfd_control_handle = NULL;
+
 static gint hf_mep_type = -1;
 static gint hf_mep_len = -1;
 static gint hf_mep_global_id = -1;
@@ -187,12 +188,12 @@ static gint hf_section_interface_no = -1;
  */
 
 /*
- * Control packet version 1, draft-ietf-bfd-base-04.txt
+ * Control packet version 1, RFC 5880
  *
  *     0                   1                   2                   3
  *     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *    |Vers |  Diag   |Sta|P|F|C|A|D|R|  Detect Mult  |    Length     |
+ *    |Vers |  Diag   |Sta|P|F|C|A|D|M|  Detect Mult  |    Length     |
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *    |                       My Discriminator                        |
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -309,7 +310,6 @@ dissect_bfd_authentication(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     int           offset    = 24;
     guint8        auth_type;
     guint8        auth_len;
-    proto_item   *ti        = NULL;
     proto_item   *auth_item = NULL;
     proto_tree   *auth_tree = NULL;
     const guint8 *password;
@@ -326,8 +326,7 @@ dissect_bfd_authentication(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 
         proto_tree_add_item(auth_tree, hf_bfd_auth_type, tvb, offset, 1, ENC_BIG_ENDIAN);
 
-        ti = proto_tree_add_item(auth_tree, hf_bfd_auth_len, tvb, offset + 1, 1, ENC_BIG_ENDIAN);
-        proto_item_append_text(ti, " bytes");
+        proto_tree_add_item(auth_tree, hf_bfd_auth_len, tvb, offset + 1, 1, ENC_BIG_ENDIAN);
 
         proto_tree_add_item(auth_tree, hf_bfd_auth_key, tvb, offset + 2, 1, ENC_BIG_ENDIAN);
     }
@@ -481,8 +480,7 @@ dissect_bfd_control(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* d
                                          bfd_detect_time_multiplier,
                                          bfd_detect_time_multiplier * (bfd_desired_min_tx_interval/1000));
 
-        proto_tree_add_uint_format_value(bfd_tree, hf_bfd_message_length, tvb, 3, 1, bfd_length,
-                "%u bytes", bfd_length);
+        proto_tree_add_uint(bfd_tree, hf_bfd_message_length, tvb, 3, 1, bfd_length);
 
         proto_tree_add_uint(bfd_tree, hf_bfd_my_discriminator, tvb, 4,
                                  4, bfd_my_discriminator);
@@ -714,7 +712,7 @@ proto_register_bfd(void)
         },
         { &hf_bfd_message_length,
           { "Message Length", "bfd.message_length",
-            FT_UINT8, BASE_DEC, NULL, 0x0,
+            FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,
             "Length of the BFD Control packet, in bytes", HFILL }
         },
         { &hf_bfd_my_discriminator,
@@ -754,7 +752,7 @@ proto_register_bfd(void)
         },
         { &hf_bfd_auth_len,
           { "Authentication Length", "bfd.auth.len",
-            FT_UINT8, BASE_DEC, NULL, 0x0,
+            FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_byte_bytes, 0x0,
             "The length, in bytes, of the authentication section", HFILL }
         },
         { &hf_bfd_auth_key,
@@ -854,7 +852,7 @@ proto_register_bfd(void)
     proto_bfd = proto_register_protocol("Bidirectional Forwarding Detection Control Message",
                                         "BFD Control",
                                         "bfd");
-    register_dissector("bfd", dissect_bfd_control, proto_bfd);
+    bfd_control_handle = register_dissector("bfd", dissect_bfd_control, proto_bfd);
 
     /* Required function calls to register the header fields and subtrees used */
     proto_register_field_array(proto_bfd, hf, array_length(hf));
@@ -866,15 +864,11 @@ proto_register_bfd(void)
 void
 proto_reg_handoff_bfd(void)
 {
-    dissector_handle_t bfd_control_handle;
+    dissector_add_uint_range_with_preference("udp.port", UDP_PORT_RANGE_BFD, bfd_control_handle);
 
-    bfd_control_handle = find_dissector("bfd");
-    dissector_add_uint("udp.port", UDP_PORT_BFD_1HOP_CONTROL,     bfd_control_handle);
-    dissector_add_uint("udp.port", UDP_PORT_BFD_MULTIHOP_CONTROL, bfd_control_handle);
-
-    dissector_add_uint("pwach.channel_type", ACH_TYPE_BFD_CC, bfd_control_handle);
-    dissector_add_uint("pwach.channel_type", ACH_TYPE_BFD_CV, bfd_control_handle);
-    dissector_add_uint("pwach.channel_type", 0x7, bfd_control_handle); /* PWACH-encapsulated BFD, RFC 5885 */
+    dissector_add_uint("pwach.channel_type", PW_ACH_TYPE_BFD_CC, bfd_control_handle);
+    dissector_add_uint("pwach.channel_type", PW_ACH_TYPE_BFD_CV, bfd_control_handle);
+    dissector_add_uint("pwach.channel_type", PW_ACH_TYPE_BFD, bfd_control_handle);
 }
 
 /*

@@ -84,6 +84,7 @@ const QString AboutDialog::about_folders_row(const char *name, const QString dir
             .arg(typ_file);
 }
 
+#if defined(HAVE_PLUGINS) || defined(HAVE_LUA)
 static void plugins_add_description(const char *name, const char *version,
                                     const char *types, const char *filename,
                                     void *user_data)
@@ -92,7 +93,7 @@ static void plugins_add_description(const char *name, const char *version,
     QStringList plugin_row = QStringList() << name << version << types << filename;
     *plugin_data << plugin_row;
 }
-
+#endif
 
 const QString AboutDialog::plugins_scan()
 {
@@ -120,11 +121,10 @@ const QString AboutDialog::plugins_scan()
     }
 
 #ifdef HAVE_EXTCAP
-    GHashTable * tools = extcap_tools_list();
+    GHashTable * tools = extcap_loaded_interfaces();
     if (tools && g_hash_table_size(tools) > 0) {
-        QString short_file;
         GList * walker = g_list_first(g_hash_table_get_keys(tools));
-        while (walker) {
+        while (walker && walker->data) {
             extcap_info * tool = (extcap_info *)g_hash_table_lookup(tools, walker->data);
             if (tool) {
                 short_file = fontMetrics().elidedText(tool->full_path, Qt::ElideMiddle, one_em*22);
@@ -148,7 +148,6 @@ AboutDialog::AboutDialog(QWidget *parent) :
 {
     ui->setupUi(this);
     setAttribute(Qt::WA_DeleteOnClose, true);
-    QFile f_authors;
     QFile f_license;
     const char *constpath;
     QString message;
@@ -186,20 +185,12 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
 /* Check if it is a dev release... (VERSION_MINOR is odd in dev release) */
 #if VERSION_MINOR & 1
-        ui->label_logo->setPixmap(QPixmap(":/about/wssplash_dev.png"));
+        ui->label_logo->setPixmap(QPixmap(":/about/wssplash.png"));
 #endif
 
-
     /* Authors */
-
-    f_authors.setFileName(get_datafile_path("AUTHORS-SHORT"));
-    f_authors.open(QFile::ReadOnly | QFile::Text);
-    QTextStream ReadFile_authors(&f_authors);
-    ReadFile_authors.setCodec("UTF-8");
-
     ui->pte_Authors->setFont(wsApp->monospaceFont());
-    ui->pte_Authors->insertPlainText(ReadFile_authors.readAll());
-    ui->pte_Authors->moveCursor(QTextCursor::Start);
+    this->addAuthors(NULL);
 
     /* Folders */
 
@@ -288,7 +279,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
 
     /* Plugins */
-
+#if defined(HAVE_PLUGINS) || defined(HAVE_LUA) || defined(HAVE_EXTCAP)
     message = QString("<table cellpadding=\"%1\">\n").arg(one_em / 4);
     message += "<tr><th align=\"left\">Name</th><th align=\"left\">Version</th><th align=\"left\">Type</th><th align=\"left\">Path</th></tr>\n";
 
@@ -296,6 +287,9 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
     message += "</table>";
     ui->te_plugins->setHtml(message);
+#else
+    ui->te_plugins->setVisible(false);
+#endif
 
     /* Shortcuts */
     bool have_shortcuts = false;
@@ -350,6 +344,32 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui->pte_License->setFont(wsApp->monospaceFont());
     ui->pte_License->insertPlainText(ReadFile_license.readAll());
     ui->pte_License->moveCursor(QTextCursor::Start);
+
+    connect(ui->searchAuthors, SIGNAL(textChanged(const QString &)), this, SLOT(updateAuthors(const QString &)));
+}
+
+void AboutDialog::addAuthors(const QString& filter)
+{
+    QFile f_authors;
+
+    f_authors.setFileName(get_datafile_path("AUTHORS-SHORT"));
+    f_authors.open(QFile::ReadOnly | QFile::Text);
+    QTextStream ReadFile_authors(&f_authors);
+    ReadFile_authors.setCodec("UTF-8");
+
+    ui->pte_Authors->clear();
+    ui->pte_Authors->moveCursor(QTextCursor::Start);
+    while (!ReadFile_authors.atEnd()) {
+        QString line = ReadFile_authors.readLine();
+        if (line.contains(filter, Qt::CaseInsensitive))
+            ui->pte_Authors->appendPlainText(line);
+    }
+    ui->pte_Authors->moveCursor(QTextCursor::Start);
+}
+
+void AboutDialog::updateAuthors(const QString& filter)
+{
+    this->addAuthors(filter);
 }
 
 AboutDialog::~AboutDialog()

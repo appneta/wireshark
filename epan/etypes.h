@@ -308,6 +308,10 @@ extern "C" {
 #define ETHERTYPE_PPPOES		0x8864	/* PPPoE Session Protocol */
 #endif
 
+#ifndef ETHERTYPE_LINK_CTL
+#define ETHERTYPE_LINK_CTL              0x886C  /* HPNA, wlan link local tunnel */
+#endif
+
 #ifndef ETHERTYPE_INTEL_ANS
 #define ETHERTYPE_INTEL_ANS		0x886D	/* Intel ANS (NIC teaming) http://www.intel.com/support/network/adapter/ans/probes.htm */
 #endif
@@ -338,6 +342,10 @@ extern "C" {
 
 #ifndef ETHERTYPE_PROFINET
 #define ETHERTYPE_PROFINET		0x8892	/* PROFIBUS PROFINET protocol */
+#endif
+
+#ifndef ETHERTYPE_REALTEK
+#define ETHERTYPE_REALTEK		0x8899	/* Realtek Layer 2 Protocols */
 #endif
 
 #ifndef ETHERTYPE_HYPERSCSI
@@ -541,6 +549,10 @@ extern "C" {
 #define ETHERTYPE_VNTAG			0x8926	/* VN-Tag */
 #endif
 
+#ifndef ETHERTYPE_SEL_L2
+#define ETHERTYPE_SEL_L2		0x892B	/* Schweitzer Engineering Labs Layer 2 */
+#endif
+
 #ifndef ETHERTYPE_HSR
 #define ETHERTYPE_HSR			0x892F	/* High-availability Seamless Redundancy (IEC62439 Part 3) */
 #endif
@@ -569,7 +581,7 @@ extern "C" {
 #define ETHERTYPE_RTCFG			0x9022	/* RTnet: Real-Time Configuration Protocol */
 #endif
 
-#ifndef ETHERYPE_QINQ_OLD
+#ifndef ETHERTYPE_QINQ_OLD
 #define ETHERTYPE_QINQ_OLD		0x9100	/* QinQ: old non-standard 802.1ad */
 #endif
 

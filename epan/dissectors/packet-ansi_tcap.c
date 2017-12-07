@@ -225,28 +225,6 @@ static const value_string ansi_tcap_national_op_code_family_vals[] = {
   { 0, NULL }
 };
 
-/*
-static dissector_handle_t tcap_handle = NULL;
-static dissector_table_t sccp_ssn_table;
-
-static GHashTable* ansi_sub_dissectors = NULL;
-static GHashTable* itu_sub_dissectors = NULL;
-
-  extern void add_ansi_tcap_subdissector(guint32 ssn, dissector_handle_t dissector) {
-    g_hash_table_insert(ansi_sub_dissectors,GUINT_TO_POINTER(ssn),dissector);
-    dissector_add_uint("sccp.ssn",ssn,tcap_handle);
-}
-
-extern void delete_ansi_tcap_subdissector(guint32 ssn, dissector_handle_t dissector _U_) {
-    g_hash_table_remove(ansi_sub_dissectors,GUINT_TO_POINTER(ssn));
-    dissector_delete_uint("sccp.ssn",ssn,tcap_handle);
-}
-
-dissector_handle_t get_ansi_tcap_subdissector(guint32 ssn) {
-    return g_hash_table_lookup(ansi_sub_dissectors,GUINT_TO_POINTER(ssn));
-}
-*/
-
 /* Transaction tracking */
 /* Transaction table */
 struct ansi_tcap_invokedata_t {
@@ -259,20 +237,7 @@ struct ansi_tcap_invokedata_t {
     gint32 OperationCode_national;
 };
 
-static GHashTable *TransactionId_table=NULL;
-
-static void
-ansi_tcap_init(void)
-{
-        TransactionId_table = g_hash_table_new(g_str_hash, g_str_equal);
-}
-
-static void
-ansi_tcap_cleanup(void)
-{
-        /* Destroy any existing memory chunks / hashes. */
-        g_hash_table_destroy(TransactionId_table);
-}
+static wmem_map_t *TransactionId_table=NULL;
 
 /* Store Invoke information needed for the corresponding reply */
 static void
@@ -302,7 +267,7 @@ save_invoke_data(packet_info *pinfo, proto_tree *tree _U_, tvbuff_t *tvb _U_){
                 }
 
           /* If the entry allready exists don't owervrite it */
-          ansi_tcap_saved_invokedata = (struct ansi_tcap_invokedata_t *)g_hash_table_lookup(TransactionId_table,buf);
+          ansi_tcap_saved_invokedata = (struct ansi_tcap_invokedata_t *)wmem_map_lookup(TransactionId_table,buf);
           if(ansi_tcap_saved_invokedata)
                   return;
 
@@ -311,7 +276,7 @@ save_invoke_data(packet_info *pinfo, proto_tree *tree _U_, tvbuff_t *tvb _U_){
           ansi_tcap_saved_invokedata->OperationCode_national = ansi_tcap_private.d.OperationCode_national;
           ansi_tcap_saved_invokedata->OperationCode_private = ansi_tcap_private.d.OperationCode_private;
 
-          g_hash_table_insert(TransactionId_table,
+          wmem_map_insert(TransactionId_table,
                         wmem_strdup(wmem_file_scope(), buf),
                         ansi_tcap_saved_invokedata);
           /*
@@ -350,7 +315,7 @@ find_saved_invokedata(packet_info *pinfo, proto_tree *tree _U_, tvbuff_t *tvb _U
                 break;
   }
 
-  ansi_tcap_saved_invokedata = (struct ansi_tcap_invokedata_t *)g_hash_table_lookup(TransactionId_table, buf);
+  ansi_tcap_saved_invokedata = (struct ansi_tcap_invokedata_t *)wmem_map_lookup(TransactionId_table, buf);
   if(ansi_tcap_saved_invokedata){
           ansi_tcap_private.d.OperationCode                      = ansi_tcap_saved_invokedata->OperationCode;
           ansi_tcap_private.d.OperationCode_national = ansi_tcap_saved_invokedata->OperationCode_national;
@@ -1410,7 +1375,7 @@ dissect_ansi_tcap_PackageType(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int 
 
 
 /*--- End of included file: packet-ansi_tcap-fn.c ---*/
-#line 353 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 318 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
 
 
 
@@ -1754,7 +1719,7 @@ proto_register_ansi_tcap(void)
         NULL, HFILL }},
 
 /*--- End of included file: packet-ansi_tcap-hfarr.c ---*/
-#line 488 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 453 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
     };
 
 /* Setup protocol subtree array */
@@ -1792,7 +1757,7 @@ proto_register_ansi_tcap(void)
     &ett_ansi_tcap_T_paramSet,
 
 /*--- End of included file: packet-ansi_tcap-ettarr.c ---*/
-#line 499 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 464 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
     };
 
     static ei_register_info ei[] = {
@@ -1827,6 +1792,5 @@ proto_register_ansi_tcap(void)
                                    "Type of matching invoke/response, risk of mismatch if loose matching chosen",
                                    &ansi_tcap_response_matching_type, ansi_tcap_response_matching_type_values, FALSE);
 
-    register_init_routine(&ansi_tcap_init);
-    register_cleanup_routine(&ansi_tcap_cleanup);
+    TransactionId_table = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), wmem_str_hash, g_str_equal);
 }

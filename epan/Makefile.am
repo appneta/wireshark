@@ -33,14 +33,14 @@ wslua_dir =
 wslua_dist_dir = wslua
 endif		# HAVE_LIBLUA
 
-SUBDIRS = compress crypt ftypes dfilter dissectors nghttp2 wmem $(wslua_dir)
+SUBDIRS = compress crypt ftypes dfilter dissectors wmem $(wslua_dir)
 
 DIST_SUBDIRS = $(SUBDIRS) $(wslua_dist_dir)
 
 AM_CPPFLAGS = $(INCLUDEDIRS) -I$(builddir)/wslua $(WS_CPPFLAGS) \
 	$(GLIB_CFLAGS) $(LUA_CFLAGS) $(LIBGNUTLS_CFLAGS) \
 	$(LIBGCRYPT_CFLAGS) $(LIBSMI_CFLAGS) $(LIBGEOIP_CFLAGS) \
-	$(KRB5_CFLAGS)
+	$(LZ4_CFLAGS) $(KRB5_CFLAGS) $(SNAPPY_CFLAGS) $(LIBXML2_CFLAGS)
 
 noinst_LTLIBRARIES = libwireshark_generated.la libwireshark_asmopt.la
 lib_LTLIBRARIES = libwireshark.la
@@ -75,6 +75,7 @@ LIBWIRESHARK_SRC = \
 	ex-opt.c		\
 	except.c		\
 	expert.c		\
+	export_object.c		\
 	exported_pdu.c		\
 	plugin_if.c		\
 	filter_expressions.c	\
@@ -82,7 +83,6 @@ LIBWIRESHARK_SRC = \
 	frame_data.c		\
 	frame_data_sequence.c	\
 	funnel.c		\
-	g_int64_hash_routines.c	\
 	geoip_db.c		\
 	golay.c			\
 	guid-utils.c		\
@@ -95,7 +95,6 @@ LIBWIRESHARK_SRC = \
 	oids.c			\
 	osi-utils.c		\
 	oui.c			\
-	packet-range.c		\
 	packet.c		\
 	prefs.c			\
 	print.c			\
@@ -128,6 +127,7 @@ LIBWIRESHARK_SRC = \
 	tvbuff_zlib.c		\
 	tvbuff.c		\
 	uat.c			\
+	unit_strings.c		\
 	value_string.c		\
 	xdlc.c
 
@@ -219,6 +219,7 @@ LIBWIRESHARK_INCLUDES = \
 	except.h		\
 	exceptions.h		\
 	expert.h		\
+	export_object.h		\
 	exported_pdu.h		\
 	plugin_if.h		\
 	filter_expressions.h	\
@@ -226,7 +227,6 @@ LIBWIRESHARK_INCLUDES = \
 	frame_data.h		\
 	frame_data_sequence.h	\
 	funnel.h		\
-	g_int64_hash_routines.h	\
 	garrayfix.h		\
 	geoip_db.h		\
 	golay.h			\
@@ -246,7 +246,6 @@ LIBWIRESHARK_INCLUDES = \
 	oids.h			\
 	osi-utils.h		\
 	oui.h			\
-	packet-range.h		\
 	packet.h		\
 	packet_info.h		\
 	params.h		\
@@ -290,6 +289,7 @@ LIBWIRESHARK_INCLUDES = \
 	tvbuff-int.h		\
 	uat.h			\
 	uat-int.h		\
+	unit_strings.h		\
 	value_string.h		\
 	x264_prt_id.h		\
 	xdlc.h
@@ -306,7 +306,7 @@ libwireshark_la_SOURCES = \
 libwireshark_la_CPPFLAGS = $(AM_CPPFLAGS) -DWS_BUILD_DLL
 
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
-libwireshark_la_LDFLAGS = -version-info 9:4:1 @LDFLAGS_SHAREDLIB@
+libwireshark_la_LDFLAGS = -version-info 10:4:0 @LDFLAGS_BIGSHAREDLIB@ @LDFLAGS_SHAREDLIB@
 
 #
 # Add the object files for missing routines, if any.
@@ -320,18 +320,21 @@ libwireshark_la_LIBADD = \
 	dissectors/libdissectors.la		\
 	dissectors/libdirtydissectors.la	\
 	dissectors/libfiledissectors.la		\
-	nghttp2/libnghttp2.la			\
 	wmem/libwmem.la				\
 	$(wslua_lib)				\
 	${top_builddir}/wiretap/libwiretap.la	\
 	${top_builddir}/wsutil/libwsutil.la	\
 	@C_ARES_LIBS@		\
+	@GEOIP_LIBS@		\
+	@KRB5_LIBS@		\
 	@LIBGCRYPT_LIBS@	\
 	@LIBGNUTLS_LIBS@	\
-	@KRB5_LIBS@		\
-	@SSL_LIBS@		\
 	@LIBSMI_LDFLAGS@	\
-	@GEOIP_LIBS@		\
+	@LZ4_LIBS@		\
+	@NGHTTP2_LIBS@		\
+	@SSL_LIBS@		\
+	@SNAPPY_LIBS@		\
+	@LIBXML2_LIBS@		\
 	@GLIB_LIBS@
 
 libwireshark_la_DEPENDENCIES = \
@@ -343,7 +346,6 @@ libwireshark_la_DEPENDENCIES = \
 	dfilter/libdfilter.la			\
 	dissectors/libdissectors.la		\
 	dissectors/libdirtydissectors.la	\
-	nghttp2/libnghttp2.la			\
 	wmem/libwmem.la				\
 	$(wslua_lib)				\
 	${top_builddir}/wsutil/libwsutil.la	\
@@ -445,7 +447,7 @@ dtd_grammar.c : $(LEMON) $(lemon_srcdir)/lempar.c $(srcdir)/dtd_grammar.lemon
 	$(AM_V_LEMON)$(LEMON) T=$(lemon_srcdir)/lempar.c $(srcdir)/dtd_grammar.lemon
 
 ws_version_info.c: $(top_srcdir)/ws_version_info.c
-	$(AM_V_LN_S)$(LN_S) $<
+	$(AM_V_LN_S)$(LN_S) $< $(builddir)
 
 tvbtest.o exntest.o oids_test.o: exceptions.h
 
@@ -460,43 +462,85 @@ if HAVE_PLUGINS
 if ENABLE_STATIC
 -include ../plugins/Custom.make
 plugin_src = \
-	../plugins/asn1/packet-asn1.c \
-	../plugins/docsis/packet-bintrngreq.c \
-	../plugins/docsis/packet-bpkmattr.c \
-	../plugins/docsis/packet-bpkmreq.c \
-	../plugins/docsis/packet-bpkmrsp.c \
 	../plugins/docsis/packet-docsis.c \
-	../plugins/docsis/packet-dsaack.c \
-	../plugins/docsis/packet-dsareq.c \
-	../plugins/docsis/packet-dsarsp.c \
-	../plugins/docsis/packet-dscack.c \
-	../plugins/docsis/packet-dscreq.c \
-	../plugins/docsis/packet-dscrsp.c \
-	../plugins/docsis/packet-dsdreq.c \
-	../plugins/docsis/packet-dsdrsp.c \
-	../plugins/docsis/packet-intrngreq.c \
 	../plugins/docsis/packet-macmgmt.c \
-	../plugins/docsis/packet-map.c \
-	../plugins/docsis/packet-regack.c \
-	../plugins/docsis/packet-regreq.c \
-	../plugins/docsis/packet-regrsp.c \
-	../plugins/docsis/packet-rngreq.c \
-	../plugins/docsis/packet-rngrsp.c \
 	../plugins/docsis/packet-tlv.c \
-	../plugins/docsis/packet-type29ucd.c \
-	../plugins/docsis/packet-uccreq.c \
-	../plugins/docsis/packet-uccrsp.c \
-	../plugins/docsis/packet-ucd.c \
+	../plugins/docsis/packet-vendor.c \
+	../plugins/docsis/plugin.c \
+	../plugins/easy_codec/codec-g722.c \
+	../plugins/easy_codec/codec-g7231.c \
+	../plugins/easy_codec/codec-g729a.c \
+	../plugins/easy_codec/easy_codec_plugin.c \
+	../plugins/ethercat/packet-ams.c \
+	../plugins/ethercat/packet-ecatmb.c \
+	../plugins/ethercat/packet-esl.c \
+	../plugins/ethercat/packet-ethercat-datagram.c \
+	../plugins/ethercat/packet-ethercat-frame.c \
+	../plugins/ethercat/packet-ioraw.c \
+	../plugins/ethercat/packet-nv.c \
+	../plugins/ethercat/plugin.c \
 	../plugins/gryphon/packet-gryphon.c \
+	../plugins/gryphon/plugin.c \
+	../plugins/irda/packet-ircomm.c \
 	../plugins/irda/packet-irda.c \
+	../plugins/irda/packet-sir.c \
+	../plugins/irda/plugin.c \
 	../plugins/m2m/packet-m2m.c \
+	../plugins/m2m/plugin.c \
 	../plugins/m2m/wimax_tlv.c \
+	../plugins/Makefile.am.inc \
+	../plugins/mate/mate_grammar.c \
+	../plugins/mate/mate_parser.c \
+	../plugins/mate/mate_runtime.c \
+	../plugins/mate/mate_setup.c \
+	../plugins/mate/mate_util.c \
+	../plugins/mate/packet-mate.c \
+	../plugins/mate/plugin.c \
+	../plugins/opcua/opcua_application_layer.c \
+	../plugins/opcua/opcua.c \
+	../plugins/opcua/opcua_complextypeparser.c \
+	../plugins/opcua/opcua_enumparser.c \
+	../plugins/opcua/opcua_extensionobjecttable.c \
+	../plugins/opcua/opcua_hfindeces.c \
+	../plugins/opcua/opcua_security_layer.c \
+	../plugins/opcua/opcua_serviceparser.c \
+	../plugins/opcua/opcua_servicetable.c \
+	../plugins/opcua/opcua_simpletypes.c \
+	../plugins/opcua/opcua_statuscode.c \
+	../plugins/opcua/opcua_transport_layer.c \
+	../plugins/opcua/plugin.c \
+	../plugins/pluginifdemo/pluginifdemo.c \
+	../plugins/profinet/packet-dcerpc-pn-io.c \
+	../plugins/profinet/packet-dcom-cba-acco.c \
+	../plugins/profinet/packet-dcom-cba.c \
+	../plugins/profinet/packet-pn.c \
+	../plugins/profinet/packet-pn-dcp.c \
+	../plugins/profinet/packet-pn-mrp.c \
+	../plugins/profinet/packet-pn-mrrt.c \
+	../plugins/profinet/packet-pn-ptcp.c \
+	../plugins/profinet/packet-pn-rt.c \
+	../plugins/profinet/packet-pn-rtc-one.c \
+	../plugins/profinet/plugin.c \
+	../plugins/stats_tree/pinfo_stats_tree.c \
+	../plugins/stats_tree/stats_tree_plugin.c \
+	../plugins/tpg/packet-http.c \
+	../plugins/transum/decoders.c \
+	../plugins/transum/extractors.c \
+	../plugins/transum/packet-transum.c \
+	../plugins/transum/plugin.c \
+	../plugins/unistim/packet-unistim.c \
+	../plugins/unistim/plugin.c \
+	../plugins/wimaxasncp/packet-wimaxasncp.c \
+	../plugins/wimaxasncp/plugin.c \
+	../plugins/wimaxasncp/wimaxasncp_dict.c \
 	../plugins/wimax/crc.c \
 	../plugins/wimax/crc_data.c \
 	../plugins/wimax/mac_hd_generic_decoder.c \
 	../plugins/wimax/mac_hd_type1_decoder.c \
 	../plugins/wimax/mac_hd_type2_decoder.c \
 	../plugins/wimax/mac_mgmt_msg_decoder.c \
+	../plugins/wimaxmacphy/packet-wimaxmacphy.c \
+	../plugins/wimaxmacphy/plugin.c \
 	../plugins/wimax/msg_aas_beam.c \
 	../plugins/wimax/msg_aas_fbck.c \
 	../plugins/wimax/msg_arq.c \
@@ -522,6 +566,7 @@ plugin_src = \
 	../plugins/wimax/msg_ucd.c \
 	../plugins/wimax/msg_ulmap.c \
 	../plugins/wimax/packet-wmx.c \
+	../plugins/wimax/plugin.c \
 	../plugins/wimax/wimax_cdma_code_decoder.c \
 	../plugins/wimax/wimax_compact_dlmap_ie_decoder.c \
 	../plugins/wimax/wimax_compact_ulmap_ie_decoder.c \
@@ -533,7 +578,6 @@ plugin_src = \
 	../plugins/wimax/wimax_phy_attributes_decoder.c \
 	../plugins/wimax/wimax_tlv.c \
 	../plugins/wimax/wimax_utils.c
-
 
 else		# ENABLE_STATIC
 
@@ -559,6 +603,7 @@ endif
 # ABI compliance checker can be obtained from
 # http://ispras.linux-foundation.org/index.php/ABI_compliance_checker
 # Checked using version 1.21.12
+# TODO: fix wrong headers and select ones providing external API
 dumpabi-libwireshark: all abi-descriptor.xml
 	rm -rf abi-check-headers abi_dumps .libs/*.abi.tar.gz
 	mkdir abi-check-headers
@@ -574,9 +619,11 @@ dumpabi-libwireshark: all abi-descriptor.xml
 	mkdir abi-check-headers/dissectors
 	cp dissectors/*.h abi-check-headers/dissectors
 	rm \
+		abi-check-headers/*/*_lex.h \
 		abi-check-headers/dissectors/x11-extension-implementation.h \
 		abi-check-headers/dissectors/x11-glx-render-enum.h \
 		abi-check-headers/dissectors/x11-register-info.h \
+		abi-check-headers/dissectors/packet-lb* \
 		abi-check-headers/dissectors/packet-idmp.h
 	mkdir abi-check-headers/ftypes
 	cp ftypes/*.h abi-check-headers/ftypes
@@ -584,7 +631,7 @@ dumpabi-libwireshark: all abi-descriptor.xml
 	cp wmem/*.h abi-check-headers/wmem
 	abi-compliance-checker -log-path abi_logs/log.txt -l libwireshark -v1 `readlink .libs/libwireshark.so | sed 's/.*\.so\.//'` \
 		-relpath $(abs_srcdir) -dump-abi abi-descriptor.xml || \
-		cat abi_logs/log.txt logs/libwireshark/[0-9]*/log.txt
+		cat abi_logs/log.txt
 	cp -f abi_dumps/libwireshark/libwireshark_* .libs/
 	cd .libs && ln -sf libwireshark_*.abi.tar.gz libwireshark.abi.tar.gz
 

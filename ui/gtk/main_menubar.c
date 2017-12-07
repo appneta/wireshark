@@ -34,11 +34,13 @@
 #include <epan/column.h>
 #include <epan/stats_tree_priv.h>
 #include <epan/plugin_if.h>
+#include <epan/export_object.h>
 
 #include "globals.h"
 #include <epan/color_filters.h>
 
 #include "ui/commandline.h"
+#include "ui/dissect_opts.h"
 #include "ui/main_statusbar.h"
 #include "ui/preference_utils.h"
 #include "ui/recent.h"
@@ -204,29 +206,7 @@ colorize_conversation_cb(conversation_filter_t* color_filter, int action_num)
                 * or through an accelerator key. Try to build a conversation
                 * filter in the order TCP, UDP, IP, Ethernet and apply the
                 * coloring */
-            color_filter = find_conversation_filter("tcp");
-            if ((color_filter != NULL) && (color_filter->is_filter_valid(pi)))
-                filter = color_filter->build_filter_string(pi);
-            if (filter == NULL) {
-                color_filter = find_conversation_filter("udp");
-                if ((color_filter != NULL) && (color_filter->is_filter_valid(pi)))
-                    filter = color_filter->build_filter_string(pi);
-            }
-            if (filter == NULL) {
-                color_filter = find_conversation_filter("ip");
-                if ((color_filter != NULL) && (color_filter->is_filter_valid(pi)))
-                    filter = color_filter->build_filter_string(pi);
-            }
-            if (filter == NULL) {
-                color_filter = find_conversation_filter("ipv6");
-                if ((color_filter != NULL) && (color_filter->is_filter_valid(pi)))
-                    filter = color_filter->build_filter_string(pi);
-            }
-            if (filter == NULL) {
-                color_filter = find_conversation_filter("eth");
-                if ((color_filter != NULL) && (color_filter->is_filter_valid(pi)))
-                    filter = color_filter->build_filter_string(pi);
-            }
+            filter = conversation_filter_from_packet(pi);
             if( filter == NULL ) {
                 simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "Unable to build conversation filter.");
                 return;
@@ -258,24 +238,11 @@ goto_conversation_frame(gboolean dir)
     dfilter_t *dfcode       = NULL;
     gboolean   found_packet = FALSE;
     packet_info *pi = &cfile.edt->pi;
-    conversation_filter_t* conv_filter;
 
     /* Try to build a conversation
      * filter in the order TCP, UDP, IP, Ethernet and apply the
      * coloring */
-    conv_filter = find_conversation_filter("tcp");
-    if ((conv_filter != NULL) && (conv_filter->is_filter_valid(pi)))
-        filter = conv_filter->build_filter_string(pi);
-    conv_filter = find_conversation_filter("udp");
-    if ((conv_filter != NULL) && (conv_filter->is_filter_valid(pi)))
-        filter = conv_filter->build_filter_string(pi);
-    conv_filter = find_conversation_filter("ip");
-    if ((conv_filter != NULL) && (conv_filter->is_filter_valid(pi)))
-        filter = conv_filter->build_filter_string(pi);
-    conv_filter = find_conversation_filter("ipv6");
-    if ((conv_filter != NULL) && (conv_filter->is_filter_valid(pi)))
-        filter = conv_filter->build_filter_string(pi);
-
+    filter = conversation_filter_from_packet(pi);
     if( filter == NULL ) {
         statusbar_push_temporary_msg("Unable to build conversation filter.");
         g_free(filter);
@@ -820,11 +787,8 @@ static const char *ui_desc_menubar =
 "      <menuitem name='ExportSelectedPacketBytes' action='/File/ExportSelectedPacketBytes'/>\n"
 "      <menuitem name='ExportPDUs' action='/File/ExportPDUs'/>\n"
 "      <menuitem name='ExportSSLSessionKeys' action='/File/ExportSSLSessionKeys'/>\n"
-"      <menu name= 'ExportObjects' action='/File/ExportObjects'>\n"
-"        <menuitem name='HTTP' action='/File/ExportObjects/HTTP'/>\n"
-"        <menuitem name='DICOM' action='/File/ExportObjects/DICOM'/>\n"
-"        <menuitem name='SMB' action='/File/ExportObjects/SMB'/>\n"
-"        <menuitem name='TFTP' action='/File/ExportObjects/TFTP'/>\n"
+"      <menu name= 'ExportObjectsMenu' action='/File/ExportObjects'>\n"
+"        <placeholder name='ExportObjects'/>\n"
 "      </menu>\n"
 "      <separator/>\n"
 "      <menuitem name='Print' action='/File/Print'/>\n"
@@ -1097,6 +1061,9 @@ static const char *ui_desc_menubar =
 "      <menu name= 'MTP3menu' action='/Telephony/MTP3'>\n"
 "        <menuitem name='MSUSummary' action='/Telephony/MTP3/MSUSummary'/>\n"
 "      </menu>\n"
+"      <menu name= 'Osmuxmenu' action='/Telephony/Osmux'>\n"
+"        <menuitem name='osmux' action='/Telephony/Osmux/osmux'/>\n"
+"      </menu>\n"
 "      <menu name= 'RTPmenu' action='/Telephony/RTP'>\n"
 "        <menuitem name='ShowAllStreams' action='/Telephony/RTP/ShowAllStreams'/>\n"
 "        <menuitem name='StreamAnalysis' action='/Telephony/RTP/StreamAnalysis'/>\n"
@@ -1279,10 +1246,6 @@ static const GtkActionEntry main_menu_bar_entries[] = {
                                                                                          NULL,                   NULL,           G_CALLBACK(export_pdml_cmd_cb) },
   { "/File/ExportPacketDissections/JSON",       NULL,       "as \"_JSON\" file...",
                                                                                          NULL,                   NULL,           G_CALLBACK(export_json_cmd_cb) },
-  { "/File/ExportObjects/HTTP",           NULL,       "_HTTP",                           NULL,                   NULL,           G_CALLBACK(eo_http_cb) },
-  { "/File/ExportObjects/DICOM",          NULL,       "_DICOM",                          NULL,                   NULL,           G_CALLBACK(eo_dicom_cb) },
-  { "/File/ExportObjects/SMB",            NULL,       "_SMB/SMB2",                            NULL,                   NULL,           G_CALLBACK(eo_smb_cb) },
-  { "/File/ExportObjects/TFTP",            NULL,       "_TFTP",                          NULL,                   NULL,           G_CALLBACK(eo_tftp_cb) },
 
   { "/Edit/Copy",                         NULL,       "Copy",                            NULL,                   NULL,           NULL },
 
@@ -1521,6 +1484,8 @@ static const GtkActionEntry main_menu_bar_entries[] = {
    { "/Telephony/LTE/RLCGraph",         NULL,                       "RLC _Graph...",            NULL,                       NULL,               G_CALLBACK(rlc_lte_graph_cb) },
    { "/Telephony/MTP3",                 NULL,                       "_MTP3",                    NULL, NULL, NULL },
    { "/Telephony/MTP3/MSUSummary",      NULL,                       "MSU Summary",              NULL,                       NULL,               G_CALLBACK(mtp3_sum_gtk_sum_cb) },
+   { "/Telephony/Osmux",                NULL,                       "Osmux",                    NULL, NULL, NULL },
+   { "/Telephony/Osmux/osmux",          NULL,                       "Packet Counter",           NULL,                       NULL,               G_CALLBACK(gtk_stats_tree_cb) },
    { "/Telephony/RTP",                  NULL,                       "_RTP",                     NULL, NULL, NULL },
    { "/Telephony/RTP/StreamAnalysis",   NULL,                       "Stream Analysis...",       NULL,                       NULL,               G_CALLBACK(rtp_analysis_cb) },
    { "/Telephony/RTP/ShowAllStreams",   NULL,                       "Show All Streams",         NULL,                       NULL,               G_CALLBACK(rtpstream_launch) },
@@ -2506,7 +2471,7 @@ main_menu_new(GtkAccelGroup ** table)
     }
 
     /* The quit item in the application menu shows up whenever ige mac
-     * integration is enabled, even if the OS X UI style in Wireshark isn't
+     * integration is enabled, even if the macOS UI style in Wireshark isn't
      * turned on. */
     quit_item = gtk_menu_item_new_with_label("Quit");
     g_signal_connect(quit_item, "activate", G_CALLBACK(file_quit_cmd_cb), NULL);
@@ -2693,11 +2658,11 @@ typedef struct {
     int counter;
 } conv_menu_t;
 
-static void
-add_conversation_menuitem(gpointer data, gpointer user_data)
+static gboolean
+add_conversation_menuitem(const void *key, void *value, void *userdata)
 {
-    register_ct_t *table = (register_ct_t*)data;
-    conv_menu_t *conv = (conv_menu_t*)user_data;
+    register_ct_t *table = (register_ct_t*)value;
+    conv_menu_t *conv = (conv_menu_t*)userdata;
     gchar *action_name;
     GtkAction *action;
 
@@ -2705,7 +2670,7 @@ add_conversation_menuitem(gpointer data, gpointer user_data)
     /*g_warning("action_name %s, filter_entry->name %s",action_name,filter_entry->name);*/
     action = (GtkAction *)g_object_new (GTK_TYPE_ACTION,
                 "name", action_name,
-                "label", proto_get_protocol_short_name(find_protocol_by_id(get_conversation_proto_id(table))),
+                "label", key,
                 "sensitive", TRUE,
                 NULL);
     g_signal_connect (action, "activate",
@@ -2721,6 +2686,7 @@ add_conversation_menuitem(gpointer data, gpointer user_data)
                 FALSE);
     g_free(action_name);
     conv->counter++;
+    return FALSE;
 }
 
 static void
@@ -2755,11 +2721,11 @@ menu_hostlist_cb(GtkAction *action _U_, gpointer user_data)
     hostlist_endpoint_cb(table);
 }
 
-static void
-add_hostlist_menuitem(gpointer data, gpointer user_data)
+static gboolean
+add_hostlist_menuitem(const void *key, void *value, void *userdata)
 {
-    register_ct_t *table = (register_ct_t*)data;
-    conv_menu_t *conv = (conv_menu_t*)user_data;
+    register_ct_t *table = (register_ct_t*)value;
+    conv_menu_t *conv = (conv_menu_t*)userdata;
     gchar *action_name;
     GtkAction *action;
 
@@ -2767,7 +2733,7 @@ add_hostlist_menuitem(gpointer data, gpointer user_data)
     /*g_warning("action_name %s, filter_entry->name %s",action_name,filter_entry->name);*/
     action = (GtkAction *)g_object_new (GTK_TYPE_ACTION,
                 "name", action_name,
-                "label", proto_get_protocol_short_name(find_protocol_by_id(get_conversation_proto_id(table))),
+                "label", key,
                 "sensitive", TRUE,
                 NULL);
     g_signal_connect (action, "activate",
@@ -2783,6 +2749,7 @@ add_hostlist_menuitem(gpointer data, gpointer user_data)
                 FALSE);
     g_free(action_name);
     conv->counter++;
+    return FALSE;
 }
 
 static void
@@ -2807,6 +2774,74 @@ menu_hostlist_list(capture_file *cf)
     conv_data.cf = cf;
     conv_data.counter = 0;
     conversation_table_iterate_tables(add_hostlist_menuitem, &conv_data);
+}
+
+typedef struct {
+    guint merge_id;
+    GtkActionGroup *action_group;
+    int counter;
+} eo_menu_t;
+
+static void
+menu_exportobject_cb(GtkAction *action _U_, gpointer user_data)
+{
+    register_eo_t *eo = (register_eo_t*)user_data;
+
+    exportobject_cb(eo);
+}
+
+static gboolean
+add_export_object_menuitem(const void *key _U_, void *value, void *userdata)
+{
+    register_eo_t *eo = (register_eo_t*)value;
+    eo_menu_t *eo_menu_data = (eo_menu_t*)userdata;
+    gchar *action_name;
+    GtkAction *action;
+
+    action_name = g_strdup_printf ("exportobject-%u", eo_menu_data->counter);
+    /*g_warning("action_name %s, filter_entry->name %s",action_name,filter_entry->name);*/
+    action = (GtkAction *)g_object_new (GTK_TYPE_ACTION,
+                "name", action_name,
+                "label", proto_get_protocol_short_name(find_protocol_by_id(get_eo_proto_id(eo))),
+                "sensitive", TRUE,
+                NULL);
+    g_signal_connect (action, "activate",
+                    G_CALLBACK (menu_exportobject_cb), eo);
+    gtk_action_group_add_action (eo_menu_data->action_group, action);
+    g_object_unref (action);
+
+    gtk_ui_manager_add_ui (ui_manager_main_menubar, eo_menu_data->merge_id,
+                "/Menubar/FileMenu/ExportObjectsMenu/ExportObjects",
+                action_name,
+                action_name,
+                GTK_UI_MANAGER_MENUITEM,
+                FALSE);
+    g_free(action_name);
+    eo_menu_data->counter++;
+    return FALSE;
+}
+
+static void
+menu_export_object_list(void)
+{
+    GtkWidget *submenu_export_object;
+    eo_menu_t eo_data;
+
+    eo_data.merge_id = gtk_ui_manager_new_merge_id (ui_manager_main_menubar);
+
+    eo_data.action_group = gtk_action_group_new ("exportobject-list-group");
+
+    submenu_export_object = gtk_ui_manager_get_widget(ui_manager_main_menubar, "/Menubar/FileMenu/ExportObjectsMenu");
+    if(!submenu_export_object){
+        g_warning("menu_export_object_list: No submenu_exportobject_list found, path= /Menubar/FileMenu/ExportObjectsMenu");
+    }
+
+    gtk_ui_manager_insert_action_group (ui_manager_main_menubar, eo_data.action_group, 0);
+    g_object_set_data (G_OBJECT (ui_manager_main_menubar),
+                     "exportobject-list-merge-id", GUINT_TO_POINTER (eo_data.merge_id));
+
+    eo_data.counter = 0;
+    eo_iterate_tables(add_export_object_menuitem, &eo_data);
 }
 
 static void
@@ -3174,8 +3209,8 @@ menus_init(void)
                                     G_N_ELEMENTS(main_menu_bar_toggle_action_entries),  /* the number of entries */
                                     NULL);                                              /* data to pass to the action callbacks */
 
-        if (global_commandline_info.time_format != TS_NOT_SET) {
-            recent.gui_time_format = global_commandline_info.time_format;
+        if (global_dissect_options.time_format != TS_NOT_SET) {
+            recent.gui_time_format = global_dissect_options.time_format;
         }
         gtk_action_group_add_radio_actions  (main_menu_bar_action_group,                 /* the action group */
                                     main_menu_bar_radio_view_time_entries,               /* an array of radio action descriptions  */
@@ -3252,6 +3287,7 @@ menus_init(void)
         menu_dissector_filter(&cfile);
         menu_conversation_list(&cfile);
         menu_hostlist_list(&cfile);
+        menu_export_object_list();
 
         /* Add additional entries which may have been introduced by dissectors and/or plugins */
         ws_menubar_external_menus();
@@ -4253,8 +4289,8 @@ menu_recent_read_finished(void)
     main_widgets_rearrange();
 
     /* Update the time format if we had a command line value. */
-    if (global_commandline_info.time_format != TS_NOT_SET) {
-        recent.gui_time_format = global_commandline_info.time_format;
+    if (global_dissect_options.time_format != TS_NOT_SET) {
+        recent.gui_time_format = global_dissect_options.time_format;
     }
 
     /* XXX Fix me */
@@ -4395,7 +4431,7 @@ set_menus_for_capture_file(capture_file *cf)
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportPacketDissections", FALSE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportSelectedPacketBytes", FALSE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportSSLSessionKeys", FALSE);
-        set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportObjects", FALSE);
+        set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportObjectsMenu", FALSE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportPDUs", FALSE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/ViewMenu/Reload", FALSE);
     } else {
@@ -4414,7 +4450,7 @@ set_menus_for_capture_file(capture_file *cf)
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportPacketDissections", TRUE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportSelectedPacketBytes", TRUE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportSSLSessionKeys", TRUE);
-        set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportObjects", TRUE);
+        set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportObjectsMenu", TRUE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportPDUs", TRUE);
         set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/ViewMenu/Reload", TRUE);
     }
@@ -4440,7 +4476,7 @@ set_menus_for_capture_in_progress(gboolean capture_in_progress)
                          capture_in_progress);
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportSSLSessionKeys",
                          capture_in_progress);
-    set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportObjects",
+    set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/ExportObjectsMenu",
                          capture_in_progress);
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/FileMenu/Set",
                          !capture_in_progress);
@@ -4759,11 +4795,11 @@ set_menus_for_selected_packet(capture_file *cf)
 static void
 menu_prefs_toggle_bool (GtkWidget *w, gpointer data)
 {
-    gboolean *value  = (gboolean *)data;
+    pref_t *pref = (pref_t*)data;
     module_t *module = (module_t *)g_object_get_data (G_OBJECT(w), "module");
 
     module->prefs_changed = TRUE;
-    *value = !(*value);
+    prefs_invert_bool_value(pref, pref_current);
 
     prefs_apply (module);
     if (!prefs.gui_use_pref_save) {
@@ -4776,16 +4812,15 @@ menu_prefs_toggle_bool (GtkWidget *w, gpointer data)
 static void
 menu_prefs_change_enum (GtkWidget *w, gpointer data)
 {
-    gint     *value     = (gint *)data;
+    pref_t   *pref      = (pref_t*)data;
     module_t *module    = (module_t *)g_object_get_data (G_OBJECT(w), "module");
     gint      new_value = GPOINTER_TO_INT(g_object_get_data (G_OBJECT(w), "enumval"));
 
     if (!gtk_check_menu_item_get_active (GTK_CHECK_MENU_ITEM(w)))
         return;
 
-    if (*value != new_value) {
+    if (prefs_set_enum_value(pref, new_value, pref_current)) {
         module->prefs_changed = TRUE;
-        *value = new_value;
 
         prefs_apply (module);
         if (!prefs.gui_use_pref_save) {
@@ -4813,25 +4848,22 @@ menu_prefs_change_ok (GtkWidget *w, gpointer parent_w)
     gchar       *p;
     guint        uval;
 
-    switch (pref->type) {
+    switch (prefs_get_type(pref)) {
     case PREF_UINT:
-        uval = (guint)strtoul(new_value, &p, pref->info.base);
+        uval = (guint)strtoul(new_value, &p, prefs_get_uint_base(pref));
         if (p == new_value || *p != '\0') {
             simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                           "The value \"%s\" isn't a valid number.",
                           new_value);
             return;
         }
-        if (*pref->varp.uint != uval) {
-            module->prefs_changed = TRUE;
-            *pref->varp.uint = uval;
-        }
+        module->prefs_changed |= prefs_set_uint_value(pref, uval, pref_current);
         break;
     case PREF_STRING:
-        prefs_set_string_like_value(pref, new_value, &module->prefs_changed);
+        module->prefs_changed |= prefs_set_string_value(pref, new_value, pref_current);
         break;
     case PREF_RANGE:
-        if (!prefs_set_range_value(pref, new_value, &module->prefs_changed)) {
+        if (!prefs_set_range_value_work(pref, new_value, TRUE, &module->prefs_changed)) {
             simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                           "The value \"%s\" isn't a valid range.",
                           new_value);
@@ -4868,41 +4900,12 @@ menu_prefs_edit_dlg (GtkWidget *w, gpointer data)
 {
     pref_t    *pref   = (pref_t *)data;
     module_t  *module = (module_t *)g_object_get_data (G_OBJECT(w), "module");
-    gchar     *value  = NULL, *tmp_value, *label_str;
+    gchar     *value  = NULL, *label_str;
 
     GtkWidget *win, *main_grid, *main_vb, *bbox, *cancel_bt, *ok_bt;
     GtkWidget *entry, *label;
 
-    switch (pref->type) {
-    case PREF_UINT:
-        switch (pref->info.base) {
-        case 8:
-            value = g_strdup_printf("%o", *pref->varp.uint);
-            break;
-        case 10:
-            value = g_strdup_printf("%u", *pref->varp.uint);
-            break;
-        case 16:
-            value = g_strdup_printf("%x", *pref->varp.uint);
-            break;
-        default:
-            g_assert_not_reached();
-            break;
-        }
-        break;
-    case PREF_STRING:
-        value = g_strdup(*pref->varp.string);
-        break;
-    case PREF_RANGE:
-        /* Convert wmem to g_alloc memory */
-        tmp_value = range_convert_range(NULL, *pref->varp.range);
-        value = g_strdup(tmp_value);
-        wmem_free(NULL, tmp_value);
-        break;
-    default:
-        g_assert_not_reached();
-        break;
-    }
+    value = prefs_pref_to_str(pref, pref_current);
 
     win = dlg_window_new(module->description);
 
@@ -4917,19 +4920,19 @@ menu_prefs_edit_dlg (GtkWidget *w, gpointer data)
     gtk_box_pack_start(GTK_BOX(main_vb), main_grid, FALSE, FALSE, 0);
     ws_gtk_grid_set_column_spacing(GTK_GRID(main_grid), 10);
 
-    label_str = g_strdup_printf("%s:", pref->title);
+    label_str = g_strdup_printf("%s:", prefs_get_title(pref));
     label = gtk_label_new(label_str);
     g_free(label_str);
     ws_gtk_grid_attach_defaults(GTK_GRID(main_grid), label, 0, 1, 1, 1);
     gtk_misc_set_alignment(GTK_MISC(label), 1.0f, 0.5f);
-    if (pref->description)
-        gtk_widget_set_tooltip_text(label, pref->description);
+    if (prefs_get_description(pref))
+        gtk_widget_set_tooltip_text(label, prefs_get_description(pref));
 
     entry = gtk_entry_new();
     ws_gtk_grid_attach_defaults(GTK_GRID(main_grid), entry, 1, 1, 1, 1);
     gtk_entry_set_text(GTK_ENTRY(entry), value);
-    if (pref->description)
-        gtk_widget_set_tooltip_text(entry, pref->description);
+    if (prefs_get_description(pref))
+        gtk_widget_set_tooltip_text(entry, prefs_get_description(pref));
 
     bbox = dlg_button_row_new(GTK_STOCK_CANCEL,GTK_STOCK_OK, NULL);
     gtk_box_pack_end(GTK_BOX(main_vb), bbox, FALSE, FALSE, 0);
@@ -4961,17 +4964,17 @@ add_protocol_prefs_generic_menu(pref_t *pref, gpointer data, GtkUIManager *ui_me
     const enum_val_t *enum_valp;
     gchar            *label  = NULL, *tmp_str;
 
-    switch (pref->type) {
+    switch (prefs_get_type(pref)) {
     case PREF_UINT:
-        switch (pref->info.base) {
+        switch (prefs_get_uint_base(pref)) {
         case 8:
-            label = g_strdup_printf ("%s: %o", pref->title, *pref->varp.uint);
+            label = g_strdup_printf ("%s: %o", prefs_get_title(pref), prefs_get_uint_value_real(pref, pref_current));
             break;
         case 10:
-            label = g_strdup_printf ("%s: %u", pref->title, *pref->varp.uint);
+            label = g_strdup_printf ("%s: %u", prefs_get_title(pref), prefs_get_uint_value_real(pref, pref_current));
             break;
         case 16:
-            label = g_strdup_printf ("%s: %x", pref->title, *pref->varp.uint);
+            label = g_strdup_printf ("%s: %x", prefs_get_title(pref), prefs_get_uint_value_real(pref, pref_current));
             break;
         default:
             g_assert_not_reached();
@@ -4983,40 +4986,40 @@ add_protocol_prefs_generic_menu(pref_t *pref, gpointer data, GtkUIManager *ui_me
         g_free (label);
         break;
     case PREF_BOOL:
-        menu_item = gtk_check_menu_item_new_with_label(pref->title);
-        gtk_check_menu_item_set_active (GTK_CHECK_MENU_ITEM(menu_item), *pref->varp.boolp);
+        menu_item = gtk_check_menu_item_new_with_label(prefs_get_title(pref));
+        gtk_check_menu_item_set_active (GTK_CHECK_MENU_ITEM(menu_item), prefs_get_bool_value(pref, pref_current));
         g_object_set_data (G_OBJECT(menu_item), "module", module);
-        g_signal_connect(menu_item, "activate", G_CALLBACK(menu_prefs_toggle_bool), pref->varp.boolp);
+        g_signal_connect(menu_item, "activate", G_CALLBACK(menu_prefs_toggle_bool), pref);
         break;
     case PREF_ENUM:
-        menu_item = gtk_menu_item_new_with_label(pref->title);
+        menu_item = gtk_menu_item_new_with_label(prefs_get_title(pref));
         sub_menu = gtk_menu_new();
         gtk_menu_item_set_submenu (GTK_MENU_ITEM(menu_item), sub_menu);
-        enum_valp = pref->info.enum_info.enumvals;
+        enum_valp = prefs_get_enumvals(pref);
         while (enum_valp->name != NULL) {
             menu_sub_item = gtk_radio_menu_item_new_with_label(group, enum_valp->description);
             group = gtk_radio_menu_item_get_group (GTK_RADIO_MENU_ITEM (menu_sub_item));
-            if (enum_valp->value == *pref->varp.enump) {
+            if (enum_valp->value == prefs_get_enum_value(pref, pref_current)) {
                 gtk_check_menu_item_set_active (GTK_CHECK_MENU_ITEM(menu_sub_item), TRUE);
             }
             g_object_set_data (G_OBJECT(menu_sub_item), "module", module);
             g_object_set_data (G_OBJECT(menu_sub_item), "enumval", GINT_TO_POINTER(enum_valp->value));
-            g_signal_connect(menu_sub_item, "activate", G_CALLBACK(menu_prefs_change_enum), pref->varp.enump);
+            g_signal_connect(menu_sub_item, "activate", G_CALLBACK(menu_prefs_change_enum), pref);
             gtk_menu_shell_append (GTK_MENU_SHELL(sub_menu), menu_sub_item);
             gtk_widget_show (menu_sub_item);
             enum_valp++;
         }
         break;
     case PREF_STRING:
-        label = g_strdup_printf ("%s: %s", pref->title, *pref->varp.string);
+        label = g_strdup_printf ("%s: %s", prefs_get_title(pref), prefs_get_string_value(pref, pref_current));
         menu_item = gtk_menu_item_new_with_label(label);
         g_object_set_data (G_OBJECT(menu_item), "module", module);
         g_signal_connect(menu_item, "activate", G_CALLBACK(menu_prefs_edit_dlg), pref);
         g_free (label);
         break;
     case PREF_RANGE:
-        tmp_str = range_convert_range (NULL, *pref->varp.range);
-        label = g_strdup_printf ("%s: %s", pref->title, tmp_str);
+        tmp_str = range_convert_range (NULL, prefs_get_range_value_real(pref, pref_current));
+        label = g_strdup_printf ("%s: %s", prefs_get_title(pref), tmp_str);
         wmem_free(NULL, tmp_str);
         menu_item = gtk_menu_item_new_with_label(label);
         g_object_set_data (G_OBJECT(menu_item), "module", module);
@@ -5024,9 +5027,9 @@ add_protocol_prefs_generic_menu(pref_t *pref, gpointer data, GtkUIManager *ui_me
         g_free (label);
         break;
     case PREF_UAT:
-        label = g_strdup_printf ("%s...", pref->title);
+        label = g_strdup_printf ("%s...", prefs_get_title(pref));
         menu_item = gtk_menu_item_new_with_label(label);
-        g_signal_connect (menu_item, "activate", G_CALLBACK(uat_window_cb), pref->varp.uat);
+        g_signal_connect (menu_item, "activate", G_CALLBACK(uat_window_cb), prefs_get_uat_value(pref));
         g_free (label);
         break;
 

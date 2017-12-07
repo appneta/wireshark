@@ -166,7 +166,7 @@ static const value_string wai_type_names [] = {
 
 static const value_string wai_attr_type_names [] = {
     { 1, "Signature"},
-    { 2, "Certificate Authentification Result"},
+    { 2, "Certificate Authentication Result"},
     { 3, "Identity List"},
     { 0, NULL }
 };
@@ -894,7 +894,7 @@ Figure 18 from [ref:1]
     if (version == 1) {
         subtype_name = val_to_str_ext_const(subtype, &wai_subtype_names_ext, "Unknown type");
     }
-    col_append_fstr(pinfo->cinfo, COL_INFO, "%s", subtype_name);
+    col_append_str(pinfo->cinfo, COL_INFO, subtype_name);
 
     /* Field lengths and offsets in WAI protocol described above */
     packet_num   = tvb_get_ntohs(tvb, 8);
@@ -964,17 +964,6 @@ Figure 18 from [ref:1]
     }
 
     return tvb_captured_length(tvb);
-}
-
-static void wai_reassemble_init (void)
-{
-    reassembly_table_init(&wai_reassembly_table,
-                          &addresses_reassembly_table_functions);
-}
-
-static void wai_reassemble_cleanup (void)
-{
-    reassembly_table_destroy(&wai_reassembly_table);
 }
 
 void
@@ -1367,10 +1356,10 @@ proto_register_wai(void)
     };
 
     proto_wai = proto_register_protocol("WAI Protocol", "WAI", "wai");
-    register_init_routine(&wai_reassemble_init);
-    register_cleanup_routine(&wai_reassemble_cleanup);
     proto_register_field_array(proto_wai, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
+    reassembly_table_register(&wai_reassembly_table,
+                          &addresses_reassembly_table_functions);
 
     wai_handle = register_dissector("wai", dissect_wai, proto_wai);
 }

@@ -19,7 +19,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Reference: 3GPP TS 36.444 v11.0.0
+ * Reference: 3GPP TS 36.444 v13.2.0
  */
 
 #include "config.h"
@@ -61,7 +61,7 @@ static int hf_m3ap_IPAddress_v6 = -1;
 
 /* Initialize the subtree pointers */
 static int ett_m3ap = -1;
-
+static int ett_m3ap_IPAddress = -1;
 #include "packet-m3ap-ett.c"
 
 static expert_field ei_m3ap_invalid_ip_address_len = EI_INIT;
@@ -127,7 +127,9 @@ dissect_m3ap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
   proto_tree      *m3ap_tree = NULL;
 
   /* make entry in the Protocol column on summary display */
-  col_set_str(pinfo->cinfo, COL_PROTOCOL, PNAME);
+  col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+  col_clear_fence(pinfo->cinfo, COL_INFO);
+  col_clear(pinfo->cinfo, COL_INFO);
 
   /* create the m3ap protocol tree */
   if (tree) {
@@ -164,7 +166,8 @@ void proto_register_m3ap(void) {
 
   /* List of subtrees */
   static gint *ett[] = {
-                  &ett_m3ap,
+    &ett_m3ap,
+    &ett_m3ap_IPAddress,
 #include "packet-m3ap-ettarr.c"
   };
 
@@ -181,6 +184,8 @@ void proto_register_m3ap(void) {
   proto_register_subtree_array(ett, array_length(ett));
   expert_m3ap = expert_register_protocol(proto_m3ap);
   expert_register_field_array(expert_m3ap, ei, array_length(ei));
+  /* Register dissector */
+  m3ap_handle = register_dissector(PFNAME, dissect_m3ap, proto_m3ap);
 
   /* Register dissector tables */
   m3ap_ies_dissector_table = register_dissector_table("m3ap.ies", "M3AP-PROTOCOL-IES", proto_m3ap, FT_UINT32, BASE_DEC);
@@ -199,7 +204,6 @@ proto_reg_handoff_m3ap(void)
   static guint SctpPort;
 
   if( !inited ) {
-    m3ap_handle = create_dissector_handle(dissect_m3ap, proto_m3ap);
     dissector_add_uint("sctp.ppi", PROTO_3GPP_M3AP_PROTOCOL_ID, m3ap_handle);
     inited = TRUE;
 #include "packet-m3ap-dis-tab.c"
