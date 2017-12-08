@@ -152,6 +152,9 @@ static gint hf_ani_rpp_ecb_request_flags = -1;
 static gint hf_ani_rpp_ecb_request_flags_first_seq = -1;
 static gint hf_ani_rpp_ecb_request_flags_last_seq = -1;
 static gint hf_ani_rpp_ecb_request_flags_reply = -1;
+static gint hf_ani_rpp_ecb_request_flags_rx_report_all = -1;
+static gint hf_ani_rpp_ecb_request_flags_inbound_gap_ns = -1;
+static gint hf_ani_rpp_ecb_request_flags_outbound_gap_ns = -1;
 static gint hf_ani_rpp_ecb_request_ssn = -1;
 static gint hf_ani_rpp_ecb_request_outbound_magnify = -1;
 static gint hf_ani_rpp_ecb_request_outbound_duration = -1;
@@ -1006,11 +1009,15 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Enhanced Controlled Burst Request");
             if (current_tree) {
-                gboolean first_seq, last_seq, is_reply;
+                gboolean first_seq, last_seq, is_reply, is_rx_report_all,
+			is_in_gap_ns, is_out_gap_ns;
                 flags = tvb_get_guint8(tvb, offset + 1);
                 first_seq = !!(flags & 0x01);
                 last_seq = !!(flags & 0x02);
                 is_reply = !!(flags & 0x04);
+                is_rx_report_all = !!(flags & 0x08);
+                is_in_gap_ns = !!(flags & 0x10);
+                is_out_gap_ns = !!(flags & 0x20);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_padding, tvb, offset, 1, FALSE);
                 tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_request_flags, tvb, offset+1, 1, flags);
                 field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_request);
@@ -1026,6 +1033,21 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     proto_item_append_text(tf, " (Last sequence)");
                     col_append_fstr(pinfo->cinfo, COL_INFO, ", Last Seq");
                 }
+                if (is_rx_report_all) {
+                    proto_item_append_text(tf, " (RX Report All)");
+                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Report All");
+                }
+                if (is_in_gap_ns) {
+                    proto_item_append_text(tf, " (Inbound Gap NS)");
+                    col_append_fstr(pinfo->cinfo, COL_INFO, ", IN NS");
+                }
+                if (is_out_gap_ns) {
+                    proto_item_append_text(tf, " (Outbound Gap NS)");
+                    col_append_fstr(pinfo->cinfo, COL_INFO, ", OUT NS");
+                }
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_outbound_gap_ns, tvb, offset+1, 1, flags);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_inbound_gap_ns, tvb, offset+1, 1, flags);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_rx_report_all, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_reply, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_last_seq, tvb, offset+1, 1, flags);
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_first_seq, tvb, offset+1, 1, flags);
@@ -1232,10 +1254,10 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
         /* Add items to our subtree */
         offset = 0;
         offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree, &marker_set);
-        tvb = tvb_new_subset(tvb, offset, -1, -1);
+        tvb = tvb_new_subset_remaining(tvb, offset);
         offset = dissect_responder_header(tvb, pinfo, ani_rpp_tree, data);
         col_append_fstr(pinfo->cinfo, COL_INFO, marker_set ? ", Dual-ended" : ", Single-ended");
-        call_dissector(payload_handle, tvb_new_subset(tvb, offset, -1, -1), pinfo, tree);
+        call_dissector(payload_handle, tvb_new_subset_remaining(tvb, offset), pinfo, tree);
     }
 
     /* Return the amount of data this dissector was able to dissect */
@@ -1938,6 +1960,42 @@ proto_register_ani_rpp(void)
                             8,
                             TFS(&ani_tf_set_not_set),
                             0x04,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_request_flags_rx_report_all,
+                    {
+                            "RX Report All",
+                            "appneta_rpp.ecb_request_flags.report_all",
+                            FT_BOOLEAN,
+                            8,
+                            TFS(&ani_tf_set_not_set),
+                            0x08,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_request_flags_inbound_gap_ns,
+                    {
+                            "Inbound Gap Nanoseconds",
+                            "appneta_rpp.ecb_request_flags.inbound_gap_nanoseconds",
+                            FT_BOOLEAN,
+                            8,
+                            TFS(&ani_tf_set_not_set),
+                            0x10,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_ecb_request_flags_outbound_gap_ns,
+                    {
+                            "Outbound Gap Nanoseconds",
+                            "appneta_rpp.ecb_request_flags.outbound_gap_nanoseconds",
+                            FT_BOOLEAN,
+                            8,
+                            TFS(&ani_tf_set_not_set),
+                            0x20,
                             "", HFILL
                     }
             },

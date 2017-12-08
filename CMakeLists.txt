@@ -1277,6 +1277,8 @@ if(ENABLE_PLUGINS)
 	add_custom_target(plugins)
 	set_target_properties(plugins PROPERTIES FOLDER "Plugins")
 	set(PLUGIN_SRC_DIRS
+		plugins/ani_payload
+		plugins/ani_rpp
 		plugins/docsis
 		plugins/ethercat
 		plugins/gryphon
@@ -1287,6 +1289,7 @@ if(ENABLE_PLUGINS)
 		plugins/profinet
 		plugins/stats_tree
 		plugins/transum
+		plugins/twamp
 		plugins/unistim
 		plugins/wimax
 		plugins/wimaxasncp
