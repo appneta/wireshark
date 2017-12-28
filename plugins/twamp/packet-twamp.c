@@ -94,7 +94,7 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     if (is_request_packet) {
         seq_num_bytes = tvb_get_ntoh40(tvb, offset);
         if (seq_num_bytes) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "Sequence Number = %i", seq_num_bytes);
+            col_append_fstr(pinfo->cinfo, COL_INFO, "Sequence Number = %lu", seq_num_bytes);
         }
     }
     offset+=4;
@@ -126,7 +126,7 @@ dissect_twamp_unauth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     if (! is_request_packet) {
         seq_num_bytes = tvb_get_ntoh40(tvb, offset);
         if (seq_num_bytes) {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "Sequence Number = %i", seq_num_bytes);
+            col_append_fstr(pinfo->cinfo, COL_INFO, "Sequence Number = %lu", seq_num_bytes);
         }
     }
     offset+=4;
