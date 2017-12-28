@@ -462,6 +462,9 @@ if HAVE_PLUGINS
 if ENABLE_STATIC
 -include ../plugins/Custom.make
 plugin_src = \
+	../plugins/ani_rpp/packet-ani-rpp.c \
+	../plugins/ani_payload/packet-ani-payload.c \
+	../plugins/twamp/packet-twamp.c \
 	../plugins/docsis/packet-docsis.c \
 	../plugins/docsis/packet-macmgmt.c \
 	../plugins/docsis/packet-tlv.c \

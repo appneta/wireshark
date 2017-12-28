@@ -1,0 +1,36 @@
+It appears that QT installed by Homebrew is more complete than the Wireshark installer. Therefore
+we need the following:
+
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
+
+Here are updated instructions ....
+
+Using the 10.13 SDK
+
+You are now prepared to build Wireshark.
+
+To build with CMAKE (desired method):
+
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
+export CMAKE_PREFIX_PATH=:/usr/local/opt/qt/lib/cmake/
+export PATH=$PATH:/usr/local/opt/qt/bin
+
+mkdir build; cd build
+cmake ..
+make -j12
+make app_bundle
+make install/strip
+
+To build with AUTOTOOLS:
+
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
+
+./autogen.sh
+mkdir build; cd build
+../configure
+make -j 12
+make install
+
+Make sure you are allowed capture access to the network devices
+See: https://wiki.wireshark.org/CaptureSetup/CapturePrivileges
+

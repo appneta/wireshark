@@ -3009,6 +3009,9 @@ AC_CONFIG_FILES(
   packaging/svr4/pkginfo
   packaging/wix/Makefile
   plugins/Makefile
+  plugins/ani_payload/Makefile
+  plugins/ani_rpp/Makefile
+  plugins/twamp/Makefile
   plugins/docsis/Makefile
   plugins/easy_codec/Makefile
   plugins/ethercat/Makefile

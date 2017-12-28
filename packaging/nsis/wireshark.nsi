@@ -1006,6 +1006,9 @@ SectionGroup "Plugins & Extensions" SecPluginsGroup
 Section "Dissector Plugins" SecPlugins
 ;-------------------------------------------
 SetOutPath '$INSTDIR\plugins\${VERSION}'
+File "${STAGING_DIR}\plugins\ani_rpp.dll"
+File "${STAGING_DIR}\plugins\ani_payload.dll"
+File "${STAGING_DIR}\plugins\twamp.dll"
 File "${STAGING_DIR}\plugins\docsis.dll"
 File "${STAGING_DIR}\plugins\ethercat.dll"
 File "${STAGING_DIR}\plugins\gryphon.dll"

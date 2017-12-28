@@ -22,6 +22,9 @@
 -include Custom.make
 
 SUBDIRS = $(_CUSTOM_SUBDIRS_) \
+	ani_rpp \
+	ani_payload \
+	twamp \
 	docsis \
 	easy_codec \
 	ethercat \
