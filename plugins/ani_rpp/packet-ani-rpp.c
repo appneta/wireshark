@@ -1053,7 +1053,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_first_seq, tvb, offset+1, 1, flags);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_ssn, tvb, offset+2, 4, FALSE);
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_magnify, tvb, offset+6, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", ECB out[mag=%ums", tvb_get_ntohs(tvb, offset+6));
+                col_append_fstr(pinfo->cinfo, COL_INFO, ", ECB out[mag=%u", tvb_get_ntohs(tvb, offset+6));
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_duration, tvb, offset+8, 2, FALSE);
                 col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+8));
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_gap, tvb, offset+10, 2, FALSE);
@@ -1063,7 +1063,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 }
                 col_append_fstr(pinfo->cinfo, COL_INFO, "]");
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_magnify, tvb, offset+12, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " in[mag=%ums", tvb_get_ntohs(tvb, offset+12));
+                col_append_fstr(pinfo->cinfo, COL_INFO, " in[mag=%u", tvb_get_ntohs(tvb, offset+12));
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_duration, tvb, offset+14, 2, FALSE);
                 col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+14));
                 proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_gap, tvb, offset+16, 2, FALSE);
