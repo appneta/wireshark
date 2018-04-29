@@ -5,28 +5,16 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __FILE_H__
 #define __FILE_H__
 
-#include "wiretap/wtap.h"
 #include <errno.h>
-#include <epan/epan.h>
 
+#include <wiretap/wtap.h>
+#include <epan/epan.h>
 #include <epan/print.h>
 #include <ui/packet_range.h>
 
@@ -164,13 +152,13 @@ cf_read_status_t cf_read(capture_file *cf, gboolean from_save);
  *
  * @param cf the capture file from which to read the record
  * @param fdata the frame_data structure for the record in question
- * @param phdr pointer to a wtap_pkthdr structure to contain the
+ * @param rec pointer to a wtap_rec structure to contain the
  * record's metadata
  * @param buf a Buffer into which to read the record's raw data
  * @return TRUE if the read succeeded, FALSE if there was an error
  */
 gboolean cf_read_record_r(capture_file *cf, const frame_data *fdata,
-                          struct wtap_pkthdr *phdr, Buffer *buf);
+                          wtap_rec *rec, Buffer *buf);
 
 /**
  * Read the metadata and raw data for a record into a
@@ -391,7 +379,7 @@ cf_status_t cf_filter_packets(capture_file *cf, gchar *dfilter, gboolean force);
 void cf_reftime_packets(capture_file *cf);
 
 /**
- * Return the time it took to load the file
+ * Return the time it took to load the file (in msec).
  */
 gulong cf_get_computed_elapsed(capture_file *cf);
 
@@ -729,18 +717,6 @@ guint32 cf_comment_types(capture_file *cf);
  * @return TRUE if it succeeds, FALSE if not
  */
 gboolean cf_add_ip_name_from_string(capture_file *cf, const char *addr, const char *name);
-
-#ifdef WANT_PACKET_EDITOR
-/**
- * Give a frame new, edited data.
- *
- * @param cf the capture file
- * @param fd frame_data structure for the frame
- * @param phdr the struct wtap_pkthdr for the frame
- * @param pd the raw packet data for the frame
- */
-void cf_set_frame_edited(capture_file *cf, frame_data *fd, struct wtap_pkthdr *phdr, guint8 *pd);
-#endif
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 
 #include <wsutil/filesystem.h>
 #include <wsutil/copyright_info.h>
-#include <ws_version_info.h>
+#include <version_info.h>
 #ifdef HAVE_LIBSMI
 #include <epan/oids.h>
 #endif
@@ -39,12 +39,10 @@
 #ifdef HAVE_LUA
 #include <epan/wslua/init_wslua.h>
 #endif
-#ifdef HAVE_EXTCAP
-#include "../../extcap.h"
-#endif
+#include "extcap.h"
 
 #include "../../log.h"
-#include "../../register.h"
+#include "epan/register.h"
 
 #include "ui/last_open_dir.h"
 
@@ -89,7 +87,7 @@ about_wireshark(GtkWidget *parent _U_, GtkWidget *main_vb)
 
   /*icon = xpm_to_widget_from_parent(parent, wssplash_xpm);*/
 #ifdef HAVE_GDK_GRESOURCE
-  icon = pixbuf_to_widget("/org/wireshark/image/wssplash.png");
+  icon = pixbuf_to_widget("/org/wireshark/image/wssplash_dev.png");
 #else
   icon = pixbuf_to_widget(wssplash_pb_data);
 #endif
@@ -258,9 +256,7 @@ splash_update(register_action_e action, const char *message, gpointer client_dat
 #ifdef HAVE_LUA
       ul_count += wslua_count_plugins (); /* get count of lua plugins */
 #endif
-#ifdef HAVE_EXTCAP
       ul_count += extcap_count() + 1; /* Count of extcap binaries + registration message */
-#endif
     }
 
     main_lb = (GtkWidget *)g_object_get_data(G_OBJECT(win), "protocol_label");
@@ -401,10 +397,8 @@ about_folders_page_new(void)
   char                 *path;
   static const gchar *titles[] = { "Name", "Folder", "Typical Files"};
   GtkWidget            *scrolledwindow;
-#if defined(HAVE_LIBSMI) || defined(HAVE_GEOIP) || defined(HAVE_EXTCAP)
   gint                  i;
   gchar               **resultArray;
-#endif
 #if 0
   const gchar *const  *dirs;
 #endif
@@ -458,17 +452,35 @@ about_folders_page_new(void)
   about_folders_row(table, "Program", constpath,
       "program files");
 
-#if defined(HAVE_PLUGINS) || defined(HAVE_LUA)
+#ifdef HAVE_PLUGINS
   /* pers plugins */
-  path = get_plugins_pers_dir();
-  about_folders_row(table, "Personal Plugins", path,
-      "dissector plugins");
-  g_free(path);
+  about_folders_row(table, "Personal Plugins", get_plugins_pers_dir_with_version(),
+      "binary plugins");
 
   /* global plugins */
-  about_folders_row(table, "Global Plugins", get_plugin_dir(),
-      "dissector plugins");
+  about_folders_row(table, "Global Plugins", get_plugins_dir_with_version(),
+      "binary plugins");
 #endif
+
+#ifdef HAVE_LUA
+  /* pers plugins */
+  about_folders_row(table, "Personal Lua Plugins", get_plugins_pers_dir(),
+      "lua scripts");
+
+  /* global plugins */
+  about_folders_row(table, "Global Lua Plugins", get_plugins_dir(),
+      "lua scripts");
+#endif
+
+  /* extcap */
+  constpath = get_extcap_dir();
+
+  resultArray = g_strsplit(constpath, G_SEARCHPATH_SEPARATOR_S, 10);
+
+  for(i = 0; resultArray[i]; i++)
+    about_folders_row(table, "Extcap path", g_strstrip(resultArray[i]),
+                      "Extcap Plugins search path");
+  g_strfreev(resultArray);
 
 #ifdef HAVE_GEOIP
   /* GeoIP */
@@ -487,25 +499,13 @@ about_folders_page_new(void)
   /* SMI MIBs/PIBs */
   path = oid_get_default_mib_path();
 
-  resultArray = g_strsplit(path, G_SEARCHPATH_SEPARATOR_S, 10);
+  resultArray = g_strsplit(path, G_SEARCHPATH_SEPARATOR_S, 20);
 
   for(i = 0; resultArray[i]; i++)
     about_folders_row(table, "MIB/PIB path", g_strstrip(resultArray[i]),
                       "SMI MIB/PIB search path");
   g_strfreev(resultArray);
   g_free(path);
-#endif
-
-#ifdef HAVE_EXTCAP
-  /* extcap */
-  constpath = get_extcap_dir();
-
-  resultArray = g_strsplit(constpath, G_SEARCHPATH_SEPARATOR_S, 10);
-
-  for(i = 0; resultArray[i]; i++)
-    about_folders_row(table, "Extcap path", g_strstrip(resultArray[i]),
-                      "Extcap Plugins search path");
-  g_strfreev(resultArray);
 #endif
 
   gtk_container_add(GTK_CONTAINER(scrolledwindow), table);
@@ -522,7 +522,7 @@ about_license_page_new(void)
 #if defined(_WIN32)
   absolute_path = get_datafile_path("COPYING.txt");
 #else
-  absolute_path = get_datafile_path("ABOUT.GPL");
+  absolute_path = get_datafile_path("COPYING");
 #endif
   page = text_page_new(absolute_path);
 

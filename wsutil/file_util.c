@@ -4,20 +4,7 @@
  *  utility library)
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -510,31 +497,25 @@ ws_init_dll_search_path()
     unsigned int retval;
     SC_HANDLE h_scm, h_serv;
 
-    typedef BOOL (WINAPI *SetDllDirectoryHandler)(LPCTSTR);
-    SetDllDirectoryHandler PSetDllDirectory;
-
-    PSetDllDirectory = (SetDllDirectoryHandler) GetProcAddress(GetModuleHandle(_T("kernel32.dll")), "SetDllDirectoryW");
-    if (PSetDllDirectory) {
-        dll_dir_set = PSetDllDirectory(_T(""));
-        if (dll_dir_set) {
-            /* Do not systematically add Npcap path as long as we favor WinPcap over Npcap. */
-            h_scm = OpenSCManager(NULL, NULL, 0);
-            if (h_scm) {
-                h_serv = OpenService(h_scm, _T("npf"), SC_MANAGER_CONNECT|SERVICE_QUERY_STATUS);
-                if (h_serv) {
-                    CloseServiceHandle(h_serv);
-                    npf_found = TRUE;
-                }
-                CloseServiceHandle(h_scm);
+    dll_dir_set = SetDllDirectory(_T(""));
+    if (dll_dir_set) {
+        /* Do not systematically add Npcap path as long as we favor WinPcap over Npcap. */
+        h_scm = OpenSCManager(NULL, NULL, 0);
+        if (h_scm) {
+            h_serv = OpenService(h_scm, _T("npf"), SC_MANAGER_CONNECT|SERVICE_QUERY_STATUS);
+            if (h_serv) {
+                CloseServiceHandle(h_serv);
+                npf_found = TRUE;
             }
-            if (!npf_found) {
-                /* npf service was not found, so WinPcap is not (properly) installed.
-                   Add Npcap folder to libraries search path. */
-                retval = GetSystemDirectoryW(npcap_path_w, MAX_PATH);
-                if (0 < retval && retval <= MAX_PATH) {
-                    wcscat_s(npcap_path_w, MAX_PATH, L"\\Npcap");
-                    dll_dir_set = PSetDllDirectory(npcap_path_w);
-                }
+            CloseServiceHandle(h_scm);
+        }
+        if (!npf_found) {
+            /* npf service was not found, so WinPcap is not (properly) installed.
+               Add Npcap folder to libraries search path. */
+            retval = GetSystemDirectoryW(npcap_path_w, MAX_PATH);
+            if (0 < retval && retval <= MAX_PATH) {
+                wcscat_s(npcap_path_w, MAX_PATH, L"\\Npcap");
+                dll_dir_set = SetDllDirectory(npcap_path_w);
             }
         }
     }

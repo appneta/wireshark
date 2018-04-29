@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -558,9 +546,7 @@ static pcp_conv_info_t* get_pcp_conversation_info(packet_info *pinfo) {
     conversation_t  *conversation;
     pcp_conv_info_t *pcp_conv_info;
 
-    conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                     pinfo->ptype, pinfo->srcport,
-                                     pinfo->destport, 0);
+    conversation = find_conversation_pinfo(pinfo, 0);
 
     /* Conversation setup is done in the main dissecting routine so it should never be null */
     DISSECTOR_ASSERT(conversation);
@@ -1528,7 +1514,7 @@ static int dissect_pcp_message_instance(tvbuff_t *tvb, packet_info *pinfo, proto
    these routines are called by dissect_pcp_message_* as needed
 */
 
-static int dissect_pcp_partial_pmid(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset)
+static int dissect_pcp_partial_pmid(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset)
 {
     proto_item *pcp_pmid_item;
     proto_tree *pcp_pmid_tree;
@@ -1581,7 +1567,7 @@ static int dissect_pcp_partial_when(tvbuff_t *tvb, packet_info *pinfo _U_, proto
     return offset;
 }
 
-static int dissect_pcp_partial_features(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset)
+static int dissect_pcp_partial_features(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset)
 {
     guint16     feature_flags;
     const gchar *feature_flags_string;
@@ -1628,7 +1614,7 @@ static int dissect_pcp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
     pcp_conv_info = (pcp_conv_info_t*)conversation_get_proto_data(conversation, proto_pcp);
 
     if(pcp_conv_info == NULL) {
-        pcp_conv_info = (pcp_conv_info_t*)g_malloc(sizeof(pcp_conv_info_t));
+        pcp_conv_info = (pcp_conv_info_t*)wmem_alloc(wmem_file_scope(), sizeof(pcp_conv_info_t));
         conversation_add_proto_data(conversation, proto_pcp, pcp_conv_info);
 
         pcp_conv_info->pmid_name_candidates = wmem_array_new(wmem_file_scope(), sizeof(guint8 *));

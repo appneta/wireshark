@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "voip_calls_dialog.h"
 #include <ui_voip_calls_dialog.h>
@@ -29,12 +16,12 @@
 
 #include "ui/rtp_stream.h"
 
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 #include "rtp_player_dialog.h"
 #include "sequence_dialog.h"
-#include "stock_icon.h"
+#include <ui/qt/utils/stock_icon.h>
 #include "wireshark_application.h"
-#include "voip_calls_info_model.h"
+#include <ui/qt/models/voip_calls_info_model.h>
 
 #include <QClipboard>
 #include <QContextMenuEvent>
@@ -85,7 +72,7 @@ VoipCallsDialog::VoipCallsDialog(QWidget &parent, CaptureFile &cf, bool all_flow
     player_button_ = RtpPlayerDialog::addPlayerButton(ui->buttonBox);
 
     copy_button_ = ui->buttonBox->addButton(tr("Copy"), QDialogButtonBox::ApplyRole);
-    QMenu *copy_menu = new QMenu();
+    QMenu *copy_menu = new QMenu(copy_button_);
     QAction *ca;
     ca = copy_menu->addAction(tr("as CSV"));
     ca->setToolTip(ui->actionCopyAsCsv->toolTip());
@@ -103,7 +90,7 @@ VoipCallsDialog::VoipCallsDialog(QWidget &parent, CaptureFile &cf, bool all_flow
     tapinfo_.h225_cstype = H225_OTHER;
     tapinfo_.fs_option = all_flows ? FLOW_ALL : FLOW_ONLY_INVITES; /* flow show option */
     tapinfo_.graph_analysis = sequence_analysis_info_new();
-    tapinfo_.graph_analysis->type = SEQ_ANALYSIS_VOIP;
+    tapinfo_.graph_analysis->name = "voip";
     sequence_info_ = new SequenceInfo(tapinfo_.graph_analysis);
 
     voip_calls_init_all_taps(&tapinfo_);
@@ -126,10 +113,10 @@ VoipCallsDialog::~VoipCallsDialog()
     g_queue_free(tapinfo_.callsinfos);
 }
 
-void VoipCallsDialog::endRetapPackets()
+void VoipCallsDialog::removeTapListeners()
 {
     voip_calls_remove_all_tap_listeners(&tapinfo_);
-    WiresharkDialog::endRetapPackets();
+    WiresharkDialog::removeTapListeners();
 }
 
 void VoipCallsDialog::captureFileClosing()

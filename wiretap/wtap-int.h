@@ -3,19 +3,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __WTAP_INT_H__
@@ -24,7 +12,7 @@
 #include <glib.h>
 #include <time.h>
 
-#ifdef HAVE_WINSOCK2_H
+#ifdef _WIN32
 #include <winsock2.h>
 #endif
 
@@ -37,9 +25,8 @@ WS_DLL_PUBLIC
 int wtap_fstat(wtap *wth, ws_statb64 *statb, int *err);
 
 typedef gboolean (*subtype_read_func)(struct wtap*, int*, char**, gint64*);
-typedef gboolean (*subtype_seek_read_func)(struct wtap*, gint64,
-                                           struct wtap_pkthdr *, Buffer *buf,
-                                           int *, char **);
+typedef gboolean (*subtype_seek_read_func)(struct wtap*, gint64, wtap_rec *,
+                                           Buffer *, int *, char **);
 
 /**
  * Struct holding data of the currently read file.
@@ -47,10 +34,11 @@ typedef gboolean (*subtype_seek_read_func)(struct wtap*, gint64,
 struct wtap {
     FILE_T                      fh;
     FILE_T                      random_fh;              /**< Secondary FILE_T for random access */
+    gboolean                    ispipe;                 /**< TRUE if the file is a pipe */
     int                         file_type_subtype;
     guint                       snapshot_length;
-    struct Buffer               *frame_buffer;
-    struct wtap_pkthdr          phdr;
+    wtap_rec                    rec;
+    Buffer                      *rec_data;
     GArray                      *shb_hdrs;
     GArray                      *interface_data;        /**< An array holding the interface data from pcapng IDB:s or equivalent(?)*/
     GArray                      *nrb_hdrs;              /**< holds the Name Res Block's comment/custom_opts, or NULL */
@@ -91,7 +79,7 @@ struct wtap_dumper;
 typedef void *WFILE_T;
 
 typedef gboolean (*subtype_write_func)(struct wtap_dumper*,
-                                       const struct wtap_pkthdr*,
+                                       const wtap_rec *rec,
                                        const guint8*, int*, gchar**);
 typedef gboolean (*subtype_finish_func)(struct wtap_dumper*, int*);
 

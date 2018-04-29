@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -52,6 +40,9 @@
 
 /* Used for locale decimal point */
 static char *col_decimal_point;
+
+/* Used to indicate updated column information, e.g. a new request/response. */
+static gboolean col_data_changed_;
 
 /* Allocate all the data structures for constructing column data, given
    the number of columns. */
@@ -466,6 +457,15 @@ col_append_ports(column_info *cinfo, const gint col, port_type typ, guint16 src,
   col_snprint_port(buf_src, 32, typ, src);
   col_snprint_port(buf_dst, 32, typ, dst);
   col_append_lstr(cinfo, col, buf_src, " " UTF8_RIGHTWARDS_ARROW " ", buf_dst, COL_ADD_LSTR_TERMINATOR);
+}
+
+void
+col_append_frame_number(packet_info *pinfo, const gint col, const gchar *fmt_str, guint frame_num)
+{
+  col_append_fstr(pinfo->cinfo, col, fmt_str, frame_num);
+  if (!pinfo->fd->flags.visited) {
+    col_data_changed_ = TRUE;
+  }
 }
 
 static void
@@ -2294,6 +2294,11 @@ col_fill_in_error(column_info *cinfo, frame_data *fdata, const gboolean fill_col
   }
 }
 
+gboolean col_data_changed(void) {
+  gboolean cur_cdc = col_data_changed_;
+  col_data_changed_ = FALSE;
+  return cur_cdc;
+}
 /*
  * Editor modelines
  *

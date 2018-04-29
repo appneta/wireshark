@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "uat_dialog.h"
 #include <ui_uat_dialog.h>
@@ -28,7 +15,7 @@
 #include "ui/help_url.h"
 #include <wsutil/report_message.h>
 
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 
 #include <QDesktopServices>
 #include <QPushButton>
@@ -43,13 +30,16 @@ UatDialog::UatDialog(QWidget *parent, epan_uat *uat) :
     ui(new Ui::UatDialog),
     uat_model_(NULL),
     uat_delegate_(NULL),
-    uat_(NULL)
+    uat_(uat)
 {
     ui->setupUi(this);
     if (uat) loadGeometry(0, 0, uat->name);
 
     ui->deleteToolButton->setEnabled(false);
     ui->copyToolButton->setEnabled(false);
+    ui->moveUpToolButton->setEnabled(false);
+    ui->moveDownToolButton->setEnabled(false);
+    ui->clearToolButton->setEnabled(false);
     ok_button_ = ui->buttonBox->button(QDialogButtonBox::Ok);
     help_button_ = ui->buttonBox->button(QDialogButtonBox::Help);
 
@@ -57,6 +47,9 @@ UatDialog::UatDialog(QWidget *parent, epan_uat *uat) :
     ui->newToolButton->setAttribute(Qt::WA_MacSmallSize, true);
     ui->deleteToolButton->setAttribute(Qt::WA_MacSmallSize, true);
     ui->copyToolButton->setAttribute(Qt::WA_MacSmallSize, true);
+    ui->moveUpToolButton->setAttribute(Qt::WA_MacSmallSize, true);
+    ui->moveDownToolButton->setAttribute(Qt::WA_MacSmallSize, true);
+    ui->clearToolButton->setAttribute(Qt::WA_MacSmallSize, true);
     ui->pathLabel->setAttribute(Qt::WA_MacSmallSize, true);
 #endif
 
@@ -72,6 +65,10 @@ UatDialog::UatDialog(QWidget *parent, epan_uat *uat) :
 #else
     ui->uatTreeView->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
 #endif
+
+    // start editing as soon as the field is selected or when typing starts
+    ui->uatTreeView->setEditTriggers(ui->uatTreeView->editTriggers() |
+            QAbstractItemView::CurrentChanged | QAbstractItemView::AnyKeyPressed);
 
     // Need to add uat_move or uat_insert to the UAT API.
     ui->uatTreeView->setDragEnabled(false);
@@ -115,8 +112,8 @@ void UatDialog::setUat(epan_uat *uat)
                 this, SLOT(modelDataChanged(QModelIndex)));
         connect(uat_model_, SIGNAL(rowsRemoved(QModelIndex, int, int)),
                 this, SLOT(modelRowsRemoved()));
-        connect(ui->uatTreeView, SIGNAL(currentItemChanged(QModelIndex,QModelIndex)),
-                this, SLOT(viewCurrentChanged(QModelIndex,QModelIndex)));
+        connect(uat_model_, SIGNAL(modelReset()), this, SLOT(modelRowsReset()));
+
         ok_button_->setEnabled(!uat_model_->hasErrors());
 
         if (uat_->help && strlen(uat_->help) > 0) {
@@ -141,20 +138,47 @@ void UatDialog::modelDataChanged(const QModelIndex &topLeft)
 void UatDialog::modelRowsRemoved()
 {
     const QModelIndex &current = ui->uatTreeView->currentIndex();
+
+    // Because currentItemChanged() is called before the row is removed from the model
+    // we also need to check for button enabling here.
+    if (current.isValid()) {
+        ui->moveUpToolButton->setEnabled(current.row() != 0);
+        ui->moveDownToolButton->setEnabled(current.row() != (uat_model_->rowCount() - 1));
+    } else {
+        ui->moveUpToolButton->setEnabled(false);
+        ui->moveDownToolButton->setEnabled(false);
+    }
+
     checkForErrorHint(current, QModelIndex());
     ok_button_->setEnabled(!uat_model_->hasErrors());
 }
 
+void UatDialog::modelRowsReset()
+{
+    ui->deleteToolButton->setEnabled(false);
+    ui->clearToolButton->setEnabled(false);
+    ui->copyToolButton->setEnabled(false);
+    ui->moveUpToolButton->setEnabled(false);
+    ui->moveDownToolButton->setEnabled(false);
+}
+
+
 // Invoked when a different field is selected. Note: when selecting a different
 // field after editing, this event is triggered after modelDataChanged.
-void UatDialog::viewCurrentChanged(const QModelIndex &current, const QModelIndex &previous)
+void UatDialog::on_uatTreeView_currentItemChanged(const QModelIndex &current, const QModelIndex &previous)
 {
     if (current.isValid()) {
         ui->deleteToolButton->setEnabled(true);
+        ui->clearToolButton->setEnabled(true);
         ui->copyToolButton->setEnabled(true);
+        ui->moveUpToolButton->setEnabled(current.row() != 0);
+        ui->moveDownToolButton->setEnabled(current.row() != (uat_model_->rowCount() - 1));
     } else {
         ui->deleteToolButton->setEnabled(false);
+        ui->clearToolButton->setEnabled(false);
         ui->copyToolButton->setEnabled(false);
+        ui->moveUpToolButton->setEnabled(false);
+        ui->moveDownToolButton->setEnabled(false);
     }
 
     checkForErrorHint(current, previous);
@@ -244,6 +268,43 @@ void UatDialog::on_deleteToolButton_clicked()
 void UatDialog::on_copyToolButton_clicked()
 {
     addRecord(true);
+}
+
+void UatDialog::on_moveUpToolButton_clicked()
+{
+    const QModelIndex &current = ui->uatTreeView->currentIndex();
+    int current_row = current.row();
+    if (uat_model_ && current.isValid() && current_row > 0) {
+        if (!uat_model_->moveRow(current_row, current_row - 1)) {
+            qDebug() << "Failed to move row up";
+            return;
+        }
+        current_row--;
+        ui->moveUpToolButton->setEnabled(current_row > 0);
+        ui->moveDownToolButton->setEnabled(current_row < (uat_model_->rowCount() - 1));
+    }
+}
+
+void UatDialog::on_moveDownToolButton_clicked()
+{
+    const QModelIndex &current = ui->uatTreeView->currentIndex();
+    int current_row = current.row();
+    if (uat_model_ && current.isValid() && current_row < (uat_model_->rowCount() - 1)) {
+        if (!uat_model_->moveRow(current_row, current_row + 1)) {
+            qDebug() << "Failed to move row down";
+            return;
+        }
+        current_row++;
+        ui->moveUpToolButton->setEnabled(current_row > 0);
+        ui->moveDownToolButton->setEnabled(current_row < (uat_model_->rowCount() - 1));
+    }
+}
+
+void UatDialog::on_clearToolButton_clicked()
+{
+    if (uat_model_) {
+        uat_model_->clearAll();
+    }
 }
 
 void UatDialog::applyChanges()

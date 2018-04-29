@@ -3,20 +3,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 #include "config.h"
 
@@ -33,6 +20,7 @@ static GPtrArray *small_buffers = NULL; /* Guaranteed to be at least SMALL_BUFFE
 void
 ws_buffer_init(Buffer* buffer, gsize space)
 {
+	g_assert(buffer);
 	if G_UNLIKELY(!small_buffers) small_buffers = g_ptr_array_sized_new(1024);
 
 	if (space <= SMALL_BUFFER_SIZE) {
@@ -54,6 +42,7 @@ ws_buffer_init(Buffer* buffer, gsize space)
 void
 ws_buffer_free(Buffer* buffer)
 {
+	g_assert(buffer);
 	if (buffer->allocated == SMALL_BUFFER_SIZE) {
 		g_ptr_array_add(small_buffers, buffer->data);
 	} else {
@@ -69,6 +58,7 @@ ws_buffer_free(Buffer* buffer)
 void
 ws_buffer_assure_space(Buffer* buffer, gsize space)
 {
+	g_assert(buffer);
 	gsize available_at_end = buffer->allocated - buffer->first_free;
 	gsize space_used;
 	gboolean space_at_beginning;
@@ -107,6 +97,7 @@ ws_buffer_assure_space(Buffer* buffer, gsize space)
 void
 ws_buffer_append(Buffer* buffer, guint8 *from, gsize bytes)
 {
+	g_assert(buffer);
 	ws_buffer_assure_space(buffer, bytes);
 	memcpy(buffer->data + buffer->first_free, from, bytes);
 	buffer->first_free += bytes;
@@ -115,6 +106,7 @@ ws_buffer_append(Buffer* buffer, guint8 *from, gsize bytes)
 void
 ws_buffer_remove_start(Buffer* buffer, gsize bytes)
 {
+	g_assert(buffer);
 	if (buffer->start + bytes > buffer->first_free) {
 		g_error("ws_buffer_remove_start trying to remove %" G_GINT64_MODIFIER "u bytes. s=%" G_GINT64_MODIFIER "u ff=%" G_GINT64_MODIFIER "u!\n",
 			(guint64)bytes, (guint64)buffer->start,
@@ -134,6 +126,7 @@ ws_buffer_remove_start(Buffer* buffer, gsize bytes)
 void
 ws_buffer_clean(Buffer* buffer)
 {
+	g_assert(buffer);
 	ws_buffer_remove_start(buffer, ws_buffer_length(buffer));
 }
 #endif
@@ -142,6 +135,7 @@ ws_buffer_clean(Buffer* buffer)
 void
 ws_buffer_increase_length(Buffer* buffer, gsize bytes)
 {
+	g_assert(buffer);
 	buffer->first_free += bytes;
 }
 #endif
@@ -150,6 +144,7 @@ ws_buffer_increase_length(Buffer* buffer, gsize bytes)
 gsize
 ws_buffer_length(Buffer* buffer)
 {
+	g_assert(buffer);
 	return buffer->first_free - buffer->start;
 }
 #endif
@@ -158,6 +153,7 @@ ws_buffer_length(Buffer* buffer)
 guint8 *
 ws_buffer_start_ptr(Buffer* buffer)
 {
+	g_assert(buffer);
 	return buffer->data + buffer->start;
 }
 #endif
@@ -166,6 +162,7 @@ ws_buffer_start_ptr(Buffer* buffer)
 guint8 *
 ws_buffer_end_ptr(Buffer* buffer)
 {
+	g_assert(buffer);
 	return buffer->data + buffer->first_free;
 }
 #endif
@@ -174,6 +171,7 @@ ws_buffer_end_ptr(Buffer* buffer)
 void
 ws_buffer_append_buffer(Buffer* buffer, Buffer* src_buffer)
 {
+	g_assert(buffer);
 	ws_buffer_append(buffer, ws_buffer_start_ptr(src_buffer), ws_buffer_length(src_buffer));
 }
 #endif

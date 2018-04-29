@@ -3,19 +3,7 @@
  * usb mass storage dissector
  * Ronnie Sahlberg 2006
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
@@ -71,13 +59,13 @@ static void
 dissect_usb_ms_reset(packet_info *pinfo _U_, proto_tree *tree, tvbuff_t *tvb, int offset, gboolean is_request, usb_trans_info_t *usb_trans_info _U_, usb_conv_info_t *usb_conv_info _U_)
 {
     if(is_request){
-        proto_tree_add_item(tree, hf_usb_ms_value, tvb, offset, 2, ENC_BIG_ENDIAN);
+        proto_tree_add_item(tree, hf_usb_ms_value, tvb, offset, 2, ENC_LITTLE_ENDIAN);
         offset += 2;
 
-        proto_tree_add_item(tree, hf_usb_ms_index, tvb, offset, 2, ENC_BIG_ENDIAN);
+        proto_tree_add_item(tree, hf_usb_ms_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
         offset += 2;
 
-        proto_tree_add_item(tree, hf_usb_ms_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+        proto_tree_add_item(tree, hf_usb_ms_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
         /*offset += 2;*/
     } else {
         /* no data in reset response */
@@ -88,17 +76,17 @@ static void
 dissect_usb_ms_get_max_lun(packet_info *pinfo _U_, proto_tree *tree, tvbuff_t *tvb, int offset, gboolean is_request, usb_trans_info_t *usb_trans_info _U_, usb_conv_info_t *usb_conv_info _U_)
 {
     if(is_request){
-        proto_tree_add_item(tree, hf_usb_ms_value, tvb, offset, 2, ENC_BIG_ENDIAN);
+        proto_tree_add_item(tree, hf_usb_ms_value, tvb, offset, 2, ENC_LITTLE_ENDIAN);
         offset += 2;
 
-        proto_tree_add_item(tree, hf_usb_ms_index, tvb, offset, 2, ENC_BIG_ENDIAN);
+        proto_tree_add_item(tree, hf_usb_ms_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
         offset += 2;
 
-        proto_tree_add_item(tree, hf_usb_ms_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+        proto_tree_add_item(tree, hf_usb_ms_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
         /*offset += 2;*/
     } else {
-        proto_tree_add_item(tree, hf_usb_ms_maxlun, tvb, offset, 1, ENC_BIG_ENDIAN);
-        offset++;
+        proto_tree_add_item(tree, hf_usb_ms_maxlun, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+        /*offset++;*/
     }
 }
 
@@ -127,7 +115,7 @@ static const value_string setup_request_names_vals[] = {
  * and 0 othervise.
  */
 static gint
-dissect_usb_ms_control(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
+dissect_usb_ms_control(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void *data)
 {
     gboolean is_request;
     usb_conv_info_t *usb_conv_info;
@@ -135,6 +123,8 @@ dissect_usb_ms_control(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
     int offset=0;
     usb_setup_dissector dissector = NULL;
     const usb_setup_dissector_table_t *tmp;
+    proto_tree *tree;
+    proto_item *ti;
 
     /* Reject the packet if data or usb_trans_info are NULL */
     if (data == NULL || ((usb_conv_info_t *)data)->usb_trans_info == NULL)
@@ -159,6 +149,8 @@ dissect_usb_ms_control(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
     }
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "USBMS");
+    ti = proto_tree_add_protocol_format(parent_tree, proto_usb_ms, tvb, 0, -1, "USB Mass Storage");
+    tree = proto_item_add_subtree(ti, ett_usb_ms);
 
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s %s",
         val_to_str(usb_trans_info->setup.request, setup_request_names_vals, "Unknown type %x"),

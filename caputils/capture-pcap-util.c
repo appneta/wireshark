@@ -5,20 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "config.h"
 
@@ -38,6 +25,8 @@
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
 #endif
+
+#include "ws_attributes.h"
 
 /*
  * Linux bonding devices mishandle unknown ioctls; they fail
@@ -101,7 +90,7 @@ static const char please_report[] =
  * type for the interface.
  */
 
-#if defined(__APPLE__)
+#if defined(HAVE_MACOS_FRAMEWORKS)
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <SystemConfiguration/SystemConfiguration.h>
@@ -264,7 +253,7 @@ add_unix_interface_ifinfo(if_info_t *if_info, const char *name,
  * name, and there is no vendor description.  ("Other UN*Xes"
  * currently means "FreeBSD and OpenBSD".)
  */
-void
+static void
 add_unix_interface_ifinfo(if_info_t *if_info, const char *name _U_,
 			  const char *description)
 {
@@ -286,9 +275,7 @@ if_info_new(const char *name, const char *description, gboolean loopback)
 	if_info->friendly_name = NULL;	/* default - unknown */
 	if_info->vendor_description = NULL;
 	if_info->type = IF_WIRED;	/* default */
-#ifdef HAVE_EXTCAP
 	if_info->extcap = g_strdup("");
-#endif
 #ifdef _WIN32
 	/*
 	 * Get the interface type.
@@ -553,10 +540,7 @@ free_if_cb(gpointer data, gpointer user_data _U_)
 	g_free(if_info->name);
 	g_free(if_info->friendly_name);
 	g_free(if_info->vendor_description);
-#ifdef HAVE_EXTCAP
 	g_free(if_info->extcap);
-#endif
-
 	g_slist_foreach(if_info->addrs, free_if_info_addr_cb, NULL);
 	g_slist_free(if_info->addrs);
 	g_free(if_info);
@@ -668,11 +652,25 @@ free_linktype_cb(gpointer data, gpointer user_data _U_)
 	g_free(linktype_info);
 }
 
+static void
+free_timestamp_cb(gpointer data, gpointer user_data _U_)
+{
+	timestamp_info_t *timestamp_info = (timestamp_info_t *)data;
+
+	g_free(timestamp_info->name);
+	g_free(timestamp_info->description);
+	g_free(data);
+}
+
 void
 free_if_capabilities(if_capabilities_t *caps)
 {
 	g_list_foreach(caps->data_link_types, free_linktype_cb, NULL);
 	g_list_free(caps->data_link_types);
+
+	g_list_foreach(caps->timestamp_types, free_timestamp_cb, NULL);
+	g_list_free(caps->timestamp_types);
+
 	g_free(caps);
 }
 
@@ -861,10 +859,7 @@ create_data_link_info(int dlt)
 	else
 		data_link_info->name = g_strdup_printf("DLT %d", dlt);
 	text = pcap_datalink_val_to_description(dlt);
-	if (text != NULL)
-		data_link_info->description = g_strdup(text);
-	else
-		data_link_info->description = NULL;
+	data_link_info->description = g_strdup(text);
 	return data_link_info;
 }
 
@@ -959,6 +954,34 @@ get_data_link_types(pcap_t *pch, interface_options *interface_opts,
 		*err_str = NULL;
 	return data_link_types;
 }
+
+/* Get supported timestamp types for a libpcap device.  */
+static GList*
+get_pcap_timestamp_types(pcap_t *pch _U_, char **err_str _U_)
+{
+	GList *list = NULL;
+#ifdef HAVE_PCAP_SET_TSTAMP_TYPE
+	int *types;
+	int ntypes = pcap_list_tstamp_types(pch, &types);
+
+	if (err_str)
+		*err_str = ntypes < 0 ? pcap_geterr(pch) : NULL;
+
+	if (ntypes <= 0)
+		return NULL;
+
+	while (ntypes--) {
+		timestamp_info_t *info = (timestamp_info_t *)g_malloc(sizeof *info);
+		info->name        = g_strdup(pcap_tstamp_type_val_to_name(types[ntypes]));
+		info->description = g_strdup(pcap_tstamp_type_val_to_description(types[ntypes]));
+		list = g_list_prepend(list, info);
+	}
+
+	pcap_free_tstamp_types(types);
+#endif
+	return list;
+}
+
 
 #ifdef HAVE_PCAP_CREATE
 #ifdef HAVE_BONDING
@@ -1079,6 +1102,8 @@ get_if_capabilities_pcap_create(interface_options *interface_opts,
 		return NULL;
 	}
 
+	caps->timestamp_types = get_pcap_timestamp_types(pch, NULL);
+
 	pcap_close(pch);
 
 	if (err_str != NULL)
@@ -1088,7 +1113,7 @@ get_if_capabilities_pcap_create(interface_options *interface_opts,
 
 pcap_t *
 open_capture_device_pcap_create(capture_options *capture_opts
-#ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
+#if defined(HAVE_PCAP_SET_TSTAMP_PRECISION) || defined (HAVE_PCAP_SET_TSTAMP_TYPE)
     ,
 #else
     _U_,
@@ -1119,9 +1144,9 @@ open_capture_device_pcap_create(capture_options *capture_opts
 
 #ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
 		/*
-		 * If we're writing pcap-ng files, try to enable
+		 * If we're writing pcapng files, try to enable
 		 * nanosecond-resolution capture; any code that
-		 * can read pcap-ng files must be able to handle
+		 * can read pcapng files must be able to handle
 		 * nanosecond-resolution time stamps.  We don't
 		 * care whether it succeeds or fails - if it fails,
 		 * we just use the microsecond-precision time stamps
@@ -1139,6 +1164,18 @@ open_capture_device_pcap_create(capture_options *capture_opts
 		 */
 		if (capture_opts->use_pcapng)
 			request_high_resolution_timestamp(pcap_h);
+#endif /* HAVE_PCAP_SET_TSTAMP_PRECISION */
+
+#ifdef HAVE_PCAP_SET_TSTAMP_TYPE
+		if (interface_opts->timestamp_type) {
+			err = pcap_set_tstamp_type(pcap_h, interface_opts->timestamp_type_id);
+			if (err == PCAP_ERROR) {
+				g_strlcpy(*open_err_str, pcap_geterr(pcap_h),
+				    sizeof *open_err_str);
+				pcap_close(pcap_h);
+				return NULL;
+			}
+		}
 #endif /* HAVE_PCAP_SET_TSTAMP_PRECISION */
 
 		g_log(LOG_DOMAIN_CAPTURE_CHILD, G_LOG_LEVEL_DEBUG,
@@ -1194,6 +1231,8 @@ get_if_capabilities_pcap_open_live(interface_options *interface_opts,
 		g_free(caps);
 		return NULL;
 	}
+
+	caps->timestamp_types = get_pcap_timestamp_types(pch, NULL);
 
 	pcap_close(pch);
 
@@ -1295,8 +1334,8 @@ get_if_capabilities(interface_options *interface_opts, char **err_str)
         caps->data_link_types = NULL;
         deflt = get_pcap_datalink(pch, interface_opts->name);
         data_link_info = create_data_link_info(deflt);
-        caps->data_link_types = g_list_append(caps->data_link_types,
-                                              data_link_info);
+        caps->data_link_types = g_list_append(caps->data_link_types, data_link_info);
+	caps->timestamp_types = get_pcap_timestamp_types(pch, NULL);
         pcap_close(pch);
 
         if (err_str != NULL)

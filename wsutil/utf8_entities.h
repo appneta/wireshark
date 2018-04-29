@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
@@ -48,6 +36,7 @@
 #define UTF8_SUPERSCRIPT_TWO                "\xc2\xb2"      /*   178 /   0xb2 */
 #define UTF8_MICRO_SIGN                     "\xc2\xb5"      /*   181 /   0xb5 */
 #define UTF8_MIDDLE_DOT                     "\xc2\xb7"      /*   183 /   0xb7 */
+#define UTF8_RIGHT_POINTING_DOUBLE_ANGLE_QUOTATION_MARK "\xc2\xbb" /* 187 / 0xbb */
 
 #define UTF8_BULLET                     "\xe2\x80\xa2"      /*  8226 / 0x2024 */
 #define UTF8_EM_DASH                    "\xe2\x80\x94"      /*  8212 / 0x2014 */

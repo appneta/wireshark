@@ -7,19 +7,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -35,7 +23,7 @@
  * o  Construct a list of interfaces, with interface names, give
  *    them link-layer types based on the interface name and packet
  *    data, and supply interface IDs with each packet (i.e., make
- *    this supply a pcap-ng-style set of interfaces and associate
+ *    this supply a pcapng-style set of interfaces and associate
  *    packets with interfaces).  This is probably the right way
  *    to "Pass the interface names and the traffic direction to either
  *    the frame-structure, a pseudo-header or use PPI."  See the
@@ -44,7 +32,7 @@
  *        http://www.wireshark.org/lists/wireshark-dev/200708/msg00029.html
  *
  *    to see whether any further discussion is still needed. I suspect
- *    it doesn't; pcap-NG existed at the time, as per the final
+ *    it doesn't; pcapng existed at the time, as per the final
  *    message in that thread:
  *
  *        http://www.wireshark.org/lists/wireshark-dev/200708/msg00039.html
@@ -56,7 +44,7 @@
  *    information as part of the packet metadata from Wiretap modules.
  *    That should be fixed so that we can show interface information,
  *    such as the interface name, in packet dissections from, for example,
- *    pcap-NG captures.
+ *    pcapng captures.
  */
 
 static gboolean info_line(const gchar *line);
@@ -67,9 +55,9 @@ static gboolean netscreen_check_file_type(wtap *wth, int *err,
 static gboolean netscreen_read(wtap *wth, int *err, gchar **err_info,
 	gint64 *data_offset);
 static gboolean netscreen_seek_read(wtap *wth, gint64 seek_off,
-	struct wtap_pkthdr *phdr, Buffer *buf,
+	wtap_rec *rec, Buffer *buf,
 	int *err, gchar **err_info);
-static gboolean parse_netscreen_packet(FILE_T fh, struct wtap_pkthdr *phdr,
+static gboolean parse_netscreen_packet(FILE_T fh, wtap_rec *rec,
 	Buffer* buf, char *line, int *err, gchar **err_info);
 static int parse_single_hex_dump_line(char* rec, guint8 *buf,
 	guint byte_offset);
@@ -195,8 +183,8 @@ static gboolean netscreen_read(wtap *wth, int *err, gchar **err_info,
 		return FALSE;
 
 	/* Parse the header and convert the ASCII hex dump to binary data */
-	if (!parse_netscreen_packet(wth->fh, &wth->phdr,
-	    wth->frame_buffer, line, err, err_info))
+	if (!parse_netscreen_packet(wth->fh, &wth->rec,
+	    wth->rec_data, line, err, err_info))
 		return FALSE;
 
 	/*
@@ -208,9 +196,9 @@ static gboolean netscreen_read(wtap *wth, int *err, gchar **err_info,
 	 * have a single encapsulation for all packets in the file.
 	 */
 	if (wth->file_encap == WTAP_ENCAP_UNKNOWN)
-		wth->file_encap = wth->phdr.pkt_encap;
+		wth->file_encap = wth->rec.rec_header.packet_header.pkt_encap;
 	else {
-		if (wth->file_encap != wth->phdr.pkt_encap)
+		if (wth->file_encap != wth->rec.rec_header.packet_header.pkt_encap)
 			wth->file_encap = WTAP_ENCAP_PER_PACKET;
 	}
 
@@ -221,7 +209,7 @@ static gboolean netscreen_read(wtap *wth, int *err, gchar **err_info,
 /* Used to read packets in random-access fashion */
 static gboolean
 netscreen_seek_read(wtap *wth, gint64 seek_off,
-	struct wtap_pkthdr *phdr, Buffer *buf,
+	wtap_rec *rec, Buffer *buf,
 	int *err, gchar **err_info)
 {
 	char		line[NETSCREEN_LINE_LENGTH];
@@ -238,7 +226,7 @@ netscreen_seek_read(wtap *wth, gint64 seek_off,
 		return FALSE;
 	}
 
-	return parse_netscreen_packet(wth->random_fh, phdr, buf, line,
+	return parse_netscreen_packet(wth->random_fh, rec, buf, line,
 	    err, err_info);
 }
 
@@ -260,7 +248,7 @@ netscreen_seek_read(wtap *wth, gint64 seek_off,
 
  */
 static gboolean
-parse_netscreen_packet(FILE_T fh, struct wtap_pkthdr *phdr, Buffer* buf,
+parse_netscreen_packet(FILE_T fh, wtap_rec *rec, Buffer* buf,
     char *line, int *err, gchar **err_info)
 {
 	int		pkt_len;
@@ -276,8 +264,8 @@ parse_netscreen_packet(FILE_T fh, struct wtap_pkthdr *phdr, Buffer* buf,
 	int		offset = 0;
 	gchar		dststr[13];
 
-	phdr->rec_type = REC_TYPE_PACKET;
-	phdr->presence_flags = WTAP_HAS_TS|WTAP_HAS_CAP_LEN;
+	rec->rec_type = REC_TYPE_PACKET;
+	rec->presence_flags = WTAP_HAS_TS|WTAP_HAS_CAP_LEN;
 	/* Suppress compiler warnings */
 	memset(cap_int, 0, sizeof(cap_int));
 	memset(cap_dst, 0, sizeof(cap_dst));
@@ -309,9 +297,9 @@ parse_netscreen_packet(FILE_T fh, struct wtap_pkthdr *phdr, Buffer* buf,
 	 * otherwise it's NETSCREEN_INGRESS.
 	 */
 
-	phdr->ts.secs  = sec;
-	phdr->ts.nsecs = dsec * 100000000;
-	phdr->len = pkt_len;
+	rec->ts.secs  = sec;
+	rec->ts.nsecs = dsec * 100000000;
+	rec->rec_header.packet_header.len = pkt_len;
 
 	/* Make sure we have enough room for the packet */
 	ws_buffer_assure_space(buf, pkt_len);
@@ -396,16 +384,16 @@ parse_netscreen_packet(FILE_T fh, struct wtap_pkthdr *phdr, Buffer* buf,
 		g_snprintf(dststr, 13, "%02x%02x%02x%02x%02x%02x",
 		   pd[0], pd[1], pd[2], pd[3], pd[4], pd[5]);
 		if (strncmp(dststr, cap_dst, 12) == 0)
-			phdr->pkt_encap = WTAP_ENCAP_ETHERNET;
+			rec->rec_header.packet_header.pkt_encap = WTAP_ENCAP_ETHERNET;
 		else
-			phdr->pkt_encap = WTAP_ENCAP_PPP;
+			rec->rec_header.packet_header.pkt_encap = WTAP_ENCAP_PPP;
 		}
 	else if (strncmp(cap_int, "seri", 4) == 0)
-		phdr->pkt_encap = WTAP_ENCAP_PPP;
+		rec->rec_header.packet_header.pkt_encap = WTAP_ENCAP_PPP;
 	else
-		phdr->pkt_encap = WTAP_ENCAP_ETHERNET;
+		rec->rec_header.packet_header.pkt_encap = WTAP_ENCAP_ETHERNET;
 
-	phdr->caplen = offset;
+	rec->rec_header.packet_header.caplen = offset;
 
 	return TRUE;
 }

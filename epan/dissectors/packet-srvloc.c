@@ -17,19 +17,7 @@
  * Service Location Protocol Version 2 is RFC 2608
  *   - partial support by Brad Hards <bradh@frogmouth.net>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1485,7 +1473,7 @@ proto_register_srvloc(void)
         },
 
         { &hf_srvloc_flags_v1_overflow,
-          { "Overflow", "srvloc.flags_v1.overflow.", FT_BOOLEAN, 8,
+          { "Overflow", "srvloc.flags_v1.overflow", FT_BOOLEAN, 8,
             TFS(&tfs_srvloc_flags_overflow), FLAG_O, "Can whole packet fit into a datagram?", HFILL }},
 
         { &hf_srvloc_flags_v1_monolingual,

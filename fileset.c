@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -33,20 +21,21 @@
 
 #include <wsutil/file_util.h>
 #include <wsutil/filesystem.h>
-#include "globals.h"
 
 #include <epan/strutil.h>
 
 #include "fileset.h"
-
-
 
 typedef struct _fileset {
     GList   *entries;
     char    *dirname;
 } fileset;
 
-/* this is the fileset's global data */
+/*
+ * This is the fileset's global data.
+ *
+ * XXX This should probably be per-main-window instead of global.
+ */
 static fileset set = { NULL, NULL};
 
 /*
@@ -270,13 +259,14 @@ void fileset_update_dlg(void *window)
 {
     GList         *le;
 
-
-    /* add all entries to the dialog */
+    /* Add all entries to the dialog. */
+    fileset_dlg_begin_add_file(window);
     le = g_list_first(set.entries);
     while(le) {
         fileset_dlg_add_file((fileset_entry *)le->data, window);
         le = g_list_next(le);
     }
+    fileset_dlg_end_add_file(window);
 }
 
 

@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -83,7 +71,7 @@ static int hf_h283_deviceListResp = -1;           /* T_deviceListResp */
 static int hf_h283_deviceChange = -1;             /* NULL */
 
 /*--- End of included file: packet-h283-hf.c ---*/
-#line 42 "./asn1/h283/packet-h283-template.c"
+#line 30 "./asn1/h283/packet-h283-template.c"
 
 /* Initialize the subtree pointers */
 static int ett_h283 = -1;
@@ -106,7 +94,7 @@ static gint ett_h283_LCTIndication = -1;
 static gint ett_h283_NonStandardMessage = -1;
 
 /*--- End of included file: packet-h283-ett.c ---*/
-#line 46 "./asn1/h283/packet-h283-template.c"
+#line 34 "./asn1/h283/packet-h283-template.c"
 
 /* Subdissectors */
 static dissector_handle_t rdc_pdu_handle;
@@ -566,7 +554,7 @@ static int dissect_LCTPDU_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_t
 
 
 /*--- End of included file: packet-h283-fn.c ---*/
-#line 57 "./asn1/h283/packet-h283-template.c"
+#line 45 "./asn1/h283/packet-h283-template.c"
 
 static int
 dissect_h283_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
@@ -722,7 +710,7 @@ void proto_register_h283(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-h283-hfarr.c ---*/
-#line 80 "./asn1/h283/packet-h283-template.c"
+#line 68 "./asn1/h283/packet-h283-template.c"
   };
 
   /* List of subtrees */
@@ -747,7 +735,7 @@ void proto_register_h283(void) {
     &ett_h283_NonStandardMessage,
 
 /*--- End of included file: packet-h283-ettarr.c ---*/
-#line 86 "./asn1/h283/packet-h283-template.c"
+#line 74 "./asn1/h283/packet-h283-template.c"
   };
 
   /* Register protocol */

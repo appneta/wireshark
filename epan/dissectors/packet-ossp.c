@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -226,24 +214,21 @@ dissect_ossp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
 {
     gint          offset = 0;
     const gchar  *str;
-    proto_item   *oui_item, *ossp_item;
+    proto_item   *ossp_item;
     proto_tree   *ossp_tree;
     tvbuff_t     *ossp_tvb;
+    guint32      oui;
     const guint8  itu_oui[] = {ITU_OUI_0, ITU_OUI_1, ITU_OUI_2};
 
-    /* OUI of the organization defining the protocol */
-    str = tvb_get_manuf_name(tvb, offset);
-
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "OSSP");
-    col_add_fstr(pinfo->cinfo, COL_INFO, "OUI: %s", str);
 
     ossp_item = proto_tree_add_protocol_format(tree, proto_ossp, tvb, 0, -1,
                                                "Organization Specific Slow Protocol");
     ossp_tree = proto_item_add_subtree(ossp_item, ett_ossppdu);
 
-    oui_item = proto_tree_add_item(ossp_tree, hf_ossp_oui,
-                                    tvb, offset, OUI_SIZE, ENC_NA);
-    proto_item_append_text(oui_item, " (%s)", str);
+    proto_tree_add_item_ret_uint(ossp_tree, hf_ossp_oui, tvb, offset, OUI_SIZE, ENC_BIG_ENDIAN, &oui);
+    str = uint_get_manuf_name_if_known(oui);
+    col_add_fstr(pinfo->cinfo, COL_INFO, "OUI: %s", (str != NULL) ? str : "(Unknown OSSP organization)");
     offset += 3;
 
     /*
@@ -266,10 +251,7 @@ dissect_ossp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
         dissect_yyy_ossp(ossp_tvb, pinfo, ossp_tree);
     }
 #endif
-    else
-    {
-        proto_item_append_text(oui_item, " (Unknown OSSP organization)");
-    }
+
     return tvb_captured_length(tvb);
 }
 
@@ -569,7 +551,7 @@ proto_register_ossp(void)
     static hf_register_info hf[] = {
         { &hf_ossp_oui,
           { "OUI",    "ossp.oui",
-            FT_BYTES,     BASE_NONE,    NULL,    0,
+            FT_UINT24,     BASE_OUI,    NULL,    0,
             "IEEE assigned Organizationally Unique Identifier", HFILL }},
 
         { &hf_itu_subtype,

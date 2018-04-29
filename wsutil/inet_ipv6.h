@@ -4,19 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __INET_IPV6_H__
@@ -29,9 +17,9 @@
 #define IPv6_HDR_SIZE           40
 #define IPv6_FRAGMENT_HDR_SIZE  8
 
-struct e_in6_addr {
+typedef struct e_in6_addr {
     guint8 bytes[16];           /* 128 bit IPv6 address */
-};
+} ws_in6_addr;
 
 /*
  * Definition for internet protocol version 6.
@@ -42,8 +30,8 @@ struct ws_ip6_hdr {
     guint16     ip6h_plen;              /* payload length */
     guint8      ip6h_nxt;               /* next header */
     guint8      ip6h_hlim;              /* hop limit */
-    struct e_in6_addr ip6h_src;         /* source address */
-    struct e_in6_addr ip6h_dst;         /* destination address */
+    ws_in6_addr ip6h_src;               /* source address */
+    ws_in6_addr ip6h_dst;               /* destination address */
 };
 
 /*
@@ -73,7 +61,7 @@ struct ip6_rthdr0 {
     guint8 ip6r0_reserved;  /* reserved field */
     guint8 ip6r0_slmap[3];  /* strict/loose bit map */
     /* followed by up to 127 addresses */
-    struct e_in6_addr ip6r0_addr[1];
+    ws_in6_addr ip6r0_addr[1];
 };
 
 /* Fragment header */
@@ -93,12 +81,12 @@ struct ip6_frag {
  * Unicast Scope
  * Note that we must check topmost 10 bits only, not 16 bits (see RFC2373).
  */
-static inline gboolean in6_is_addr_linklocal(const struct e_in6_addr *a)
+static inline gboolean in6_addr_is_linklocal(const ws_in6_addr *a)
 {
     return (a->bytes[0] == 0xfe) && ((a->bytes[1] & 0xc0) == 0x80);
 }
 
-static inline gboolean in6_is_addr_sitelocal(const struct e_in6_addr *a)
+static inline gboolean in6_addr_is_sitelocal(const ws_in6_addr *a)
 {
     return (a->bytes[0] == 0xfe) && ((a->bytes[1] & 0xc0) == 0xc0);
 }
@@ -106,7 +94,7 @@ static inline gboolean in6_is_addr_sitelocal(const struct e_in6_addr *a)
 /**
  * Multicast
  */
-static inline gboolean in6_is_addr_multicast(const struct e_in6_addr *a)
+static inline gboolean in6_addr_is_multicast(const ws_in6_addr *a)
 {
     return a->bytes[0] == 0xff;
 }

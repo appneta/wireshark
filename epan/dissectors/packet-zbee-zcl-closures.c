@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*  Include Files */
@@ -241,15 +229,11 @@ proto_register_zbee_zcl_shade_configuration(void)
 void
 proto_reg_handoff_zbee_zcl_shade_configuration(void)
 {
-    dissector_handle_t shade_config_handle;
-
-    /* Register our dissector with the ZigBee application dissectors. */
-    shade_config_handle = find_dissector(ZBEE_PROTOABBREV_ZCL_SHADE_CONFIG);
-    dissector_add_uint("zbee.zcl.cluster", ZBEE_ZCL_CID_SHADE_CONFIG, shade_config_handle);
-
-    zbee_zcl_init_cluster(  proto_zbee_zcl_shade_configuration,
+    zbee_zcl_init_cluster(  ZBEE_PROTOABBREV_ZCL_SHADE_CONFIG,
+                            proto_zbee_zcl_shade_configuration,
                             ett_zbee_zcl_shade_configuration,
                             ZBEE_ZCL_CID_SHADE_CONFIG,
+                            ZBEE_MFG_CODE_NONE,
                             hf_zbee_zcl_shade_configuration_attr_id,
                             -1, -1,
                             (zbee_zcl_fn_attr_data)dissect_zcl_shade_configuration_attr_data
@@ -581,15 +565,11 @@ proto_register_zbee_zcl_door_lock(void)
 void
 proto_reg_handoff_zbee_zcl_door_lock(void)
 {
-    dissector_handle_t door_lock_handle;
-
-    /* Register our dissector with the ZigBee application dissectors. */
-    door_lock_handle = find_dissector(ZBEE_PROTOABBREV_ZCL_DOOR_LOCK);
-    dissector_add_uint("zbee.zcl.cluster", ZBEE_ZCL_CID_DOOR_LOCK, door_lock_handle);
-
-    zbee_zcl_init_cluster(  proto_zbee_zcl_door_lock,
+    zbee_zcl_init_cluster(  ZBEE_PROTOABBREV_ZCL_DOOR_LOCK,
+                            proto_zbee_zcl_door_lock,
                             ett_zbee_zcl_door_lock,
                             ZBEE_ZCL_CID_DOOR_LOCK,
+                            ZBEE_MFG_CODE_NONE,
                             hf_zbee_zcl_door_lock_attr_id,
                             hf_zbee_zcl_door_lock_srv_rx_cmd_id,
                             hf_zbee_zcl_door_lock_srv_tx_cmd_id,

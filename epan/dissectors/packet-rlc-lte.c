@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -36,7 +24,7 @@
 
 /* Described in:
  * 3GPP TS 36.322 Evolved Universal Terrestial Radio Access (E-UTRA)
- * Radio Link Control (RLC) Protocol specification v12.1.0
+ * Radio Link Control (RLC) Protocol specification v14.0.0
  */
 
 /* TODO:
@@ -3515,7 +3503,7 @@ void proto_register_rlc_lte(void)
         },
         { &hf_rlc_lte_sequence_analysis_repeated_nack_original_frame,
             { "Frame with previous status PDU",
-              "rlc-lte.sequence-analysis.repeated-nack.original-frame",  FT_FRAMENUM, BASE_NONE, 0, 0x0,
+              "rlc-lte.sequence-analysis.repeated-nack.original-frame",  FT_FRAMENUM, BASE_NONE, FRAMENUM_TYPE(FT_FRAMENUM_DUP_ACK), 0x0,
               NULL, HFILL
             }
         },
@@ -3528,7 +3516,7 @@ void proto_register_rlc_lte(void)
         },
         { &hf_rlc_lte_sequence_analysis_ack_out_of_range_opposite_frame,
             { "Frame with most recent SN",
-              "rlc-lte.sequence-analysis.ack-out-of-range.last-sn-frame",  FT_FRAMENUM, BASE_NONE, 0, 0x0,
+              "rlc-lte.sequence-analysis.ack-out-of-range.last-sn-frame",  FT_FRAMENUM, BASE_NONE, NULL, 0x0,
               NULL, HFILL
             }
         },
@@ -3566,7 +3554,7 @@ void proto_register_rlc_lte(void)
         },
         { &hf_rlc_lte_reassembly_source_segment_framenum,
             { "Frame",
-              "rlc-lte.reassembly-info.segment.frame", FT_FRAMENUM, BASE_NONE, 0, 0x0,
+              "rlc-lte.reassembly-info.segment.frame", FT_FRAMENUM, BASE_NONE, NULL, 0x0,
               NULL, HFILL
             }
         },

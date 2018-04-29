@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __PACKET_H__
@@ -85,6 +73,9 @@ typedef struct dissector_table *dissector_table_t;
  *	dissect the entire PDU.
  */
 typedef int (*dissector_t)(tvbuff_t *, packet_info *, proto_tree *, void *);
+
+/* Same as dissector_t with an extra parameter for callback pointer */
+typedef int (*dissector_cb_t)(tvbuff_t *, packet_info *, proto_tree *, void *, void *);
 
 /** Type of a heuristic dissector, used in heur_dissector_add().
  *
@@ -300,6 +291,12 @@ WS_DLL_PUBLIC void dissector_reset_string(const char *name, const gchar *pattern
 WS_DLL_PUBLIC int dissector_try_string(dissector_table_t sub_dissectors,
     const gchar *string, tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data);
 
+/* Look for a given string in a given dissector table and, if found, call
+   the dissector with the arguments supplied, and return the number of
+   bytes consumed, otherwise return 0. */
+WS_DLL_PUBLIC int dissector_try_string_new(dissector_table_t sub_dissectors,
+    const gchar *string, tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, const gboolean add_proto_name,void *data);
+
 /** Look for a given value in a given string dissector table and, if found,
  * return the current dissector handle for that value.
  *
@@ -367,6 +364,25 @@ WS_DLL_PUBLIC int dissector_try_guid_new(dissector_table_t sub_dissectors,
 WS_DLL_PUBLIC dissector_handle_t dissector_get_guid_handle(
     dissector_table_t const sub_dissectors, guid_key* guid_val);
 
+/* Use the currently assigned payload dissector for the dissector table and,
+   if any, call the dissector with the arguments supplied, and return the
+   number of bytes consumed, otherwise return 0. */
+WS_DLL_PUBLIC int dissector_try_payload(dissector_table_t sub_dissectors,
+    tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree);
+
+/* Use the currently assigned payload dissector for the dissector table and,
+   if any, call the dissector with the arguments supplied, and return the
+   number of bytes consumed, otherwise return 0. */
+WS_DLL_PUBLIC int dissector_try_payload_new(dissector_table_t sub_dissectors,
+    tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, const gboolean add_proto_name, void *data);
+
+/* Change the entry for a dissector in a payload (FT_NONE) dissector table
+   with a particular pattern to use a new dissector handle. */
+WS_DLL_PUBLIC void dissector_change_payload(const char *abbrev, dissector_handle_t handle);
+
+/* Reset payload (FT_NONE) dissector table to its initial value. */
+WS_DLL_PUBLIC void dissector_reset_payload(const char *name);
+
 /* Add a handle to the list of handles that *could* be used with this
    table.  That list is used by the "Decode As"/"-d" code in the UI. */
 WS_DLL_PUBLIC void dissector_add_for_decode_as(const char *name,
@@ -382,7 +398,7 @@ WS_DLL_PUBLIC GSList *dissector_table_get_dissector_handles(dissector_table_t di
 
 /** Get a handle to dissector out of a dissector table
  */
-WS_DLL_PUBLIC dissector_handle_t dissector_table_get_dissector_handle(dissector_table_t dissector_table, gchar* short_name);
+WS_DLL_PUBLIC dissector_handle_t dissector_table_get_dissector_handle(dissector_table_t dissector_table, const gchar* short_name);
 
 /** Get a dissector table's type
  */
@@ -502,6 +518,9 @@ WS_DLL_PUBLIC void heur_dissector_delete(const char *name, heur_dissector_t diss
 
 /** Register a new dissector. */
 WS_DLL_PUBLIC dissector_handle_t register_dissector(const char *name, dissector_t dissector, const int proto);
+
+/** Register a new dissector with a callback pointer. */
+WS_DLL_PUBLIC dissector_handle_t register_dissector_with_data(const char *name, dissector_cb_t dissector, const int proto, void *cb_data);
 
 /** Deregister a dissector. */
 void deregister_dissector(const char *name);
@@ -729,15 +748,13 @@ typedef struct file_data_s
  * Dissectors should never modify the record data.
  */
 extern void dissect_record(struct epan_dissect *edt, int file_type_subtype,
-    struct wtap_pkthdr *phdr, tvbuff_t *tvb,
-    frame_data *fd, column_info *cinfo);
+    wtap_rec *rec, tvbuff_t *tvb, frame_data *fd, column_info *cinfo);
 
 /*
  * Dissectors should never modify the packet data.
  */
 extern void dissect_file(struct epan_dissect *edt,
-    struct wtap_pkthdr *phdr, tvbuff_t *tvb,
-    frame_data *fd, column_info *cinfo);
+    wtap_rec *rec, tvbuff_t *tvb, frame_data *fd, column_info *cinfo);
 
 /* Structure passed to the ethertype dissector */
 typedef struct ethertype_data_s
@@ -773,7 +790,8 @@ WS_DLL_PUBLIC void register_postdissector(dissector_handle_t handle);
 
 /*
  * Specify a set of hfids that the postdissector will need.
- * The GArray is an array of hfids.
+ * The GArray is an array of hfids (type int) and should be NULL to clear the
+ * list. This function will take ownership of the memory.
  */
 WS_DLL_PUBLIC void set_postdissector_wanted_hfids(dissector_handle_t handle,
     GArray *wanted_hfids);

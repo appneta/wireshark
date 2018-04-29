@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 /* Dump our collected IPv4- and IPv6-to-hostname mappings */
 
@@ -40,15 +27,12 @@ gboolean dump_v6 = FALSE;
 
 #define TAP_NAME "hosts"
 
-#define HOSTNAME_POS 48
-#define ADDRSTRLEN 46 /* Covers IPv4 & IPv6 */
-
 static void
 ipv4_hash_table_print_resolved(gpointer key _U_, gpointer value, gpointer user_data _U_)
 {
 	hashipv4_t *ipv4_hash_table_entry = (hashipv4_t *)value;
 
-	if (!(ipv4_hash_table_entry->flags & DUMMY_ADDRESS_ENTRY)) {
+	if ((ipv4_hash_table_entry->flags & NAME_RESOLVED)) {
 		printf("%s\t%s\n",
 		       ipv4_hash_table_entry->ip,
 		       ipv4_hash_table_entry->name);
@@ -60,7 +44,7 @@ ipv6_hash_table_print_resolved(gpointer key _U_, gpointer value, gpointer user_d
 {
 	hashipv6_t *ipv6_hash_table_entry = (hashipv6_t *)value;
 
-	if (!(ipv6_hash_table_entry->flags & DUMMY_ADDRESS_ENTRY)) {
+	if ((ipv6_hash_table_entry->flags & NAME_RESOLVED)) {
 		printf("%s\t%s\n",
 		       ipv6_hash_table_entry->ip6,
 		       ipv6_hash_table_entry->name);

@@ -1,10 +1,4 @@
-wireshark (2.4.3.appneta.32) UNRELEASED; urgency=medium
-
-  * Support for new ECB Request flags
-
- -- AppNeta <support@appneta.com>  Thu, 07 Dec 2017 14:19:57 -0800
-
-wireshark (2.4.3) unstable; urgency=low
+wireshark (2.6.0) unstable; urgency=low
 
   * Self-made package
 

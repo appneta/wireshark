@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
@@ -86,7 +74,7 @@ ADD: Additional generic (non-checked) ICV length of 128, 192 and 256.
 #include <wsutil/wsgcrypt.h>
 
 #include "packet-ipsec.h"
-#include "packet-ipv6.h"
+#include "packet-ip.h"
 
 void proto_register_ipsec(void);
 void proto_reg_handoff_ipsec(void);
@@ -354,13 +342,13 @@ static void* uat_esp_sa_record_copy_cb(void* n, const void* o, size_t siz _U_) {
 
   /* Copy UAT fields */
   new_rec->protocol = old_rec->protocol;
-  new_rec->srcIP = (old_rec->srcIP) ? g_strdup(old_rec->srcIP) : NULL;
-  new_rec->dstIP = (old_rec->dstIP) ? g_strdup(old_rec->dstIP) : NULL;
-  new_rec->spi = (old_rec->spi) ? g_strdup(old_rec->spi) : NULL;
+  new_rec->srcIP = g_strdup(old_rec->srcIP);
+  new_rec->dstIP = g_strdup(old_rec->dstIP);
+  new_rec->spi = g_strdup(old_rec->spi);
   new_rec->encryption_algo = old_rec->encryption_algo;
-  new_rec->encryption_key_string = (old_rec->encryption_key_string) ? g_strdup(old_rec->encryption_key_string) : NULL;
+  new_rec->encryption_key_string = g_strdup(old_rec->encryption_key_string);
   new_rec->authentication_algo = old_rec->authentication_algo;
-  new_rec->authentication_key_string = (old_rec->authentication_key_string) ? g_strdup(old_rec->authentication_key_string) : NULL;
+  new_rec->authentication_key_string = g_strdup(old_rec->authentication_key_string);
 
   /* Parse keys as in an update */
   uat_esp_sa_record_update_cb(new_rec, NULL);
@@ -431,12 +419,7 @@ void esp_sa_record_add_from_dissector(guint8 protocol, const gchar *srcIP, const
 
    /* Authentication */
    record->authentication_algo = authentication_algo;
-   if (authentication_key) {
-      record->authentication_key_string = g_strdup(authentication_key);
-   }
-   else {
-      record->authentication_key_string = NULL;
-   }
+   record->authentication_key_string = g_strdup(authentication_key);
 
    /* Parse keys */
    uat_esp_sa_record_update_cb(record, NULL);
@@ -562,8 +545,6 @@ static gboolean g_esp_do_sequence_analysis = TRUE;
 
 
 
-#if 0
-
 /*
    Name : static int get_ipv6_suffix(char* ipv6_suffix, char *ipv6_address)
    Description : Get the extended IPv6 Suffix of an IPv6 Address
@@ -585,12 +566,7 @@ static int get_ipv6_suffix(char* ipv6_suffix, char *ipv6_address)
   gboolean found = FALSE;
 
   ipv6_len = (int) strlen(ipv6_address);
-  if(ipv6_len  == 0)
-    {
-      /* Found a suffix */
-      found = TRUE;
-    }
-  else
+  if(ipv6_len  != 0)
     {
       while ( (cpt_suffix < IPSEC_STRLEN_IPV6) && (ipv6_len - cpt -1 >= 0) && (found == FALSE))
         {
@@ -638,7 +614,6 @@ static int get_ipv6_suffix(char* ipv6_suffix, char *ipv6_address)
               suffix[IPSEC_STRLEN_IPV6 -1 -cpt_suffix] = '0';
               cpt_suffix ++;
             }
-          cpt_seg = 0;
         }
 
     }
@@ -678,12 +653,27 @@ get_full_ipv6_addr(char* ipv6_addr_expanded, char *ipv6_addr)
   int prefix_remaining = 0;
   int prefix_len = 0;
   int j = 0;
+  guint i = 0;
+  guint addr_byte = 0;
+  guint mask = IPSEC_IPV6_ADDR_LEN;
+  char* mask_begin = NULL;
 
 
   if((ipv6_addr == NULL) || (strcmp(ipv6_addr, "") == 0))  return -1;
+
+  memset(ipv6_addr_expanded, 0x0, IPSEC_STRLEN_IPV6);
+
+  mask_begin = strchr(ipv6_addr, '/');
+  if(mask_begin)
+  {
+    if(sscanf(mask_begin, "/%u", &mask) == EOF)
+      mask = IPSEC_IPV6_ADDR_LEN;
+    mask_begin[0] = '\0';
+  }
+
   if((strlen(ipv6_addr) == 1) && (ipv6_addr[0] == IPSEC_SA_WILDCARDS_ANY))
     {
-      for(j = 0; j <= IPSEC_STRLEN_IPV6; j++)
+      for(j = 0; j < IPSEC_STRLEN_IPV6; j++)
         {
           ipv6_addr_expanded[j] = IPSEC_SA_WILDCARDS_ANY;
         }
@@ -709,6 +699,22 @@ get_full_ipv6_addr(char* ipv6_addr_expanded, char *ipv6_addr)
     }
 
   memcpy(ipv6_addr_expanded + IPSEC_STRLEN_IPV6 - suffix_len, suffix,suffix_len + 1);
+
+  for(i = 0; i < IPSEC_STRLEN_IPV6; i++)
+  {
+    if(4 * (i + 1) > mask)
+    {
+      if(mask <= 4 * i || ipv6_addr_expanded[i] == '*')
+        ipv6_addr_expanded[i] = '*';
+      else {
+        if(sscanf(ipv6_addr_expanded + i, "%X", &addr_byte) == EOF)
+           break;
+        addr_byte &= (0x0F << (4 * (i + 1) - mask));
+        addr_byte &= 0x0F;
+        g_snprintf(ipv6_addr_expanded + i, 4, "%X", addr_byte);
+      }
+    }
+  }
 
   if(suffix_len < IPSEC_STRLEN_IPV6)
     return (prefix_len - prefix_remaining);
@@ -743,8 +749,18 @@ get_full_ipv4_addr(char* ipv4_address_expanded, char *ipv4_address)
   guint k = 0;
   guint cpt = 0;
   gboolean done_flag = FALSE;
+  guint mask = IPSEC_IPV4_ADDR_LEN;
+  char* mask_begin = NULL;
 
   if((ipv4_address == NULL) || (strcmp(ipv4_address, "") == 0))  return done_flag;
+
+  mask_begin = strchr(ipv4_address, '/');
+  if(mask_begin)
+  {
+    if(sscanf(mask_begin, "/%u", &mask) == EOF)
+      mask = IPSEC_IPV4_ADDR_LEN;
+    mask_begin[0] = '\0';
+  }
 
   if((strlen(ipv4_address) == 1) && (ipv4_address[0] == IPSEC_SA_WILDCARDS_ANY))
   {
@@ -839,12 +855,26 @@ get_full_ipv4_addr(char* ipv4_address_expanded, char *ipv4_address)
 
     }
 
+    for(i = 0; i < IPSEC_STRLEN_IPV4; i++)
+    {
+      if(4 * (i + 1) > mask)
+      {
+        if(mask <= 4 * i || ipv4_address_expanded[i] == '*')
+          ipv4_address_expanded[i] = '*';
+        else {
+          if(sscanf(ipv4_address_expanded + i, "%X", &addr_byte) == EOF)
+             return FALSE;
+          addr_byte &= (0x0F << (4 * (i + 1) - mask));
+          addr_byte &= 0x0F;
+          g_snprintf(ipv4_address_expanded + i, 4, "%X", addr_byte);
+        }
+      }
+    }
     ipv4_address_expanded[cpt] = '\0';
   }
 
   return done_flag;
 }
-#endif
 
 /*
    Name : static goolean filter_address_match(gchar *addr, gchar *filter, gint len, gint typ)
@@ -859,62 +889,47 @@ static gboolean
 filter_address_match(gchar *addr, gchar *filter, gint typ)
 {
   guint i;
-  guint filter_tmp = 0;
-  guint addr_tmp = 0;
-  char filter_string_tmp[3];
-  char addr_string_tmp[3];
+  char addr_hex[IPSEC_STRLEN_IPV6 + 1];
+  char filter_hex[IPSEC_STRLEN_IPV6 + 1];
   guint addr_len;
-  guint filter_len = (guint)strlen(filter);
+  guint filter_len;
 
-  if((filter_len == 1) && (filter[0] == IPSEC_SA_WILDCARDS_ANY))
-      return TRUE;
-
-  addr_len = (guint)strlen(addr);
-  if(addr_len != filter_len)
+  if (typ == IPSEC_SA_IPV4) {
+      if (!get_full_ipv4_addr(addr_hex, addr))
           return FALSE;
+      if (!get_full_ipv4_addr(filter_hex, filter))
+          return FALSE;
+  } else {
+      if (get_full_ipv6_addr(addr_hex, addr))
+          return FALSE;
+      if (get_full_ipv6_addr(filter_hex, filter))
+          return FALSE;
+  }
+
+  addr_len = (guint)strlen(addr_hex);
+  filter_len = (guint)strlen(filter_hex);
+
+  if((filter_len == 1) && (filter[0] == IPSEC_SA_WILDCARDS_ANY)){
+      return TRUE;
+  }
+
+  if(addr_len != filter_len)
+      return FALSE;
 
   /* No length specified */
-   if( ((typ == IPSEC_SA_IPV6) && (filter_len > IPSEC_IPV6_ADDR_LEN)) ||
-       ((typ == IPSEC_SA_IPV4) && (filter_len > IPSEC_IPV4_ADDR_LEN)))
+   if( ((typ == IPSEC_SA_IPV6) && (filter_len == IPSEC_STRLEN_IPV6)) ||
+       ((typ == IPSEC_SA_IPV4) && (filter_len == IPSEC_STRLEN_IPV4)))
    {
-      /* Filter is longer than address can be... */
+      /* Check byte by byte ... */
       for(i = 0; i < addr_len; i++)
       {
-         if((filter[i] != IPSEC_SA_WILDCARDS_ANY) && (filter[i] != addr[i]))
+         if((filter_hex[i] != IPSEC_SA_WILDCARDS_ANY) && (filter_hex[i] != addr_hex[i]))
             return FALSE;
       }
       return TRUE;
    }
    else
-   {
-      for(i = 0; i < (filter_len/4); i++)
-      {
-         if((filter[i] != IPSEC_SA_WILDCARDS_ANY) && (filter[i] != addr[i]))
-            return FALSE;
-      }
-
-      if(filter[i] == IPSEC_SA_WILDCARDS_ANY)
-         return TRUE;
-      else if (filter_len  % 4 != 0)
-      {
-         /* take the end of the Netmask/Prefixlen into account */
-         filter_string_tmp[0] = filter[i];
-         filter_string_tmp[1] = '\0';
-         addr_string_tmp[0] = addr[i];
-         addr_string_tmp[1] = '\0';
-
-         if (sscanf(filter_string_tmp,"%x",&filter_tmp) == EOF)
-             return FALSE;
-         if (sscanf(addr_string_tmp,"%x",&addr_tmp) == EOF)
-             return FALSE;
-         for(i = 0; i < (filter_len % 4); i++)
-         {
-            if(((filter_tmp >> (4 -i -1)) & 1) != ((addr_tmp >> (4 -i -1)) & 1))
-               return FALSE;
-         }
-      }
-   }
-
+      return FALSE;
   return TRUE;
 
 }
@@ -1129,16 +1144,8 @@ dissect_ah(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
   ah_hdr_len = (ah_len + 2) * 4;
   ah_icv_len = ah_len ? (ah_len - 1) * 4 : 0;
 
-  root_tree = tree;
-  if (pinfo->dst.type == AT_IPv6) {
-    ipv6_pinfo_t *ipv6_pinfo = p_get_ipv6_pinfo(pinfo);
-
-    ipv6_pinfo->frag_plen -= ah_hdr_len;
-    if (ipv6_pinfo->ipv6_tree != NULL) {
-      root_tree = ipv6_pinfo->ipv6_tree;
-      ipv6_pinfo->ipv6_item_len += ah_hdr_len;
-    }
-  }
+  root_tree = p_ipv6_pinfo_select_root(pinfo, tree);
+  p_ipv6_pinfo_add_len(pinfo, ah_hdr_len);
 
   pi = proto_tree_add_item(root_tree, proto_ah, tvb, 0, -1, ENC_NA);
   ah_tree = proto_item_add_subtree(pi, ett_ah);
@@ -1163,7 +1170,7 @@ dissect_ah(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
   next_tvb = tvb_new_subset_remaining(tvb, ah_hdr_len);
 
   if (pinfo->dst.type == AT_IPv6) {
-    ipv6_dissect_next(ah_nxt, next_tvb, pinfo, tree, (ws_ip *)data);
+    ipv6_dissect_next(ah_nxt, next_tvb, pinfo, tree, (ws_ip6 *)data);
   } else {
     /* do lookup with the subdissector table */
     saved_match_uint  = pinfo->match_uint;
@@ -1325,7 +1332,8 @@ dissect_esp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
    * populate a tree in the second pane with the status of the link layer
    * (ie none)
    */
-  len = 0, encapsulated_protocol = 0;
+  len = 0;
+  encapsulated_protocol = 0;
   decrypt_dissect_ok = FALSE;
 
   ti = proto_tree_add_item(tree, proto_esp, tvb, 0, -1, ENC_NA);
@@ -1530,7 +1538,7 @@ dissect_esp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
           if (err)
           {
             fprintf (stderr, "<IPsec/ESP Dissector> Error in Algorithm %s, gcry_md_open failed: %s\n",
-                     gcry_md_algo_name(auth_algo_libgcrypt), gpg_strerror (err));
+                     gcry_md_algo_name(auth_algo_libgcrypt), gcry_strerror(err));
             authentication_ok = FALSE;
           }
           else
@@ -1913,7 +1921,7 @@ dissect_esp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
             if (err)
             {
               fprintf(stderr, "<IPsec/ESP Dissector> Error in Algorithm %s Mode %d, grcy_open_cipher failed: %s\n",
-                      gcry_cipher_algo_name(crypt_algo_libgcrypt), crypt_mode_libgcrypt, gpg_strerror(err));
+                      gcry_cipher_algo_name(crypt_algo_libgcrypt), crypt_mode_libgcrypt, gcry_strerror(err));
             }
             else
             {
@@ -1933,7 +1941,7 @@ dissect_esp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
                 if (err)
                 {
                   fprintf(stderr, "<IPsec/ESP Dissector> Error in Algorithm %s Mode %d, gcry_cipher_setkey(key_len=%u) failed: %s\n",
-                          gcry_cipher_algo_name(crypt_algo_libgcrypt), crypt_mode_libgcrypt, esp_crypt_key_len, gpg_strerror (err));
+                          gcry_cipher_algo_name(crypt_algo_libgcrypt), crypt_mode_libgcrypt, esp_crypt_key_len, gcry_strerror(err));
                   gcry_cipher_close(*cipher_hd);
                 }
               }
@@ -1968,7 +1976,7 @@ dissect_esp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
           if (err)
           {
             fprintf(stderr, "<IPsec/ESP Dissector> Error in Algorithm %s, Mode %d, gcry_cipher_decrypt failed: %s\n",
-                    gcry_cipher_algo_name(crypt_algo_libgcrypt), crypt_mode_libgcrypt, gpg_strerror (err));
+                    gcry_cipher_algo_name(crypt_algo_libgcrypt), crypt_mode_libgcrypt, gcry_strerror(err));
             gcry_cipher_close(*cipher_hd);
             decrypt_ok = FALSE;
           }

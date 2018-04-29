@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -333,7 +321,8 @@ wmem_test_allocator(wmem_allocator_type_t type, wmem_verify_func verify,
             ptrs[ptrs_index] = (char *) wmem_realloc(allocator,
                     ptrs[ptrs_index], new_size);
 
-            memset(ptrs[ptrs_index], 0, new_size);
+            if (new_size)
+                memset(ptrs[ptrs_index], 0, new_size);
         }
         else {
             /* the index is used, and our random bit has determined we will be
@@ -390,6 +379,9 @@ wmem_test_miscutls(void)
     char               *ret;
 
     allocator = wmem_allocator_new(WMEM_ALLOCATOR_STRICT);
+
+    ret = (char*) wmem_memdup(allocator, NULL, 0);
+    g_assert(ret == NULL);
 
     ret = (char*) wmem_memdup(allocator, source, 5);
     ret[4] = '\0';
@@ -620,6 +612,7 @@ wmem_test_stringperf(void)
         "wmem_strconcat 5 strings: u %.3f ms s %.3f ms", utime_ms, stime_ms);
 
     wmem_destroy_allocator(allocator);
+    g_free(str_ptr);
 }
 
 /* DATA STRUCTURE TESTING FUNCTIONS (/wmem/datastruct/) */
@@ -882,7 +875,10 @@ wmem_test_map(void)
     wmem_allocator_t   *allocator, *extra_allocator;
     wmem_map_t       *map;
     gchar            *str_key;
+    const void       *str_key_ret;
     unsigned int      i;
+    unsigned int     *key_ret;
+    unsigned int     *value_ret;
     void             *ret;
 
     allocator = wmem_allocator_new(WMEM_ALLOCATOR_STRICT);
@@ -903,8 +899,22 @@ wmem_test_map(void)
     for (i=0; i<CONTAINER_ITERS; i++) {
         ret = wmem_map_lookup(map, GINT_TO_POINTER(i));
         g_assert(ret == GINT_TO_POINTER(i));
+        g_assert(wmem_map_contains(map, GINT_TO_POINTER(i)) == TRUE);
+        g_assert(wmem_map_lookup_extended(map, GINT_TO_POINTER(i), NULL, NULL));
+        key_ret = NULL;
+        g_assert(wmem_map_lookup_extended(map, GINT_TO_POINTER(i), GINT_TO_POINTER(&key_ret), NULL));
+        g_assert(key_ret == GINT_TO_POINTER(i));
+        value_ret = NULL;
+        g_assert(wmem_map_lookup_extended(map, GINT_TO_POINTER(i), NULL, GINT_TO_POINTER(&value_ret)));
+        g_assert(value_ret == GINT_TO_POINTER(i));
+        key_ret = NULL;
+        value_ret = NULL;
+        g_assert(wmem_map_lookup_extended(map, GINT_TO_POINTER(i), GINT_TO_POINTER(&key_ret), GINT_TO_POINTER(&value_ret)));
+        g_assert(key_ret == GINT_TO_POINTER(i));
+        g_assert(value_ret == GINT_TO_POINTER(i));
         ret = wmem_map_remove(map, GINT_TO_POINTER(i));
         g_assert(ret == GINT_TO_POINTER(i));
+        g_assert(wmem_map_contains(map, GINT_TO_POINTER(i)) == FALSE);
         ret = wmem_map_lookup(map, GINT_TO_POINTER(i));
         g_assert(ret == NULL);
         ret = wmem_map_remove(map, GINT_TO_POINTER(i));
@@ -938,6 +948,12 @@ wmem_test_map(void)
         wmem_map_insert(map, str_key, GINT_TO_POINTER(i));
         ret = wmem_map_lookup(map, str_key);
         g_assert(ret == GINT_TO_POINTER(i));
+        g_assert(wmem_map_contains(map, str_key) == TRUE);
+        str_key_ret = NULL;
+        value_ret = NULL;
+        g_assert(wmem_map_lookup_extended(map, str_key, &str_key_ret, GINT_TO_POINTER(&value_ret)) == TRUE);
+        g_assert(g_str_equal(str_key_ret, str_key));
+        g_assert(value_ret == GINT_TO_POINTER(i));
     }
 
     /* test foreach */
@@ -1152,7 +1168,10 @@ wmem_test_tree(void)
 
     tree = wmem_tree_new(allocator);
     for (i=0; i<CONTAINER_ITERS; i++) {
-        guint32 rand_int = g_test_rand_int();
+        guint32 rand_int;
+        do {
+            rand_int = g_test_rand_int();
+        } while (wmem_tree_lookup32(tree, rand_int));
         wmem_tree_insert32(tree, rand_int, GINT_TO_POINTER(i));
         g_assert(wmem_tree_lookup32(tree, rand_int) == GINT_TO_POINTER(i));
     }

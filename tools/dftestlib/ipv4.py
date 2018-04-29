@@ -1,18 +1,6 @@
 # Copyright (c) 2013 by Gilbert Ramirez <gram@alumni.rice.edu>
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 
 from dftestlib import dftest
@@ -120,4 +108,18 @@ class testIPv4(dftest.DFTest):
         dfilter = "ip.src != 200.0.0.0/8"
         self.assertDFilterCount(dfilter, 2)
 
+    def test_slice_1(self):
+         dfilter = "ip.src[0:2] == ac:19"
+         self.assertDFilterCount(dfilter, 1)
 
+    def test_slice_2(self):
+         dfilter = "ip.src[0:2] == 00:00"
+         self.assertDFilterCount(dfilter, 0)
+
+    def test_slice_3(self):
+         dfilter = "ip.src[2:2] == 64:0e"
+         self.assertDFilterCount(dfilter, 1)
+
+    def test_slice_4(self):
+         dfilter = "ip.src[2:2] == ff:ff"
+         self.assertDFilterCount(dfilter, 0)

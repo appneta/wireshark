@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -42,6 +30,7 @@
 #ifdef HAVE_LIBSMI
 #include <smi.h>
 
+static gboolean smi_init_done = FALSE;
 static gboolean oids_init_done = FALSE;
 static gboolean load_smi_modules = FALSE;
 static gboolean suppress_smi_errors = FALSE;
@@ -545,14 +534,13 @@ static void register_mibs(void) {
 	if (oids_init_done) {
 		D(1,("Exiting register_mibs() to avoid double registration of MIBs proto."));
 		return;
-	} else {
-		oids_init_done = TRUE;
 	}
 
 	hfa = wmem_array_new(wmem_epan_scope(), sizeof(hf_register_info));
 	etta = g_array_new(FALSE,TRUE,sizeof(gint*));
 
 	smiInit(NULL);
+	smi_init_done = TRUE;
 
 	smi_errors = g_string_new("");
 	smiSetErrorHandler(smi_error_handler);
@@ -636,23 +624,27 @@ static void register_mibs(void) {
 			if ( typedata && oid_data->value_hfid == -2 ) {
 				SmiNamedNumber* smiEnum;
 				hf_register_info hf;
+				char *name;
+				char *blurb;
+
+				name = g_strdup(oid_data->name);
+				blurb = smiRenderOID(smiNode->oidlen, smiNode->oid, SMI_RENDER_ALL);
+				/* Don't allow duplicate blurb/name */
+				if (strcmp(blurb, name) == 0) {
+					smi_free(blurb);
+					blurb = NULL;
+				}
 
 				hf.p_id                     = &(oid_data->value_hfid);
-				hf.hfinfo.name              = g_strdup(oid_data->name);
+				hf.hfinfo.name              = name;
 				hf.hfinfo.abbrev            = alnumerize(oid_data->name);
 				hf.hfinfo.type              = typedata->ft_type;
 				hf.hfinfo.display           = typedata->display;
 				hf.hfinfo.strings           = NULL;
 				hf.hfinfo.bitmask           = 0;
-				hf.hfinfo.blurb             = smiRenderOID(smiNode->oidlen, smiNode->oid, SMI_RENDER_ALL);
+				hf.hfinfo.blurb             = blurb;
 				/* HFILL */
 				HFILL_INIT(hf);
-
-				/* Don't allow duplicate blurb/name */
-				if (strcmp(hf.hfinfo.blurb, hf.hfinfo.name) == 0) {
-					smi_free((void *) hf.hfinfo.blurb);
-					hf.hfinfo.blurb = NULL;
-				}
 
 				oid_data->value_hfid = -1;
 
@@ -710,27 +702,25 @@ static void register_mibs(void) {
 
 			if ((key = oid_data->key)) {
 				for(; key; key = key->next) {
-					hf_register_info hf;
-
-					hf.p_id                     = &(key->hfid);
-					hf.hfinfo.name              = key->name;
-					hf.hfinfo.abbrev            = alnumerize(key->name);
-					hf.hfinfo.type              = key->ft_type;
-					hf.hfinfo.display           = key->display;
-					hf.hfinfo.strings           = NULL;
-					hf.hfinfo.bitmask           = 0;
-					hf.hfinfo.blurb             = NULL;
-					/* HFILL */
-					HFILL_INIT(hf);
-
 					D(5,("\t\t\tIndex: name=%s subids=%u key_type=%d",
 						 key->name, key->num_subids, key->key_type ));
 
 					if (key->hfid == -2) {
+						hf_register_info hf;
+
+						hf.p_id                     = &(key->hfid);
+						hf.hfinfo.name              = key->name;
+						hf.hfinfo.abbrev            = alnumerize(key->name);
+						hf.hfinfo.type              = key->ft_type;
+						hf.hfinfo.display           = key->display;
+						hf.hfinfo.strings           = NULL;
+						hf.hfinfo.bitmask           = 0;
+						hf.hfinfo.blurb             = NULL;
+						/* HFILL */
+						HFILL_INIT(hf);
+
 						wmem_array_append_one(hfa,hf);
 						key->hfid = -1;
-					} else {
-						g_free((void*)hf.hfinfo.abbrev);
 					}
 				}
 			}
@@ -744,6 +734,8 @@ static void register_mibs(void) {
 	proto_register_subtree_array((gint**)(void*)etta->data, etta->len);
 
 	g_array_free(etta,TRUE);
+
+	oids_init_done = TRUE;
 }
 #endif
 
@@ -947,6 +939,7 @@ guint oid_string2subid(wmem_allocator_t *scope, const char* str, guint32** subid
 			subid += *r - '0';
 
 			if( subids >= subids_overflow ||  subid > 0xffffffff) {
+				wmem_free(scope, *subids_p);
 				*subids_p=NULL;
 				return 0;
 			}
@@ -1272,10 +1265,9 @@ oid_get_default_mib_path(void) {
 
 	if (!load_smi_modules) {
 		D(1,("OID resolution not enabled"));
-		return path_str->str;
+		return g_string_free(path_str, FALSE);
 	}
 #ifdef _WIN32
-#define PATH_SEPARATOR ";"
 	path = get_datafile_path("snmp\\mibs");
 	g_string_append_printf(path_str, "%s;", path);
 	g_free (path);
@@ -1284,23 +1276,28 @@ oid_get_default_mib_path(void) {
 	g_string_append_printf(path_str, "%s", path);
 	g_free (path);
 #else
-#define PATH_SEPARATOR ":"
-	path = smiGetPath();
 	g_string_append(path_str, "/usr/share/snmp/mibs");
+	if (!smi_init_done)
+		smiInit(NULL);
+	path = smiGetPath();
 	if (strlen(path) > 0 ) {
-		g_string_append(path_str, PATH_SEPARATOR);
+		g_string_append(path_str, G_SEARCHPATH_SEPARATOR_S);
+		g_string_append_printf(path_str, "%s", path);
 	}
-	g_string_append_printf(path_str, "%s", path);
 	smi_free(path);
+
+	if (oids_init_done == FALSE)
+	{
 #endif
+		for (i = 0; i < num_smi_paths; i++) {
+			if (!(smi_paths[i].name && *smi_paths[i].name))
+				continue;
 
-	for(i=0;i<num_smi_paths;i++) {
-		if (!( smi_paths[i].name && *smi_paths[i].name))
-			continue;
-
-		g_string_append_printf(path_str,PATH_SEPARATOR "%s",smi_paths[i].name);
+			g_string_append_printf(path_str, G_SEARCHPATH_SEPARATOR_S "%s", smi_paths[i].name);
+		}
+#ifndef _WIN32
 	}
-
+#endif
 	return g_string_free(path_str, FALSE);
 #else /* HAVE_LIBSMI */
         return g_strdup("");

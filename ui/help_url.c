@@ -6,20 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2000 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "config.h"
 
@@ -239,11 +226,9 @@ topic_action_url(topic_action_e action)
     case(HELP_EXPERT_INFO_DIALOG):
         url = user_guide_url("ChAdvExpert.html");
         break;
-#ifdef HAVE_EXTCAP
     case(HELP_EXTCAP_OPTIONS_DIALOG):
         url = data_file_url("extcap.html");
         break;
-#endif
     case(HELP_STATS_SUMMARY_DIALOG):
         url = user_guide_url("ChStatSummary.html");
         break;
@@ -267,6 +252,9 @@ topic_action_url(topic_action_e action)
         break;
     case(HELP_STATS_LTE_RLC_TRAFFIC_DIALOG):
         url = user_guide_url("ChTelLTERLCTraffic.html");
+        break;
+    case(HELP_STATS_TCP_STREAM_GRAPHS_DIALOG):
+        url = user_guide_url("ChStatTCPStreamGraphs.html");
         break;
     case(HELP_STATS_WLAN_TRAFFIC_DIALOG):
         url = user_guide_url("ChStatWLANTraffic.html");

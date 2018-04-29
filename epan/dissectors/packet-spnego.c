@@ -19,19 +19,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 /* The heimdal code for decryption of GSSAPI wrappers using heimdal comes from
    Heimdal 1.6 and has been modified for wireshark's requirements.
@@ -109,7 +97,7 @@ static int hf_spnego_ContextFlags_confFlag = -1;
 static int hf_spnego_ContextFlags_integFlag = -1;
 
 /*--- End of included file: packet-spnego-hf.c ---*/
-#line 76 "./asn1/spnego/packet-spnego-template.c"
+#line 64 "./asn1/spnego/packet-spnego-template.c"
 
 /* Global variables */
 static const char *MechType_oid;
@@ -136,7 +124,7 @@ static gint ett_spnego_NegTokenTarg = -1;
 static gint ett_spnego_InitialContextToken_U = -1;
 
 /*--- End of included file: packet-spnego-ett.c ---*/
-#line 90 "./asn1/spnego/packet-spnego-template.c"
+#line 78 "./asn1/spnego/packet-spnego-template.c"
 
 static expert_field ei_spnego_decrypted_keytype = EI_INIT;
 static expert_field ei_spnego_unknown_header = EI_INIT;
@@ -559,7 +547,7 @@ dissect_spnego_InitialContextToken(gboolean implicit_tag _U_, tvbuff_t *tvb _U_,
 
 
 /*--- End of included file: packet-spnego-fn.c ---*/
-#line 111 "./asn1/spnego/packet-spnego-template.c"
+#line 99 "./asn1/spnego/packet-spnego-template.c"
 /*
  * This is the SPNEGO KRB5 dissector. It is not true KRB5, but some ASN.1
  * wrapped blob with an OID, USHORT token ID, and a Ticket, that is also
@@ -1735,9 +1723,7 @@ dissect_spnego(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void*
        * If we have a conversation, try to get the handle,
        * and if we get one, attach it to the frame.
        */
-      conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                       pinfo->ptype, pinfo->srcport,
-                                       pinfo->destport, 0);
+      conversation = find_conversation_pinfo(pinfo, 0);
 
       if (conversation) {
         next_level_value = (gssapi_oid_value *)conversation_get_proto_data(conversation, proto_spnego);
@@ -1936,7 +1922,7 @@ void proto_register_spnego(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-spnego-hfarr.c ---*/
-#line 1391 "./asn1/spnego/packet-spnego-template.c"
+#line 1377 "./asn1/spnego/packet-spnego-template.c"
   };
 
   /* List of subtrees */
@@ -1959,7 +1945,7 @@ void proto_register_spnego(void) {
     &ett_spnego_InitialContextToken_U,
 
 /*--- End of included file: packet-spnego-ettarr.c ---*/
-#line 1401 "./asn1/spnego/packet-spnego-template.c"
+#line 1387 "./asn1/spnego/packet-spnego-template.c"
   };
 
   static ei_register_info ei[] = {

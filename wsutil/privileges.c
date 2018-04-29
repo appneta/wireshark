@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2006 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -43,14 +31,6 @@
 void
 init_process_policies(void)
 {
-	HMODULE kernel32Handle;
-	typedef BOOL (WINAPI *SetProcessDEPPolicyHandler)(DWORD);
-	SetProcessDEPPolicyHandler PSetProcessDEPPolicy;
-
-#ifndef PROCESS_DEP_ENABLE
-#define PROCESS_DEP_ENABLE 1
-#endif
-
 	/*
 	 * If we have SetProcessDEPPolicy(), turn "data execution
 	 * prevention" on - i.e., if the MMU lets you set execute
@@ -60,17 +40,8 @@ init_process_policies(void)
 	 * we don't care (we did our best), so we don't check for
 	 * errors.
 	 *
-	 * XXX - if the GetModuleHandle() call fails, should we report
-	 * an error?  That "shouldn't happen" - it's the equivalent
-	 * of libc.{so,sl,a} or libSystem.dylib being missing on UN*X.
 	 */
-	kernel32Handle = GetModuleHandle(_T("kernel32.dll"));
-	if (kernel32Handle != NULL) {
-		PSetProcessDEPPolicy = (SetProcessDEPPolicyHandler) GetProcAddress(kernel32Handle, "SetProcessDEPPolicy");
-		if (PSetProcessDEPPolicy) {
-			PSetProcessDEPPolicy(PROCESS_DEP_ENABLE);
-		}
-	}
+	SetProcessDEPPolicy(PROCESS_DEP_ENABLE);
 }
 
 /*

@@ -4,20 +4,10 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
+
+#include <config.h>
 
 #include "layout_preferences_frame.h"
 #include <ui_layout_preferences_frame.h>
@@ -28,6 +18,7 @@
 
 #include <QDebug>
 #include <epan/prefs-int.h>
+#include <ui/qt/models/pref_models.h>
 
 LayoutPreferencesFrame::LayoutPreferencesFrame(QWidget *parent) :
     QFrame(parent),
@@ -48,8 +39,24 @@ LayoutPreferencesFrame::LayoutPreferencesFrame(QWidget *parent) :
     ui->layout5ToolButton->setStyleSheet(image_pad_ss);
     ui->layout6ToolButton->setStyleSheet(image_pad_ss);
 
+    QStyleOption style_opt;
+    QString indent_ss = QString(
+             "QCheckBox {"
+             "  margin-left: %1px;"
+             "}"
+             ).arg(ui->packetListSeparatorCheckBox->style()->subElementRect(QStyle::SE_CheckBoxContents, &style_opt).left());
+    ui->packetListSeparatorCheckBox->setStyleSheet(indent_ss);
+    ui->statusBarShowSelectedPacketCheckBox->setStyleSheet(indent_ss);
+    ui->statusBarShowFileLoadTimeCheckBox->setStyleSheet(indent_ss);
+
     pref_packet_list_separator_ = prefFromPrefPtr(&prefs.gui_qt_packet_list_separator);
     ui->packetListSeparatorCheckBox->setChecked(prefs_get_bool_value(pref_packet_list_separator_, pref_stashed));
+
+    pref_show_selected_packet_ = prefFromPrefPtr(&prefs.gui_qt_show_selected_packet);
+    ui->statusBarShowSelectedPacketCheckBox->setChecked(prefs_get_bool_value(pref_show_selected_packet_, pref_stashed));
+
+    pref_show_file_load_time_ = prefFromPrefPtr(&prefs.gui_qt_show_file_load_time);
+    ui->statusBarShowFileLoadTimeCheckBox->setChecked(prefs_get_bool_value(pref_show_file_load_time_, pref_stashed));
 }
 
 LayoutPreferencesFrame::~LayoutPreferencesFrame()
@@ -275,7 +282,6 @@ void LayoutPreferencesFrame::on_pane3NoneRadioButton_toggled(bool checked)
     prefs_set_enum_value(pref_layout_content_3_, layout_pane_content_none, pref_stashed);
 }
 
-
 void LayoutPreferencesFrame::on_restoreButtonBox_clicked(QAbstractButton *)
 {
     reset_stashed_pref(pref_layout_type_);
@@ -287,11 +293,23 @@ void LayoutPreferencesFrame::on_restoreButtonBox_clicked(QAbstractButton *)
     updateWidgets();
 
     ui->packetListSeparatorCheckBox->setChecked(prefs_get_bool_value(pref_packet_list_separator_, pref_default));
+    ui->statusBarShowSelectedPacketCheckBox->setChecked(prefs_get_bool_value(pref_show_selected_packet_, pref_default));
+    ui->statusBarShowFileLoadTimeCheckBox->setChecked(prefs_get_bool_value(pref_show_file_load_time_, pref_default));
 }
 
 void LayoutPreferencesFrame::on_packetListSeparatorCheckBox_toggled(bool checked)
 {
     prefs_set_bool_value(pref_packet_list_separator_, (gboolean) checked, pref_stashed);
+}
+
+void LayoutPreferencesFrame::on_statusBarShowSelectedPacketCheckBox_toggled(bool checked)
+{
+    prefs_set_bool_value(pref_show_selected_packet_, (gboolean) checked, pref_stashed);
+}
+
+void LayoutPreferencesFrame::on_statusBarShowFileLoadTimeCheckBox_toggled(bool checked)
+{
+    prefs_set_bool_value(pref_show_file_load_time_, (gboolean) checked, pref_stashed);
 }
 
 /*

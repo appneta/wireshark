@@ -9,19 +9,7 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 2005 Ulf Lamping
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
 # an existing capture file
@@ -62,6 +50,7 @@ Usage: $THIS [-c] [-h] [-s <suite>]
       prerequisites
       unittests
       wslua
+      dissection
 FIN
         exit 0
 fi
@@ -110,6 +99,7 @@ source $TESTS_DIR/suite-nameres.sh
 source $TESTS_DIR/suite-wslua.sh
 source $TESTS_DIR/suite-mergecap.sh
 source $TESTS_DIR/suite-text2pcap.sh
+source $TESTS_DIR/suite-dissection.sh
 
 test_cleanup() {
 	if [ $TEST_OUTDIR_CLEAN = 1 ]; then
@@ -172,6 +162,7 @@ test_suite() {
 	test_suite_add "Mergecap" mergecap_suite
 	test_suite_add "File formats" fileformats_suite
 	test_suite_add "Text2pcap" text2pcap_suite
+	test_suite_add "Dissection" dissection_suite
 }
 
 
@@ -222,6 +213,9 @@ if [ -n "$RUN_SUITE" ] ; then
 			exit $? ;;
 		"text2pcap")
 			test_suite_run "Text2pcap" text2pcap_suite
+			exit $? ;;
+		"dissection")
+			test_suite_run "Dissection" dissection_suite
 			exit $? ;;
 	esac
 fi

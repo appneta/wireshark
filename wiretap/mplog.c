@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
@@ -99,7 +87,7 @@
    - if two blocks of our packet's block type are more than 200us apart,
      we treat this as a packet boundary as described above
    */
-static gboolean mplog_read_packet(FILE_T fh, struct wtap_pkthdr *phdr,
+static gboolean mplog_read_packet(FILE_T fh, wtap_rec *rec,
         Buffer *buf, int *err, gchar **err_info)
 {
     guint8 *p, *start_p;
@@ -182,13 +170,13 @@ static gboolean mplog_read_packet(FILE_T fh, struct wtap_pkthdr *phdr,
     start_p[2] = pkt_bytes >> 8;
     start_p[3] = pkt_bytes & 0xFF;
 
-    phdr->rec_type = REC_TYPE_PACKET;
-    phdr->pkt_encap = WTAP_ENCAP_ISO14443;
-    phdr->presence_flags = WTAP_HAS_TS | WTAP_HAS_CAP_LEN;
-    phdr->ts.secs = (time_t)((pkt_ctr*10)/(1000*1000*1000));
-    phdr->ts.nsecs = (int)((pkt_ctr*10)%(1000*1000*1000));
-    phdr->caplen = ISO14443_PSEUDO_HDR_LEN + pkt_bytes;
-    phdr->len = phdr->caplen;
+    rec->rec_type = REC_TYPE_PACKET;
+    rec->rec_header.packet_header.pkt_encap = WTAP_ENCAP_ISO14443;
+    rec->presence_flags = WTAP_HAS_TS | WTAP_HAS_CAP_LEN;
+    rec->ts.secs = (time_t)((pkt_ctr*10)/(1000*1000*1000));
+    rec->ts.nsecs = (int)((pkt_ctr*10)%(1000*1000*1000));
+    rec->rec_header.packet_header.caplen = ISO14443_PSEUDO_HDR_LEN + pkt_bytes;
+    rec->rec_header.packet_header.len = rec->rec_header.packet_header.caplen;
 
     return TRUE;
 }
@@ -200,18 +188,18 @@ mplog_read(wtap *wth, int *err, gchar **err_info, gint64 *data_offset)
     *data_offset = file_tell(wth->fh);
 
     return mplog_read_packet(
-            wth->fh, &wth->phdr, wth->frame_buffer, err, err_info);
+            wth->fh, &wth->rec, wth->rec_data, err, err_info);
 }
 
 
 static gboolean
-mplog_seek_read(wtap *wth, gint64 seek_off, struct wtap_pkthdr *pkthdr,
-        Buffer *buf, int *err, gchar **err_info)
+mplog_seek_read(wtap *wth, gint64 seek_off, wtap_rec *rec, Buffer *buf,
+                int *err, gchar **err_info)
 {
     if (-1 == file_seek(wth->random_fh, seek_off, SEEK_SET, err))
         return FALSE;
 
-    if (!mplog_read_packet(wth->random_fh, pkthdr, buf, err, err_info)) {
+    if (!mplog_read_packet(wth->random_fh, rec, buf, err, err_info)) {
         /* Even if we got an immediate EOF, that's an error. */
         if (*err == 0)
             *err = WTAP_ERR_SHORT_READ;

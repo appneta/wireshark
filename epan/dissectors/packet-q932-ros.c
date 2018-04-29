@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -76,7 +64,7 @@ static int hf_q932_ros_present = -1;              /* INTEGER */
 static int hf_q932_ros_InvokeId_present = -1;     /* InvokeId_present */
 
 /*--- End of included file: packet-q932-ros-hf.c ---*/
-#line 43 "./asn1/q932-ros/packet-q932-ros-template.c"
+#line 31 "./asn1/q932-ros/packet-q932-ros-template.c"
 
 /* Initialize the subtree pointers */
 
@@ -94,7 +82,7 @@ static gint ett_q932_ros_T_problem = -1;
 static gint ett_q932_ros_InvokeId = -1;
 
 /*--- End of included file: packet-q932-ros-ett.c ---*/
-#line 46 "./asn1/q932-ros/packet-q932-ros-template.c"
+#line 34 "./asn1/q932-ros/packet-q932-ros-template.c"
 
 static expert_field ei_ros_undecoded = EI_INIT;
 
@@ -677,7 +665,7 @@ static int dissect_ROS_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree
 
 
 /*--- End of included file: packet-q932-ros-fn.c ---*/
-#line 63 "./asn1/q932-ros/packet-q932-ros-template.c"
+#line 51 "./asn1/q932-ros/packet-q932-ros-template.c"
 
 /*--- dissect_q932_ros -----------------------------------------------------*/
 static int dissect_q932_ros(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data) {
@@ -795,7 +783,7 @@ void proto_register_q932_ros(void) {
         "InvokeId_present", HFILL }},
 
 /*--- End of included file: packet-q932-ros-hfarr.c ---*/
-#line 80 "./asn1/q932-ros/packet-q932-ros-template.c"
+#line 68 "./asn1/q932-ros/packet-q932-ros-template.c"
   };
 
   /* List of subtrees */
@@ -815,7 +803,7 @@ void proto_register_q932_ros(void) {
     &ett_q932_ros_InvokeId,
 
 /*--- End of included file: packet-q932-ros-ettarr.c ---*/
-#line 85 "./asn1/q932-ros/packet-q932-ros-template.c"
+#line 73 "./asn1/q932-ros/packet-q932-ros-template.c"
   };
 
   static ei_register_info ei[] = {

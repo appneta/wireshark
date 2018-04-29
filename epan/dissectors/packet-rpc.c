@@ -8,19 +8,7 @@
  *
  * Copied from packet-smb.c
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -815,12 +803,11 @@ dissect_rpc_opaque_data(tvbuff_t *tvb, int offset,
 		string_buffer_print=RPC_STRING_EMPTY;
 	}
 
-	if (tree) {
-		/* string_item_offset = offset; */
-		string_tree = proto_tree_add_subtree_format(tree, tvb,offset, -1,
-		    ett_rpc_string, &string_item, "%s: %s", proto_registrar_get_name(hfindex),
-		    string_buffer_print);
-	}
+	/* string_item_offset = offset; */
+	string_tree = proto_tree_add_subtree_format(tree, tvb,offset, -1,
+			ett_rpc_string, &string_item, "%s: %s", proto_registrar_get_name(hfindex),
+			string_buffer_print);
+
 	if (!fixed_length) {
 		proto_tree_add_uint(string_tree, hf_rpc_opaque_length, tvb,offset, 4, string_length);
 		offset += 4;
@@ -843,21 +830,18 @@ dissect_rpc_opaque_data(tvbuff_t *tvb, int offset,
 	offset += string_length_copy;
 
 	if (fill_length) {
-		if (string_tree) {
-			if (fill_truncated) {
-				proto_tree_add_bytes_format_value(string_tree, hf_rpc_fill_bytes, tvb,
-				offset, fill_length_copy, NULL, "opaque data<TRUNCATED>");
-			}
-			else {
-				proto_tree_add_bytes_format_value(string_tree, hf_rpc_fill_bytes, tvb,
-				offset, fill_length_copy, NULL, "opaque data");
-			}
+		if (fill_truncated) {
+			proto_tree_add_bytes_format_value(string_tree, hf_rpc_fill_bytes, tvb,
+					offset, fill_length_copy, NULL, "opaque data<TRUNCATED>");
+		}
+		else {
+			proto_tree_add_bytes_format_value(string_tree, hf_rpc_fill_bytes, tvb,
+					offset, fill_length_copy, NULL, "opaque data");
 		}
 		offset += fill_length_copy;
 	}
 
-	if (string_item)
-		proto_item_set_end(string_item, tvb, offset);
+	proto_item_set_end(string_item, tvb, offset);
 
 	if (string_buffer_ret != NULL)
 		*string_buffer_ret = string_buffer_print;
@@ -1315,9 +1299,7 @@ dissect_rpc_opaque_auth(tvbuff_t* tvb, proto_tree* tree, int offset,
 	rpc_conv_info_t *conv_info = NULL;
 
 	if (pinfo->ptype == PT_TCP)
-		conv = find_conversation(pinfo->num, &pinfo->src,
-				&pinfo->dst, pinfo->ptype, pinfo->srcport,
-				pinfo->destport, 0);
+		conv = find_conversation_pinfo(pinfo, 0);
 
 	if (conv)
 		conv_info = (rpc_conv_info_t *)conversation_get_proto_data(conv,
@@ -1353,8 +1335,6 @@ dissect_rpc_authgss_token(tvbuff_t* tvb, proto_tree* tree, int offset,
 	if (opaque_length != 0) {
 		length = tvb_captured_length_remaining(tvb, offset);
 		reported_length = tvb_reported_length_remaining(tvb, offset);
-		DISSECTOR_ASSERT(length >= 0);
-		DISSECTOR_ASSERT(reported_length >= 0);
 		if (length > reported_length)
 			length = reported_length;
 		if ((guint32)length > opaque_length)
@@ -1586,11 +1566,9 @@ dissect_rpc_authgss_integ_data(tvbuff_t *tvb, packet_info *pinfo,
 			    tvb, offset+4, 4, seq);
 	offset += 8;
 
-	if (dissect_function != NULL) {
-		/* offset = */
-		call_dissect_function(tvb, pinfo, gtree, offset,
-				      dissect_function, progname, rpc_call);
-	}
+	/* offset = */
+	call_dissect_function(tvb, pinfo, gtree, offset, dissect_function, progname, rpc_call);
+
 	offset += rounded_length - 4;
 	offset = dissect_rpc_authgss_token(tvb, tree, offset, pinfo, hf_rpc_authgss_checksum);
 
@@ -1663,9 +1641,7 @@ get_conversation_for_call(packet_info *pinfo)
 	 * the original request.
 	 */
 	if (pinfo->ptype == PT_TCP || pinfo->ptype == PT_IBQP) {
-		conversation = find_conversation(pinfo->num,
-		    &pinfo->src, &pinfo->dst, pinfo->ptype,
-		    pinfo->srcport, pinfo->destport, 0);
+		conversation = find_conversation_pinfo(pinfo, 0);
 	} else {
 		/*
 		 * XXX - you currently still have to pass a non-null
@@ -1673,18 +1649,18 @@ get_conversation_for_call(packet_info *pinfo)
 		 * if you use NO_ADDR_B.
 		 */
 		conversation = find_conversation(pinfo->num,
-		    &pinfo->src, &null_address, pinfo->ptype,
+		    &pinfo->src, &null_address, conversation_pt_to_endpoint_type(pinfo->ptype),
 		    pinfo->destport, 0, NO_ADDR_B|NO_PORT_B);
 	}
 
 	if (conversation == NULL) {
 		if (pinfo->ptype == PT_TCP || pinfo->ptype == PT_IBQP) {
 			conversation = conversation_new(pinfo->num,
-			    &pinfo->src, &pinfo->dst, pinfo->ptype,
+			    &pinfo->src, &pinfo->dst, conversation_pt_to_endpoint_type(pinfo->ptype),
 			    pinfo->srcport, pinfo->destport, 0);
 		} else {
 			conversation = conversation_new(pinfo->num,
-			    &pinfo->src, &null_address, pinfo->ptype,
+			    &pinfo->src, &null_address, conversation_pt_to_endpoint_type(pinfo->ptype),
 			    pinfo->destport, 0, NO_ADDR2|NO_PORT2);
 		}
 	}
@@ -1717,9 +1693,7 @@ find_conversation_for_reply(packet_info *pinfo)
 	 * might be sent to different ports.
 	 */
 	if (pinfo->ptype == PT_TCP || pinfo->ptype == PT_IBQP) {
-		conversation = find_conversation(pinfo->num,
-		    &pinfo->src, &pinfo->dst, pinfo->ptype,
-		    pinfo->srcport, pinfo->destport, 0);
+		conversation = find_conversation_pinfo(pinfo, 0);
 	} else {
 		/*
 		 * XXX - you currently still have to pass a non-null
@@ -1727,7 +1701,7 @@ find_conversation_for_reply(packet_info *pinfo)
 		 * if you use NO_ADDR_B.
 		 */
 		conversation = find_conversation(pinfo->num,
-		    &pinfo->dst, &null_address, pinfo->ptype,
+		    &pinfo->dst, &null_address, conversation_pt_to_endpoint_type(pinfo->ptype),
 		    pinfo->srcport, 0, NO_ADDR_B|NO_PORT_B);
 	}
 	return conversation;
@@ -1738,38 +1712,23 @@ new_conversation_for_reply(packet_info *pinfo)
 {
 	conversation_t *conversation;
 
-	if (pinfo->ptype == PT_TCP || pinfo->ptype == PT_IBQP) {
+	switch (pinfo->ptype)
+	{
+	case PT_TCP:
 		conversation = conversation_new(pinfo->num,
-		    &pinfo->src, &pinfo->dst, pinfo->ptype,
+		    &pinfo->src, &pinfo->dst, ENDPOINT_TCP,
 		    pinfo->srcport, pinfo->destport, 0);
-	} else {
+		break;
+	case PT_IBQP:
 		conversation = conversation_new(pinfo->num,
-		    &pinfo->dst, &null_address, pinfo->ptype,
+		    &pinfo->src, &pinfo->dst, ENDPOINT_IBQP,
+		    pinfo->srcport, pinfo->destport, 0);
+		break;
+	default:
+		conversation = conversation_new(pinfo->num,
+		    &pinfo->dst, &null_address, conversation_pt_to_endpoint_type(pinfo->ptype),
 		    pinfo->srcport, 0, NO_ADDR2|NO_PORT2);
-	}
-	return conversation;
-}
-
-static conversation_t *
-get_conversation_for_tcp(packet_info *pinfo)
-{
-	conversation_t *conversation;
-
-	/*
-	 * We know this is running over TCP, so the conversation should
-	 * not wildcard either address or port, regardless of whether
-	 * this is a call or reply.
-	 */
-	conversation = find_conversation(pinfo->num,
-	    &pinfo->src, &pinfo->dst, pinfo->ptype,
-	    pinfo->srcport, pinfo->destport, 0);
-	if (conversation == NULL) {
-		/*
-		 * It's not part of any conversation - create a new one.
-		 */
-		conversation = conversation_new(pinfo->num,
-		    &pinfo->src, &pinfo->dst, pinfo->ptype,
-		    pinfo->srcport, pinfo->destport, 0);
+		break;
 	}
 	return conversation;
 }
@@ -1864,10 +1823,7 @@ dissect_rpc_indir_call(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 		return offset;
 	}
 
-	if ( tree )
-	{
-		proto_tree_add_item(tree, hf_rpc_argument_length, tvb, offset, 4, ENC_BIG_ENDIAN);
-	}
+	proto_tree_add_item(tree, hf_rpc_argument_length, tvb, offset, 4, ENC_BIG_ENDIAN);
 	offset += 4;
 
 	/* Dissect the arguments */
@@ -1993,11 +1949,9 @@ dissect_rpc_continuation(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "RPC");
 	col_set_str(pinfo->cinfo, COL_INFO, "Continuation");
 
-	if (tree) {
-		rpc_item = proto_tree_add_item(tree, proto_rpc, tvb, 0, -1, ENC_NA);
-		rpc_tree = proto_item_add_subtree(rpc_item, ett_rpc);
-		proto_tree_add_item(rpc_tree, hf_rpc_continuation_data, tvb, 0, -1, ENC_NA);
-	}
+	rpc_item = proto_tree_add_item(tree, proto_rpc, tvb, 0, -1, ENC_NA);
+	rpc_tree = proto_item_add_subtree(rpc_item, ett_rpc);
+	proto_tree_add_item(rpc_tree, hf_rpc_continuation_data, tvb, 0, -1, ENC_NA);
 }
 
 
@@ -2436,11 +2390,9 @@ dissect_rpc_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 			}
 		}
 
-		if (rpc_tree) {
-			proto_tree_add_uint_format_value(rpc_tree,
+		proto_tree_add_uint_format_value(rpc_tree,
 				hf_rpc_procedure, tvb, offset+12, 4, proc,
 				"%s (%u)", procname, proc);
-		}
 
 		/* Print the program version, procedure name, and message type (call or reply). */
 		if (first_pdu)
@@ -2630,10 +2582,8 @@ dissect_rpc_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 		}
 
 		reply_state = tvb_get_ntohl(tvb,offset);
-		if (rpc_tree) {
-			proto_tree_add_uint(rpc_tree, hf_rpc_state_reply, tvb,
+		proto_tree_add_uint(rpc_tree, hf_rpc_state_reply, tvb,
 				offset, 4, reply_state);
-		}
 		offset += 4;
 
 		/* Indicate the frame to which this is a reply. */
@@ -3340,7 +3290,7 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 				   it doesn't already exist, and make the
 				   dissector for it the non-heuristic RPC
 				   dissector for RPC-over-TCP. */
-				conversation = get_conversation_for_tcp(pinfo);
+				conversation = find_or_create_conversation(pinfo);
 				conversation_set_dissector(conversation,
 				    rpc_tcp_handle);
 			}
@@ -3404,7 +3354,7 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 	 * one, create it.
 	 */
 	if (conversation == NULL)
-		conversation = get_conversation_for_tcp(pinfo);
+		conversation = find_or_create_conversation(pinfo);
 	old_rfk.conv_id = conversation->conv_index;
 	old_rfk.seq = seq;
 	old_rfk.port = pinfo->srcport;
@@ -3933,20 +3883,20 @@ static stat_tap_table_item rpc_prog_stat_fields[] = {
 	{TABLE_ITEM_FLOAT, TAP_ALIGN_RIGHT, "Avg SRT (s)", "%.2f"}
 };
 
-static void rpc_prog_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb gui_callback, void* gui_data)
+static void rpc_prog_stat_init(stat_tap_table_ui* new_stat, stat_tap_gui_init_cb gui_callback, void* gui_data)
 {
 	int num_fields = sizeof(rpc_prog_stat_fields)/sizeof(stat_tap_table_item);
 	stat_tap_table* table;
 
-	table = new_stat_tap_init_table("ONC-RPC Program Statistics", num_fields, 0, NULL, gui_callback, gui_data);
-	new_stat_tap_add_table(new_stat, table);
+	table = stat_tap_init_table("ONC-RPC Program Statistics", num_fields, 0, NULL, gui_callback, gui_data);
+	stat_tap_add_table(new_stat, table);
 
 }
 
 static gboolean
 rpc_prog_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const void *rciv_ptr)
 {
-	new_stat_data_t* stat_data = (new_stat_data_t*)tapdata;
+	stat_data_t* stat_data = (stat_data_t*)tapdata;
 	const rpc_call_info_value *ri = (const rpc_call_info_value *)rciv_ptr;
 	int num_fields = sizeof(rpc_prog_stat_fields)/sizeof(stat_tap_table_item);
 	nstime_t delta;
@@ -3962,8 +3912,8 @@ rpc_prog_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt 
 	for (element = 0; element < table->num_elements; element++)
 	{
 		stat_tap_table_item_type *program_data, *version_data;
-		program_data = new_stat_tap_get_field_data(table, element, PROGRAM_NUM_COLUMN);
-		version_data = new_stat_tap_get_field_data(table, element, VERSION_COLUMN);
+		program_data = stat_tap_get_field_data(table, element, PROGRAM_NUM_COLUMN);
+		version_data = stat_tap_get_field_data(table, element, VERSION_COLUMN);
 
 		if ((ri->prog == program_data->value.uint_value) && (ri->vers == version_data->value.uint_value)) {
 			found = TRUE;
@@ -3987,7 +3937,7 @@ rpc_prog_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt 
 		items[MAX_SRT_COLUMN].type = TABLE_ITEM_FLOAT;
 		items[AVG_SRT_COLUMN].type = TABLE_ITEM_FLOAT;
 
-		new_stat_tap_init_table_row(table, element, num_fields, items);
+		stat_tap_init_table_row(table, element, num_fields, items);
 	}
 
 	/* we are only interested in reply packets */
@@ -3995,31 +3945,31 @@ rpc_prog_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt 
 		return FALSE;
 	}
 
-	item_data = new_stat_tap_get_field_data(table, element, CALLS_COLUMN);
+	item_data = stat_tap_get_field_data(table, element, CALLS_COLUMN);
 	item_data->value.uint_value++;
 	call_count = item_data->value.uint_value;
-	new_stat_tap_set_field_data(table, element, CALLS_COLUMN, item_data);
+	stat_tap_set_field_data(table, element, CALLS_COLUMN, item_data);
 
 	/* calculate time delta between request and reply */
 	nstime_delta(&delta, &pinfo->abs_ts, &ri->req_time);
 	delta_s = nstime_to_sec(&delta);
 
-	item_data = new_stat_tap_get_field_data(table, element, MIN_SRT_COLUMN);
+	item_data = stat_tap_get_field_data(table, element, MIN_SRT_COLUMN);
 	if (item_data->value.float_value == 0.0 || delta_s < item_data->value.float_value) {
 		item_data->value.float_value = delta_s;
-		new_stat_tap_set_field_data(table, element, MIN_SRT_COLUMN, item_data);
+		stat_tap_set_field_data(table, element, MIN_SRT_COLUMN, item_data);
 	}
 
-	item_data = new_stat_tap_get_field_data(table, element, MAX_SRT_COLUMN);
+	item_data = stat_tap_get_field_data(table, element, MAX_SRT_COLUMN);
 	if (item_data->value.float_value == 0.0 || delta_s > item_data->value.float_value) {
 		item_data->value.float_value = delta_s;
-		new_stat_tap_set_field_data(table, element, MAX_SRT_COLUMN, item_data);
+		stat_tap_set_field_data(table, element, MAX_SRT_COLUMN, item_data);
 	}
 
-	item_data = new_stat_tap_get_field_data(table, element, AVG_SRT_COLUMN);
+	item_data = stat_tap_get_field_data(table, element, AVG_SRT_COLUMN);
 	item_data->user_data.float_value += delta_s;
 	item_data->value.float_value = item_data->user_data.float_value / call_count;
-	new_stat_tap_set_field_data(table, element, AVG_SRT_COLUMN, item_data);
+	stat_tap_set_field_data(table, element, AVG_SRT_COLUMN, item_data);
 
 	return TRUE;
 }
@@ -4032,18 +3982,18 @@ rpc_prog_stat_reset(stat_tap_table* table)
 
 	for (element = 0; element < table->num_elements; element++)
 	{
-		item_data = new_stat_tap_get_field_data(table, element, CALLS_COLUMN);
+		item_data = stat_tap_get_field_data(table, element, CALLS_COLUMN);
 		item_data->value.uint_value = 0;
-		new_stat_tap_set_field_data(table, element, CALLS_COLUMN, item_data);
-		item_data = new_stat_tap_get_field_data(table, element, MIN_SRT_COLUMN);
+		stat_tap_set_field_data(table, element, CALLS_COLUMN, item_data);
+		item_data = stat_tap_get_field_data(table, element, MIN_SRT_COLUMN);
 		item_data->value.float_value = 0.0;
-		new_stat_tap_set_field_data(table, element, MIN_SRT_COLUMN, item_data);
-		item_data = new_stat_tap_get_field_data(table, element, MAX_SRT_COLUMN);
+		stat_tap_set_field_data(table, element, MIN_SRT_COLUMN, item_data);
+		item_data = stat_tap_get_field_data(table, element, MAX_SRT_COLUMN);
 		item_data->value.float_value = 0.0;
-		new_stat_tap_set_field_data(table, element, MAX_SRT_COLUMN, item_data);
-		item_data = new_stat_tap_get_field_data(table, element, AVG_SRT_COLUMN);
+		stat_tap_set_field_data(table, element, MAX_SRT_COLUMN, item_data);
+		item_data = stat_tap_get_field_data(table, element, AVG_SRT_COLUMN);
 		item_data->value.float_value = 0.0;
-		new_stat_tap_set_field_data(table, element, AVG_SRT_COLUMN, item_data);
+		stat_tap_set_field_data(table, element, AVG_SRT_COLUMN, item_data);
 	}
 }
 

@@ -21,11 +21,9 @@
         <Component Id="cmpWiretap_dll" Guid="*">
           <File Id="filWiretap_dll" KeyPath="yes" Source="$(var.Staging.Dir)\libwiretap.dll" />
         </Component>
-        <?ifdef ENABLE_LIBWIRESHARK?>
-          <Component Id="cmpLibwireshark_dll" Guid="*">
-            <File Id="filLibwireshark_dll" KeyPath="yes" Source="$(var.Staging.Dir)\libwireshark.dll" />
-          </Component>
-        <?endif?>
+        <Component Id="cmpLibwireshark_dll" Guid="*">
+          <File Id="filLibwireshark_dll" KeyPath="yes" Source="$(var.Staging.Dir)\libwireshark.dll" />
+        </Component>
         <Component Id="cmpLibwscodecs_dll" Guid="*">
           <File Id="filLibwscodecs_dll" KeyPath="yes" Source="$(var.Staging.Dir)\libwscodecs.dll" />
         </Component>
@@ -49,6 +47,9 @@
         </Component>
         <Component Id="cmpManuf" Guid="*">
           <File Id="filManuf" KeyPath="yes" Source="$(var.Staging.Dir)\manuf" />
+        </Component>
+        <Component Id="cmpWka" Guid="*">
+          <File Id="filWka" KeyPath="yes" Source="$(var.Staging.Dir)\wka" />
         </Component>
         <Component Id="cmpServices" Guid="*">
           <File Id="filServices" KeyPath="yes" Source="$(var.Staging.Dir)\services" />
@@ -74,17 +75,12 @@
         <Component Id="cmpExtcap_html" Guid="*">
           <File Id="filExtcap_html" KeyPath="yes" Source="$(var.Staging.Dir)\extcap.html" />
         </Component>
-        <Component Id="cmpIpmap_html" Guid="*">
-          <File Id="filIpmap_html" KeyPath="yes" Source="$(var.Staging.Dir)\ipmap.html" />
-        </Component>
       </DirectoryRef>
     </Fragment>
     <Fragment>
       <ComponentGroup Id="CG.WiresharkRequired">
         <ComponentRef Id="cmpWiretap_dll" />
-        <?ifdef ENABLE_LIBWIRESHARK?>
-          <ComponentRef Id="cmpLibwireshark_dll" />
-        <?endif?>
+        <ComponentRef Id="cmpLibwireshark_dll" />
         <ComponentRef Id="cmpLibwscodecs_dll" />
         <ComponentRef Id="cmpLibwsutil_dll" />
         <ComponentRef Id="cmpCOPYING_txt" />
@@ -93,6 +89,7 @@
         <ComponentRef Id="cmpREADME_windows_txt" />
         <ComponentRef Id="cmpAUTHORS_SHORT" />
         <ComponentRef Id="cmpManuf" />
+        <ComponentRef Id="cmpWka" />
         <ComponentRef Id="cmpServices" />
         <ComponentRef Id="cmpPdml2html_xsl" />
         <ComponentRef Id="cmpWs_css" />
@@ -101,7 +98,6 @@
         <ComponentRef Id="cmpDumpcap_exe" />
         <ComponentRef Id="cmpDumpcap_html" />
         <ComponentRef Id="cmpExtcap_html" />
-        <ComponentRef Id="cmpIpmap_html" />
       </ComponentGroup>
     </Fragment>
 
@@ -117,6 +113,9 @@
         <Component Id="cmpDfilters" Guid="*">
           <File Id="filDfilters" KeyPath="yes" Source="$(var.Staging.Dir)\dfilters" />
         </Component>
+        <Component Id="cmpEnterprisesTsv" Guid="*">
+          <File Id="filEnterprisesTsv" KeyPath="yes" Source="$(var.Staging.Dir)\enterprises.tsv" />
+        </Component>
         <Component Id="cmpSmi_modules" Guid="*">
           <File Id="filSmi_modules" KeyPath="yes" Source="$(var.Staging.Dir)\smi_modules" />
         </Component>
@@ -127,6 +126,7 @@
         <ComponentRef Id="cmpCfilters" />
         <ComponentRef Id="cmpColorfilters" />
         <ComponentRef Id="cmpDfilters" />
+        <ComponentRef Id="cmpEnterprisesTsv" />
         <ComponentRef Id="cmpSmi_modules" />
       </ComponentGroup>
     </Fragment>
@@ -379,7 +379,21 @@
   </Fragment>
   <Fragment>
     <ComponentGroup Id="CG.Tools.Reordercap">
-      <ComponentRef Id="cmpMergecap_exe" />
+      <ComponentRef Id="cmpReordercap_exe" />
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- DFTest -->
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="cmpDFTest_exe" Guid="*">
+        <File Id="filDFTest_exe" KeyPath="yes" Source="$(var.Staging.Dir)\dftest.exe" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+  <Fragment>
+    <ComponentGroup Id="CG.Tools.DFTest">
+      <ComponentRef Id="cmpDFTest_exe" />
     </ComponentGroup>
   </Fragment>
 
@@ -418,6 +432,26 @@
       <ComponentRef Id="cmpRawshark_html" />
     </ComponentGroup>
   </Fragment>
+
+  <!-- MMDBResolve -->
+  <?ifdef MMDBRESOLVE_EXE?>
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="cmpMmdbresolve_exe" Guid="*">
+        <File Id="filMmdbresolve_exe" KeyPath="yes" Source="$(var.Staging.Dir)\mmdbresolve.exe" />
+      </Component>
+      <Component Id="cmpMmdbresolve_html" Guid="*">
+        <File Id="filMmdbresolve_html" KeyPath="yes" Source="$(var.Staging.Dir)\mmdbresolve.html" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+  <Fragment>
+    <ComponentGroup Id="CG.Tools.MMDBResolve">
+      <ComponentRef Id="cmpMmdbresolve_exe" />
+      <ComponentRef Id="cmpMmdbresolve_html" />
+    </ComponentGroup>
+  </Fragment>
+  <?endif?>
 
   <!-- Androiddump -->
   <Fragment>
@@ -684,6 +718,15 @@
         <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="ipfix" Type="integer" Value="1" KeyPath="yes"/>
         <Condition>WIRESHARK_FILE_EXTENSIONS = "0"</Condition>
       </Component>
+      <Component Id="cmpFAlcap">
+        <ProgId Id="$(var.WiresharkFileAssociation)" Description="lcap">
+          <Extension Id="lcap">
+            <Verb Id="open" Command="open" TargetFile="filWireshark_exe" Argument="&quot;%1&quot;"/>
+          </Extension>
+        </ProgId>
+        <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="lcap" Type="integer" Value="1" KeyPath="yes"/>
+        <Condition>WIRESHARK_FILE_EXTENSIONS = "0"</Condition>
+      </Component>
       <Component Id="cmpFAmplog">
         <ProgId Id="$(var.WiresharkFileAssociation)" Description="mplog">
           <Extension Id="mplog">
@@ -691,6 +734,15 @@
           </Extension>
         </ProgId>
         <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="mplog" Type="integer" Value="1" KeyPath="yes"/>
+        <Condition>WIRESHARK_FILE_EXTENSIONS = "0"</Condition>
+      </Component>
+      <Component Id="cmpFAntar">
+        <ProgId Id="$(var.WiresharkFileAssociation)" Description="ntar">
+          <Extension Id="ntar">
+            <Verb Id="open" Command="open" TargetFile="filWireshark_exe" Argument="&quot;%1&quot;"/>
+          </Extension>
+        </ProgId>
+        <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="ntar" Type="integer" Value="1" KeyPath="yes"/>
         <Condition>WIRESHARK_FILE_EXTENSIONS = "0"</Condition>
       </Component>
       <Component Id="cmpFAout">
@@ -925,6 +977,15 @@
         <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="ipfix" Type="integer" Value="1" KeyPath="yes"/>
         <Condition>WIRESHARK_FILE_EXTENSIONS = "1"</Condition>
       </Component>
+      <Component Id="cmpFAlcapLegacy" Guid="64C1C689-CDAF-491D-AB39-8FA62AE565D3">
+        <ProgId Id="$(var.WiresharkFileAssociation)" Description="lcap">
+          <Extension Id="lcap">
+            <Verb Id="open" Command="open" TargetFile="filWiresharkGTK_exe" Argument="&quot;%1&quot;"/>
+          </Extension>
+        </ProgId>
+        <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="lcap" Type="integer" Value="1" KeyPath="yes"/>
+        <Condition>WIRESHARK_FILE_EXTENSIONS = "1"</Condition>
+      </Component>
       <Component Id="cmpFAmplogLegacy" Guid="7AA152AB-1225-466E-8C33-2DF9E6C1CBCE">
         <ProgId Id="$(var.WiresharkFileAssociation)" Description="mplog">
           <Extension Id="mplog">
@@ -932,6 +993,15 @@
           </Extension>
         </ProgId>
         <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="mplog" Type="integer" Value="1" KeyPath="yes"/>
+        <Condition>WIRESHARK_FILE_EXTENSIONS = "1"</Condition>
+      </Component>
+      <Component Id="cmpFAntarLegacy" Guid="4D7AD891-359B-4E74-A0C7-63300F9DC232">
+        <ProgId Id="$(var.WiresharkFileAssociation)" Description="ntar">
+          <Extension Id="ntar">
+            <Verb Id="open" Command="open" TargetFile="filWiresharkGTK_exe" Argument="&quot;%1&quot;"/>
+          </Extension>
+        </ProgId>
+        <RegistryValue Root="HKCU" Key="Software\$(var.WiresharkName)" Name="ntar" Type="integer" Value="1" KeyPath="yes"/>
         <Condition>WIRESHARK_FILE_EXTENSIONS = "1"</Condition>
       </Component>
       <Component Id="cmpFAoutLegacy" Guid="75E60C7A-758F-45C9-A9CF-6B87F3609229">

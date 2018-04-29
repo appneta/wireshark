@@ -6,19 +6,7 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 2005 Ulf Lamping
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
 # To do:
@@ -171,6 +159,25 @@ decryption_step_dtls_psk_aes128ccm8() {
 	two='Works for me!.'
 	if [[ "$output" != *${one}*${one}*${two}*${two}* ]]; then
 		test_step_failed "Failed to decrypt DTLS 1.2 (PSK AES-128-CCM-8)"
+		return
+	fi
+	test_step_ok
+}
+
+# UDT over DTLS 1.2 with RSA key
+decryption_step_udt_dtls() {
+	TEST_KEYS_FILE="$TESTS_DIR/keys/udt-dtls.key"
+	if [ "$WS_SYSTEM" == "Windows" ] ; then
+		TEST_KEYS_FILE="`cygpath -w $TEST_KEYS_FILE`"
+	fi
+	$TESTS_DIR/run_and_catch_crashes env $TS_DC_ENV $TSHARK $TS_DC_ARGS \
+		-o dtls.keys_list:"0.0.0.0,0,data,$TEST_KEYS_FILE" \
+		-Y "dtls && udt.type==ack" \
+		-r "$CAPTURE_DIR/udt-dtls.pcapng.gz" \
+		| grep UDT > /dev/null
+	RETURNVALUE=$?
+	if [ ! $RETURNVALUE -eq $EXIT_OK ]; then
+		test_step_failed "Failed to decrypt UDT/DTLS using the server's RSA private key"
 		return
 	fi
 	test_step_ok
@@ -633,6 +640,7 @@ tshark_decryption_suite() {
 	test_step_add "IEEE 802.11 WPA TDLS Decryption" decryption_step_80211_wpa_tdls
 	test_step_add "DTLS Decryption" decryption_step_dtls
 	test_step_add "DTLS 1.2 Decryption (PSK AES-128-CCM-8)" decryption_step_dtls_psk_aes128ccm8
+	test_step_add "UDT over DTLS 1.2 Decryption" decryption_step_udt_dtls
 	test_step_add "IPsec ESP Decryption" decryption_step_ipsec_esp
 	test_step_add "SSL Decryption (private key)" decryption_step_ssl
 	test_step_add "SSL Decryption (RSA private key with p smaller than q)" decryption_step_ssl_rsa_pq

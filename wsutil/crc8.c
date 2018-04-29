@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
@@ -146,7 +134,7 @@ static const unsigned char crc8_precompiled_3b[256] =
  * @param crc_table a table storing 256 entries for crc8 checksums
  * @return the CRC8 checksum for the buffer
  */
-static guint8 crc8_precompiled(guint8 *buf, guint32 len, guint8 seed, const guint8 crc_table[])
+static guint8 crc8_precompiled(const guint8 *buf, guint32 len, guint8 seed, const guint8 crc_table[])
 {
     guint8 crc;
 
@@ -164,7 +152,7 @@ static guint8 crc8_precompiled(guint8 *buf, guint32 len, guint8 seed, const guin
  * @param seed The seed to use.
  * @return the CRC8 checksum for the buffer
  */
-guint8 crc8_0x2F(guint8 *buf, guint32 len, guint8 seed)
+guint8 crc8_0x2F(const guint8 *buf, guint32 len, guint8 seed)
 {
     return crc8_precompiled(buf, len, seed, crc8_precompiled_2F);
 }
@@ -176,7 +164,7 @@ guint8 crc8_0x2F(guint8 *buf, guint32 len, guint8 seed)
  * @param seed The seed to use.
  * @return the CRC8 checksum for the buffer
  */
-guint8 crc8_0x37(guint8 *buf, guint32 len, guint8 seed)
+guint8 crc8_0x37(const guint8 *buf, guint32 len, guint8 seed)
 {
     guint8 crc = seed;
     while (len-- > 0)
@@ -193,7 +181,7 @@ guint8 crc8_0x37(guint8 *buf, guint32 len, guint8 seed)
  * @param seed The seed to use.
  * @return the CRC8 checksum for the buffer
  */
-guint8 crc8_0x3B(guint8 *buf, guint32 len, guint8 seed)
+guint8 crc8_0x3B(const guint8 *buf, guint32 len, guint8 seed)
 {
     guint8 crc = seed;
     while (len-- > 0)

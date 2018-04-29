@@ -9,19 +9,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 /* Just set me to activate debug #define DEBUG_NTLMSSP */
 #include "config.h"
@@ -1874,9 +1862,7 @@ get_sign_key(packet_info *pinfo, int cryptpeer)
   conversation_t *conversation;
   ntlmssp_info   *conv_ntlmssp_info;
 
-  conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                   pinfo->ptype, pinfo->srcport,
-                                   pinfo->destport, 0);
+  conversation = find_conversation_pinfo(pinfo, 0);
   if (conversation == NULL) {
     /* We don't have a conversation.  In this case, stop processing
        because we do not have enough info to decrypt the payload */
@@ -1914,9 +1900,7 @@ get_encrypted_state(packet_info *pinfo, int cryptpeer)
   conversation_t *conversation;
   ntlmssp_info   *conv_ntlmssp_info;
 
-  conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                   pinfo->ptype, pinfo->srcport,
-                                   pinfo->destport, 0);
+  conversation = find_conversation_pinfo(pinfo, 0);
   if (conversation == NULL) {
     /* We don't have a conversation.  In this case, stop processing
        because we do not have enough info to decrypt the payload */
@@ -2041,9 +2025,7 @@ decrypt_data_payload(tvbuff_t *tvb, int offset, guint32 encrypted_block_length,
     ntlmssp_info   *conv_ntlmssp_info;
 
     /* Pull the challenge info from the conversation */
-    conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                     pinfo->ptype, pinfo->srcport,
-                                     pinfo->destport, 0);
+    conversation = find_conversation_pinfo(pinfo, 0);
     if (conversation == NULL) {
       /* There is no conversation, thus no encryption state */
       return NULL;
@@ -2249,9 +2231,7 @@ decrypt_verifier(tvbuff_t *tvb, int offset, guint32 encrypted_block_length,
     /* We don't have data for this packet */
     return;
   }
-  conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                   pinfo->ptype, pinfo->srcport,
-                                   pinfo->destport, 0);
+  conversation = find_conversation_pinfo(pinfo, 0);
   if (conversation == NULL) {
     /* There is no conversation, thus no encryption state */
     return;

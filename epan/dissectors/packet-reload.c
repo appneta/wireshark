@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * Please refer to the following specs for protocol detail:
  * - RFC 6940
@@ -748,19 +736,14 @@ static void* uat_kindid_copy_cb(void* n, const void* o, size_t siz _U_) {
   kind_t * new_record = (kind_t *)n;
   const kind_t* old_record = (const kind_t *)o;
 
-  if (old_record->name) {
-    new_record->name = g_strdup(old_record->name);
-  } else {
-    new_record->name = NULL;
-  }
+  new_record->name = g_strdup(old_record->name);
 
   return new_record;
 }
 
 static void uat_kindid_record_free_cb(void*r) {
   kind_t* rec = (kind_t *)r;
-
-  if (rec->name) g_free(rec->name);
+  g_free(rec->name);
 }
 
 UAT_DEC_CB_DEF(kindidlist_uats,id,kind_t)
@@ -2623,7 +2606,7 @@ dissect_statans(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint16 off
 
   kind_responses_length = tvb_get_ntohl(tvb, offset);
 
-  if (4 + kind_responses_length > length) {
+  if (kind_responses_length > G_MAXUINT16 || 4 + kind_responses_length > length) {
     ti_statans = proto_tree_add_item(tree, hf_reload_statans, tvb, offset, length, ENC_NA);
     expert_add_info_format(pinfo, ti_statans, &ei_reload_truncated_field, "Truncated StatAns");
     return length;
@@ -4132,7 +4115,7 @@ dissect_reload_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
       col_add_fstr(pinfo->cinfo, COL_INFO, "Fragmented RELOAD protocol (trans id=%x%x off=%u",
                    transaction_id[0],transaction_id[1], fragment);
       if (reload_fd_head && reload_fd_head->reassembled_in != pinfo->num) {
-        col_append_fstr(pinfo->cinfo, COL_INFO, " [Reassembled in #%u]",
+        col_append_frame_number(pinfo, COL_INFO, " [Reassembled in #%u]",
                         reload_fd_head->reassembled_in);
       }
       save_fragmented = pinfo->fragmented;
@@ -4804,7 +4787,7 @@ proto_register_reload(void)
       }
     },
     { &hf_reload_signature_value,
-      { "signature_value",  "reload.signature.value.",  FT_NONE,
+      { "signature_value",  "reload.signature.value",  FT_NONE,
         BASE_NONE,  NULL, 0x0,  NULL, HFILL
       }
     },
@@ -5214,7 +5197,7 @@ proto_register_reload(void)
     },
 
     { &hf_reload_configupdatereq,
-      { "ConfigUpdateReq",  "reload.configupdatereq.",  FT_NONE,
+      { "ConfigUpdateReq",  "reload.configupdatereq",  FT_NONE,
         BASE_NONE,  NULL, 0x0,  NULL, HFILL
       }
     },

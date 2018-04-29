@@ -11,19 +11,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -186,7 +174,7 @@ WSLUA_FUNCTION wslua_register_postdissector(lua_State* L) {
        It will be called for every frame after dissection. */
 #define WSLUA_ARG_register_postdissector_PROTO 1 /* the protocol to be used as post-dissector. */
 #define WSLUA_OPTARG_register_postdissector_ALLFIELDS 2 /* Whether to generate all fields.
-                                                           Note: this impacts performance (default=false). */
+                                                           Note: This impacts performance (default=false). */
 
     Proto proto = checkProto(L,WSLUA_ARG_register_postdissector_PROTO);
     const gboolean all_fields = wslua_optbool(L, WSLUA_OPTARG_register_postdissector_ALLFIELDS, FALSE);
@@ -754,9 +742,6 @@ int Proto_commit(lua_State* L) {
             eiri.eiinfo.group    = e->group;
             eiri.eiinfo.severity = e->severity;
             eiri.eiinfo.summary  = e->text;
-
-            /* Copy this because it will be free'd when deregistering fields */
-            eiri.eiinfo.hf_info.hfinfo.name = g_strdup(eiri.eiinfo.hf_info.hfinfo.name);
 
             if (e->ids.ei != EI_INIT_EI || e->ids.hf != EI_INIT_HF) {
                 return luaL_error(L,"expert fields can be registered only once");

@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -39,6 +27,7 @@
 #include <wsutil/clopts_common.h>
 #include <wsutil/cmdarg_err.h>
 #include <wsutil/file_util.h>
+#include <wsutil/ws_pipe.h>
 
 #include "caputils/capture_ifinfo.h"
 #include "caputils/capture-pcap-util.h"
@@ -62,12 +51,11 @@ capture_opts_init(capture_options *capture_opts)
     capture_opts->default_options.linktype        = -1; /* use interface default */
     capture_opts->default_options.promisc_mode    = TRUE;
     capture_opts->default_options.if_type         = IF_WIRED;
-#ifdef HAVE_EXTCAP
     capture_opts->default_options.extcap          = NULL;
     capture_opts->default_options.extcap_fifo     = NULL;
     capture_opts->default_options.extcap_args     = NULL;
-    capture_opts->default_options.extcap_userdata = NULL;
-    capture_opts->default_options.extcap_pid      = INVALID_EXTCAP_PID;
+    capture_opts->default_options.extcap_pipedata = NULL;
+    capture_opts->default_options.extcap_pid      = WS_INVALID_PID;
 #ifdef _WIN32
     capture_opts->default_options.extcap_pipe_h   = INVALID_HANDLE_VALUE;
     capture_opts->default_options.extcap_control_in_h  = INVALID_HANDLE_VALUE;
@@ -75,7 +63,6 @@ capture_opts_init(capture_options *capture_opts)
 #endif
     capture_opts->default_options.extcap_control_in  = NULL;
     capture_opts->default_options.extcap_control_out = NULL;
-#endif
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
     capture_opts->default_options.buffer_size     = DEFAULT_CAPTURE_BUFFER_SIZE;
 #endif
@@ -95,11 +82,12 @@ capture_opts_init(capture_options *capture_opts)
     capture_opts->default_options.sampling_method = CAPTURE_SAMP_NONE;
     capture_opts->default_options.sampling_param  = 0;
 #endif
+    capture_opts->default_options.timestamp_type  = NULL;
     capture_opts->saving_to_file                  = FALSE;
     capture_opts->save_file                       = NULL;
     capture_opts->group_read_access               = FALSE;
 #ifdef PCAP_NG_DEFAULT
-    capture_opts->use_pcapng                      = TRUE;             /* Save as pcap-ng by default */
+    capture_opts->use_pcapng                      = TRUE;             /* Save as pcapng by default */
 #else
     capture_opts->use_pcapng                      = FALSE;            /* Save as pcap by default */
 #endif
@@ -111,6 +99,8 @@ capture_opts_init(capture_options *capture_opts)
     capture_opts->multi_files_on                  = FALSE;
     capture_opts->has_file_duration               = FALSE;
     capture_opts->file_duration                   = 60;               /* 1 min */
+    capture_opts->has_file_interval               = FALSE;
+    capture_opts->file_interval                   = 60;               /* 1 min */
     capture_opts->has_ring_num_files              = FALSE;
     capture_opts->ring_num_files                  = RINGBUFFER_MIN_NUM_FILES;
 
@@ -135,10 +125,18 @@ capture_opts_cleanup(capture_options *capture_opts)
         return;
 
     if (capture_opts->ifaces) {
+        while (capture_opts->ifaces->len > 0) {
+            capture_opts_del_iface(capture_opts, 0);
+        }
         g_array_free(capture_opts->ifaces, TRUE);
         capture_opts->ifaces = NULL;
     }
     if (capture_opts->all_ifaces) {
+        while (capture_opts->all_ifaces->len > 0) {
+            interface_t *device = &g_array_index(capture_opts->all_ifaces, interface_t, 0);
+            capture_opts_free_interface_t(device);
+            capture_opts->all_ifaces = g_array_remove_index(capture_opts->all_ifaces, 0);
+        }
         g_array_free(capture_opts->all_ifaces, TRUE);
         capture_opts->all_ifaces = NULL;
     }
@@ -152,50 +150,49 @@ capture_opts_log(const char *log_domain, GLogLevelFlags log_level, capture_optio
     g_log(log_domain, log_level, "CAPTURE OPTIONS     :");
 
     for (i = 0; i < capture_opts->ifaces->len; i++) {
-        interface_options interface_opts;
+        interface_options *interface_opts;
 
-        interface_opts = g_array_index(capture_opts->ifaces, interface_options, i);
-        g_log(log_domain, log_level, "Interface name[%02d]  : %s", i, interface_opts.name ? interface_opts.name : "(unspecified)");
-        g_log(log_domain, log_level, "Interface description[%02d] : %s", i, interface_opts.descr ? interface_opts.descr : "(unspecified)");
-        g_log(log_domain, log_level, "Console display name[%02d]: %s", i, interface_opts.console_display_name ? interface_opts.console_display_name : "(unspecified)");
-        g_log(log_domain, log_level, "Capture filter[%02d]  : %s", i, interface_opts.cfilter ? interface_opts.cfilter : "(unspecified)");
-        g_log(log_domain, log_level, "Snap length[%02d] (%u) : %d", i, interface_opts.has_snaplen, interface_opts.snaplen);
-        g_log(log_domain, log_level, "Link Type[%02d]       : %d", i, interface_opts.linktype);
-        g_log(log_domain, log_level, "Promiscuous Mode[%02d]: %s", i, interface_opts.promisc_mode?"TRUE":"FALSE");
-#ifdef HAVE_EXTCAP
-        g_log(log_domain, log_level, "Extcap[%02d]          : %s", i, interface_opts.extcap ? interface_opts.extcap : "(unspecified)");
-        g_log(log_domain, log_level, "Extcap FIFO[%02d]     : %s", i, interface_opts.extcap_fifo ? interface_opts.extcap_fifo : "(unspecified)");
-        g_log(log_domain, log_level, "Extcap PID[%02d]      : %d", i, interface_opts.extcap_pid);
-#endif
+        interface_opts = &g_array_index(capture_opts->ifaces, interface_options, i);
+        g_log(log_domain, log_level, "Interface name[%02d]  : %s", i, interface_opts->name ? interface_opts->name : "(unspecified)");
+        g_log(log_domain, log_level, "Interface description[%02d] : %s", i, interface_opts->descr ? interface_opts->descr : "(unspecified)");
+        g_log(log_domain, log_level, "Console display name[%02d]: %s", i, interface_opts->console_display_name ? interface_opts->console_display_name : "(unspecified)");
+        g_log(log_domain, log_level, "Capture filter[%02d]  : %s", i, interface_opts->cfilter ? interface_opts->cfilter : "(unspecified)");
+        g_log(log_domain, log_level, "Snap length[%02d] (%u) : %d", i, interface_opts->has_snaplen, interface_opts->snaplen);
+        g_log(log_domain, log_level, "Link Type[%02d]       : %d", i, interface_opts->linktype);
+        g_log(log_domain, log_level, "Promiscuous Mode[%02d]: %s", i, interface_opts->promisc_mode?"TRUE":"FALSE");
+        g_log(log_domain, log_level, "Extcap[%02d]          : %s", i, interface_opts->extcap ? interface_opts->extcap : "(unspecified)");
+        g_log(log_domain, log_level, "Extcap FIFO[%02d]     : %s", i, interface_opts->extcap_fifo ? interface_opts->extcap_fifo : "(unspecified)");
+        g_log(log_domain, log_level, "Extcap PID[%02d]      : %d", i, interface_opts->extcap_pid);
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
-        g_log(log_domain, log_level, "Buffer size[%02d]     : %d (MB)", i, interface_opts.buffer_size);
+        g_log(log_domain, log_level, "Buffer size[%02d]     : %d (MB)", i, interface_opts->buffer_size);
 #endif
-        g_log(log_domain, log_level, "Monitor Mode[%02d]    : %s", i, interface_opts.monitor_mode?"TRUE":"FALSE");
+        g_log(log_domain, log_level, "Monitor Mode[%02d]    : %s", i, interface_opts->monitor_mode?"TRUE":"FALSE");
 #ifdef HAVE_PCAP_REMOTE
         g_log(log_domain, log_level, "Capture source[%02d]  : %s", i,
-            interface_opts.src_type == CAPTURE_IFLOCAL ? "Local interface" :
-            interface_opts.src_type == CAPTURE_IFREMOTE ? "Remote interface" :
+            interface_opts->src_type == CAPTURE_IFLOCAL ? "Local interface" :
+            interface_opts->src_type == CAPTURE_IFREMOTE ? "Remote interface" :
             "Unknown");
-        if (interface_opts.src_type == CAPTURE_IFREMOTE) {
-            g_log(log_domain, log_level, "Remote host[%02d]     : %s", i, interface_opts.remote_host ? interface_opts.remote_host : "(unspecified)");
-            g_log(log_domain, log_level, "Remote port[%02d]     : %s", i, interface_opts.remote_port ? interface_opts.remote_port : "(unspecified)");
+        if (interface_opts->src_type == CAPTURE_IFREMOTE) {
+            g_log(log_domain, log_level, "Remote host[%02d]     : %s", i, interface_opts->remote_host ? interface_opts->remote_host : "(unspecified)");
+            g_log(log_domain, log_level, "Remote port[%02d]     : %s", i, interface_opts->remote_port ? interface_opts->remote_port : "(unspecified)");
         }
         g_log(log_domain, log_level, "Authentication[%02d]  : %s", i,
-            interface_opts.auth_type == CAPTURE_AUTH_NULL ? "Null" :
-            interface_opts.auth_type == CAPTURE_AUTH_PWD ? "By username/password" :
+            interface_opts->auth_type == CAPTURE_AUTH_NULL ? "Null" :
+            interface_opts->auth_type == CAPTURE_AUTH_PWD ? "By username/password" :
             "Unknown");
-        if (interface_opts.auth_type == CAPTURE_AUTH_PWD) {
-            g_log(log_domain, log_level, "Auth username[%02d]   : %s", i, interface_opts.auth_username ? interface_opts.auth_username : "(unspecified)");
+        if (interface_opts->auth_type == CAPTURE_AUTH_PWD) {
+            g_log(log_domain, log_level, "Auth username[%02d]   : %s", i, interface_opts->auth_username ? interface_opts->auth_username : "(unspecified)");
             g_log(log_domain, log_level, "Auth password[%02d]   : <hidden>", i);
         }
-        g_log(log_domain, log_level, "UDP data tfer[%02d]   : %u", i, interface_opts.datatx_udp);
-        g_log(log_domain, log_level, "No cap. RPCAP[%02d]   : %u", i, interface_opts.nocap_rpcap);
-        g_log(log_domain, log_level, "No cap. local[%02d]   : %u", i, interface_opts.nocap_local);
+        g_log(log_domain, log_level, "UDP data tfer[%02d]   : %u", i, interface_opts->datatx_udp);
+        g_log(log_domain, log_level, "No cap. RPCAP[%02d]   : %u", i, interface_opts->nocap_rpcap);
+        g_log(log_domain, log_level, "No cap. local[%02d]   : %u", i, interface_opts->nocap_local);
 #endif
 #ifdef HAVE_PCAP_SETSAMPLING
-        g_log(log_domain, log_level, "Sampling meth.[%02d]  : %d", i, interface_opts.sampling_method);
-        g_log(log_domain, log_level, "Sampling param.[%02d] : %d", i, interface_opts.sampling_param);
+        g_log(log_domain, log_level, "Sampling meth.[%02d]  : %d", i, interface_opts->sampling_method);
+        g_log(log_domain, log_level, "Sampling param.[%02d] : %d", i, interface_opts->sampling_param);
 #endif
+        g_log(log_domain, log_level, "Timestamp type [%02d] : %s", i, interface_opts->timestamp_type);
     }
     g_log(log_domain, log_level, "Interface name[df]  : %s", capture_opts->default_options.name ? capture_opts->default_options.name : "(unspecified)");
     g_log(log_domain, log_level, "Interface Descr[df] : %s", capture_opts->default_options.descr ? capture_opts->default_options.descr : "(unspecified)");
@@ -203,10 +200,8 @@ capture_opts_log(const char *log_domain, GLogLevelFlags log_level, capture_optio
     g_log(log_domain, log_level, "Snap length[df] (%u) : %d", capture_opts->default_options.has_snaplen, capture_opts->default_options.snaplen);
     g_log(log_domain, log_level, "Link Type[df]       : %d", capture_opts->default_options.linktype);
     g_log(log_domain, log_level, "Promiscuous Mode[df]: %s", capture_opts->default_options.promisc_mode?"TRUE":"FALSE");
-#ifdef HAVE_EXTCAP
     g_log(log_domain, log_level, "Extcap[df]          : %s", capture_opts->default_options.extcap ? capture_opts->default_options.extcap : "(unspecified)");
     g_log(log_domain, log_level, "Extcap FIFO[df]     : %s", capture_opts->default_options.extcap_fifo ? capture_opts->default_options.extcap_fifo : "(unspecified)");
-#endif
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
     g_log(log_domain, log_level, "Buffer size[df]     : %d (MB)", capture_opts->default_options.buffer_size);
 #endif
@@ -236,6 +231,7 @@ capture_opts_log(const char *log_domain, GLogLevelFlags log_level, capture_optio
     g_log(log_domain, log_level, "Sampling meth. [df] : %d", capture_opts->default_options.sampling_method);
     g_log(log_domain, log_level, "Sampling param.[df] : %d", capture_opts->default_options.sampling_param);
 #endif
+    g_log(log_domain, log_level, "Timestamp type [df] : %s", capture_opts->default_options.timestamp_type ? capture_opts->default_options.timestamp_type : "(unspecified)");
     g_log(log_domain, log_level, "SavingToFile        : %u", capture_opts->saving_to_file);
     g_log(log_domain, log_level, "SaveFile            : %s", (capture_opts->save_file) ? capture_opts->save_file : "");
     g_log(log_domain, log_level, "GroupReadAccess     : %u", capture_opts->group_read_access);
@@ -245,6 +241,7 @@ capture_opts_log(const char *log_domain, GLogLevelFlags log_level, capture_optio
 
     g_log(log_domain, log_level, "MultiFilesOn        : %u", capture_opts->multi_files_on);
     g_log(log_domain, log_level, "FileDuration    (%u) : %u", capture_opts->has_file_duration, capture_opts->file_duration);
+    g_log(log_domain, log_level, "FileInterval    (%u) : %u", capture_opts->has_file_interval, capture_opts->file_interval);
     g_log(log_domain, log_level, "RingNumFiles    (%u) : %u", capture_opts->has_ring_num_files, capture_opts->ring_num_files);
 
     g_log(log_domain, log_level, "AutostopFiles   (%u) : %u", capture_opts->has_autostop_files, capture_opts->autostop_files);
@@ -342,13 +339,11 @@ static gboolean get_filter_arguments(capture_options* capture_opts, const char* 
     }
 
     if (capture_opts->ifaces->len > 0) {
-        interface_options interface_opts;
+        interface_options *interface_opts;
 
-        interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-        capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-        g_free(interface_opts.cfilter);
-        interface_opts.cfilter = filter_exp;
-        g_array_append_val(capture_opts->ifaces, interface_opts);
+        interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+        g_free(interface_opts->cfilter);
+        interface_opts->cfilter = filter_exp;
         return TRUE;
     }
     else {
@@ -402,6 +397,9 @@ get_ring_arguments(capture_options *capture_opts, const char *arg)
     } else if (strcmp(arg,"duration") == 0) {
         capture_opts->has_file_duration = TRUE;
         capture_opts->file_duration = get_positive_int(p, "ring buffer duration");
+    } else if (strcmp(arg,"interval") == 0) {
+        capture_opts->has_file_interval = TRUE;
+        capture_opts->file_interval = get_positive_int(p, "ring buffer interval");
     }
 
     *colonp = ':';    /* put the colon back */
@@ -436,26 +434,22 @@ get_sampling_arguments(capture_options *capture_opts, const char *arg)
 
     if (strcmp(arg, "count") == 0) {
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.sampling_method = CAPTURE_SAMP_BY_COUNT;
-            interface_opts.sampling_param = get_positive_int(p, "sampling count");
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->sampling_method = CAPTURE_SAMP_BY_COUNT;
+            interface_opts->sampling_param = get_positive_int(p, "sampling count");
         } else {
             capture_opts->default_options.sampling_method = CAPTURE_SAMP_BY_COUNT;
             capture_opts->default_options.sampling_param = get_positive_int(p, "sampling count");
         }
     } else if (strcmp(arg, "timer") == 0) {
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.sampling_method = CAPTURE_SAMP_BY_TIMER;
-            interface_opts.sampling_param = get_positive_int(p, "sampling timer");
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->sampling_method = CAPTURE_SAMP_BY_TIMER;
+            interface_opts->sampling_param = get_positive_int(p, "sampling timer");
         } else {
             capture_opts->default_options.sampling_method = CAPTURE_SAMP_BY_TIMER;
             capture_opts->default_options.sampling_param = get_positive_int(p, "sampling timer");
@@ -489,14 +483,12 @@ get_auth_arguments(capture_options *capture_opts, const char *arg)
         p++;
 
     if (capture_opts->ifaces->len > 0) {
-        interface_options interface_opts;
+        interface_options *interface_opts;
 
-        interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-        capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-        interface_opts.auth_type = CAPTURE_AUTH_PWD;
-        interface_opts.auth_username = g_strdup(arg);
-        interface_opts.auth_password = g_strdup(p);
-        g_array_append_val(capture_opts->ifaces, interface_opts);
+        interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+        interface_opts->auth_type = CAPTURE_AUTH_PWD;
+        interface_opts->auth_username = g_strdup(arg);
+        interface_opts->auth_password = g_strdup(p);
     } else {
         capture_opts->default_options.auth_type = CAPTURE_AUTH_PWD;
         capture_opts->default_options.auth_username = g_strdup(arg);
@@ -571,9 +563,7 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
             interface_opts.console_display_name = g_strdup(if_info->name);
         }
         interface_opts.if_type = if_info->type;
-#ifdef HAVE_EXTCAP
         interface_opts.extcap = g_strdup(if_info->extcap);
-#endif
         free_interface_list(if_list);
     } else if (capture_opts->capture_child) {
         /* In Wireshark capture child mode, thus proper device name is supplied. */
@@ -581,9 +571,7 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
         interface_opts.name = g_strdup(optarg_str_p);
         interface_opts.console_display_name = g_strdup(optarg_str_p);
         interface_opts.if_type = capture_opts->default_options.if_type;
-#ifdef HAVE_EXTCAP
         interface_opts.extcap = g_strdup(capture_opts->default_options.extcap);
-#endif
     } else {
         /*
          * Retrieve the interface list so that we can search for the
@@ -622,9 +610,7 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
                         interface_opts.console_display_name = g_strdup(if_info->name);
                     }
                     interface_opts.if_type = if_info->type;
-#ifdef HAVE_EXTCAP
                     interface_opts.extcap = g_strdup(if_info->extcap);
-#endif
                     matched = TRUE;
                     break;
                 }
@@ -636,9 +622,7 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
                     interface_opts.name = g_strdup(if_info->name);
                     interface_opts.console_display_name = g_strdup(if_info->friendly_name);
                     interface_opts.if_type = if_info->type;
-#ifdef HAVE_EXTCAP
                     interface_opts.extcap = g_strdup(if_info->extcap);
-#endif
                     matched = TRUE;
                     break;
                 }
@@ -660,9 +644,7 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
                         interface_opts.name = g_strdup(if_info->name);
                         interface_opts.console_display_name = g_strdup(if_info->friendly_name);
                         interface_opts.if_type = if_info->type;
-#ifdef HAVE_EXTCAP
                         interface_opts.extcap = g_strdup(if_info->extcap);
-#endif
                         matched = TRUE;
                         break;
                     }
@@ -679,18 +661,14 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
                 interface_opts.name = g_strdup(optarg_str_p);
                 interface_opts.console_display_name = g_strdup(optarg_str_p);
                 interface_opts.if_type = capture_opts->default_options.if_type;
-#ifdef HAVE_EXTCAP
                 interface_opts.extcap = g_strdup(capture_opts->default_options.extcap);
-#endif
             }
             free_interface_list(if_list);
         } else {
             interface_opts.name = g_strdup(optarg_str_p);
             interface_opts.console_display_name = g_strdup(optarg_str_p);
             interface_opts.if_type = capture_opts->default_options.if_type;
-#ifdef HAVE_EXTCAP
             interface_opts.extcap = g_strdup(capture_opts->default_options.extcap);
-#endif
         }
     }
 
@@ -704,11 +682,10 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
     interface_opts.has_snaplen = capture_opts->default_options.has_snaplen;
     interface_opts.linktype = capture_opts->default_options.linktype;
     interface_opts.promisc_mode = capture_opts->default_options.promisc_mode;
-#ifdef HAVE_EXTCAP
     interface_opts.extcap_fifo = g_strdup(capture_opts->default_options.extcap_fifo);
     interface_opts.extcap_args = NULL;
-    interface_opts.extcap_pid = INVALID_EXTCAP_PID;
-    interface_opts.extcap_userdata = NULL;
+    interface_opts.extcap_pid = WS_INVALID_PID;
+    interface_opts.extcap_pipedata = NULL;
 #ifdef _WIN32
     interface_opts.extcap_pipe_h = INVALID_HANDLE_VALUE;
     interface_opts.extcap_control_in_h = INVALID_HANDLE_VALUE;
@@ -716,7 +693,6 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
 #endif
     interface_opts.extcap_control_in = g_strdup(capture_opts->default_options.extcap_control_in);
     interface_opts.extcap_control_out = g_strdup(capture_opts->default_options.extcap_control_out);
-#endif
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
     interface_opts.buffer_size = capture_opts->default_options.buffer_size;
 #endif
@@ -736,6 +712,7 @@ capture_opts_add_iface_opt(capture_options *capture_opts, const char *optarg_str
     interface_opts.sampling_method = capture_opts->default_options.sampling_method;
     interface_opts.sampling_param  = capture_opts->default_options.sampling_param;
 #endif
+    interface_opts.timestamp_type  = capture_opts->default_options.timestamp_type;
 
     g_array_append_val(capture_opts->ifaces, interface_opts);
 
@@ -780,12 +757,10 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
     case 'B':        /* Buffer size */
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.buffer_size = get_positive_int(optarg_str_p, "buffer size");
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->buffer_size = get_positive_int(optarg_str_p, "buffer size");
         } else {
             capture_opts->default_options.buffer_size = get_positive_int(optarg_str_p, "buffer size");
         }
@@ -804,6 +779,18 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
     case 'H':        /* Hide capture info dialog box */
         capture_opts->show_info = FALSE;
         break;
+    case LONGOPT_SET_TSTAMP_TYPE:        /* Set capture time stamp type */
+        if (capture_opts->ifaces->len > 0) {
+            interface_options *interface_opts;
+
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            g_free(interface_opts->timestamp_type);
+            interface_opts->timestamp_type = g_strdup(optarg_str_p);
+        } else {
+            g_free(capture_opts->default_options.timestamp_type);
+            capture_opts->default_options.timestamp_type = g_strdup(optarg_str_p);
+        }
+        break;
     case 'i':        /* Use interface x */
         status = capture_opts_add_iface_opt(capture_opts, optarg_str_p);
         if (status != 0) {
@@ -813,12 +800,10 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
 #ifdef HAVE_PCAP_CREATE
     case 'I':        /* Capture in monitor mode */
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.monitor_mode = TRUE;
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->monitor_mode = TRUE;
         } else {
             capture_opts->default_options.monitor_mode = TRUE;
         }
@@ -841,12 +826,10 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
         break;
     case 'p':        /* Don't capture in promiscuous mode */
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.promisc_mode = FALSE;
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->promisc_mode = FALSE;
         } else {
             capture_opts->default_options.promisc_mode = FALSE;
         }
@@ -857,12 +840,10 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
 #ifdef HAVE_PCAP_REMOTE
     case 'r':
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.nocap_rpcap = FALSE;
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->nocap_rpcap = FALSE;
         } else {
             capture_opts->default_options.nocap_rpcap = FALSE;
         }
@@ -877,13 +858,11 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
         if (snaplen == 0)
             snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.has_snaplen = TRUE;
-            interface_opts.snaplen = snaplen;
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->has_snaplen = TRUE;
+            interface_opts->snaplen = snaplen;
         } else {
             capture_opts->default_options.snaplen = snaplen;
             capture_opts->default_options.has_snaplen = TRUE;
@@ -895,12 +874,10 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
 #ifdef HAVE_PCAP_REMOTE
     case 'u':
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.datatx_udp = TRUE;
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->datatx_udp = TRUE;
         } else {
             capture_opts->default_options.datatx_udp = TRUE;
         }
@@ -914,17 +891,15 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
         return status;
     case 'y':        /* Set the pcap data link type */
         if (capture_opts->ifaces->len > 0) {
-            interface_options interface_opts;
+            interface_options *interface_opts;
 
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, capture_opts->ifaces->len - 1);
-            interface_opts.linktype = linktype_name_to_val(optarg_str_p);
-            if (interface_opts.linktype == -1) {
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, capture_opts->ifaces->len - 1);
+            interface_opts->linktype = linktype_name_to_val(optarg_str_p);
+            if (interface_opts->linktype == -1) {
                 cmdarg_err("The specified data link type \"%s\" isn't valid",
                            optarg_str_p);
                 return 1;
             }
-            g_array_append_val(capture_opts->ifaces, interface_opts);
         } else {
             capture_opts->default_options.linktype = linktype_name_to_val(optarg_str_p);
             if (capture_opts->default_options.linktype == -1) {
@@ -943,26 +918,40 @@ capture_opts_add_opt(capture_options *capture_opts, int opt, const char *optarg_
 }
 
 void
-capture_opts_print_if_capabilities(if_capabilities_t *caps, char *name,
-                                   gboolean monitor_mode)
+capture_opts_print_if_capabilities(if_capabilities_t *caps, char *name, int queries)
 {
-    GList *lt_entry;
-    data_link_info_t *data_link_info;
+    GList *lt_entry, *ts_entry;
 
-    if (caps->can_set_rfmon)
-        printf("Data link types of interface %s when %sin monitor mode (use option -y to set):\n",
-               name, monitor_mode ? "" : "not ");
-    else
-        printf("Data link types of interface %s (use option -y to set):\n", name);
-    for (lt_entry = caps->data_link_types; lt_entry != NULL;
-         lt_entry = g_list_next(lt_entry)) {
-        data_link_info = (data_link_info_t *)lt_entry->data;
-        printf("  %s", data_link_info->name);
-        if (data_link_info->description != NULL)
-            printf(" (%s)", data_link_info->description);
+    if (queries & CAPS_QUERY_LINK_TYPES) {
+        if (caps->can_set_rfmon)
+            printf("Data link types of interface %s when %sin monitor mode (use option -y to set):\n",
+                   name, queries & CAPS_MONITOR_MODE ? "" : "not ");
         else
-            printf(" (not supported)");
-        printf("\n");
+            printf("Data link types of interface %s (use option -y to set):\n", name);
+        for (lt_entry = caps->data_link_types; lt_entry != NULL;
+             lt_entry = g_list_next(lt_entry)) {
+            data_link_info_t *data_link_info = (data_link_info_t *)lt_entry->data;
+            printf("  %s", data_link_info->name);
+            if (data_link_info->description != NULL)
+                printf(" (%s)", data_link_info->description);
+            else
+                printf(" (not supported)");
+            printf("\n");
+        }
+    }
+
+    if (queries & CAPS_QUERY_TIMESTAMP_TYPES) {
+        printf("Timestamp types of the interface (use option --time-stamp-type to set):\n");
+        for (ts_entry = caps->timestamp_types; ts_entry != NULL;
+             ts_entry = g_list_next(ts_entry)) {
+            timestamp_info_t *timestamp = (timestamp_info_t *)ts_entry->data;
+            printf("  %s", timestamp->name);
+            if (timestamp->description != NULL)
+                printf(" (%s)", timestamp->description);
+            else
+                printf(" (none)");
+            printf("\n");
+        }
     }
 }
 
@@ -997,17 +986,15 @@ void
 capture_opts_trim_snaplen(capture_options *capture_opts, int snaplen_min)
 {
     guint i;
-    interface_options interface_opts;
+    interface_options *interface_opts;
 
     if (capture_opts->ifaces->len > 0) {
         for (i = 0; i < capture_opts->ifaces->len; i++) {
-            interface_opts = g_array_index(capture_opts->ifaces, interface_options, 0);
-            capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, 0);
-            if (interface_opts.snaplen < 1)
-                interface_opts.snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
-            else if (interface_opts.snaplen < snaplen_min)
-                interface_opts.snaplen = snaplen_min;
-            g_array_append_val(capture_opts->ifaces, interface_opts);
+            interface_opts = &g_array_index(capture_opts->ifaces, interface_options, 0);
+            if (interface_opts->snaplen < 1)
+                interface_opts->snaplen = WTAP_MAX_PACKET_SIZE_STANDARD;
+            else if (interface_opts->snaplen < snaplen_min)
+                interface_opts->snaplen = snaplen_min;
         }
     } else {
         if (capture_opts->default_options.snaplen < 1)
@@ -1125,33 +1112,31 @@ capture_opts_output_to_pipe(const char *save_file, gboolean *is_pipe)
 void
 capture_opts_del_iface(capture_options *capture_opts, guint if_index)
 {
-    interface_options interface_opts;
+    interface_options *interface_opts;
 
-    interface_opts = g_array_index(capture_opts->ifaces, interface_options, if_index);
+    interface_opts = &g_array_index(capture_opts->ifaces, interface_options, if_index);
     /* XXX - check if found? */
 
-    g_free(interface_opts.name);
-    g_free(interface_opts.descr);
-    if (interface_opts.console_display_name != NULL)
-        g_free(interface_opts.console_display_name);
-    g_free(interface_opts.cfilter);
-#ifdef HAVE_EXTCAP
-    g_free(interface_opts.extcap);
-    g_free(interface_opts.extcap_fifo);
-    if (interface_opts.extcap_args)
-        g_hash_table_unref(interface_opts.extcap_args);
-    if (interface_opts.extcap_pid != INVALID_EXTCAP_PID)
-        g_spawn_close_pid(interface_opts.extcap_pid);
-    g_free(interface_opts.extcap_userdata);
-    g_free(interface_opts.extcap_control_in);
-    g_free(interface_opts.extcap_control_out);
-#endif
+    g_free(interface_opts->name);
+    g_free(interface_opts->descr);
+    g_free(interface_opts->console_display_name);
+    g_free(interface_opts->cfilter);
+    g_free(interface_opts->timestamp_type);
+    g_free(interface_opts->extcap);
+    g_free(interface_opts->extcap_fifo);
+    if (interface_opts->extcap_args)
+        g_hash_table_unref(interface_opts->extcap_args);
+    if (interface_opts->extcap_pid != WS_INVALID_PID)
+        g_spawn_close_pid(interface_opts->extcap_pid);
+    g_free(interface_opts->extcap_pipedata);
+    g_free(interface_opts->extcap_control_in);
+    g_free(interface_opts->extcap_control_out);
 #ifdef HAVE_PCAP_REMOTE
-    if (interface_opts.src_type == CAPTURE_IFREMOTE) {
-        g_free(interface_opts.remote_host);
-        g_free(interface_opts.remote_port);
-        g_free(interface_opts.auth_username);
-        g_free(interface_opts.auth_password);
+    if (interface_opts->src_type == CAPTURE_IFREMOTE) {
+        g_free(interface_opts->remote_host);
+        g_free(interface_opts->remote_port);
+        g_free(interface_opts->auth_username);
+        g_free(interface_opts->auth_password);
     }
 #endif
     capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, if_index);
@@ -1167,7 +1152,7 @@ void
 collect_ifaces(capture_options *capture_opts)
 {
     guint i;
-    interface_t device;
+    interface_t *device;
     interface_options interface_opts;
 
     /* Empty out the existing list of interfaces. */
@@ -1176,26 +1161,26 @@ collect_ifaces(capture_options *capture_opts)
 
     /* Now fill the list up again. */
     for (i = 0; i < capture_opts->all_ifaces->len; i++) {
-        device = g_array_index(capture_opts->all_ifaces, interface_t, i);
-        if (!device.hidden && device.selected) {
-            interface_opts.name = g_strdup(device.name);
-            interface_opts.descr = g_strdup(device.display_name);
-            interface_opts.console_display_name = g_strdup(device.name);
-            interface_opts.linktype = device.active_dlt;
-            interface_opts.cfilter = g_strdup(device.cfilter);
-            interface_opts.snaplen = device.snaplen;
-            interface_opts.has_snaplen = device.has_snaplen;
-            interface_opts.promisc_mode = device.pmode;
-            interface_opts.if_type = device.if_info.type;
-#ifdef HAVE_EXTCAP
-            interface_opts.extcap = g_strdup(device.if_info.extcap);
+        device = &g_array_index(capture_opts->all_ifaces, interface_t, i);
+        if (!device->hidden && device->selected) {
+            interface_opts.name = g_strdup(device->name);
+            interface_opts.descr = g_strdup(device->display_name);
+            interface_opts.console_display_name = g_strdup(device->name);
+            interface_opts.linktype = device->active_dlt;
+            interface_opts.cfilter = g_strdup(device->cfilter);
+            interface_opts.timestamp_type = g_strdup(device->timestamp_type);
+            interface_opts.snaplen = device->snaplen;
+            interface_opts.has_snaplen = device->has_snaplen;
+            interface_opts.promisc_mode = device->pmode;
+            interface_opts.if_type = device->if_info.type;
+            interface_opts.extcap = g_strdup(device->if_info.extcap);
             interface_opts.extcap_fifo = NULL;
-            interface_opts.extcap_userdata = NULL;
-            interface_opts.extcap_args = device.external_cap_args_settings;
-            interface_opts.extcap_pid = INVALID_EXTCAP_PID;
+            interface_opts.extcap_pipedata = NULL;
+            interface_opts.extcap_args = device->external_cap_args_settings;
+            interface_opts.extcap_pid = WS_INVALID_PID;
             if (interface_opts.extcap_args)
                 g_hash_table_ref(interface_opts.extcap_args);
-            interface_opts.extcap_userdata = NULL;
+            interface_opts.extcap_pipedata = NULL;
 #ifdef _WIN32
             interface_opts.extcap_pipe_h = INVALID_HANDLE_VALUE;
             interface_opts.extcap_control_in_h = INVALID_HANDLE_VALUE;
@@ -1203,27 +1188,26 @@ collect_ifaces(capture_options *capture_opts)
 #endif
             interface_opts.extcap_control_in = NULL;
             interface_opts.extcap_control_out = NULL;
-#endif
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
-            interface_opts.buffer_size =  device.buffer;
+            interface_opts.buffer_size =  device->buffer;
 #endif
 #ifdef HAVE_PCAP_CREATE
-            interface_opts.monitor_mode = device.monitor_mode_enabled;
+            interface_opts.monitor_mode = device->monitor_mode_enabled;
 #endif
 #ifdef HAVE_PCAP_REMOTE
             interface_opts.src_type = CAPTURE_IFREMOTE;
-            interface_opts.remote_host = g_strdup(device.remote_opts.remote_host_opts.remote_host);
-            interface_opts.remote_port = g_strdup(device.remote_opts.remote_host_opts.remote_port);
-            interface_opts.auth_type = device.remote_opts.remote_host_opts.auth_type;
-            interface_opts.auth_username = g_strdup(device.remote_opts.remote_host_opts.auth_username);
-            interface_opts.auth_password = g_strdup(device.remote_opts.remote_host_opts.auth_password);
-            interface_opts.datatx_udp = device.remote_opts.remote_host_opts.datatx_udp;
-            interface_opts.nocap_rpcap = device.remote_opts.remote_host_opts.nocap_rpcap;
-            interface_opts.nocap_local = device.remote_opts.remote_host_opts.nocap_local;
+            interface_opts.remote_host = g_strdup(device->remote_opts.remote_host_opts.remote_host);
+            interface_opts.remote_port = g_strdup(device->remote_opts.remote_host_opts.remote_port);
+            interface_opts.auth_type = device->remote_opts.remote_host_opts.auth_type;
+            interface_opts.auth_username = g_strdup(device->remote_opts.remote_host_opts.auth_username);
+            interface_opts.auth_password = g_strdup(device->remote_opts.remote_host_opts.auth_password);
+            interface_opts.datatx_udp = device->remote_opts.remote_host_opts.datatx_udp;
+            interface_opts.nocap_rpcap = device->remote_opts.remote_host_opts.nocap_rpcap;
+            interface_opts.nocap_local = device->remote_opts.remote_host_opts.nocap_local;
 #endif
 #ifdef HAVE_PCAP_SETSAMPLING
-            interface_opts.sampling_method = device.remote_opts.sampling_method;
-            interface_opts.sampling_param  = device.remote_opts.sampling_param;
+            interface_opts.sampling_method = device->remote_opts.sampling_method;
+            interface_opts.sampling_param  = device->remote_opts.sampling_param;
 #endif
             g_array_append_val(capture_opts->ifaces, interface_opts);
         } else {
@@ -1256,6 +1240,7 @@ capture_opts_free_interface_t(interface_t *device)
         g_free(device->friendly_name);
         g_free(device->addresses);
         g_free(device->cfilter);
+        g_free(device->timestamp_type);
         g_list_foreach(device->links,
                        capture_opts_free_interface_t_links, NULL);
         g_list_free(device->links);
@@ -1271,9 +1256,7 @@ capture_opts_free_interface_t(interface_t *device)
         g_slist_foreach(device->if_info.addrs,
                         capture_opts_free_interface_t_addrs, NULL);
         g_slist_free(device->if_info.addrs);
-#ifdef HAVE_EXTCAP
         g_free(device->if_info.extcap);
-#endif
     }
 }
 

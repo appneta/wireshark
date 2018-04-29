@@ -10,19 +10,7 @@
  *
  * Copied from packet-cops.c
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * REF: 3GPP TS 48.058 version 6.1.0 Release 6
  * http://www.3gpp.org/ftp/Specs/html-info/48058.htm
@@ -161,6 +149,13 @@ static int hf_rsl_paging_group_cs              = -1;
 static int hf_rsl_paging_group_empty_package   = -1;
 static int hf_rsl_paging_group_ps_spare        = -1;
 
+/* Physical Context dissection */
+static int hf_rsl_phy_ctx_ie_id                = -1;
+static int hf_rsl_phy_ctx_ext_rand_access      = -1;
+static int hf_rsl_phy_ctx_ab_rx_lvl            = -1;
+static int hf_rsl_phy_ctx_ab_err_bits          = -1;
+static int hf_rsl_phy_ctx_rx_lvl_ext           = -1;
+
 /* Initialize the subtree pointers */
 static int ett_rsl = -1;
 static int ett_ie_link_id = -1;
@@ -232,6 +227,12 @@ static int ett_ie_paging_package_info          = -1;
 static int ett_ie_paging_package_ch_a_emlpp    = -1;
 static int ett_ie_paging_group_paras           = -1;
 
+/* Physical Context dissection */
+static int ett_phy_ctx_ie                      = -1;
+static int ett_phy_ctx_ie_ext_rand_access      = -1;
+static int ett_phy_ctx_ab_rx_lvl_err_bits      = -1;
+static int ett_phy_ctx_rxlvl_ext               = -1;
+
 /* Generated from convert_proto_tree_add_text.pl */
 static expert_field ei_rsl_speech_or_data_indicator = EI_INIT;
 static expert_field ei_rsl_facility_information_element_3gpp_ts_44071 = EI_INIT;
@@ -247,6 +248,9 @@ static dissector_handle_t gsm_a_sacch_handle;
 
 /* Decode things as nanoBTS traces */
 static gboolean global_rsl_use_nano_bts = FALSE;
+
+/* Decode things in Physical Context Information field. */
+static gboolean global_rsl_dissect_phy_ctx_inf = TRUE;
 
 /* Forward declarations */
 static int dissct_rsl_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset);
@@ -296,6 +300,7 @@ static const value_string rsl_msg_disc_vals[] = {
 #define RSL_MSG_REL_CONF                 8   /* 0x08 */
 #define RSL_MSG_REL_IND                  9   /* 0x09 */
 #define RSL_MSG_UNIT_DATA_REQ           10  /* 0x0a */
+#define RSL_MSG_UNIT_DATA_IND           11  /* 0x0b */
 /* Common Channel Management messages */
 #define RSL_MSG_BCCH_INFO               17  /* 0x11 */
 #define RSL_MSG_CCCH_LOAD_IND           18  /* 0x12 */
@@ -409,6 +414,7 @@ static const value_string rsl_msg_type_vals[] = {
 /* 0x08 */ {  RSL_MSG_REL_CONF,          "RELease CONFirm" },                            /* 8.3.8 */
 /* 0x09 */ {  RSL_MSG_REL_IND,           "RELease INDication" },                         /* 8.3.9 */
 /* 0x0a */ {  RSL_MSG_UNIT_DATA_REQ,     "UNIT DATA REQuest" },                          /* 8.3.10 */
+/* 0x0b */ {  RSL_MSG_UNIT_DATA_IND,     "UNIT DATA INDication" },                       /* 8.3.11 */
     /* 0 0 0 1 - - - - Common Channel Management/TRX Management messages: */
 /* 0x11 */ {  RSL_MSG_BCCH_INFO,         "BCCH INFOrmation" },                           /* 8.5.1 */
 /* 0x12 */ {  RSL_MSG_CCCH_LOAD_IND,     "CCCH LOAD INDication" },                       /* 8.5.2 */
@@ -690,6 +696,19 @@ static const value_string rsl_ch_no_Cbits_vals[] = {
     { 0,            NULL }
 };
 static value_string_ext rsl_ch_no_Cbits_vals_ext = VALUE_STRING_EXT_INIT(rsl_ch_no_Cbits_vals);
+
+#define RSL_PHY_CTX_IE_EXT_RAND_ACCES 0x42
+#define RSL_PHY_CTX_IE_AB_RX_LEVEL_ERR_BITS 0x43
+#define RSL_PHY_CTX_IE_RX_LEVEL_EXT 0x45
+
+/* Physical Context IE vals*/
+static const value_string rsl_phy_con_ie_vals[] = {
+    {  RSL_PHY_CTX_IE_EXT_RAND_ACCES,           "Ext RandAccess" },
+    {  RSL_PHY_CTX_IE_AB_RX_LEVEL_ERR_BITS,     "AB RxLevel&ErrBits" },
+    {  RSL_PHY_CTX_IE_RX_LEVEL_EXT,             "RxLevel Ext" },
+    { 0,            NULL }
+};
+static value_string_ext rsl_phy_con_ie_vals_ext = VALUE_STRING_EXT_INIT(rsl_phy_con_ie_vals);
 
 /* From openbsc/include/openbsc/tlv.h */
 enum tlv_type {
@@ -1336,6 +1355,8 @@ dissect_rsl_ie_L3_inf(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int o
        /* L3 PDUs carried on CCCH have L2 PSEUDO LENGTH octet or are RR Short PD format */
        proto_tree_add_item(ie_tree, hf_rsl_llsdu_ccch, tvb, offset, length, ENC_NA);
        next_tvb = tvb_new_subset_length(tvb, offset, length);
+       /* The gsm_a_ccch dissector is the only one handling messages with L2 pseudo-length,
+        * so we pass it also downlink SACCH (SI5/SI6 and related) */
        call_dissector(gsm_a_ccch_handle, next_tvb, pinfo, top_tree);
     }
     else if (type == L3_INF_SACCH)
@@ -1488,6 +1509,129 @@ dissect_rsl_ie_paging_load(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tr
     return offset;
 
 }
+
+/* Physical Context dissection *
+ * Rx Level Ext *
+ *
+ */
+static int
+dissect_rsl_phy_ctx_rx_lvl_ext(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset)
+{
+    proto_tree *rxlvl_ext_tree;
+    proto_item *ti;
+    gint length;
+
+    rxlvl_ext_tree = proto_tree_add_subtree(tree, tvb, offset, 0, ett_phy_ctx_rxlvl_ext, &ti, "RxLevel Rxt (called in Pre-processed Measurements)");
+
+    /* Phy Ctx Element Identifier */
+    proto_tree_add_item(rxlvl_ext_tree, hf_rsl_phy_ctx_ie_id, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+    /* Length */
+    length = tvb_get_guint8(tvb, offset);
+    proto_item_set_len(ti, length + 2);
+    proto_tree_add_item(rxlvl_ext_tree, hf_rsl_ie_length, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+    /* Rx Level Ext */
+    proto_tree_add_item(rxlvl_ext_tree, hf_rsl_phy_ctx_rx_lvl_ext, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+
+    return offset;
+}
+/* Physical Context dissection*
+ * AB RxLevel&ErrBits *
+ *
+ */
+static int
+dissect_rsl_phy_ctx_ab_rx_lvl_err_bits(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset)
+{
+    proto_tree *ab_tree;
+    proto_tree *ti;
+    gint length;
+
+    ab_tree = proto_tree_add_subtree(tree, tvb, offset, 0, ett_phy_ctx_ab_rx_lvl_err_bits, &ti, "AB RxLevel&ErrBits IE");
+
+    /* Phy Ctx Element Identifier */
+    proto_tree_add_item(ab_tree, hf_rsl_phy_ctx_ie_id, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+    /* Length */
+    length = tvb_get_guint8(tvb, offset);
+    proto_item_set_len(ti, length + 2);
+    proto_tree_add_item(ab_tree, hf_rsl_ie_length, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+    /* AB Rx Level */
+    proto_tree_add_item(ab_tree, hf_rsl_phy_ctx_ab_rx_lvl, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+    /* Traning Err Bits */
+    proto_tree_add_item(ab_tree, hf_rsl_phy_ctx_ab_err_bits, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+    return offset;
+}
+/* Physcial Context dissection*
+ * Ext RandAccess *
+ *
+ */
+static int
+dissect_rsl_phy_ctx_ext_rand_access(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset)
+{
+    proto_tree *ext_rand_access_tree;
+    proto_item *ti;
+    guint length;
+
+    ext_rand_access_tree = proto_tree_add_subtree(tree, tvb, offset, 0, ett_phy_ctx_ie_ext_rand_access, &ti, "Ext RandAccess IE");
+    /* Phy Ctx Element identifier */
+    proto_tree_add_item(ext_rand_access_tree, hf_rsl_phy_ctx_ie_id, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+    /* Length */
+    length = tvb_get_guint8(tvb, offset);
+    proto_item_set_len(ti, length+2);
+    proto_tree_add_item(ext_rand_access_tree, hf_rsl_ie_length, tvb, offset, 1, ENC_BIG_ENDIAN);
+    offset++;
+
+    proto_tree_add_item(ext_rand_access_tree, hf_rsl_phy_ctx_ext_rand_access, tvb, offset, length, ENC_NA);
+    offset = offset + length;
+    return offset;
+}
+/* Physical Context IE dissection
+ *
+ */
+static int
+dissect_phy_ctx_ie(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint8 length)
+{
+    proto_tree *phy_ctx_tree;
+    guint8 phy_ctx_ie_type;
+
+    phy_ctx_tree = proto_tree_add_subtree(tree, tvb, offset, length, ett_phy_ctx_ie, NULL, "Physical Context dissection");
+    phy_ctx_ie_type = tvb_get_guint8(tvb, offset);
+
+    switch (phy_ctx_ie_type) {
+        /* Ext RandAccess */
+        case RSL_PHY_CTX_IE_EXT_RAND_ACCES:
+            /* Ext RandAccess */
+            offset = dissect_rsl_phy_ctx_ext_rand_access(tvb, pinfo, phy_ctx_tree, offset);
+            /* AB Rx Level */
+            offset = dissect_rsl_phy_ctx_ab_rx_lvl_err_bits(tvb, pinfo, phy_ctx_tree, offset);
+            /* Rx Level Ext */
+            offset = dissect_rsl_phy_ctx_rx_lvl_ext(tvb, pinfo, phy_ctx_tree, offset);
+            break;
+        /* AB RxLevel&ErrBits */
+        case RSL_PHY_CTX_IE_AB_RX_LEVEL_ERR_BITS:
+            /* AB Rx Level */
+            offset = dissect_rsl_phy_ctx_ab_rx_lvl_err_bits(tvb, pinfo, phy_ctx_tree, offset);
+            /* Rx Level Ext */
+            offset = dissect_rsl_phy_ctx_rx_lvl_ext(tvb, pinfo, phy_ctx_tree, offset);
+            break;
+        /* RXLevelExt */
+        case RSL_PHY_CTX_IE_RX_LEVEL_EXT:
+            /* Rx Level Ext */
+            offset = dissect_rsl_phy_ctx_rx_lvl_ext(tvb, pinfo, phy_ctx_tree, offset);
+            break;
+        default:
+            break;
+    }
+
+    return offset;
+}
+
 /*
  * 9.3.16 Physical Context TLV
  */
@@ -1522,8 +1666,12 @@ dissect_rsl_ie_phy_ctx(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, 
      *  This information should not be analysed by BSC, but merely
      *  forwarded from one TRX/channel to another.
      */
-    proto_tree_add_item(ie_tree, hf_rsl_phy_ctx, tvb, offset, length, ENC_NA);
-    offset = offset + length;
+    if(global_rsl_dissect_phy_ctx_inf){
+        offset = dissect_phy_ctx_ie(tvb, pinfo, ie_tree, offset, length);
+    }else{
+        proto_tree_add_item(ie_tree, hf_rsl_phy_ctx, tvb, offset, length, ENC_NA);
+        offset = offset + length;
+    }
 
     return offset;
 }
@@ -3165,8 +3313,6 @@ dissect_rsl_paging_package(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tr
     guint8     i, length, paging_type;
     gboolean increse_offset = TRUE;
 
-    length = 0;
-    paging_type = 0;
     for(i = 1; i <= package_number; i++){
        /* Calculating whole length of Paging Package Info */
         length = (tvb_get_guint8(tvb, offset+2) + 3);
@@ -3488,6 +3634,15 @@ dissct_rsl_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset)
         if (tvb_reported_length_remaining(tvb, offset) > 0)
             offset = dissect_rsl_ie_L3_inf(tvb, pinfo, tree, offset, FALSE, L3_INF_OTHER);
         break;
+    /* 8.3.11 UNIT DATA INDICATION */
+    case RSL_MSG_UNIT_DATA_IND:
+        /*  Channel number          9.3.1   M TV 2               */
+        offset = dissect_rsl_ie_ch_no(tvb, pinfo, tree, offset, TRUE);
+        /*  Link Identifier         9.3.2   M TV 2               */
+        offset = dissect_rsl_ie_link_id(tvb, pinfo, tree, offset, TRUE);
+        /*  L3 Information          9.3.11  M TLV 3-25           */
+        offset = dissect_rsl_ie_L3_inf(tvb, pinfo, tree, offset, TRUE, L3_INF_OTHER);
+        break;
 /* Common Channel Management/TRX Management messages */
     /* 8.5.1 BCCH INFORMATION 17*/
     case RSL_MSG_BCCH_INFO:
@@ -3576,7 +3731,7 @@ dissct_rsl_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset)
         /* L3 Info (SYS INFO)       9.3.11 O 1) TLV 22 */
         if (tvb_reported_length_remaining(tvb, offset) > 0)
            offset = dissect_rsl_ie_L3_inf(tvb, pinfo, tree, offset, FALSE,
-                                          (sys_info_type == 0x48) ? L3_INF_SACCH : L3_INF_OTHER);
+                                          (sys_info_type == 0x48) ? L3_INF_SACCH : L3_INF_CCCH);
         /* Starting Time            9.3.23 O 2) TV 3 */
         if (tvb_reported_length_remaining(tvb, offset) > 0)
             offset = dissect_rsl_ie_starting_time(tvb, pinfo, tree, offset, FALSE);
@@ -3869,7 +4024,7 @@ dissct_rsl_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset)
         /* L3 Info                  9.3.11  O 1) TLV 22 */
         if (tvb_reported_length_remaining(tvb, offset) > 0)
             offset = dissect_rsl_ie_L3_inf(tvb, pinfo, tree, offset, FALSE,
-                                           (sys_info_type == 0x48) ? L3_INF_SACCH : L3_INF_OTHER);
+                                           (sys_info_type == 0x48) ? L3_INF_SACCH : L3_INF_CCCH);
         /* Starting Time            9.3.23  O 2) TV 3 */
         if (tvb_reported_length_remaining(tvb, offset) > 0)
             offset = dissect_rsl_ie_starting_time(tvb, pinfo, tree, offset, FALSE);
@@ -4192,22 +4347,22 @@ void proto_register_rsl(void)
         },
         { &hf_rsl_rxlev_full_up,
           { "RXLEV.FULL.up",           "gsm_abis_rsl.rxlev_full_up",
-            FT_UINT8, BASE_DEC, NULL, 0x3f,
+            FT_UINT8, BASE_DEC|BASE_EXT_STRING, &gsm_a_rr_rxlev_vals_ext, 0x3f,
             NULL, HFILL }
         },
         { &hf_rsl_rxlev_sub_up,
           { "RXLEV.SUB.up",           "gsm_abis_rsl.rxlev_sub_up",
-            FT_UINT8, BASE_DEC, NULL, 0x3f,
+            FT_UINT8, BASE_DEC|BASE_EXT_STRING, &gsm_a_rr_rxlev_vals_ext, 0x3f,
             NULL, HFILL }
         },
         { &hf_rsl_rxqual_full_up,
           { "RXQUAL.FULL.up",           "gsm_abis_rsl.rxqual_full_up",
-            FT_UINT8, BASE_DEC, NULL, 0x38,
+            FT_UINT8, BASE_DEC, VALS(gsm_a_rr_rxqual_vals), 0x38,
             NULL, HFILL }
         },
         { &hf_rsl_rxqual_sub_up,
           { "RXQUAL.SUB.up",           "gsm_abis_rsl.rxqual_sub_up",
-            FT_UINT8, BASE_DEC, NULL, 0x07,
+            FT_UINT8, BASE_DEC, VALS(gsm_a_rr_rxqual_vals), 0x07,
             NULL, HFILL }
         },
         { &hf_rsl_acc_delay,
@@ -4547,6 +4702,32 @@ void proto_register_rsl(void)
            FT_UINT8, BASE_DEC, NULL, 0x7f,
            NULL, HFILL }
         },
+        /* Physical Context */
+        { &hf_rsl_phy_ctx_ie_id,
+          { "Element identifier", "gsm_abis_rsl.phy_ctx_ie_id",
+            FT_UINT8, BASE_HEX_DEC|BASE_EXT_STRING, &rsl_phy_con_ie_vals_ext, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_rsl_phy_ctx_ext_rand_access,
+          { "RandRef11bit", "gsm_abis_rsl.phy_ctx_ext_rand_access",
+            FT_BYTES, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_rsl_phy_ctx_ab_rx_lvl,
+          { "AB Rx Level", "gsm_abis_rsl.phy_ctx_ab_rx_lvl",
+            FT_UINT8, BASE_HEX_DEC, NULL, 0xff,
+            NULL, HFILL }
+        },
+        { &hf_rsl_phy_ctx_ab_err_bits,
+          { "Training Err Bits", "gsm_abis_rsl.phy_ctx_ab_err_bits",
+            FT_UINT8, BASE_HEX, NULL, 0xff,
+            NULL, HFILL }
+        },
+        { &hf_rsl_phy_ctx_rx_lvl_ext,
+          { "Rx Level Ext", "gsm_abis_rsl.phy_ctx_rx_lvl_ext",
+            FT_UINT8, BASE_HEX_DEC, NULL, 0xff,
+            NULL, HFILL }
+        },
       /* Generated from convert_proto_tree_add_text.pl */
       { &hf_rsl_channel_description_tag, { "Channel Description Tag", "gsm_abis_rsl.channel_description_tag", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
       { &hf_rsl_mobile_allocation_tag, { "Mobile Allocation Tag+Length(0)", "gsm_abis_rsl.mobile_allocation_tag", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
@@ -4629,7 +4810,11 @@ void proto_register_rsl(void)
         &ett_ie_paging_package_number,
         &ett_ie_paging_package_info,
         &ett_ie_paging_package_ch_a_emlpp,
-        &ett_ie_paging_group_paras
+        &ett_ie_paging_group_paras,
+        &ett_phy_ctx_ie,
+        &ett_phy_ctx_ie_ext_rand_access,
+        &ett_phy_ctx_ab_rx_lvl_err_bits,
+        &ett_phy_ctx_rxlvl_ext
     };
     static ei_register_info ei[] = {
       /* Generated from convert_proto_tree_add_text.pl */
@@ -4735,6 +4920,12 @@ void proto_register_rsl(void)
                                    "Use nanoBTS definitions",
                                    "Use ipaccess nanoBTS specific definitions for RSL",
                                    &global_rsl_use_nano_bts);
+    prefs_register_bool_preference(rsl_module, "dissect_phy_ctx_inf",
+                                   "Decode Physical Context Information field",
+                                   "The Physical Context Information field is not specified "
+                                   "This information should be not be analysed by BSC, but merely "
+                                   "forwarded from one TRX/channel to another.",
+                                   &global_rsl_dissect_phy_ctx_inf);
 }
 
 void

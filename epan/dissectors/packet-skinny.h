@@ -17,24 +17,12 @@
  *  - Wireshark - Network traffic analyzer,
  *    By Gerald Combs <gerald@wireshark.org>, Copyright 1998
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
  * Generated Automatically Using (from wireshark base directory):
- *   cog.py -D xmlfile=tools/SkinnyProtocolOptimized.xml -d -c -o epan/dissectors/packet-skinny.c epan/dissectors/packet-skinny.c.in
+ *   cog.py -D xmlfile=tools/SkinnyProtocolOptimized.xml -d -c -o epan/dissectors/packet-skinny.h epan/dissectors/packet-skinny.h.in
  */
 
 #include <epan/wmem/wmem.h>
@@ -74,7 +62,7 @@ typedef struct _skinny_info_t
   guint32                 maxProtocolVersion;
   gint32                  lineId;
   guint32                 callId;
-  guint32                 passThruId;
+  guint32                 passThroughPartyId;
   const gchar           * messageName;
   guint32                 callState;
   gboolean                hasCallInfo;

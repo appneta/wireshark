@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -27,8 +15,9 @@
 #include <epan/prefs.h>
 #include <epan/reassemble.h>
 #include <epan/expert.h>
-
 #include <epan/sminmpec.h>
+#include <epan/addr_resolv.h>
+
 #include "packet-ieee80211.h"
 
 void proto_register_capwap_control(void);
@@ -3576,7 +3565,7 @@ proto_register_capwap_control(void)
         },
         { &hf_capwap_control_header_msg_type_enterprise_nbr,
             { "Message Type (Enterprise Number)", "capwap.control.header.message_type.enterprise_number",
-              FT_UINT32, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0x0,
+              FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
               NULL, HFILL }
         },
         { &hf_capwap_control_header_msg_type_enterprise_specific,
@@ -3714,7 +3703,7 @@ proto_register_capwap_control(void)
 
         { &hf_capwap_msg_element_type_ac_information_vendor,
             { "AC Information Vendor", "capwap.control.message_element.ac_information.vendor",
-              FT_UINT32, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0x0,
+              FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
               NULL, HFILL }
         },
         { &hf_capwap_msg_element_type_ac_information_type,
@@ -3933,7 +3922,7 @@ proto_register_capwap_control(void)
         },
         { &hf_capwap_msg_element_type_vsp_vendor_identifier,
             { "Vendor Identifier", "capwap.control.message_element.vsp.vendor_identifier",
-              FT_UINT32, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0x0,
+              FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
               NULL, HFILL }
         },
         { &hf_capwap_msg_element_type_vsp_vendor_element_id,
@@ -3954,7 +3943,7 @@ proto_register_capwap_control(void)
         },
         { &hf_capwap_msg_element_type_wtp_board_data_vendor,
             { "WTP Board Data Vendor", "capwap.control.message_element.wtp_board_data.vendor",
-               FT_UINT32, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0x0,
+               FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
                NULL, HFILL }
         },
         { &hf_capwap_msg_element_type_wtp_board_data_type,
@@ -4042,7 +4031,7 @@ proto_register_capwap_control(void)
         },
         { &hf_capwap_msg_element_type_wtp_descriptor_vendor,
             { "WTP Descriptor Vendor", "capwap.control.message_element.wtp_descriptor.vendor",
-              FT_UINT32, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0x0,
+              FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
               NULL, HFILL }
         },
         { &hf_capwap_msg_element_type_wtp_descriptor_type,

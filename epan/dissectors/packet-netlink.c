@@ -4,19 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* http://www.tcpdump.org/linktypes/LINKTYPE_NETLINK.html */
@@ -78,6 +66,8 @@ static const value_string ha_types[] = {
 	{ ARPHRD_NETLINK,    "Netlink" },
 	{ 0, NULL }
 };
+
+extern value_string_ext linux_negative_errno_vals_ext;
 
 static dissector_handle_t netlink_handle;
 
@@ -192,8 +182,8 @@ static header_field_info hfi_netlink_attr_data NETLINK_HFI_INIT =
 
 /* TODO add a value_string for errno. */
 static header_field_info hfi_netlink_error NETLINK_HFI_INIT =
-	{ "Error code", "netlink.error", FT_INT32, BASE_DEC,
-		NULL, 0x00, "Negative errno or 0 for acknowledgements", HFILL };
+	{ "Error code", "netlink.error", FT_INT32, BASE_DEC | BASE_EXT_STRING,
+		&linux_negative_errno_vals_ext, 0x00, "Negative errno or 0 for acknowledgements", HFILL };
 
 static gint ett_netlink_cooked = -1;
 static gint ett_netlink_msghdr = -1;

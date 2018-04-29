@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* TODO (in no particular order):
@@ -59,9 +47,7 @@
 #include "packet-x11-keysymdef.h"
 #include "packet-x11.h"
 
-#ifndef HAVE_POPCOUNT
-# include "wsutil/popcount.h"
-#endif
+#include <wsutil/bits_count_ones.h>
 
 void proto_register_x11(void);
 void proto_reg_handoff_x11(void);
@@ -2561,8 +2547,13 @@ static guint32 requestLength(tvbuff_t *tvb, int *offsetp, proto_tree *t,
                              guint byte_order)
 {
       guint32 res;
-      proto_tree_add_item_ret_uint(t, hf_x11_request_length, tvb, *offsetp, 2, byte_order, &res);
+      proto_item *ti = proto_tree_add_item_ret_uint(t, hf_x11_request_length, tvb, *offsetp, 2, byte_order, &res);
       *offsetp += 2;
+      if (res == 0) {
+            proto_item_append_text(ti, " (extended length flag)");
+            proto_tree_add_item_ret_uint(t, hf_x11_request_length, tvb, *offsetp, 4, byte_order, &res);
+            *offsetp += 4;
+      }
       return res * 4;
 }
 
@@ -3480,6 +3471,7 @@ static void dissect_x11_request(tvbuff_t *tvb, packet_info *pinfo,
 {
       int offset = 0;
       int *offsetp = &offset;
+      int query_ext_offset;
       int next_offset;
       proto_item *ti;
       proto_tree *t;
@@ -3490,7 +3482,19 @@ static void dissect_x11_request(tvbuff_t *tvb, packet_info *pinfo,
       gint left;
       gchar *name;
 
-      length = tvb_get_guint16(tvb, 2, byte_order) * 4;
+      query_ext_offset = 2; /* "opcode" and "unused" */
+
+      length = tvb_get_guint16(tvb, query_ext_offset, byte_order) * 4;
+      query_ext_offset += 2;
+
+      if (length == 0) {
+            /* BIG-REQUESTS extension */
+            length = tvb_get_guint32(tvb, query_ext_offset, byte_order);
+            if ((gint64)length * 4 > G_MAXINT32)
+                return;
+            length *= 4;
+            query_ext_offset += 4;
+      }
 
       if (length < 4) {
             /* Bogus message length? */
@@ -3524,8 +3528,11 @@ static void dissect_x11_request(tvbuff_t *tvb, packet_info *pinfo,
 
                   /* necessary processing even if tree == NULL */
 
-                  v16 = tvb_get_guint16(tvb, 4, byte_order);
-                  name = tvb_get_string_enc(wmem_file_scope(), tvb, 8, v16, ENC_ASCII);
+                  v16 = tvb_get_guint16(tvb, query_ext_offset, byte_order);
+                  query_ext_offset += 2;
+                  /* Some unused bytes */
+                  query_ext_offset += 2;
+                  name = tvb_get_string_enc(wmem_file_scope(), tvb, query_ext_offset, v16, ENC_ASCII);
 
                   /* store string of extension, opcode will be set at reply */
                   i = 0;
@@ -4833,7 +4840,7 @@ static void dissect_x11_requests(tvbuff_t *tvb, packet_info *pinfo,
       int length_remaining;
       volatile guint byte_order;
       guint8 opcode;
-      volatile int plen;
+      volatile gint plen;
       proto_item *ti;
       volatile gboolean is_initial_creq;
       guint16 auth_proto_len, auth_data_len;
@@ -4895,13 +4902,21 @@ static void dissect_x11_requests(tvbuff_t *tvb, packet_info *pinfo,
 
             if (plen == 0) {
                   /*
-                   * This can't be 0, as it includes the header length.
+                   * A length field of 0 indicates that the BIG-REQUESTS
+                   * extension is used: The next four bytes are the real length.
+                   */
+                  plen = tvb_get_guint32(tvb, offset + 4, byte_order);
+            }
+
+            if (plen <= 0) {
+                  /*
+                   * This can't be less then 0, as it includes the header length.
                    * A different choice of byte order wouldn't have
                    * helped.
                    * Give up.
                    */
                   ti = proto_tree_add_item(tree, proto_x11, tvb, offset, -1, ENC_NA);
-                  expert_add_info_format(pinfo, ti, &ei_x11_request_length, "Bogus request length (0)");
+                  expert_add_info_format(pinfo, ti, &ei_x11_request_length, "Bogus request length (%d)", plen);
                   return;
             }
 
@@ -4987,6 +5002,7 @@ static void dissect_x11_requests(tvbuff_t *tvb, packet_info *pinfo,
                   plen = 12 + ROUND_LENGTH(auth_proto_len) +
                         ROUND_LENGTH(auth_data_len);
             } else {
+                  volatile gint64 tmp = (gint64)plen * 4;
                   /*
                    * This is probably an ordinary request.
                    */
@@ -4995,7 +5011,12 @@ static void dissect_x11_requests(tvbuff_t *tvb, packet_info *pinfo,
                   /*
                    * The length of a request is in 4-byte words.
                    */
-                  plen *= 4;
+                  if (tmp > G_MAXINT32) {
+                        ti = proto_tree_add_item(tree, proto_x11, tvb, offset, -1, ENC_NA);
+                        expert_add_info_format(pinfo, ti, &ei_x11_request_length, "Bogus request length (%"G_GINT64_MODIFIER"d)", tmp);
+                        return;
+                  }
+                  plen = (gint)tmp;
             }
 
             /*

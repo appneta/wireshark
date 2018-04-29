@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1999 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -120,6 +108,7 @@ static  dissector_handle_t smtp_handle;
 static  dissector_handle_t ssl_handle;
 static  dissector_handle_t imf_handle;
 static  dissector_handle_t ntlmssp_handle;
+static  dissector_handle_t data_text_lines_handle;
 
 /*
  * A CMD is an SMTP command, MESSAGE is the message portion, and EOM is the
@@ -760,6 +749,8 @@ dissect_smtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
                                          pinfo, spd_frame_data->conversation_id, NULL,
                                          tvb_reported_length(tvb),
                                          spd_frame_data->more_frags);
+        /* Show the text lines within this PDU fragment */
+        call_dissector(data_text_lines_handle, tvb, pinfo, smtp_tree);
       } else {
         /*
          * Message body.
@@ -1319,6 +1310,9 @@ proto_reg_handoff_smtp(void)
 
   /* find the NTLM dissector */
   ntlmssp_handle = find_dissector_add_dependency("ntlmssp", proto_smtp);
+
+  /* find the data-text-lines dissector */
+  data_text_lines_handle = find_dissector_add_dependency("data-text-lines", proto_smtp);
 }
 
 /*

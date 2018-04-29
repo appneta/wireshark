@@ -4,30 +4,18 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef PACKET_LIST_H
 #define PACKET_LIST_H
 
 #include "byte_view_tab.h"
-#include "packet_list_model.h"
-#include "preferences_dialog.h"
+#include <ui/qt/models/packet_list_model.h>
 #include "proto_tree.h"
 #include "protocol_preferences_menu.h"
-#include "related_packet_delegate.h"
+#include <ui/qt/models/related_packet_delegate.h>
+#include <ui/qt/utils/field_information.h>
 
 #include <QMenu>
 #include <QTime>
@@ -60,7 +48,7 @@ public:
     QMenu *conversationMenu() { return &conv_menu_; }
     QMenu *colorizeMenu() { return &colorize_menu_; }
     void setProtoTree(ProtoTree *proto_tree);
-    void setByteViewTab(ByteViewTab *byteViewTab);
+
     /** Disable and clear the packet list.
      *
      * Disable packet list widget updates, clear the detail and byte views,
@@ -83,6 +71,7 @@ public:
     QString packetComment();
     void setPacketComment(QString new_comment);
     QString allPacketComments();
+    void deleteAllPacketComments();
     void setVerticalAutoScroll(bool enabled = true);
     void setCaptureInProgress(bool in_progress = false) { capture_in_progress_ = in_progress; tail_at_end_ = in_progress; }
     void captureFileReadFinished();
@@ -105,14 +94,12 @@ protected slots:
 private:
     PacketListModel *packet_list_model_;
     ProtoTree *proto_tree_;
-    ByteViewTab *byte_view_tab_;
     capture_file *cap_file_;
     QMenu ctx_menu_;
     QMenu conv_menu_;
     QMenu colorize_menu_;
     ProtocolPreferencesMenu proto_prefs_menu_;
     QAction *decode_as_;
-    QList<QAction *> copy_actions_;
     int ctx_column_;
     QByteArray column_state_;
     OverlayScrollBar *overlay_sb_;
@@ -150,19 +137,21 @@ private:
 
 signals:
     void packetDissectionChanged();
-    void packetSelectionChanged();
-    void showColumnPreferences(PreferencesDialog::PreferencesPane start_pane);
+    void showColumnPreferences(QString pane_name);
     void editColumn(int column);
     void packetListScrolled(bool at_end);
     void showProtocolPreferences(const QString module_name);
     void editProtocolPreference(struct preference *pref, struct pref_module *module);
+
+    void frameSelected(int frameNum);
+    void fieldSelected(FieldInformation *);
 
 public slots:
     void setCaptureFile(capture_file *cf);
     void setMonospaceFont(const QFont &mono_font);
     void goNextPacket();
     void goPreviousPacket();
-    void goFirstPacket();
+    void goFirstPacket(bool user_selected = true);
     void goLastPacket();
     void goToPacket(int packet);
     void goToPacket(int packet, int hf_id);

@@ -7,19 +7,7 @@
  *
  * Copied from packet-smb.c
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -140,9 +128,9 @@ dissect_getport_reply(tvbuff_t *tvb, packet_info *pinfo _U_,
 			port=tvb_get_ntohl(tvb, offset);
 			if(port){
 				conversation_t *conv;
-				conv=find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, (port_type)rpc_call->private_data, port, 0, NO_ADDR_B|NO_PORT_B);
+				conv=find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, ENDPOINT_UDP, port, 0, NO_ADDR_B|NO_PORT_B);
 				if(!conv){
-					conv=conversation_new(pinfo->num, &pinfo->src, &pinfo->dst, (port_type)rpc_call->private_data, port, 0, NO_ADDR2|NO_PORT2);
+					conv=conversation_new(pinfo->num, &pinfo->src, &pinfo->dst, ENDPOINT_UDP, port, 0, NO_ADDR2|NO_PORT2);
 				}
 				conversation_set_dissector(conv, rpc_handle);
 			}

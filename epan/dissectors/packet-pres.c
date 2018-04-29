@@ -15,19 +15,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -176,7 +164,7 @@ static int hf_pres_User_session_requirements_symmetric_synchronize = -1;
 static int hf_pres_User_session_requirements_data_separation = -1;
 
 /*--- End of included file: packet-pres-hf.c ---*/
-#line 89 "./asn1/pres/packet-pres-template.c"
+#line 77 "./asn1/pres/packet-pres-template.c"
 
 /* Initialize the subtree pointers */
 static gint ett_pres           = -1;
@@ -222,7 +210,7 @@ static gint ett_pres_User_session_requirements = -1;
 static gint ett_pres_UD_type = -1;
 
 /*--- End of included file: packet-pres-ett.c ---*/
-#line 94 "./asn1/pres/packet-pres-template.c"
+#line 82 "./asn1/pres/packet-pres-template.c"
 
 static expert_field ei_pres_dissector_not_available = EI_INIT;
 static expert_field ei_pres_wrong_spdu_type = EI_INIT;
@@ -260,8 +248,7 @@ register_ctx_id_and_oid(packet_info *pinfo _U_, guint32 idx, const char *oid)
 	pco=wmem_new(wmem_file_scope(), pres_ctx_oid_t);
 	pco->ctx_id=idx;
 	pco->oid=wmem_strdup(wmem_file_scope(), oid);
-	conversation=find_conversation (pinfo->num, &pinfo->src, &pinfo->dst,
-			pinfo->ptype, pinfo->srcport, pinfo->destport, 0);
+	conversation=find_conversation_pinfo(pinfo, 0);
 	if (conversation) {
 		pco->idx = conversation->conv_index;
 	} else {
@@ -301,8 +288,7 @@ find_oid_by_pres_ctx_id(packet_info *pinfo, guint32 idx)
 	conversation_t *conversation;
 
 	pco.ctx_id=idx;
-	conversation=find_conversation (pinfo->num, &pinfo->src, &pinfo->dst,
-			pinfo->ptype, pinfo->srcport, pinfo->destport, 0);
+	conversation=find_conversation_pinfo(pinfo, 0);
 	if (conversation) {
 		pco.idx = conversation->conv_index;
 	} else {
@@ -1345,7 +1331,7 @@ static int dissect_UD_type_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_
 
 
 /*--- End of included file: packet-pres-fn.c ---*/
-#line 210 "./asn1/pres/packet-pres-template.c"
+#line 196 "./asn1/pres/packet-pres-template.c"
 
 
 /*
@@ -1827,7 +1813,7 @@ void proto_register_pres(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-pres-hfarr.c ---*/
-#line 379 "./asn1/pres/packet-pres-template.c"
+#line 365 "./asn1/pres/packet-pres-template.c"
   };
 
   /* List of subtrees */
@@ -1874,7 +1860,7 @@ void proto_register_pres(void) {
     &ett_pres_UD_type,
 
 /*--- End of included file: packet-pres-ettarr.c ---*/
-#line 385 "./asn1/pres/packet-pres-template.c"
+#line 371 "./asn1/pres/packet-pres-template.c"
   };
 
   static ei_register_info ei[] = {

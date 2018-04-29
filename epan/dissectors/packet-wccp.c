@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -443,7 +431,7 @@ typedef struct wccp_address_table {
   gint16 version;
   guint16 table_length;
   guint32 *table_ipv4;
-  struct e_in6_addr *table_ipv6;
+  ws_in6_addr *table_ipv6;
 } wccp_address_table;
 
 static int wccp_bucket_info(guint8 bucket_info, proto_tree *bucket_tree,
@@ -549,93 +537,99 @@ find_wccp_address_table(tvbuff_t *tvb, int offset,
    we need to fix that
 */
 
-static void wccp_fmt_ipaddress(gchar *buffer, guint32 host_addr, wccp_address_table* addr_table)
+static const gchar * decode_wccp_encoded_address(tvbuff_t *tvb, int offset, packet_info *pinfo _U_,
+                        proto_tree *info_tree _U_, wccp_address_table* addr_table)
 {
+  guint32 host_addr;
+  gchar *buffer;
+
   /* are we using an address table? */
   if (!addr_table->in_use)
     {
-      /* no return the IPv4 IP */
-      /* first fix the byte order */
-      guint addr= GUINT32_SWAP_LE_BE(host_addr);
-
-      ip_to_str_buf( (guint8 *) &addr, buffer, ITEM_LABEL_LENGTH);
-      return;
+      /* no; return the IPv4 IP */
+      host_addr = tvb_get_ipv4(tvb,offset);
+      buffer = (char *) wmem_alloc(wmem_packet_scope(), WS_INET_ADDRSTRLEN);
+      ip_to_str_buf( (guint8 *) &host_addr, buffer, WS_INET_ADDRSTRLEN);
     }
   else
     {
-      /* we need to decode the encoded address: */
-      guint16 reserv = (host_addr & 0xFFFF0000) >> 16;
-      guint16 addr_index  = (host_addr & 0x0000FFFF);
+      /* yes; we need to decode the encoded address */
+      guint16 reserv;
+      guint16 addr_index;
+
+      host_addr = tvb_get_ntohl(tvb,offset);
+      reserv = (host_addr & 0xFFFF0000) >> 16;
+      addr_index = (host_addr & 0x0000FFFF);
 
       if (reserv != 0) {
-        g_snprintf(buffer, ITEM_LABEL_LENGTH, "INVALID: reserved part non zero");
-        return;
+        buffer = wmem_strdup(wmem_packet_scope(), "INVALID: reserved part non zero");
       }
+      else {
+        /* now check if it's IPv4 or IPv6 we need to print */
+        switch (addr_table->family) {
+        case 1:
+          /* IPv4 */
 
-      /* now check if it's IPv4 or IPv6 we need to print */
-      switch (addr_table->family) {
-      case 1:
-        /* IPv4 */
+          /* special case: index 0 -> undefined IP */
+          if (addr_index == 0) {
+            buffer = wmem_strdup(wmem_packet_scope(), "0.0.0.0");
+            break;
+          }
+          /* are we be beyond the end of the table? */
+          if (addr_index > addr_table->table_length) {
+            buffer = wmem_strdup_printf(wmem_packet_scope(), "INVALID IPv4 index: %d > %d",
+                       addr_index, addr_table->table_length);
+            break;
+          }
 
-        /* special case: index 0 -> undefined IP */
-        if (addr_index == 0) {
-          g_snprintf(buffer, ITEM_LABEL_LENGTH, "0.0.0.0");
-          return;
-        }
-        /* are we be beyond the end of the table? */
-        if (addr_index > addr_table->table_length) {
-          g_snprintf(buffer, ITEM_LABEL_LENGTH, "INVALID IPv4 index: %d > %d",
-                     addr_index, addr_table->table_length);
-          return;
-        }
+          /* ok get the IP */
+          if (addr_table->table_ipv4 != NULL) {
+            buffer = (char *) wmem_alloc(wmem_packet_scope(), WS_INET_ADDRSTRLEN);
+            ip_to_str_buf( (guint8 *) &(addr_table->table_ipv4[addr_index-1]), buffer, WS_INET_ADDRSTRLEN);
+          }
+          else {
+            buffer = wmem_strdup(wmem_packet_scope(), "INVALID IPv4 table empty!");
+          }
+          break;
+        case 2:
+          /* IPv6 */
+          /* special case: index 0 -> undefined IP */
+          if (addr_index == 0) {
+            buffer = wmem_strdup(wmem_packet_scope(), "::");
+            break;
+          }
 
-        /* ok get the IP */
-        if (addr_table->table_ipv4 != NULL) {
-          ip_to_str_buf( (guint8 *) &(addr_table->table_ipv4[addr_index-1]), buffer, ITEM_LABEL_LENGTH);
-          return;
-        }
-        else {
-          g_snprintf(buffer, ITEM_LABEL_LENGTH, "INVALID IPv4 table empty!");
-          return;
-        }
-        break;
-      case 2:
-        /* IPv6 */
-        /* special case: index 0 -> undefined IP */
-        if (addr_index == 0) {
-          g_snprintf(buffer, ITEM_LABEL_LENGTH, "::");
-          return;
-        }
+          /* are we be beyond the end of the table? */
+          if (addr_index > addr_table->table_length) {
+            buffer = wmem_strdup_printf(wmem_packet_scope(), "INVALID IPv6 index: %d > %d",
+                       addr_index, addr_table->table_length);
+            break;
+          }
 
-        /* are we be beyond the end of the table? */
-        if (addr_index > addr_table->table_length) {
-          g_snprintf(buffer, ITEM_LABEL_LENGTH, "INVALID IPv6 index: %d > %d",
-                     addr_index, addr_table->table_length);
-          return;
+          /* ok get the IP */
+          if (addr_table->table_ipv6 != NULL) {
+            buffer = (char *) wmem_alloc(wmem_packet_scope(), WS_INET6_ADDRSTRLEN);
+            ip6_to_str_buf(&(addr_table->table_ipv6[addr_index-1]), buffer, WS_INET6_ADDRSTRLEN);
+          }
+          else {
+            buffer = wmem_strdup(wmem_packet_scope(), "INVALID IPv6 table empty!");
+          }
+          break;
+        default:
+          buffer = wmem_strdup(wmem_packet_scope(), "INVALID IP family");
+          break;
         }
-
-        /* ok get the IP */
-        if (addr_table->table_ipv6 != NULL) {
-          ip6_to_str_buf(&(addr_table->table_ipv6[addr_index-1]), buffer, ITEM_LABEL_LENGTH);
-          return;
-        }
-        else {
-          g_snprintf(buffer, ITEM_LABEL_LENGTH, "INVALID IPv6 table empty!");
-          return;
-        }
-        break;
-      default:
-        g_snprintf(buffer, ITEM_LABEL_LENGTH, "INVALID IP family");
-        return;
       }
     }
+
+  return buffer;
 }
 
 static proto_item* wccp_add_ipaddress_item(proto_tree* tree, int hf_index, int hf_ipv4, int hf_ipv6, tvbuff_t *tvb,
                                     int offset, gint length, wccp_address_table* addr_table)
 {
     guint32 host_addr;
-    struct e_in6_addr ipv6_zero;
+    ws_in6_addr ipv6_zero;
     guint16 reserv, addr_index;
 
     /* are we using an address table? */
@@ -700,21 +694,8 @@ static proto_item* wccp_add_ipaddress_item(proto_tree* tree, int hf_index, int h
     return proto_tree_add_ipv4_format(tree, hf_index, tvb, offset, length, host_addr, "INVALID IP family");
 }
 
-#define WCCP_IP_MAX_LENGTH (MAX_IP_STR_LEN > 46 ? MAX_IP_STR_LEN : 46)
+#define WCCP_IP_MAX_LENGTH (WS_INET_ADDRSTRLEN > 46 ? WS_INET_ADDRSTRLEN : 46)
 
-
-static const gchar * decode_wccp_encoded_address(tvbuff_t *tvb, int offset, packet_info *pinfo _U_,
-                        proto_tree *info_tree _U_, wccp_address_table* addr_table)
-{
-  gchar *buffer;
-  guint32 host_addr;
-
-  buffer= (char *) wmem_alloc(wmem_packet_scope(), WCCP_IP_MAX_LENGTH+1);
-  host_addr = tvb_get_ntohl(tvb,offset);
-
-  wccp_fmt_ipaddress(buffer, host_addr, addr_table);
-  return buffer;
-}
 
 static guint
 dissect_hash_data(tvbuff_t *tvb, int offset, proto_tree *wccp_tree)
@@ -788,7 +769,13 @@ wccp_bucket_info(guint8 bucket_info, proto_tree *bucket_tree, guint32 start,
 
 #define EAT_AND_CHECK(x,next) {length -= x; offset += x; if (length < next) return length - next;}
 
-#define NOTE_EATEN_LENGTH(new_length) {if (new_length<0) return new_length;  offset += length-new_length; length = new_length; }
+#define CHECK_LENGTH_ADVANCE_OFFSET(new_length) { \
+  int old_offset = offset; \
+  if (new_length<0) return new_length; \
+  offset += length-new_length; \
+  if (old_offset >= offset) return offset - old_offset; \
+  length = new_length; \
+  }
 
 
 /* 5.1.1 Security Info Component */
@@ -1121,7 +1108,7 @@ dissect_wccp2_router_view_info(tvbuff_t *tvb, int offset, gint length,
   EAT(4);
 
   new_length=dissect_wccp2_assignment_key_element(tvb, offset, length, pinfo, info_tree, addr_table);
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   n_routers = tvb_get_ntohl(tvb, offset);
   proto_tree_add_uint(info_tree, hf_router_router_num, tvb, offset, 4, n_routers);
@@ -1262,7 +1249,7 @@ dissect_wccp2_assignment_info(tvbuff_t *tvb, int offset, gint length,
 
 
   new_length=dissect_wccp2_assignment_key_element(tvb, offset, length, pinfo, info_tree, addr_table);
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   n_routers = tvb_get_ntohl(tvb, offset);
   proto_tree_add_uint(info_tree, hf_assignment_info_router_num, tvb, offset, 4, n_routers);
@@ -1281,7 +1268,7 @@ dissect_wccp2_assignment_info(tvbuff_t *tvb, int offset, gint length,
   }
 
   new_length = dissect_wccp2_hash_buckets_assignment_element(tvb, offset, length, pinfo, info_tree, addr_table);
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
   return length;
 }
 
@@ -1398,7 +1385,7 @@ dissect_wccp2_capability_info(tvbuff_t *tvb, int offset, gint length,
   while (length >= 8) {
     capability_length = dissect_wccp2_capability_element(tvb,offset,length,pinfo,info_tree);
 
-    NOTE_EATEN_LENGTH(capability_length);
+    CHECK_LENGTH_ADVANCE_OFFSET(capability_length);
   }
   return length;
 }
@@ -1498,8 +1485,8 @@ dissect_wccp2r1_address_table_info(tvbuff_t *tvb, int offset, int length,
       break;
     case 2:
       if (wccp_wccp_address_table->table_ipv6 == NULL)
-        wccp_wccp_address_table->table_ipv6 = (struct e_in6_addr *)
-          wmem_alloc0(pinfo->pool, wccp_wccp_address_table->table_length * sizeof(struct e_in6_addr));
+        wccp_wccp_address_table->table_ipv6 = (ws_in6_addr *)
+          wmem_alloc0(pinfo->pool, wccp_wccp_address_table->table_length * sizeof(ws_in6_addr));
       if (address_length != 16) {
         expert_add_info_format(pinfo, tf, &ei_wccp_length_bad,
                                "The Address length must be 16, but I found %d for IPv6 addresses. Correcting this.",
@@ -1606,7 +1593,7 @@ static gint dissect_wccp2_assignment_map(tvbuff_t *tvb, int offset,
 
   new_length=dissect_wccp2_mask_value_set_list(tvb, offset, length, pinfo, info_tree, addr_table);
 
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   return length;
 }
@@ -1717,13 +1704,13 @@ dissect_wccp2_mask_assignment_data_element(tvbuff_t *tvb, int offset, gint lengt
 
   new_length=dissect_wccp2_mask_value_set_list(tvb, offset, length, pinfo, mask_tree, addr_table);
 
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   if (length < 2)
     return length-4;
 
   new_length =  dissect_wccp2_assignment_weight_and_status_element(tvb, offset, length, pinfo, info_tree);
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   proto_item_set_len(mask_item, offset-start);
   return length;
@@ -1750,7 +1737,7 @@ dissect_wccp2_alternate_mask_assignment_data_element(tvbuff_t *tvb, int offset, 
 
         new_length=dissect_wccp2_alternate_mask_value_set_list(tvb, offset, length, pinfo, mask_tree, addr_table);
 
-        NOTE_EATEN_LENGTH(new_length);
+        CHECK_LENGTH_ADVANCE_OFFSET(new_length);
       }
 
   if (length < 2)
@@ -1959,7 +1946,7 @@ dissect_wccp2_mask_value_set_list(tvbuff_t *tvb, int offset,
 
       new_length=dissect_wccp2_mask_value_set_element(tvb, offset, length, i, pinfo, element_tree, addr_table);
 
-      NOTE_EATEN_LENGTH(new_length);
+      CHECK_LENGTH_ADVANCE_OFFSET(new_length);
     }
 
   proto_item_set_len(te, offset-start);
@@ -2018,7 +2005,7 @@ static gint dissect_wccp2_alternate_mask_value_set_list(tvbuff_t *tvb, int offse
 
     new_length=dissect_wccp2_alternate_mask_value_set_element(tvb, offset, length, i, pinfo, list_tree, addr_table);
 
-    NOTE_EATEN_LENGTH(new_length);
+    CHECK_LENGTH_ADVANCE_OFFSET(new_length);
   }
   return length;
 }
@@ -2043,7 +2030,7 @@ dissect_wccp2_alternate_mask_value_set_element(tvbuff_t *tvb, int offset, gint l
 
   new_length=dissect_wccp2_mask_element(tvb,offset,length,pinfo,element_tree);
   total_length += length - new_length;
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   if (length < 4)
     return length - 4;
@@ -2054,10 +2041,11 @@ dissect_wccp2_alternate_mask_value_set_element(tvbuff_t *tvb, int offset, gint l
   total_length += 4;
   EAT(4);
 
+  /* XXX Add a bounds check for number_of_elements? */
   for (i=0; i < number_of_elements; i++) {
     new_length=dissect_wccp2_web_cache_value_element(tvb, offset, length, pinfo, value_tree, addr_table);
     total_length += length - new_length;
-    NOTE_EATEN_LENGTH(new_length);
+    CHECK_LENGTH_ADVANCE_OFFSET(new_length);
   }
   proto_item_set_len(header, total_length);
 
@@ -2282,7 +2270,7 @@ dissect_wccp2_mask_value_set_element(tvbuff_t *tvb, int offset, gint length, int
                            ett_mv_set_element, &tl, "Mask/Value Set Element(%d)", idx);
 
   new_length = dissect_wccp2_mask_element(tvb,offset,length,pinfo,element_tree);
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   if (length < 4)
     return length-4;
@@ -2297,7 +2285,7 @@ dissect_wccp2_mask_value_set_element(tvbuff_t *tvb, int offset, gint length, int
     {
       new_length=dissect_wccp2_value_element(tvb, offset, length, i, pinfo,  value_tree, addr_table);
 
-      NOTE_EATEN_LENGTH(new_length);
+      CHECK_LENGTH_ADVANCE_OFFSET(new_length);
     }
 
   proto_item_set_len(tl, 16+num_of_val_elements*16);
@@ -2346,7 +2334,7 @@ dissect_wccp2_alternate_assignment_info(tvbuff_t *tvb, int offset, gint length,
   }
 
   new_length=dissect_wccp2_assignment_key_element(tvb, offset, length, pinfo,  info_tree, addr_table);
-  NOTE_EATEN_LENGTH(new_length);
+  CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   n_routers = tvb_get_ntohl(tvb, offset);
   proto_tree_add_uint(info_tree, hf_alt_assignment_info_num_routers, tvb, offset, 4, n_routers);

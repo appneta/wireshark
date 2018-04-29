@@ -17,19 +17,7 @@
  *
  * Copied from README.developer
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  * References:
  * ISUP:
  * http://www.itu.int/rec/recommendation.asp?type=products&lang=e&parent=T-REC-Q
@@ -49,6 +37,7 @@
 #include <epan/packet.h>
 #include <epan/expert.h>
 #include <epan/exceptions.h>
+#include <epan/conversation.h>
 #include <epan/stats_tree.h>
 #include <epan/asn1.h>
 #include <epan/prefs.h>
@@ -1131,6 +1120,7 @@ static const value_string ansi_isup_message_type_value_acro[] = {
   { 0,                                  NULL}};
 static value_string_ext ansi_isup_message_type_value_acro_ext = VALUE_STRING_EXT_INIT(ansi_isup_message_type_value_acro);
 
+/* Table 5/Q.763 */
 const value_string isup_parameter_type_value[] = {
 /*   0 */  { PARAM_TYPE_END_OF_OPT_PARAMS,         "End of optional parameters"},
 /*   1 */  { PARAM_TYPE_CALL_REF,                  "Call Reference (national use)"},
@@ -1262,6 +1252,11 @@ const value_string isup_parameter_type_value[] = {
 /* 128 */  { 128,                                  "Not used"},
 /* 129 */  { 129,                                  "Not used"},
 /* 130 */  { 130,                                  "Not used"},
+/* 142 */  { 142,                                  "Forward CAT indicators"},   /* Q.763 Amendment 6(10/2009) */
+/* 143 */  { 143,                                  "Backward CAT indicators"},  /* Q.763 Amendment 6(10/2009) */
+/* 150 */  { 150,                                  "Automatic re-routing" },    /* Q.763 Amendment 3(04/2004) */
+/* 166 */  { 166,                                  "IEPS call information" },   /* Q.763 Amendment 4(01/2006) */
+/* 168 */  { 168,                                  "VED information" },         /* Q.763 Amendment 5(09/2006) */
 /* 192 */  { PARAM_TYPE_GENERIC_NR,                "Generic number"},
 /* 193 */  { PARAM_TYPE_GENERIC_DIGITS,            "Generic digits (national use)"},
   { 0,                                 NULL}};
@@ -2047,6 +2042,7 @@ static const value_string isup_calling_party_nature_of_address_ind_value[] = {
   { ISUP_CALLED_PARTY_NATURE_UNKNOWN,           "unknown (national use)"},
   { ISUP_CALLED_PARTY_NATURE_NATIONAL_NR,       "national (significant) number"},
   { ISUP_CALLED_PARTY_NATURE_INTERNATNL_NR,     "international number"},
+  { 5,                                          "PISN specific number"},
   { 0,                                 NULL}};
 
 static const value_string isup_charge_number_nature_of_address_ind_value[] = {
@@ -2120,12 +2116,13 @@ static const value_string isup_location_type_of_shape_value[] = {
 #define DATA_NUMBERING_PLAN                     3
 #define TELEX_NUMBERING_PLAN                    4
 static const value_string isup_numbering_plan_ind_value[] = {
-  { ISDN_NUMBERING_PLAN,     "ISDN (Telephony) numbering plan"},
-  { DATA_NUMBERING_PLAN,     "Data numbering plan (national use)"},
-  { TELEX_NUMBERING_PLAN,    "Telex numbering plan (national use)"},
-  { 5,                       "Reserved for national use"},
+  { 0,                       "Unknown (national use)"},
+  { ISDN_NUMBERING_PLAN,     "ISDN (Telephony) numbering plan ITU-T E.164"},
+  { DATA_NUMBERING_PLAN,     "Data numbering plan ITU-T X.121(national use)"},
+  { TELEX_NUMBERING_PLAN,    "Telex numbering plan ITU-T F.69(national use)"},
+  { 5,                       "Private numbering plan (national use)"},
   { 6,                       "Reserved for national use"},
-  { 0,                                 NULL}};
+  { 0,                        NULL}};
 
 #define ADDRESS_PRESETATION_ALLOWED      0
 #define ADDRESS_PRESETATION_RESTRICTED   1
@@ -10148,8 +10145,6 @@ dissect_isup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 /* Extract message type field */
   message_type = tvb_get_guint8(tvb, CIC_OFFSET + CIC_LENGTH);
 
-  pinfo->ctype = CT_ISUP;
-
   switch (mtp3_standard) {
     case ANSI_STANDARD:
       isup_standard = ANSI_STANDARD;
@@ -10169,6 +10164,7 @@ dissect_isup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
         isup_tree = proto_item_add_subtree(ti, ett_isup);
         proto_tree_add_uint(isup_tree, hf_isup_cic, tvb, CIC_OFFSET, CIC_LENGTH, cic);
       }
+      conversation_create_endpoint_by_id(pinfo, ENDPOINT_ISUP, cic, 0);
       message_tvb = tvb_new_subset_remaining(tvb, CIC_LENGTH);
       dissect_ansi_isup_message(message_tvb, pinfo, isup_tree, ISUP_ITU_STANDARD_VARIANT, cic);
       break;
@@ -10217,6 +10213,7 @@ dissect_isup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
         isup_tree = proto_item_add_subtree(ti, ett_isup);
         proto_tree_add_uint(isup_tree, hf_isup_cic, tvb, CIC_OFFSET, CIC_LENGTH, cic);
       }
+      conversation_create_endpoint_by_id(pinfo, ENDPOINT_ISUP, cic, 0);
       message_tvb = tvb_new_subset_remaining(tvb, CIC_LENGTH);
       dissect_isup_message(message_tvb, pinfo, isup_tree, itu_isup_variant, cic);
   }
@@ -10270,7 +10267,7 @@ dissect_bicc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 
   bicc_cic = tvb_get_letohl(tvb, BICC_CIC_OFFSET);
 
-  pinfo->ctype = CT_BICC;
+  conversation_create_endpoint_by_id(pinfo, ENDPOINT_BICC, bicc_cic, 0);
 
   col_clear(pinfo->cinfo, COL_INFO);
   if (isup_show_cic_in_info) {
@@ -10314,8 +10311,8 @@ dissect_application_isup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
   if (data) {
     http_message_info_t *message_info = (http_message_info_t *)data;
     if (message_info->media_str) {
-      version = ws_find_media_type_parameter(message_info->media_str, "version");
-      base = ws_find_media_type_parameter(message_info->media_str, "base");
+      version = ws_find_media_type_parameter(wmem_packet_scope(), message_info->media_str, "version");
+      base = ws_find_media_type_parameter(wmem_packet_scope(), message_info->media_str, "base");
       if ((version && g_ascii_strncasecmp(version, "ansi", 4) == 0) ||
           (base && g_ascii_strncasecmp(base, "ansi", 4) == 0)) {
         /*
@@ -10346,8 +10343,6 @@ dissect_application_isup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
       } else {
         isup_standard = ITU_STANDARD;
       }
-      g_free(version);
-      g_free(base);
     } else {
       /* default to ITU */
       isup_standard = ITU_STANDARD;

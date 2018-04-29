@@ -54,6 +54,7 @@
 
 #include "ui/recent.h"
 
+#include "globals.h"
 
 void register_tap_listener_rlc_lte_stat(void);
 
@@ -1308,13 +1309,7 @@ static void gtk_rlc_lte_stat_init(const char *opt_arg, void *userdata _U_)
     hs->ep_list = NULL;
 
     /* Copy filter (so can be used for window title at reset) */
-    if (filter) {
-        hs->filter = g_strdup(filter);
-    }
-    else {
-        hs->filter = NULL;
-    }
-
+    hs->filter = g_strdup(filter);
 
     /* Set title */
     display_name = cf_get_display_name(&cfile);

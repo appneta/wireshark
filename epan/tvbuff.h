@@ -15,19 +15,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __TVBUFF_H__
@@ -332,7 +320,7 @@ WS_DLL_PUBLIC gdouble tvb_get_ieee_double(tvbuff_t *tvb, const gint offset, cons
 
 /*
  * Fetch 16-bit and 32-bit values in host byte order.
- * Used for some pseudo-headers in pcap/pcap-ng files, in which the
+ * Used for some pseudo-headers in pcap/pcapng files, in which the
  * headers are, when capturing, in the byte order of the host, and
  * are converted to the byte order of the host reading the file
  * when reading a capture file.
@@ -398,7 +386,7 @@ WS_DLL_PUBLIC guint32 tvb_get_ipv4(tvbuff_t *tvb, const gint offset);
 
 /* Fetch an IPv6 address. */
 WS_DLL_PUBLIC void tvb_get_ipv6(tvbuff_t *tvb, const gint offset,
-    struct e_in6_addr *addr);
+    ws_in6_addr *addr);
 
 /* Fetch a GUID. */
 WS_DLL_PUBLIC void tvb_get_ntohguid(tvbuff_t *tvb, const gint offset,
@@ -885,6 +873,21 @@ WS_DLL_PUBLIC tvbuff_t *tvb_child_uncompress(tvbuff_t *parent, tvbuff_t *tvb,
  *  string
  */
 extern tvbuff_t* base64_to_tvb(tvbuff_t *parent, const char *base64);
+
+/**
+ * Extract a variable length integer from a tvbuff.
+ * Each byte in a varint, except the last byte, has the most significant bit (msb)
+ * set -- this indicates that there are further bytes to come. For example,
+ *   1010 1100 0000 0010 is 300
+ *
+ * @param tvb The tvbuff in which we are extracting integer.
+ * @param offset The offset in tvb from which we begin trying to extract integer.
+ * @param maxlen The maximum distance from offset that we may try to extract integer
+ * @param value  if parsing succeeds, parsed varint will store here.
+ * @param encoding The ENC_* that defines the format (e.g., ENC_VARINT_PROTOBUF, ENC_VARINT_QUIC)
+ * @return   the length of this varint in tvb. 0 means parsing failed.
+ */
+WS_DLL_PUBLIC guint tvb_get_varint(tvbuff_t *tvb, guint offset, guint maxlen, guint64 *value, const guint encoding);
 
 /************** END OF ACCESSORS ****************/
 

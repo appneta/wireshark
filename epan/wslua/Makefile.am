@@ -80,19 +80,11 @@ dist_pkgdata_DATA = \
 nodist_pkgdata_DATA = \
 	init.lua
 
-CLEANFILES = \
-	*~
-
 DISTCLEANFILES = \
 	$(BUILT_SOURCES) \
 	taps.txt \
 	wslua_register.h \
 	init.lua
-
-MAINTAINERCLEANFILES = \
-	Makefile.in	\
-	register_wslua.c \
-	declare_wslua.h
 
 EXTRA_DIST = \
 	.editorconfig		\

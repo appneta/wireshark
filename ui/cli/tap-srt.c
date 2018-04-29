@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "config.h"
 
@@ -167,20 +154,22 @@ register_srt_tables(const void *key _U_, void *value, void *userdata _U_)
 	register_srt_t *srt = (register_srt_t*)value;
 	const char* short_name = proto_get_protocol_short_name(find_protocol_by_id(get_srt_proto_id(srt)));
 	stat_tap_ui ui_info;
+	gchar *cli_string;
 
 	/* XXX - CAMEL dissector hasn't been converted over due seemingly different tap packet
 	   handling functions.  So let the existing TShark CAMEL tap keep its registration */
 	if (strcmp(short_name, "CAMEL") == 0)
 		return FALSE;
 
+	cli_string = srt_table_get_tap_string(srt);
 	ui_info.group = REGISTER_STAT_GROUP_RESPONSE_TIME;
 	ui_info.title = NULL;   /* construct this from the protocol info? */
-	ui_info.cli_string = srt_table_get_tap_string(srt);
+	ui_info.cli_string = cli_string;
 	ui_info.tap_init_cb = dissector_srt_init;
 	ui_info.nparams = 0;
 	ui_info.params = NULL;
 	register_stat_tap_ui(&ui_info, srt);
-	g_free((char*)ui_info.cli_string);
+	g_free(cli_string);
 	return FALSE;
 }
 

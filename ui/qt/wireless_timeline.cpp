@@ -8,20 +8,7 @@
  * Copyright 2012 Parc Inc and Samsung Electronics
  * Copyright 2015, 2016 & 2017 Cisco Inc
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "wireless_timeline.h"
 
@@ -35,17 +22,17 @@
 #include <cmath>
 
 #include "globals.h"
-#include "color_utils.h"
 #include "../../log.h"
 #include <epan/dissectors/packet-ieee80211-radio.h>
 
 #include <epan/color_filters.h>
 #include "frame_tvbuff.h"
 
-#include "color_utils.h"
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/color_utils.h>
+#include <ui/qt/utils/qt_ui_utils.h>
 #include "wireshark_application.h"
-#include "wsutil/utf8_entities.h"
+#include <wsutil/report_message.h>
+#include <wsutil/utf8_entities.h>
 
 #ifdef Q_OS_WIN
 #include "wsutil/file_util.h"
@@ -58,7 +45,7 @@
 #include <QToolTip>
 
 #include "packet_list.h"
-#include "packet_list_model.h"
+#include <ui/qt/models/packet_list_model.h>
 
 #include "ui/main_statusbar.h"
 
@@ -175,7 +162,7 @@ void WirelessTimeline::mouseReleaseEvent(QMouseEvent *event)
     if (num == 0)
         return;
 
-    frame_data *fdata = frame_data_sequence_find(cfile.frames, num);
+    frame_data *fdata = frame_data_sequence_find(cfile.provider.frames, num);
     if (!fdata->flags.passed_dfilter && fdata->prev_dis_num > 0)
         num = fdata->prev_dis_num;
 
@@ -200,8 +187,10 @@ void WirelessTimeline::clip_tsf()
 }
 
 
-void WirelessTimeline::packetSelectionChanged()
+void WirelessTimeline::selectedFrameChanged(int frameNum)
 {
+    Q_UNUSED(frameNum);
+
     if (isHidden())
         return;
 
@@ -303,14 +292,19 @@ void WirelessTimeline::captureFileReadFinished()
     zoom_level = 0;
 
     show();
-    packetSelectionChanged();
+    selectedFrameChanged(0);
     // TODO: show or ungrey the toolbar controls
     update();
 }
 
 void WirelessTimeline::appInitialized()
 {
-    register_tap_listener("wlan_radio_timeline", this, NULL, TL_REQUIRES_NOTHING, tap_timeline_reset, tap_timeline_packet, NULL/*tap_draw_cb tap_draw*/);
+    GString *error_string;
+    error_string = register_tap_listener("wlan_radio_timeline", this, NULL, TL_REQUIRES_NOTHING, tap_timeline_reset, tap_timeline_packet, NULL/*tap_draw_cb tap_draw*/);
+    if (error_string) {
+        report_failure("Wireless Timeline - tap registration failed: %s", error_string->str);
+        g_string_free(error_string, TRUE);
+    }
 }
 
 void WirelessTimeline::resizeEvent(QResizeEvent*)
@@ -338,19 +332,22 @@ WirelessTimeline::WirelessTimeline(QWidget *parent) : QWidget(parent)
     setFixedHeight(TIMELINE_HEIGHT);
     first_packet = 1;
     setMouseTracking(true);
+    start_x = 0;
+    last_x = 0;
+    packet_list = NULL;
+    start_tsf = 0;
+    end_tsf = 0;
+    first = NULL;
+    last = NULL;
+    capfile = NULL;
 
     radio_packet_list = NULL;
+    connect(wsApp, SIGNAL(appInitialized()), this, SLOT(appInitialized()));
 }
 
 void WirelessTimeline::setPacketList(PacketList *packet_list)
 {
     this->packet_list = packet_list;
-    connect(packet_list->packetListModel(), SIGNAL(bgColorizationProgress(int,int)),
-            this, SLOT(bgColorizationProgress(int,int)));
-    connect(packet_list, SIGNAL(packetSelectionChanged()),
-            this, SLOT(packetSelectionChanged()));
-    connect(wsApp, SIGNAL(appInitialized()),
-        this, SLOT(appInitialized()));
 }
 
 void WirelessTimeline::tap_timeline_reset(void* tapdata)
@@ -369,10 +366,10 @@ void WirelessTimeline::tap_timeline_reset(void* tapdata)
 gboolean WirelessTimeline::tap_timeline_packet(void *tapdata, packet_info* pinfo, epan_dissect_t* edt _U_, const void *data)
 {
     WirelessTimeline* timeline = (WirelessTimeline*)tapdata;
-    struct wlan_radio *wlan_radio_info = (struct wlan_radio *)data;
+    const struct wlan_radio *wlan_radio_info = (const struct wlan_radio *)data;
 
     /* Save the radio information in our own (GUI) hashtable */
-    g_hash_table_insert(timeline->radio_packet_list, GUINT_TO_POINTER(pinfo->num), wlan_radio_info);
+    g_hash_table_insert(timeline->radio_packet_list, GUINT_TO_POINTER(pinfo->num), (gpointer)wlan_radio_info);
     return FALSE;
 }
 
@@ -532,7 +529,7 @@ WirelessTimeline::paintEvent(QPaintEvent *qpe)
 
     QGraphicsScene qs;
     for (packet = find_packet_tsf(start_tsf + left/zoom - RENDER_EARLY); packet <= cfile.count; packet++) {
-        frame_data *fdata = frame_data_sequence_find(cfile.frames, packet);
+        frame_data *fdata = frame_data_sequence_find(cfile.provider.frames, packet);
         struct wlan_radio *ri = get_wlan_radio(fdata->num);
         float x, width, red, green, blue;
 
@@ -583,7 +580,7 @@ WirelessTimeline::paintEvent(QPaintEvent *qpe)
             first_packet = packet;
 
         if (fdata->color_filter) {
-            const color_t *c = &((color_filter_t *) fdata->color_filter)->fg_color;
+            const color_t *c = &((const color_filter_t *) fdata->color_filter)->fg_color;
             red = c->red / 65535.0;
             green = c->green / 65535.0;
             blue = c->blue / 65535.0;

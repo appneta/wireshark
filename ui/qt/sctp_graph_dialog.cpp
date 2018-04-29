@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include <wsutil/utf8_entities.h>
 
@@ -35,7 +22,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 
-#include "qcustomplot.h"
+#include <ui/qt/widgets/qcustomplot.h>
 #include "wireshark_application.h"
 
 SCTPGraphDialog::SCTPGraphDialog(QWidget *parent, sctp_assoc_info_t *assoc, capture_file *cf, int dir) :
@@ -79,7 +66,7 @@ void SCTPGraphDialog::drawNRSACKGraph()
     GList *list=NULL, *tlist;
     guint16 gap_start=0, gap_end=0, i, numberOf_gaps, numberOf_nr_gaps;
     guint8 type;
-    guint32 tsnumber, j, min_tsn;
+    guint32 tsnumber, j = 0, min_tsn;
     struct nr_sack_chunk_header *nr_sack_header;
     struct gaps *nr_gap;
     /* This holds the sum of gap acks and nr gap acks */

@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -61,6 +49,7 @@
 #include <epan/packet.h>
 #include <epan/ipproto.h>
 #include <epan/sminmpec.h>
+#include <epan/addr_resolv.h>
 #include <epan/prefs.h>
 #include <epan/conversation.h>
 #include <epan/expert.h>
@@ -964,7 +953,6 @@ static const val64_string unique_indeterminable_or_no_link[] = {
     { 0, NULL },
 };
 
-static const true_false_string tfs_up_down = { "Up", "Down" };
 static const true_false_string tfs_new_existing = { "New", "Existing" };
 
 static dissector_handle_t ppp_hdlc_handle;
@@ -1525,8 +1513,8 @@ static int dissect_l2tp_cisco_avps(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
     avp_type        = tvb_get_ntohs(tvb, offset + 4);
 
     l2tp_avp_tree =  proto_tree_add_subtree_format(tree, tvb, offset,
-                              avp_len, ett_l2tp_avp, NULL, "Vendor %s: %s AVP",
-                              val_to_str_ext(avp_vendor_id, &sminmpec_values_ext, "Unknown (%u)"),
+                              avp_len, ett_l2tp_avp, NULL, "Vendor %s (%u): %s AVP",
+                              enterprises_lookup(avp_vendor_id, "Unknown"), avp_vendor_id,
                               val_to_str(avp_type, cisco_avp_type_vals, "Unknown (%u)"));
 
     proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_mandatory, tvb, offset, 2, ENC_BIG_ENDIAN);
@@ -1633,8 +1621,8 @@ static int dissect_l2tp_broadband_avps(tvbuff_t *tvb, packet_info *pinfo _U_, pr
     avp_type        = tvb_get_ntohs(tvb, offset + 4);
 
     l2tp_avp_tree =  proto_tree_add_subtree_format(tree, tvb, offset,
-                              avp_len, ett_l2tp_avp, NULL, "Vendor %s: %s AVP",
-                              val_to_str_ext(avp_vendor_id, &sminmpec_values_ext, "Unknown (%u)"),
+                              avp_len, ett_l2tp_avp, NULL, "Vendor %s (%u): %s AVP",
+                              enterprises_lookup(avp_vendor_id, "Unknown"), avp_vendor_id,
                               val_to_str(avp_type, broadband_avp_type_vals, "Unknown (%u)"));
 
     proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_mandatory, tvb, offset, 2, ENC_BIG_ENDIAN);
@@ -1815,8 +1803,8 @@ static int dissect_l2tp_ericsson_avps(tvbuff_t *tvb, packet_info *pinfo _U_, pro
     avp_type        = tvb_get_ntohs(tvb, offset + 4);
 
     l2tp_avp_tree =  proto_tree_add_subtree_format(tree, tvb, offset,
-                              avp_len, ett_l2tp_avp, NULL, "Vendor %s: %s AVP",
-                              val_to_str_ext(avp_vendor_id, &sminmpec_values_ext, "Unknown (%u)"),
+                              avp_len, ett_l2tp_avp, NULL, "Vendor %s (%u): %s AVP",
+                              enterprises_lookup(avp_vendor_id, "Unknown"), avp_vendor_id,
                               val_to_str(avp_type, ericsson_avp_type_vals, "Unknown (%u)"));
 
     proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_mandatory, tvb, offset, 2, ENC_BIG_ENDIAN);
@@ -1904,8 +1892,8 @@ dissect_l2tp_vnd_cablelabs_avps(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
     avp_type        = tvb_get_ntohs(tvb, offset + 4);
 
     l2tp_avp_tree =  proto_tree_add_subtree_format(tree, tvb, offset,
-                              avp_len, ett_l2tp_avp, NULL, "Vendor %s: %s AVP",
-                              val_to_str_ext(avp_vendor_id, &sminmpec_values_ext, "Unknown (%u)"),
+                              avp_len, ett_l2tp_avp, NULL, "Vendor %s (%u): %s AVP",
+                              enterprises_lookup(avp_vendor_id, "Unknown"), avp_vendor_id,
                               val_to_str(avp_type, cablelabs_avp_type_vals, "Unknown (%u)"));
 
     proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_mandatory, tvb, offset, 2, ENC_BIG_ENDIAN);
@@ -2036,8 +2024,8 @@ static void process_control_avps(tvbuff_t *tvb,
                 /* Vendor-Specific AVP */
                 if (!dissector_try_uint_new(l2tp_vendor_avp_dissector_table, avp_vendor_id, avp_tvb, pinfo, l2tp_tree, FALSE, l2tp_cntrl_data)){
                     l2tp_avp_tree =  proto_tree_add_subtree_format(l2tp_tree, tvb, idx,
-                                          avp_len, ett_l2tp_avp, NULL, "Vendor %s AVP Type %u",
-                                          val_to_str_ext(avp_vendor_id, &sminmpec_values_ext, "Unknown (%u)"),
+                                          avp_len, ett_l2tp_avp, NULL, "Vendor %s (%u) AVP Type %u",
+                                          enterprises_lookup(avp_vendor_id, "Unknown"), avp_vendor_id,
                                           avp_type);
 
                     proto_tree_add_item(l2tp_avp_tree, hf_l2tp_avp_mandatory, tvb, idx, 2, ENC_BIG_ENDIAN);
@@ -2538,7 +2526,7 @@ process_l2tpv3_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 {
     int         idx         = *pIdx;
     int         sid;
-    guint32      oam_cell   = 0;
+    guint32     oam_cell    = 0;
     proto_tree *l2_specific = NULL;
     proto_item *ti          = NULL;
     tvbuff_t   *next_tvb;
@@ -2583,17 +2571,18 @@ process_l2tpv3_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     if (cookie_len == -1)
         cookie_len = L2TPv3_COOKIE_DEFAULT;
 
-    col_add_fstr(pinfo->cinfo,COL_INFO,
-                    "%s            (session id=%u)",
-                    data_msg, sid);
+    col_append_fstr(pinfo->cinfo, COL_INFO, "D[S:0x%02X]", sid);
+    col_set_fence(pinfo->cinfo, COL_INFO);
 
     if (tree) {
         proto_tree_add_item(l2tp_tree, hf_l2tp_sid, tvb, idx-4, 4, ENC_BIG_ENDIAN);
         proto_item_set_len(l2tp_item, idx);
-        if (!(tvb_offset_exists(tvb, idx)))
+        if (!(tvb_offset_exists(tvb, idx))) {
             return;
-        if (cookie_len != 0)
+        }
+        if (cookie_len != 0) {
             proto_tree_add_item(l2tp_tree, hf_l2tp_cookie, tvb, idx, cookie_len, ENC_NA);
+        }
     }
 
     switch(l2_spec){
@@ -2940,16 +2929,16 @@ dissect_l2tp_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
         return 0;
     }
 
-    conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, PT_UDP,
+    conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, ENDPOINT_UDP,
                          pinfo->srcport, pinfo->destport, NO_PORT_B);
 
     if (conv == NULL) {
-        conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, PT_UDP,
+        conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, ENDPOINT_UDP,
                              pinfo->srcport, pinfo->destport, 0);
     }
 
     if ((conv == NULL) || (conversation_get_dissector(conv, pinfo->num) != l2tp_udp_handle)) {
-        conv = conversation_new(pinfo->num, &pinfo->src, &pinfo->dst, PT_UDP,
+        conv = conversation_new(pinfo->num, &pinfo->src, &pinfo->dst, ENDPOINT_UDP,
                         pinfo->srcport, 0, NO_PORT2);
         conversation_set_dissector(conv, l2tp_udp_handle);
     }
@@ -3197,8 +3186,7 @@ static void l2tp_cleanup(void)
     GSList *iterator = list_heads;
 
     while (iterator) {
-        if (iterator->data != NULL)
-            g_slist_free((GSList *)iterator->data);
+        g_slist_free((GSList *)iterator->data);
         iterator = g_slist_next(iterator);
     }
 
@@ -3274,7 +3262,7 @@ proto_register_l2tp(void)
             NULL, HFILL }},
 
         { &hf_l2tp_avp_vendor_id,
-          { "Vendor ID", "l2tp.avp.vendor_id", FT_UINT16, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0,
+          { "Vendor ID", "l2tp.avp.vendor_id", FT_UINT16, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0,
             "AVP Vendor ID", HFILL }},
 
         { &hf_l2tp_avp_type,

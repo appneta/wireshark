@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1092,7 +1080,7 @@ static gpointer media_type_value(packet_info *pinfo)
     return NULL;
 }
 
-static void obex_profile_prompt(packet_info *pinfo _U_, gchar* result)
+static void obex_profile_prompt(packet_info *pinfo, gchar* result)
 {
     guint8 *value_data;
 
@@ -1103,7 +1091,7 @@ static void obex_profile_prompt(packet_info *pinfo _U_, gchar* result)
         g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Unknown OBEX Profile");
 }
 
-static gpointer obex_profile_value(packet_info *pinfo _U_)
+static gpointer obex_profile_value(packet_info *pinfo)
 {
     guint8 *value_data;
 
@@ -3592,7 +3580,7 @@ proto_register_obex(void)
             NULL, HFILL}
         },
         { &hf_ctn_application_parameter_data_parameter_mask_alarm_status,
-          { "Alarm Status", "obex.parameter.ctn.parameter_mask.",
+          { "Alarm Status", "obex.parameter.ctn.parameter_mask.alarm_status",
             FT_UINT32, BASE_HEX, NULL, 0x00000080,
             NULL, HFILL}
         },

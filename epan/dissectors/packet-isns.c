@@ -12,19 +12,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -767,7 +755,7 @@ dissect_isns_attr_port(tvbuff_t *tvb, guint offset, proto_tree *tree, int hf_ind
     guint16             port  = tvb_get_ntohs(tvb, offset+2);
     gboolean            is_udp = ((tvb_get_ntohs(tvb, offset) & 0x01) == 0x01);
     conversation_t     *conversation;
-    port_type           pt;
+    endpoint_type       et;
     dissector_handle_t  handle;
 
     proto_tree_add_uint(tree, hf_index, tvb, offset, 4, port);
@@ -775,19 +763,19 @@ dissect_isns_attr_port(tvbuff_t *tvb, guint offset, proto_tree *tree, int hf_ind
 
     if ((isns_port_type == ISNS_ESI_PORT) || (isns_port_type == ISNS_SCN_PORT)) {
         if (is_udp) {
-            pt = PT_UDP;
+            et = ENDPOINT_UDP;
             handle = isns_udp_handle;
         }
         else {
-            pt = PT_TCP;
+            et = ENDPOINT_TCP;
             handle = isns_tcp_handle;
         }
 
         conversation = find_conversation(pinfo->num,
-                &pinfo->src, &pinfo->dst, pt, port, 0, NO_PORT_B);
+                &pinfo->src, &pinfo->dst, et, port, 0, NO_PORT_B);
         if (conversation == NULL) {
             conversation = conversation_new(pinfo->num,
-                    &pinfo->src, &pinfo->dst, pt, port, 0, NO_PORT2_FORCE);
+                    &pinfo->src, &pinfo->dst, et, port, 0, NO_PORT2_FORCE);
             conversation_set_dissector(conversation, handle);
         }
     }

@@ -15,19 +15,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -821,6 +809,7 @@ static gint hf_btcommon_le_channel_map_36 = -1;
 static gint hf_btcommon_le_channel_map_37 = -1;
 static gint hf_btcommon_le_channel_map_38 = -1;
 static gint hf_btcommon_le_channel_map_39 = -1;
+static gint hf_btcommon_eir_ad_mesh_msg = -1;
 
 
 static const int *hfx_btcommon_eir_ad_ips_flags[] = {
@@ -912,6 +901,7 @@ static dissector_handle_t btcommon_eir_handle;
 static dissector_handle_t btcommon_ad_handle;
 static dissector_handle_t btcommon_le_channel_map_handle;
 static dissector_handle_t bthci_cmd_handle;
+static dissector_handle_t btmesh_handle;
 
 static dissector_table_t  bluetooth_eir_ad_manufacturer_company_id;
 static dissector_table_t  bluetooth_eir_ad_tds_organization_id;
@@ -1532,6 +1522,7 @@ static const value_string bthci_cmd_cod_minor_device_class_health_vals[] = {
 };
 value_string_ext bthci_cmd_cod_minor_device_class_health_vals_ext = VALUE_STRING_EXT_INIT(bthci_cmd_cod_minor_device_class_health_vals);
 
+/* https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile */
 static const value_string bthci_cmd_eir_data_type_vals[] = {
     {0x01, "Flags" },
     {0x02, "16-bit Service Class UUIDs (incomplete)" },
@@ -1572,6 +1563,9 @@ static const value_string bthci_cmd_eir_data_type_vals[] = {
     {0x26, "Transport Discovery Data" },
     {0x27, "LE Supported Features" },
     {0x28, "Channel Map Update Indication" },
+    {0x29, "PB-ADV" },
+    {0x2A, "Mesh Message" },
+    {0x2B, "Mesh Beacon" },
     {0x3D, "3D Information Data" },
     {0xFF, "Manufacturer Specific" },
     {   0, NULL }
@@ -1620,10 +1614,112 @@ static const value_string bthci_cmd_appearance_vals[] = {
     { 1155,  "Cycling: Cadence Sensor" },
     { 1156,  "Cycling: Power Sensor" },
     { 1157,  "Cycling: Speed and Cadence Sensor" },
-    { 3136,  "Generic" },
+    { 1216,  "Generic Control Device" },
+    { 1217,  "Switch" },
+    { 1218,  "Multi-switch" },
+    { 1219,  "Button" },
+    { 1220,  "Slider" },
+    { 1221,  "Rotary" },
+    { 1222,  "Touch-panel" },
+    { 1280,  "Generic Network Device" },
+    { 1281,  "Access Point" },
+    { 1344,  "Generic Sensor" },
+    { 1345,  "Motion Sensor" },
+    { 1346,  "Air Quality Sensor" },
+    { 1347,  "Temperature Sensor" },
+    { 1348,  "Humidity Sensor" },
+    { 1349,  "Leak Sensor" },
+    { 1350,  "Smoke Sensor" },
+    { 1351,  "Occupancy Sensor" },
+    { 1352,  "Contact Sensor" },
+    { 1353,  "Carbon Monoxide Sensor" },
+    { 1354,  "Carbon Dioxide Sensor" },
+    { 1355,  "Ambient Light Sensor" },
+    { 1356,  "Energy Sensor" },
+    { 1357,  "Color Light Sensor" },
+    { 1358,  "Rain Sensor" },
+    { 1359,  "Fire Sensor" },
+    { 1360,  "Wind Sensor" },
+    { 1361,  "Proximity Sensor" },
+    { 1362,  "Multi-Sensor" },
+    { 1408,  "Generic Light Fixtures" },
+    { 1409,  "Wall Light" },
+    { 1410,  "Ceiling Light" },
+    { 1411,  "Floor Light" },
+    { 1412,  "Cabinet Light" },
+    { 1413,  "Desk Light" },
+    { 1414,  "Troffer Light" },
+    { 1415,  "Pendant Light" },
+    { 1416,  "In-ground Light" },
+    { 1417,  "Flood Light" },
+    { 1418,  "Underwater Light" },
+    { 1419,  "Bollard with Light" },
+    { 1420,  "Pathway Light" },
+    { 1421,  "Garden Light" },
+    { 1422,  "Pole-top Light" },
+    { 1423,  "Spotlight" },
+    { 1424,  "Linear Light" },
+    { 1425,  "Street Light" },
+    { 1426,  "Shelves Light" },
+    { 1427,  "High-bay / Low-bay Light" },
+    { 1428,  "Emergency Exit Light" },
+    { 1472,  "Generic Fan" },
+    { 1473,  "Ceiling Fan" },
+    { 1474,  "Axial Fan" },
+    { 1475,  "Exhaust Fan" },
+    { 1476,  "Pedestal Fan" },
+    { 1477,  "Desk Fan" },
+    { 1478,  "Wall Fan" },
+    { 1536,  "Generic HVAC" },
+    { 1537,  "Thermostat" },
+    { 1600,  "Generic Air Conditioning" },
+    { 1664,  "Generic Humidifier" },
+    { 1728,  "Generic Heating" },
+    { 1729,  "Radiator" },
+    { 1730,  "Boiler" },
+    { 1731,  "Heat Pump" },
+    { 1732,  "Infrared Heater" },
+    { 1733,  "Radiant Panel Heater" },
+    { 1734,  "Fan Heater" },
+    { 1735,  "Air Curtain" },
+    { 1792,  "Generic Access Control" },
+    { 1793,  "Access Door" },
+    { 1794,  "Garage Door" },
+    { 1795,  "Emergency Exit Door" },
+    { 1796,  "Access Lock" },
+    { 1797,  "Elevator" },
+    { 1798,  "Window" },
+    { 1799,  "Entrance Gate" },
+    { 1856,  "Generic Motorized Device" },
+    { 1857,  "Motorized Gate" },
+    { 1858,  "Awning" },
+    { 1859,  "Blinds or Shades" },
+    { 1860,  "Curtains" },
+    { 1861,  "Screen" },
+    { 1920,  "Generic Power Device" },
+    { 1921,  "Power Outlet" },
+    { 1922,  "Power Strip" },
+    { 1923,  "Plug" },
+    { 1924,  "Power Supply" },
+    { 1925,  "LED Driver" },
+    { 1926,  "Fluorescent Lamp Gear" },
+    { 1927,  "HID Lamp Gear" },
+    { 1984,  "Generic Light Source" },
+    { 1985,  "Incandescent Light Bulb" },
+    { 1986,  "LED Bulb" },
+    { 1987,  "HID Lamp" },
+    { 1988,  "Fluorescent Lamp" },
+    { 1989,  "LED Array" },
+    { 1990,  "Multi-Color LED Array" },
+    { 3136,  "Generic: Pulse Oximeter" },
     { 3137,  "Fingertip" },
     { 3138,  "Wrist Worn" },
-    { 5184,  "Generic" },
+    { 3200,  "Generic: Weight Scale" },
+    { 3264,  "Generic Personal Mobility Device" },
+    { 3265,  "Powered Wheelchair" },
+    { 3266,  "Mobility Scooter" },
+    { 3328,  "Generic Continuous Glucose Monitor" },
+    { 5184,  "Generic: Outdoor Sports Activity" },
     { 5185,  "Location Display Device" },
     { 5186,  "Location and Navigation Display Device" },
     { 5187,  "Location Pod" },
@@ -2099,15 +2195,11 @@ static const value_string csb_fragment_vals[] = {
 void proto_register_bthci_cmd(void);
 void proto_reg_handoff_bthci_cmd(void);
 void proto_register_btcommon(void);
+void proto_reg_handoff_btcommon(void);
 
 static void bthci_cmd_vendor_prompt(packet_info *pinfo _U_, gchar* result)
 {
     g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Vendor as");
-}
-
-static gpointer bthci_cmd_vendor_value(packet_info *pinfo _U_)
-{
-    return NULL;
 }
 
 static gint dissect_coding_format(proto_tree *tree, int hf_x, tvbuff_t *tvb, gint offset, gint ett_x)
@@ -4665,7 +4757,7 @@ dissect_bthci_cmd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
     if (ogf == HCI_OGF_VENDOR_SPECIFIC) {
         col_append_fstr(pinfo->cinfo, COL_INFO, "Vendor Command 0x%04X (opcode 0x%04X)", ocf, opcode);
 
-        if (!dissector_try_uint_new(vendor_dissector_table, HCI_VENDOR_DEFAULT, tvb, pinfo, tree, TRUE, bluetooth_data)) {
+        if (!dissector_try_payload_new(vendor_dissector_table, tvb, pinfo, tree, TRUE, bluetooth_data)) {
             if (bluetooth_data) {
                 hci_vendor_data_t  *hci_vendor_data;
 
@@ -7114,12 +7206,6 @@ proto_register_bthci_cmd(void)
         &ett_pattern
     };
 
-    /* Decode As handling */
-    static build_valid_func bthci_cmd_vendor_da_build_value[1] = {bthci_cmd_vendor_value};
-    static decode_as_value_t bthci_cmd_vendor_da_values = {bthci_cmd_vendor_prompt, 1, bthci_cmd_vendor_da_build_value};
-    static decode_as_t bthci_cmd_vendor_da = {"bthci_evt", "Vendor", "bthci_cmd.vendor", 1, 0, &bthci_cmd_vendor_da_values, NULL, NULL,
-            decode_as_default_populate_list, decode_as_default_reset, decode_as_default_change, NULL};
-
     proto_bthci_cmd = proto_register_protocol("Bluetooth HCI Command", "HCI_CMD", "bthci_cmd");
     bthci_cmd_handle = register_dissector("bthci_cmd", dissect_bthci_cmd, proto_bthci_cmd);
 
@@ -7132,14 +7218,13 @@ proto_register_bthci_cmd(void)
 
     bthci_cmds = wmem_tree_new_autoreset(wmem_epan_scope(), wmem_file_scope());
 
-    vendor_dissector_table = register_dissector_table("bthci_cmd.vendor", "BT HCI Vendor", proto_bthci_cmd, FT_UINT16, BASE_HEX);
-
-    module = prefs_register_protocol(proto_bthci_cmd, NULL);
+    module = prefs_register_protocol_subtree("Bluetooth", proto_bthci_cmd, NULL);
     prefs_register_static_text_preference(module, "hci_cmd.version",
             "Bluetooth HCI version: 4.0 (Core)",
             "Version of protocol supported by this dissector.");
 
-    register_decode_as(&bthci_cmd_vendor_da);
+    vendor_dissector_table = register_decode_as_next_proto(proto_bthci_cmd, "Vendor", "bthci_cmd.vendor",
+                                                           "BT HCI Vendor", bthci_cmd_vendor_prompt);
 }
 
 
@@ -7295,11 +7380,12 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             end_offset = offset + length;
             while (offset < end_offset) {
                 if (tvb_get_ntohs(tvb, offset) == 0x0000 &&
-                        tvb_get_ntohl(tvb, offset + 4) == 0x1000 &&
-                        tvb_get_ntoh64(tvb, offset + 8) == G_GUINT64_CONSTANT(0x800000805F9B34FB)) {
+                    tvb_get_ntohl(tvb, offset + 4) == 0x1000 &&
+                    tvb_get_ntoh64(tvb, offset + 8) == G_GUINT64_CONSTANT(0x800000805F9B34FB)) {
                     sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_uuid_128, tvb, offset, 16, ENC_NA);
                     proto_item_append_text(sub_item, " (%s)", val_to_str_ext_const(tvb_get_ntohs(tvb, offset + 2), &bluetooth_uuid_vals_ext, "Unknown"));
-                } else {
+                }
+                else {
                     bluetooth_uuid_t  uuid;
 
                     sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_custom_uuid, tvb, offset, 16, ENC_NA);
@@ -7316,7 +7402,7 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
         case 0x08: /* Device Name (shortened) */
         case 0x09: /* Device Name */
             proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_name, tvb, offset, length, ENC_UTF_8 | ENC_NA);
-            proto_item_append_text(entry_item, ": %s", tvb_format_text(tvb,offset, length));
+            proto_item_append_text(entry_item, ": %s", tvb_format_text(tvb, offset, length));
             if (!name || type == 0x09)
                 name = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, length, ENC_UTF_8);
             offset += length;
@@ -7326,7 +7412,8 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             if (length == 16) { /* little heuristic for recognize Security Manager TK Value */
                 sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_data, tvb, offset, 16, ENC_NA);
                 expert_add_info(pinfo, sub_item, &ei_eir_ad_undecoded);
-            } else if (length == 8) { /* DID */
+            }
+            else if (length == 8) { /* DID */
                 guint16       vendor_id_source;
                 guint16       vendor_id;
                 guint16       product_id;
@@ -7338,9 +7425,11 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
 
                 if (vendor_id_source == DID_VENDOR_ID_SOURCE_BLUETOOTH_SIG) {
                     proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_did_vendor_id_bluetooth_sig, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-                } else if (vendor_id_source == DID_VENDOR_ID_SOURCE_USB_FORUM) {
+                }
+                else if (vendor_id_source == DID_VENDOR_ID_SOURCE_USB_FORUM) {
                     proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_did_vendor_id_usb_forum, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-                } else {
+                }
+                else {
                     proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_did_vendor_id, tvb, offset, 2, ENC_LITTLE_ENDIAN);
                 }
                 vendor_id = tvb_get_letohs(tvb, offset);
@@ -7357,7 +7446,8 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
 
                 proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_did_version, tvb, offset, 2, ENC_LITTLE_ENDIAN);
                 offset += 2;
-            } else {
+            }
+            else {
                 sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_data, tvb, offset, length, ENC_NA);
                 expert_add_info(pinfo, sub_item, &ei_command_unknown_command);
             }
@@ -7408,11 +7498,11 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             break;
         case 0x12: /* Slave Connection Interval Range */
             sub_item = proto_tree_add_item(tree, hf_btcommon_eir_ad_connection_interval_min, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-            proto_item_append_text(sub_item, " (%g msec)",  tvb_get_letohs(tvb, offset) * 1.25);
+            proto_item_append_text(sub_item, " (%g msec)", tvb_get_letohs(tvb, offset) * 1.25);
             offset += 2;
 
             sub_item = proto_tree_add_item(tree, hf_btcommon_eir_ad_connection_interval_max, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-            proto_item_append_text(sub_item, " (%g msec)",  tvb_get_letohs(tvb, offset) * 1.25);
+            proto_item_append_text(sub_item, " (%g msec)", tvb_get_letohs(tvb, offset) * 1.25);
             offset += 2;
 
             proto_item_append_text(entry_item, ": %g - %g msec", tvb_get_letohs(tvb, offset - 4) * 1.25, tvb_get_letohs(tvb, offset - 2) * 1.25);
@@ -7431,7 +7521,8 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             if (tvb_get_ntohs(tvb, offset) == 0x0000) {
                 sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_uuid_32, tvb, offset, 4, ENC_BIG_ENDIAN);
                 proto_item_append_text(sub_item, " (%s)", val_to_str_ext_const(tvb_get_ntohs(tvb, offset + 2), &bluetooth_uuid_vals_ext, "Unknown"));
-            } else {
+            }
+            else {
                 bluetooth_uuid_t  uuid;
 
                 sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_custom_uuid, tvb, offset, 4, ENC_NA);
@@ -7448,11 +7539,12 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             break;
         case 0x21: /* Service Data - 128 bit UUID */
             if (tvb_get_ntohs(tvb, offset) == 0x0000 &&
-                    tvb_get_ntohl(tvb, offset + 4) == 0x1000 &&
-                    tvb_get_ntoh64(tvb, offset + 8) == G_GUINT64_CONSTANT(0x800000805F9B34FB)) {
+                tvb_get_ntohl(tvb, offset + 4) == 0x1000 &&
+                tvb_get_ntoh64(tvb, offset + 8) == G_GUINT64_CONSTANT(0x800000805F9B34FB)) {
                 sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_uuid_128, tvb, offset, 16, ENC_NA);
                 proto_item_append_text(sub_item, " (%s)", val_to_str_ext_const(tvb_get_ntohs(tvb, offset + 2), &bluetooth_uuid_vals_ext, "Unknown"));
-            } else {
+            }
+            else {
                 bluetooth_uuid_t  uuid;
 
                 sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_custom_uuid, tvb, offset, 16, ENC_NA);
@@ -7477,7 +7569,7 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             break;
         case 0x19: /* Appearance */
             proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_appearance, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-            proto_item_append_text(entry_item,": %s", val_to_str(tvb_get_letohs(tvb, offset), bthci_cmd_appearance_vals, "Unknown"));
+            proto_item_append_text(entry_item, ": %s", val_to_str(tvb_get_letohs(tvb, offset), bthci_cmd_appearance_vals, "Unknown"));
             offset += 2;
 
             break;
@@ -7520,7 +7612,7 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             if (length == 0)
                 break;
 
-            sub_item =  proto_tree_add_bitmask(entry_tree, tvb, offset, hf_btcommon_eir_ad_ips_flags, ett_eir_ad_entry, hfx_btcommon_eir_ad_ips_flags, ENC_LITTLE_ENDIAN);
+            sub_item = proto_tree_add_bitmask(entry_tree, tvb, offset, hf_btcommon_eir_ad_ips_flags, ett_eir_ad_entry, hfx_btcommon_eir_ad_ips_flags, ENC_LITTLE_ENDIAN);
             flags = tvb_get_guint8(tvb, offset);
             offset += 1;
 
@@ -7623,8 +7715,8 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
                 expert_add_info(pinfo, sub_item, &ei_eir_ad_unknown);
                 offset += sub_length;
             }
-            }
-            break;
+        }
+                   break;
         case 0x28: /* Channel Map Update Indication */
             sub_item = proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_le_channel_map, tvb, offset, 5, ENC_NA);
             sub_tree = proto_item_add_subtree(sub_item, ett_le_channel_map);
@@ -7647,6 +7739,14 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
             proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_3ds_path_loss_threshold, tvb, offset, 1, ENC_NA);
             offset += 1;
 
+            break;
+        case 0x2a:
+            if (btmesh_handle) {
+                call_dissector(btmesh_handle, tvb_new_subset_length(tvb, offset, length), pinfo, proto_tree_get_root(tree));
+            } else {
+                proto_tree_add_item(entry_tree, hf_btcommon_eir_ad_mesh_msg, tvb, offset, length, ENC_NA);
+            }
+            offset += length;
             break;
         case 0xFF: /* Manufacturer Specific */ {
             guint16  company_id;
@@ -7709,6 +7809,20 @@ dissect_eir_ad_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bluetoo
     if (tvb_reported_length_remaining(tvb, offset) > 0) {
         proto_tree_add_item(tree, hf_btcommon_eir_ad_unused, tvb, offset, tvb_reported_length_remaining(tvb, offset), ENC_NA);
         offset = tvb_reported_length(tvb);
+    }
+
+    if  (bluetooth_eir_ad_data && bluetooth_eir_ad_data->bd_addr && name && have_tap_listener(bluetooth_device_tap)) {
+        bluetooth_device_tap_t  *tap_device;
+
+        tap_device = wmem_new(wmem_packet_scope(), bluetooth_device_tap_t);
+        tap_device->interface_id  = bluetooth_eir_ad_data->interface_id;
+        tap_device->adapter_id    = bluetooth_eir_ad_data->adapter_id;
+        memcpy(tap_device->bd_addr, bluetooth_eir_ad_data->bd_addr, 6);
+        tap_device->has_bd_addr = TRUE;
+        tap_device->is_local = FALSE;
+        tap_device->type = BLUETOOTH_DEVICE_NAME;
+        tap_device->data.name = name;
+        tap_queue_packet(bluetooth_device_tap, pinfo, tap_device);
     }
 
     if (has_bd_addr && name && have_tap_listener(bluetooth_device_tap)) {
@@ -8825,7 +8939,13 @@ proto_register_btcommon(void)
             { "RF Channel 1 (2404 MHz - Data - 0)",                  "btcommon.le_channel_map.0",
             FT_BOOLEAN, 8, NULL, 0x01,
             NULL, HFILL }
-        }
+        },
+        { &hf_btcommon_eir_ad_mesh_msg,
+        { "Mesh message content",        "btcommon.eir_ad.entry.mesh_msg",
+            FT_BYTES, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+
     };
 
     static gint *ett[] = {
@@ -8872,6 +8992,11 @@ proto_register_btcommon(void)
     register_decode_as(&bluetooth_eir_ad_tds_organization_id_da);
 }
 
+void
+proto_reg_handoff_btcommon(void)
+{
+    btmesh_handle = find_dissector("btmesh.msg");
+}
 /*
  * Editor modelines  -  http://www.wireshark.org/tools/modelines.html
  *

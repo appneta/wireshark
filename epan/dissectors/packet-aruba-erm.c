@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -205,11 +193,7 @@ dissect_aruba_erm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
 {
     int offset = 0;
 
-    /*
-     * Implement "Decode As", as Aruba ERM doesn't
-     * have a unique identifier to determine subdissector
-     */
-    if (!dissector_try_uint(aruba_erm_subdissector_table, 0, tvb, pinfo, tree)) {
+    if (!dissector_try_payload(aruba_erm_subdissector_table, tvb, pinfo, tree)) {
 
         dissect_aruba_erm_common(tvb, pinfo, tree, &offset);
         /* Add Expert info how decode...*/
@@ -353,13 +337,6 @@ aruba_erm_prompt(packet_info *pinfo _U_, gchar* result)
     g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Aruba ERM payload as");
 }
 
-static gpointer
-aruba_erm_value(packet_info *pinfo _U_)
-{
-    return NULL;
-}
-
-
 void
 proto_register_aruba_erm(void)
 {
@@ -412,18 +389,6 @@ proto_register_aruba_erm(void)
 
     module_t *aruba_erm_module;
 
-    /* Decode As handling */
-    static build_valid_func aruba_erm_payload_da_build_value[1] = {aruba_erm_value};
-    static decode_as_value_t aruba_erm_payload_da_values = {aruba_erm_prompt, 1, aruba_erm_payload_da_build_value};
-    static decode_as_t aruba_erm_payload_da = {
-        "aruba_erm", "Aruba ERM Type", "aruba_erm.type", 1, 0,
-        &aruba_erm_payload_da_values, NULL, NULL,
-        decode_as_default_populate_list,
-        decode_as_default_reset,
-        decode_as_default_change,
-        NULL,
-    };
-
     expert_module_t* expert_aruba_erm;
 
     proto_aruba_erm = proto_register_protocol(PROTO_LONG_NAME, "ARUBA_ERM" , "aruba_erm");
@@ -451,12 +416,9 @@ proto_register_aruba_erm(void)
     expert_register_field_array(expert_aruba_erm, ei, array_length(ei));
 
     register_dissector("aruba_erm", dissect_aruba_erm, proto_aruba_erm);
-    aruba_erm_subdissector_table = register_dissector_table(
-        "aruba_erm.type", "Aruba ERM Type", proto_aruba_erm,
-        FT_UINT32, BASE_DEC);
 
-    register_decode_as(&aruba_erm_payload_da);
-
+    aruba_erm_subdissector_table = register_decode_as_next_proto(proto_aruba_erm, "Aruba ERM Type", "aruba_erm.type",
+                                                                "Aruba ERM Type", aruba_erm_prompt);
 }
 
 void

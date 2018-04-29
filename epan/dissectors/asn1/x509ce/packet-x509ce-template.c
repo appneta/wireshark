@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -45,7 +33,8 @@ static int proto_x509ce = -1;
 static int hf_x509ce_id_ce_invalidityDate = -1;
 static int hf_x509ce_id_ce_baseUpdateTime = -1;
 static int hf_x509ce_object_identifier_id = -1;
-static int hf_x509ce_IPAddress = -1;
+static int hf_x509ce_IPAddress_ipv4 = -1;
+static int hf_x509ce_IPAddress_ipv6 = -1;
 #include "packet-x509ce-hf.c"
 
 /* Initialize the subtree pointers */
@@ -111,9 +100,12 @@ void proto_register_x509ce(void) {
     { &hf_x509ce_object_identifier_id,
       { "Id", "x509ce.id", FT_OID, BASE_NONE, NULL, 0,
 	"Object identifier Id", HFILL }},
-    { &hf_x509ce_IPAddress,
-      { "iPAddress", "x509ce.IPAddress", FT_IPv4, BASE_NONE, NULL, 0,
-        "IP Address", HFILL }},
+    { &hf_x509ce_IPAddress_ipv4,
+      { "iPAddress", "x509ce.IPAddress.ipv4", FT_IPv4, BASE_NONE, NULL, 0,
+        "IPv4 address", HFILL }},
+    { &hf_x509ce_IPAddress_ipv6,
+      { "iPAddress", "x509ce.IPAddress.ipv6", FT_IPv6, BASE_NONE, NULL, 0,
+        "IPv6 address", HFILL }},
 
 #include "packet-x509ce-hfarr.c"
   };

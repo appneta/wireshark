@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __ETYPES_H__
@@ -324,6 +312,10 @@ extern "C" {
 #define ETHERTYPE_JUMBO_LLC		0x8870	/* 802.2 jumbo frames http://tools.ietf.org/html/draft-ietf-isis-ext-eth */
 #endif
 
+#ifndef ETHERTYPE_BRCM_TYPE
+#define ETHERTYPE_BRCM_TYPE		0x8874	/* Broadcom Ethernet switches management tag */
+#endif
+
 #ifndef ETHERTYPE_HOMEPLUG
 #define ETHERTYPE_HOMEPLUG		0x887B	/* IEEE assigned Ethertype */
 #endif
@@ -537,6 +529,10 @@ extern "C" {
 #define ETHERTYPE_FIP			0x8914	/* FCoE Initialization Protocol */
 #endif
 
+#ifndef ETHERTYPE_ROCE
+#define ETHERTYPE_ROCE			0x8915	/* Infiniband RDMA over Converged Ethernet */
+#endif
+
 #ifndef ETHERTYPE_MIH
 #define ETHERTYPE_MIH			0x8917	/* Media Independent Handover Protocol */
 #endif
@@ -553,8 +549,16 @@ extern "C" {
 #define ETHERTYPE_SEL_L2		0x892B	/* Schweitzer Engineering Labs Layer 2 */
 #endif
 
+#ifndef ETHERTYPE_BLUECOM
+#define ETHERTYPE_BLUECOM		0x892D	/* Bachmann bluecom protocol */
+#endif
+
 #ifndef ETHERTYPE_HSR
 #define ETHERTYPE_HSR			0x892F	/* High-availability Seamless Redundancy (IEC62439 Part 3) */
+#endif
+
+#ifndef ETHERTYPE_IEEE_1905
+#define ETHERTYPE_IEEE_1905		0x893A  /* IEEE 1905 */
 #endif
 
 #ifndef ETHERTYPE_IEEE_802_1BR
@@ -585,6 +589,10 @@ extern "C" {
 #define ETHERTYPE_QINQ_OLD		0x9100	/* QinQ: old non-standard 802.1ad */
 #endif
 
+#ifndef ETHERTYPE_6LOWPAN
+#define ETHERTYPE_6LOWPAN		0xA0ED	/* RFC 4944: Transmission of IPv6 Packets over IEEE 802.15.4 Networks */
+#endif
+
 #ifndef ETHERTYPE_LLT
 #define ETHERTYPE_LLT			0xCAFE	/* Veritas Low Latency Transport (not officially registered) */
 #endif
@@ -605,14 +613,9 @@ extern "C" {
 #define ETHERTYPE_FCFT			0xFCFC	/* used to transport FC frames+MDS hdr internal to Cisco's MDS switch */
 #endif
 
-#ifndef ETHERTYPE_ROCE
-#define ETHERTYPE_ROCE			0x8915	/* Infiniband RDMA over Converged Ethernet */
+#ifndef ETHERTYPE_AVSP
+#define ETHERTYPE_AVSP			0xD28B /* Ethernet type for Arista vendor specific packet frames */
 #endif
-
-#ifndef ETHERTYPE_BLUECOM
-#define ETHERTYPE_BLUECOM		0x892D	/* Bachmann bluecom protocol */
-#endif
-
 
 WS_DLL_PUBLIC const value_string etype_vals[];
 

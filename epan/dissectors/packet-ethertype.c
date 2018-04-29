@@ -9,19 +9,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -82,11 +70,13 @@ const value_string etype_vals[] = {
 	{ ETHERTYPE_INTEL_ANS,            "Intel ANS probe" },
 	{ ETHERTYPE_MS_NLB_HEARTBEAT,     "MS NLB heartbeat" },
 	{ ETHERTYPE_JUMBO_LLC,            "Jumbo LLC" },
+	{ ETHERTYPE_BRCM_TYPE,            "Broadcom tag" },
 	{ ETHERTYPE_HOMEPLUG,             "Homeplug" },
 	{ ETHERTYPE_HOMEPLUG_AV,          "Homeplug AV" },
 	{ ETHERTYPE_MRP,                  "MRP" },
 	{ ETHERTYPE_IEEE_802_1AD,         "802.1ad Provider Bridge (Q-in-Q)" },
 	{ ETHERTYPE_MACSEC,               "802.1AE (MACsec)" },
+	{ ETHERTYPE_IEEE_1905,		  "1905.1a Convergent Digital Home Network for Heterogenous Technologies" },
 	{ ETHERTYPE_IEEE_802_1AH,         "802.1ah Provider Backbone Bridge (mac-in-mac)" },
 	{ ETHERTYPE_IEEE_802_1BR,         "802.1br Bridge Port Extension E-Tag" },
 	{ ETHERTYPE_EAPOL,                "802.1X Authentication" },
@@ -187,6 +177,8 @@ const value_string etype_vals[] = {
 	{ ETHERTYPE_NWP,                  "Neighborhood Watch Protocol" },
 	{ ETHERTYPE_BLUECOM,              "bluecom Protocol" },
 	{ ETHERTYPE_QINQ_OLD,             "QinQ: old non-standard 802.1ad" },
+	{ ETHERTYPE_6LOWPAN,              "6LoWPAN" },
+	{ ETHERTYPE_AVSP,                 "Arista Timestamp" },
 	{ 0, NULL }
 };
 

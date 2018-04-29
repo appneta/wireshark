@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "service_response_time_dialog.h"
 
@@ -28,6 +15,7 @@
 #include <ui/service_response_time.h>
 
 #include "rpc_service_response_time_dialog.h"
+#include "scsi_service_response_time_dialog.h"
 #include "wireshark_application.h"
 
 #include <QTreeWidget>
@@ -65,6 +53,8 @@ gboolean register_service_response_tables(const void *, void *value, void*)
     } else if (strcmp(short_name, "RPC") == 0) {
         short_name = "ONC-RPC";
         tpd_creator = RpcServiceResponseTimeDialog::createOncRpcSrtDialog;
+    } else if (strcmp(short_name, "SCSI") == 0) {
+        tpd_creator = ScsiServiceResponseTimeDialog::createScsiSrtDialog;
     }
 
     cfg_str_to_srt_[cfg_abbr] = srt;
@@ -283,6 +273,8 @@ void ServiceResponseTimeDialog::fillTree()
     }
     srt_data_.srt_array = g_array_new(FALSE, TRUE, sizeof(srt_stat_table*));
     srt_data_.user_data = this;
+
+    provideParameterData();
 
     srt_table_dissector_init(srt_, srt_data_.srt_array, NULL, NULL);
 

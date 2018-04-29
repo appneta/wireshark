@@ -40,9 +40,7 @@
 #include <getopt.h>
 #endif
 
-#ifdef HAVE_EXTCAP
 #include <extcap.h>
-#endif
 
 #ifdef HAVE_LIBPORTAUDIO
 #include <portaudio.h>
@@ -54,9 +52,7 @@
 #include <wsutil/file_util.h>
 #include <wsutil/privileges.h>
 #include <wsutil/report_message.h>
-#include <ws_version_info.h>
-
-#include <wiretap/merge.h>
+#include <version_info.h>
 
 #include <epan/addr_resolv.h>
 #include <epan/column.h>
@@ -90,9 +86,8 @@
 /* general (not GTK specific) */
 #include "../../file.h"
 #include "../../frame_tvbuff.h"
-#include "../../summary.h"
 #include <epan/color_filters.h>
-#include "../../register.h"
+#include "epan/register.h"
 #include "../../ringbuffer.h"
 #include "../../log.h"
 
@@ -108,10 +103,12 @@
 #include "ui/recent.h"
 #include "ui/recent_utils.h"
 #include "ui/software_update.h"
-#include "ui/ui_util.h"
+#include "ui/summary.h"
+#include "ui/ws_ui_util.h"
 #include "ui/util.h"
 #include "ui/dissect_opts.h"
 #include "ui/commandline.h"
+#include "ui/taps.h"
 
 #ifdef HAVE_LIBPCAP
 #include "ui/capture_ui_utils.h"
@@ -201,12 +198,8 @@
 #include "airpcap_gui_utils.h"
 #endif
 
-#include <epan/crypt/airpdcap_ws.h>
+#include <epan/crypt/dot11decrypt_ws.h>
 
-
-#ifdef HAVE_GTKOSXAPPLICATION
-#include <gtkmacintegration/gtkosxapplication.h>
-#endif
 
 #define INVALID_OPTION 1
 #define INIT_FAILED 2
@@ -247,7 +240,7 @@ static gboolean have_capture_file = FALSE; /* XXX - is there an equivalent in cf
 
 static guint  tap_update_timer_id;
 
-static void create_main_window(gint, gint, gint, e_prefs*);
+static void create_main_window(gint, gint, gint);
 static void show_main_window(gboolean);
 static void main_save_window_geometry(GtkWidget *widget);
 
@@ -536,8 +529,9 @@ get_ip_address_list_from_packet_list_row(gpointer data)
         epan_dissect_init(&edt, cfile.epan, FALSE, FALSE);
         col_custom_prime_edt(&edt, &cfile.cinfo);
 
-        epan_dissect_run(&edt, cfile.cd_t, &cfile.phdr,
-            frame_tvbuff_new_buffer(fdata, &cfile.buf), fdata, &cfile.cinfo);
+        epan_dissect_run(&edt, cfile.cd_t, &cfile.rec,
+            frame_tvbuff_new_buffer(&cfile.provider, fdata, &cfile.buf),
+            fdata, &cfile.cinfo);
         epan_dissect_fill_in_columns(&edt, TRUE, TRUE);
 
         /* First check selected column */
@@ -577,8 +571,8 @@ get_filter_from_packet_list_row_and_column(gpointer data)
         epan_dissect_init(&edt, cfile.epan, have_custom_cols(&cfile.cinfo), FALSE);
         col_custom_prime_edt(&edt, &cfile.cinfo);
 
-        epan_dissect_run(&edt, cfile.cd_t, &cfile.phdr,
-                         frame_tvbuff_new_buffer(fdata, &cfile.buf),
+        epan_dissect_run(&edt, cfile.cd_t, &cfile.rec,
+                         frame_tvbuff_new_buffer(&cfile.provider, fdata, &cfile.buf),
                          fdata, &cfile.cinfo);
         epan_dissect_fill_in_columns(&edt, TRUE, TRUE);
 
@@ -1769,9 +1763,6 @@ main_cf_callback(gint event, gpointer data, gpointer user_data _U_)
 static void
 main_capture_callback(gint event, capture_session *cap_session, gpointer user_data _U_)
 {
-#ifdef HAVE_GTKOSXAPPLICATION
-    GtkosxApplication *theApp;
-#endif
     switch(event) {
     case(capture_cb_capture_prepared):
         g_log(LOG_DOMAIN_MAIN, G_LOG_LEVEL_DEBUG, "Callback: capture prepared");
@@ -1780,14 +1771,6 @@ main_capture_callback(gint event, capture_session *cap_session, gpointer user_da
     case(capture_cb_capture_update_started):
         g_log(LOG_DOMAIN_MAIN, G_LOG_LEVEL_DEBUG, "Callback: capture update started");
         main_capture_cb_capture_update_started(cap_session);
-#ifdef HAVE_GTKOSXAPPLICATION
-        theApp = (GtkosxApplication *)g_object_new(GTKOSX_TYPE_APPLICATION, NULL);
-#ifdef HAVE_GDK_GRESOURCE
-        gtkosx_application_set_dock_icon_pixbuf(theApp, ws_gdk_pixbuf_new_from_resource("/org/wireshark/image/wsicon48.png"));
-#else
-        gtkosx_application_set_dock_icon_pixbuf(theApp, gdk_pixbuf_new_from_inline(-1, wsicon_48_pb_data, FALSE, NULL));
-#endif
-#endif
         break;
     case(capture_cb_capture_update_continue):
         /*g_log(LOG_DOMAIN_MAIN, G_LOG_LEVEL_DEBUG, "Callback: capture update continue");*/
@@ -1811,14 +1794,6 @@ main_capture_callback(gint event, capture_session *cap_session, gpointer user_da
         g_log(LOG_DOMAIN_MAIN, G_LOG_LEVEL_DEBUG, "Callback: capture stopping");
         /* Beware: this state won't be called, if the capture child
          * closes the capturing on its own! */
-#ifdef HAVE_GTKOSXAPPLICATION
-        theApp = (GtkosxApplication *)g_object_new(GTKOSX_TYPE_APPLICATION, NULL);
-#ifdef HAVE_GDK_GRESOURCE
-        gtkosx_application_set_dock_icon_pixbuf(theApp, ws_gdk_pixbuf_new_from_resource("/org/wireshark/image/wsicon64.png"));
-#else
-        gtkosx_application_set_dock_icon_pixbuf(theApp, gdk_pixbuf_new_from_inline(-1, wsicon_64_pb_data, FALSE, NULL));
-#endif
-#endif
         main_capture_cb_capture_stopping(cap_session);
         break;
     case(capture_cb_capture_failed):
@@ -1874,12 +1849,14 @@ get_gui_compiled_info(GString *str)
     g_string_append(str, "without PortAudio");
 #endif /* HAVE_LIBPORTAUDIO */
 
+#ifdef _WIN32
     g_string_append(str, ", ");
 #ifdef HAVE_AIRPCAP
     get_compiled_airpcap_version(str);
 #else
     g_string_append(str, "without AirPcap");
 #endif
+#endif /* _WIN32 */
 
     codec_get_compiled_version_info(str);
 }
@@ -1949,7 +1926,7 @@ check_and_warn_user_startup(gchar *cf_name _U_)
         "This could be dangerous.\n\n"
         "If you're running Wireshark this way in order to perform live capture, "
         "you may want to be aware that there is a better way documented at\n"
-        "/usr/share/doc/wireshark-common/README.Debian", cur_user, cur_group);
+        "https://wiki.wireshark.org/CaptureSetup/CapturePrivileges", cur_user, cur_group);
         g_free(cur_user);
         g_free(cur_group);
         simple_dialog_check_set(priv_warning_dialog, "Don't show this message again.");
@@ -1989,6 +1966,7 @@ main(int argc, char *argv[])
     int                  err;
 #ifdef HAVE_LIBPCAP
     gchar               *err_str;
+    int                  caps_queries = 0;
 #else
 #ifdef _WIN32
 #ifdef HAVE_AIRPCAP
@@ -2004,9 +1982,6 @@ main(int argc, char *argv[])
     GtkWidget           *splash_win = NULL;
     dfilter_t           *jump_to_filter = NULL;
     unsigned int         in_file_type = WTAP_TYPE_AUTO;
-#ifdef HAVE_GTKOSXAPPLICATION
-    GtkosxApplication   *theApp;
-#endif
     GString             *comp_info_str = NULL;
     GString             *runtime_info_str = NULL;
 
@@ -2043,7 +2018,7 @@ main(int argc, char *argv[])
     /* initialize the funnel mini-api */
     initialize_funnel_ops();
 
-    AirPDcapInitContext(&airpdcap_ctx);
+    Dot11DecryptInitContext(&dot11decrypt_ctx);
 
 #ifdef _WIN32
     /* Load wpcap if possible. Do this before collecting the run-time version information */
@@ -2215,23 +2190,7 @@ main(int argc, char *argv[])
         g_free(init_progfile_dir_error);
     }
 
-    wtap_init();
-
-#ifdef HAVE_PLUGINS
-    /* Register all the plugin types we have. */
-    epan_register_plugin_types(); /* Types known to libwireshark */
-    codec_register_plugin_types(); /* Types known to libwscodecs */
-
-    /* Scan for plugins.  This does *not* call their registration routines;
-       that's done later. */
-    scan_plugins(REPORT_LOAD_FAILURE);
-
-    /* Register all libwiretap plugin modules. */
-    register_all_wiretap_modules();
-#endif
-
-    /* Register all audio codec plugins. */
-    register_all_codecs();
+    wtap_init(TRUE);
 
     splash_update(RA_DISSECTORS, NULL, (gpointer)splash_win);
 
@@ -2244,6 +2203,9 @@ main(int argc, char *argv[])
         ret = INIT_FAILED;
         goto clean_exit;
     }
+
+    /* Register all audio codecs. */
+    codecs_init();
 
     splash_update(RA_LISTENERS, NULL, (gpointer)splash_win);
 
@@ -2258,17 +2220,18 @@ main(int argc, char *argv[])
     register_all_plugin_tap_listeners();
 #endif
 
-    register_all_tap_listeners();
+    /* Register all tap listeners. */
+    for (tap_reg_t *t = tap_reg_listener; t->cb_func != NULL; t++) {
+        t->cb_func();
+    }
     conversation_table_set_gui_info(init_conversation_table);
     hostlist_table_set_gui_info(init_hostlist_table);
     srt_table_iterate_tables(register_service_response_tables, NULL);
     rtd_table_iterate_tables(register_response_time_delay_tables, NULL);
-    new_stat_tap_iterate_tables(register_simple_stat_tables, NULL);
+    stat_tap_iterate_tables(register_simple_stat_tables, NULL);
 
-#ifdef HAVE_EXTCAP
     splash_update(RA_EXTCAP, NULL, (gpointer)splash_win);
     extcap_register_preferences();
-#endif
 
     splash_update(RA_PREFERENCES, NULL, (gpointer)splash_win);
 
@@ -2294,8 +2257,13 @@ main(int argc, char *argv[])
 
     fill_in_local_interfaces(main_window_update);
 
-    if (global_commandline_info.start_capture || global_commandline_info.list_link_layer_types) {
-        /* We're supposed to do a live capture or get a list of link-layer
+    if  (global_commandline_info.list_link_layer_types)
+        caps_queries |= CAPS_QUERY_LINK_TYPES;
+     if (global_commandline_info.list_timestamp_types)
+        caps_queries |= CAPS_QUERY_TIMESTAMP_TYPES;
+
+    if (global_commandline_info.start_capture || caps_queries) {
+        /* We're supposed to do a live capture or get a list of link-layer/timestamp
            types for a live capture device; if the user didn't specify an
            interface to use, pick a default. */
         ret = capture_opts_default_iface_if_necessary(&global_capture_opts,
@@ -2305,13 +2273,13 @@ main(int argc, char *argv[])
         }
     }
 
-    if (global_commandline_info.list_link_layer_types) {
+    if (caps_queries) {
         /* Get the list of link-layer types for the capture devices. */
         if_capabilities_t *caps;
         guint i;
         interface_t device;
         for (i = 0; i < global_capture_opts.all_ifaces->len; i++) {
-
+            int if_caps_queries = caps_queries;
             device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
             if (device.selected) {
                 gchar* auth_str = NULL;
@@ -2342,10 +2310,10 @@ main(int argc, char *argv[])
                 create_console();
 #endif /* _WIN32 */
 #if defined(HAVE_PCAP_CREATE)
-                capture_opts_print_if_capabilities(caps, device.name, device.monitor_mode_supported);
-#else
-                capture_opts_print_if_capabilities(caps, device.name, FALSE);
+                if (device.monitor_mode_supported)
+                    if_caps_queries |= CAPS_MONITOR_MODE;
 #endif
+                capture_opts_print_if_capabilities(caps, device.name, if_caps_queries);
 #ifdef _WIN32
                 destroy_console();
 #endif /* _WIN32 */
@@ -2363,6 +2331,7 @@ main(int argc, char *argv[])
        changed either from one of the preferences file or from the command
        line that their preferences have changed. */
     prefs_apply_all();
+    prefs_to_capture_opts();
 
 #ifdef HAVE_LIBPCAP
     if ((global_capture_opts.num_selected == 0) &&
@@ -2427,7 +2396,7 @@ main(int argc, char *argv[])
     /* Everything is prepared now, preferences and command line was read in */
 
     /* Pop up the main window. */
-    create_main_window(pl_size, tv_size, bv_size, global_commandline_info.prefs_p);
+    create_main_window(pl_size, tv_size, bv_size);
 
     /* Read the dynamic part of the recent file, as we have the gui now ready for it. */
     if (!recent_read_dynamic(&rf_path, &rf_open_errno)) {
@@ -2578,8 +2547,7 @@ main(int argc, char *argv[])
                 g_free(global_commandline_info.cf_name);
                 global_commandline_info.cf_name = NULL;
             } else {
-                if (rfcode != NULL)
-                    dfilter_free(rfcode);
+                dfilter_free(rfcode);
                 cfile.rfcode = NULL;
                 show_main_window(FALSE);
                 /* Don't call check_and_warn_user_startup(): we did it above */
@@ -2644,16 +2612,6 @@ main(int argc, char *argv[])
 
     profile_store_persconffiles (FALSE);
 
-#ifdef HAVE_GTKOSXAPPLICATION
-    theApp = (GtkosxApplication *)g_object_new(GTKOSX_TYPE_APPLICATION, NULL);
-#ifdef HAVE_GDK_GRESOURCE
-    gtkosx_application_set_dock_icon_pixbuf(theApp, ws_gdk_pixbuf_new_from_resource("/org/wireshark/image/wsicon64.png"));
-#else
-    gtkosx_application_set_dock_icon_pixbuf(theApp, gdk_pixbuf_new_from_inline(-1, wsicon_64_pb_data, FALSE, NULL));
-#endif
-    gtkosx_application_ready(theApp);
-#endif
-
     g_log(LOG_DOMAIN_MAIN, G_LOG_LEVEL_INFO, "Wireshark is up and ready to go");
 
 #ifdef HAVE_LIBPCAP
@@ -2671,16 +2629,9 @@ main(int argc, char *argv[])
 #endif
 
     epan_cleanup();
-
-#ifdef HAVE_EXTCAP
     extcap_cleanup();
-#endif
 
-    AirPDcapDestroyContext(&airpdcap_ctx);
-
-#ifdef HAVE_GTKOSXAPPLICATION
-    g_object_unref(theApp);
-#endif
+    Dot11DecryptDestroyContext(&dot11decrypt_ctx);
 
 #ifdef _WIN32
     /* hide the (unresponsive) main window, while asking the user to close the console window */
@@ -2708,11 +2659,9 @@ clean_exit:
 #endif
     col_cleanup(&cfile.cinfo);
     free_filter_lists();
+    codecs_cleanup();
     wtap_cleanup();
     free_progdirs();
-#ifdef HAVE_PLUGINS
-    plugins_cleanup();
-#endif
     return ret;
 }
 
@@ -3049,11 +2998,7 @@ top_level_key_pressed_cb(GtkWidget *w _U_, GdkEventKey *event, gpointer user_dat
 }
 
 static void
-create_main_window (gint pl_size, gint tv_size, gint bv_size, e_prefs *prefs_p
-#if !defined(HAVE_IGE_MAC_INTEGRATION) && !defined (HAVE_GTKOSXAPPLICATION)
-                    _U_
-#endif
-                    )
+create_main_window (gint pl_size, gint tv_size, gint bv_size)
 {
     GtkAccelGroup *accel;
 
@@ -3079,17 +3024,8 @@ create_main_window (gint pl_size, gint tv_size, gint bv_size, e_prefs *prefs_p
     /* Menu bar */
     menubar = main_menu_new(&accel);
 
-#if defined(HAVE_IGE_MAC_INTEGRATION) || defined (HAVE_GTKOSXAPPLICATION)
-    /* macOS native menus are created and displayed by main_menu_new() */
-    if(!prefs_p->gui_macosx_style) {
-#endif
     gtk_window_add_accel_group(GTK_WINDOW(top_level), accel);
     gtk_widget_show(menubar);
-#if defined(HAVE_IGE_MAC_INTEGRATION) || defined(HAVE_GTKOSXAPPLICATION)
-    } else {
-    gtk_widget_hide(menubar);
-    }
-#endif
 
     /* Main Toolbar */
     main_tb = toolbar_new();

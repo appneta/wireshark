@@ -6,19 +6,7 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # Common variables and functions for fuzz and randpkt tests.
 
@@ -125,10 +113,11 @@ export ASAN_OPTIONS=detect_leaks=0
 
 # See if we were configured with gcc or clang's AddressSanitizer.
 CONFIGURED_WITH_ASAN=0
-if [ -r "$WIRESHARK_BIN_DIR/Makefile" ] ; then
-    grep -- "-fsanitize=address" "$WIRESHARK_BIN_DIR/Makefile" > /dev/null 2>&1 && CONFIGURED_WITH_ASAN=1
-elif [ -r "$WIRESHARK_BIN_DIR/../CMakeFiles/tshark.dir/flags.make" ] ; then
-    grep -- "-fsanitize=address" "$WIRESHARK_BIN_DIR/../CMakeFiles/tshark.dir/flags.make" > /dev/null 2>&1 && CONFIGURED_WITH_ASAN=1
+# If tshark is built with ASAN this will generate an error. We could
+# also pass help=1 and look for help text.
+ASAN_OPTIONS=Invalid_Option_Flag $TSHARK -h > /dev/null 2>&1
+if [ $? -ne 0 ] ; then
+    CONFIGURED_WITH_ASAN=1
 fi
 export CONFIGURED_WITH_ASAN
 

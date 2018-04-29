@@ -3,19 +3,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -77,7 +65,7 @@ static const ascend_magic_string ascend_magic[] = {
 static gboolean ascend_read(wtap *wth, int *err, gchar **err_info,
         gint64 *data_offset);
 static gboolean ascend_seek_read(wtap *wth, gint64 seek_off,
-        struct wtap_pkthdr *phdr, Buffer *buf,
+        wtap_rec *rec, Buffer *buf,
         int *err, gchar **err_info);
 
 /* Seeks to the beginning of the next packet, and returns the
@@ -212,7 +200,7 @@ found:
   if (file_seek(wth->fh, packet_off, SEEK_SET, err) == -1)
     return -1;
 
-  wth->phdr.pseudo_header.ascend.type = type;
+  wth->rec.rec_header.packet_header.pseudo_header.ascend.type = type;
 
   return packet_off;
 }
@@ -240,7 +228,7 @@ wtap_open_return_val ascend_open(wtap *wth, int *err, gchar **err_info)
   /* Do a trial parse of the first packet just found to see if we might
      really have an Ascend file.  If it fails with an actual error,
      fail; those will be I/O errors. */
-  if (run_ascend_parser(wth->fh, &wth->phdr, buf, &parser_state, err,
+  if (run_ascend_parser(wth->fh, &wth->rec, buf, &parser_state, err,
                         err_info) != 0 && *err != 0) {
       /* An I/O error. */
       return WTAP_OPEN_ERROR;
@@ -261,7 +249,7 @@ wtap_open_return_val ascend_open(wtap *wth, int *err, gchar **err_info)
 
   wth->file_type_subtype = WTAP_FILE_TYPE_SUBTYPE_ASCEND;
 
-  switch(wth->phdr.pseudo_header.ascend.type) {
+  switch(wth->rec.rec_header.packet_header.pseudo_header.ascend.type) {
     case ASCEND_PFX_ISDN_X:
     case ASCEND_PFX_ISDN_R:
       wth->file_encap = WTAP_ENCAP_ISDN;
@@ -304,14 +292,14 @@ wtap_open_return_val ascend_open(wtap *wth, int *err, gchar **err_info)
 /* Parse the capture file.
    Returns TRUE if we got a packet, FALSE otherwise. */
 static gboolean
-parse_ascend(ascend_t *ascend, FILE_T fh, struct wtap_pkthdr *phdr, Buffer *buf,
+parse_ascend(ascend_t *ascend, FILE_T fh, wtap_rec *rec, Buffer *buf,
              guint length, int *err, gchar **err_info)
 {
   ascend_state_t parser_state;
   int retval;
 
   ws_buffer_assure_space(buf, length);
-  retval = run_ascend_parser(fh, phdr, ws_buffer_start_ptr(buf), &parser_state,
+  retval = run_ascend_parser(fh, rec, ws_buffer_start_ptr(buf), &parser_state,
                              err, err_info);
 
   /* did we see any data (hex bytes)? if so, tip off ascend_seek()
@@ -354,30 +342,30 @@ parse_ascend(ascend_t *ascend, FILE_T fh, struct wtap_pkthdr *phdr, Buffer *buf,
       if (ascend->inittime > parser_state.secs)
         ascend->inittime -= parser_state.secs;
     }
-    phdr->presence_flags = WTAP_HAS_TS|WTAP_HAS_CAP_LEN;
-    phdr->ts.secs = parser_state.secs + ascend->inittime;
-    phdr->ts.nsecs = parser_state.usecs * 1000;
-    phdr->caplen = parser_state.caplen;
-    phdr->len = parser_state.wirelen;
+    rec->presence_flags = WTAP_HAS_TS|WTAP_HAS_CAP_LEN;
+    rec->ts.secs = parser_state.secs + ascend->inittime;
+    rec->ts.nsecs = parser_state.usecs * 1000;
+    rec->rec_header.packet_header.caplen = parser_state.caplen;
+    rec->rec_header.packet_header.len = parser_state.wirelen;
 
     /*
      * For these types, the encapsulation we use is not WTAP_ENCAP_ASCEND,
      * so set the pseudo-headers appropriately for the type (WTAP_ENCAP_ISDN
      * or WTAP_ENCAP_ETHERNET).
      */
-    switch(phdr->pseudo_header.ascend.type) {
+    switch(rec->rec_header.packet_header.pseudo_header.ascend.type) {
       case ASCEND_PFX_ISDN_X:
-        phdr->pseudo_header.isdn.uton = TRUE;
-        phdr->pseudo_header.isdn.channel = 0;
+        rec->rec_header.packet_header.pseudo_header.isdn.uton = TRUE;
+        rec->rec_header.packet_header.pseudo_header.isdn.channel = 0;
         break;
 
       case ASCEND_PFX_ISDN_R:
-        phdr->pseudo_header.isdn.uton = FALSE;
-        phdr->pseudo_header.isdn.channel = 0;
+        rec->rec_header.packet_header.pseudo_header.isdn.uton = FALSE;
+        rec->rec_header.packet_header.pseudo_header.isdn.channel = 0;
         break;
 
       case ASCEND_PFX_ETHER:
-        phdr->pseudo_header.eth.fcs_len = 0;
+        rec->rec_header.packet_header.pseudo_header.eth.fcs_len = 0;
         break;
     }
     return TRUE;
@@ -420,7 +408,7 @@ static gboolean ascend_read(wtap *wth, int *err, gchar **err_info,
   offset = ascend_seek(wth, err, err_info);
   if (offset == -1)
     return FALSE;
-  if (!parse_ascend(ascend, wth->fh, &wth->phdr, wth->frame_buffer,
+  if (!parse_ascend(ascend, wth->fh, &wth->rec, wth->rec_data,
                    wth->snapshot_length, err, err_info))
     return FALSE;
 
@@ -429,14 +417,14 @@ static gboolean ascend_read(wtap *wth, int *err, gchar **err_info,
 }
 
 static gboolean ascend_seek_read(wtap *wth, gint64 seek_off,
-        struct wtap_pkthdr *phdr, Buffer *buf,
+        wtap_rec *rec, Buffer *buf,
         int *err, gchar **err_info)
 {
   ascend_t *ascend = (ascend_t *)wth->priv;
 
   if (file_seek(wth->random_fh, seek_off, SEEK_SET, err) == -1)
     return FALSE;
-  if (!parse_ascend(ascend, wth->random_fh, phdr, buf,
+  if (!parse_ascend(ascend, wth->random_fh, rec, buf,
                    wth->snapshot_length, err, err_info))
     return FALSE;
 

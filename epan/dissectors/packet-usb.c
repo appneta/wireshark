@@ -10,19 +10,7 @@
  *
  * http://desowin.org/usbpcap/captureformat.html
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
@@ -42,9 +30,11 @@
 #include "packet-usb.h"
 #include "packet-mausb.h"
 #include "packet-usbip.h"
+#include "packet-netmon.h"
 
 /* protocols and header fields */
 static int proto_usb = -1;
+static int proto_usbport = -1;
 
 /* USB pseudoheader fields, both FreeBSD and Linux */
 static int hf_usb_totlen = -1;
@@ -252,6 +242,55 @@ static int hf_usb_darwin_iso_status = -1;
 static int hf_usb_darwin_iso_frame_number = -1;
 static int hf_usb_darwin_iso_timestamp = -1;
 
+/* NetMon */
+static int hf_usbport_event_id = -1;
+static int hf_usbport_device_object = -1;
+static int hf_usbport_pci_bus = -1;
+static int hf_usbport_pci_device = -1;
+static int hf_usbport_pci_function = -1;
+static int hf_usbport_pci_vendor_id = -1;
+static int hf_usbport_pci_device_id = -1;
+static int hf_usbport_port_path_depth = -1;
+static int hf_usbport_port_path0 = -1;
+static int hf_usbport_port_path1 = -1;
+static int hf_usbport_port_path2 = -1;
+static int hf_usbport_port_path3 = -1;
+static int hf_usbport_port_path4 = -1;
+static int hf_usbport_port_path5 = -1;
+static int hf_usbport_device_handle = -1;
+static int hf_usbport_device_speed = -1;
+static int hf_usbport_endpoint = -1;
+static int hf_usbport_pipehandle = -1;
+static int hf_usbport_endpoint_desc_length = -1;
+static int hf_usbport_endpoint_desc_type = -1;
+static int hf_usbport_endpoint_address = -1;
+static int hf_usbport_bm_attributes = -1;
+static int hf_usbport_max_packet_size = -1;
+static int hf_usbport_interval = -1;
+static int hf_usbport_irp = -1;
+static int hf_usbport_urb = -1;
+static int hf_usbport_urb_transfer_data = -1;
+static int hf_usbport_urb_header_length = -1;
+static int hf_usbport_urb_header_function = -1;
+static int hf_usbport_urb_header_status = -1;
+static int hf_usbport_urb_header_usbddevice_handle = -1;
+static int hf_usbport_urb_header_usbdflags = -1;
+static int hf_usbport_urb_configuration_desc = -1;
+static int hf_usbport_urb_configuration_handle = -1;
+static int hf_usbport_urb_pipe_handle = -1;
+static int hf_usbport_urb_xferflags = -1;
+static int hf_usbport_urb_transfer_buffer_length = -1;
+static int hf_usbport_urb_transfer_buffer = -1;
+static int hf_usbport_urb_transfer_buffer_mdl = -1;
+static int hf_usbport_urb_reserved_mbz = -1;
+static int hf_usbport_urb_reserved_hcd = -1;
+static int hf_usbport_urb_reserved = -1;
+static int hf_usbport_keyword = -1;
+static int hf_usbport_keyword_diagnostic = -1;
+static int hf_usbport_keyword_power_diagnostics = -1;
+static int hf_usbport_keyword_perf_diagnostics = -1;
+static int hf_usbport_keyword_reserved1 = -1;
+
 static gint ett_usb_hdr = -1;
 static gint ett_usb_setup_hdr = -1;
 static gint ett_usb_isodesc = -1;
@@ -268,11 +307,21 @@ static gint ett_usb_xferflags = -1;
 static gint ett_usb_xferstatus = -1;
 static gint ett_usb_frame = -1;
 static gint ett_usb_frame_flags = -1;
+static gint ett_usbport = -1;
+static gint ett_usbport_host_controller = -1;
+static gint ett_usbport_path = -1;
+static gint ett_usbport_device = -1;
+static gint ett_usbport_endpoint = -1;
+static gint ett_usbport_endpoint_desc = -1;
+static gint ett_usbport_urb = -1;
+static gint ett_usbport_keyword = -1;
 
 static expert_field ei_usb_bLength_even = EI_INIT;
 static expert_field ei_usb_bLength_too_short = EI_INIT;
 static expert_field ei_usb_desc_length_invalid = EI_INIT;
 static expert_field ei_usb_invalid_setup = EI_INIT;
+
+static expert_field ei_usbport_invalid_path_depth = EI_INIT;
 
 static int usb_address_type = -1;
 
@@ -772,6 +821,7 @@ static const value_string usb_endpoint_direction_vals[] = {
 extern value_string_ext ext_usb_vendors_vals;
 extern value_string_ext ext_usb_products_vals;
 extern value_string_ext ext_usb_com_subclass_vals;
+extern value_string_ext linux_negative_errno_vals_ext;
 
 /*
  * Standard descriptor types.
@@ -902,146 +952,6 @@ static const value_string usb_wMaxPacketSize_slots_vals[]  = {
     {0x03,      "Reserved"},
     {0, NULL}
 };
-
-/* Note: sorted in (unsigned) ascending order */
-static const value_string usb_urb_status_vals[] = {
-    /* from linux/include/asm-generic/errno.h*/
-    { -131, "State not recoverable (-ENOTRECOVERABLE)" },
-    { -130, "Owner died (-EOWNERDEAD)" },
-    { -129, "Key was rejected by service (-EKEYREJECTED)" },
-    { -128, "Key has been revoked (-EKEYREVOKED)" },
-    { -127, "Key has expired (-EKEYEXPIRED)" },
-    { -126, "Required key not available (-ENOKEY)" },
-    { -125, "Operation Canceled (-ECANCELED)" },
-    { -124, "Wrong medium type (-EMEDIUMTYPE)" },
-    { -123, "No medium found (-ENOMEDIUM)" },
-    { -122, "Quota exceeded (-EDQUOT)" },
-    { -121, "Remote I/O error (-EREMOTEIO)" },
-    { -120, "Is a named type file (-EISNAM)" },
-    { -119, "No XENIX semaphores available (-ENAVAIL)" },
-    { -118, "Not a XENIX named type file (-ENOTNAM)" },
-    { -117, "Structure needs cleaning (-EUCLEAN)" },
-    { -116, "Stale NFS file handle (-ESTALE)" },
-    { -115, "Operation now in progress (-EINPROGRESS)" },
-    { -114, "Operation already in progress (-EALREADY)" },
-    { -113, "No route to host (-EHOSTUNREACH)" },
-    { -112, "Host is down (-EHOSTDOWN)" },
-    { -111, "Connection refused (-ECONNREFUSED)" },
-    { -110, "Connection timed out (-ETIMEDOUT)" },
-    { -109, "Too many references: cannot splice (-ETOOMANYREFS)" },
-    { -108, "Cannot send after transport endpoint shutdown (-ESHUTDOWN)" },
-    { -107, "Transport endpoint is not connected (-ENOTCONN)" },
-    { -106, "Transport endpoint is already connected (-EISCONN)" },
-    { -105, "No buffer space available (-ENOBUFS)" },
-    { -104, "Connection reset by peer (-ECONNRESET)" },
-    { -103, "Software caused connection abort (-ECONNABORTED)" },
-    { -102, "Network dropped connection because of reset (-ENETRESET)" },
-    { -101, "Network is unreachable (-ENETUNREACH)" },
-    { -100, "Network is down (-ENETDOWN)" },
-    { -99,  "Cannot assign requested address (-EADDRNOTAVAIL)" },
-    { -98,  "Address already in use (-EADDRINUSE)" },
-    { -97,  "Address family not supported by protocol (-EAFNOSUPPORT)" },
-    { -96,  "Protocol family not supported (-EPFNOSUPPORT)" },
-    { -95,  "Operation not supported on transport endpoint (-EOPNOTSUPP)" },
-    { -94,  "Socket type not supported (-ESOCKTNOSUPPORT)" },
-    { -93,  "Protocol not supported (-EPROTONOSUPPORT)" },
-    { -92,  "Protocol not available (-ENOPROTOOPT)" },
-    { -91,  "Protocol wrong type for socket (-EPROTOTYPE)" },
-    { -90,  "Message too long (-EMSGSIZE)" },
-    { -89,  "Destination address required (-EDESTADDRREQ)" },
-    { -88,  "Socket operation on non-socket (-ENOTSOCK)" },
-    { -87,  "Too many users (-EUSERS)" },
-    { -86,  "Streams pipe error (-ESTRPIPE)" },
-    { -85,  "Interrupted system call should be restarted (-ERESTART)" },
-    { -84,  "Illegal byte sequence (-EILSEQ)" },
-    { -83,  "Cannot exec a shared library directly (-ELIBEXEC)" },
-    { -82,  "Attempting to link in too many shared libraries (-ELIBMAX)" },
-    { -81,  ".lib section in a.out corrupted (-ELIBSCN)" },
-    { -80,  "Accessing a corrupted shared library (-ELIBBAD)" },
-    { -79,  "Can not access a needed shared library (-ELIBACC)" },
-    { -78,  "Remote address changed (-EREMCHG)" },
-    { -77,  "File descriptor in bad state (-EBADFD)" },
-    { -76,  "Name not unique on network (-ENOTUNIQ)" },
-    { -75,  "Value too large for defined data type (-EOVERFLOW)" },
-    { -74,  "Not a data message (-EBADMSG)" },
-    { -73,  "RFS specific error (-EDOTDOT)" },
-    { -72,  "Multihop attempted (-EMULTIHOP)" },
-    { -71,  "Protocol error (-EPROTO)" },
-    { -70,  "Communication error on send (-ECOMM)" },
-    { -69,  "Srmount error (-ESRMNT)" },
-    { -68,  "Advertise error (-EADV)" },
-    { -67,  "Link has been severed (-ENOLINK)" },
-    { -66,  "Object is remote (-EREMOTE)" },
-    { -65,  "Package not installed (-ENOPKG)" },
-    { -64,  "Machine is not on the network (-ENONET)" },
-    { -63,  "Out of streams resources (-ENOSR)" },
-    { -62,  "Timer expired (-ETIME)" },
-    { -61,  "No data available (-ENODATA)" },
-    { -60,  "Device not a stream (-ENOSTR)" },
-    { -59,  "Bad font file format (-EBFONT)" },
-    { -58,  "(-58 \?\?\?)" },   /* dummy so that there are no "gaps" */
-    { -57,  "Invalid slot (-EBADSLT)" },
-    { -56,  "Invalid request code (-EBADRQC)" },
-    { -55,  "No anode (-ENOANO)" },
-    { -54,  "Exchange full (-EXFULL)" },
-    { -53,  "Invalid request descriptor (-EBADR)" },
-    { -52,  "Invalid exchange (-EBADE)" },
-    { -51,  "Level 2 halted (-EL2HLT)" },
-    { -50,  "No CSI structure available (-ENOCSI)" },
-    { -49,  "Protocol driver not attached (-EUNATCH)" },
-    { -48,  "Link number out of range (-ELNRNG)" },
-    { -47,  "Level 3 reset (-EL3RST)" },
-    { -46,  "Level 3 halted (-EL3HLT)" },
-    { -45,  "Level 2 not synchronized (-EL2NSYNC)" },
-    { -44,  "Channel number out of range (-ECHRNG)" },
-    { -43,  "Identifier removed (-EIDRM)" },
-    { -42,  "No message of desired type (-ENOMSG)" },
-    { -41,  "(-41 \?\?\?)" },   /* dummy so that there are no "gaps" */
-    { -40,  "Too many symbolic links encountered (-ELOOP)" },
-    { -39,  "Directory not empty (-ENOTEMPTY)" },
-    { -38,  "Function not implemented (-ENOSYS)" },
-    { -37,  "No record locks available (-ENOLCK)" },
-    { -36,  "File name too long (-ENAMETOOLONG)" },
-    { -35,  "Resource deadlock would occur (-EDEADLK)" },
-    /* from linux/include/asm-generic/errno.h */
-    { -34,  "Math result not representable (-ERANGE)" },
-    { -33,  "Math argument out of domain of func (-EDOM)" },
-    { -32,  "Broken pipe (-EPIPE)" },
-    { -31,  "Too many links (-EMLINK)" },
-    { -30,  "Read-only file system (-EROFS)" },
-    { -29,  "Illegal seek (-ESPIPE)" },
-    { -28,  "No space left on device (-ENOSPC)" },
-    { -27,  "File too large (-EFBIG)" },
-    { -26,  "Text file busy (-ETXTBSY)" },
-    { -25,  "Not a typewriter (-ENOTTY)" },
-    { -24,  "Too many open files (-EMFILE)" },
-    { -23,  "File table overflow (-ENFILE)" },
-    { -22,  "Invalid argument (-EINVAL)" },
-    { -21,  "Is a directory (-EISDIR)" },
-    { -20,  "Not a directory (-ENOTDIR)" },
-    { -19,  "No such device (-ENODEV)" },
-    { -18,  "Cross-device link (-EXDEV)" },
-    { -17,  "File exists (-EEXIST)" },
-    { -16,  "Device or resource busy (-EBUSY)" },
-    { -15,  "Block device required (-ENOTBLK)" },
-    { -14,  "Bad address (-EFAULT)" },
-    { -13,  "Permission denied (-EACCES)" },
-    { -12,  "Out of memory (-ENOMEM)" },
-    { -11,  "Try again (-EAGAIN)" },
-    { -10,  "No child processes (-ECHILD)" },
-    { -9,   "Bad file number (-EBADF)" },
-    { -8,   "Exec format error (-ENOEXEC)" },
-    { -7,   "Argument list too long (-E2BIG)" },
-    { -6,   "No such device or address (-ENXIO)" },
-    { -5,   "I/O error (-EIO)" },
-    { -4,   "Interrupted system call (-EINTR)" },
-    { -3,   "No such process (-ESRCH)" },
-    { -2,   "No such file or directory (-ENOENT)" },
-    { -1,   "Operation not permitted (-EPERM)" },
-    { 0,    "Success"},
-    { 0, NULL }
-};
-value_string_ext usb_urb_status_vals_ext = VALUE_STRING_EXT_INIT(usb_urb_status_vals);
 
 #define USB_CONTROL_STAGE_SETUP  0x00
 #define USB_CONTROL_STAGE_DATA   0x01
@@ -1362,6 +1272,239 @@ static const guint32 darwin_endpoint_to_linux[] =
 static value_string_ext usb_darwin_status_vals_ext = VALUE_STRING_EXT_INIT(darwin_usb_status_vals);
 
 
+static const value_string netmon_event_id_vals[] = {
+    {1, "USBPORT_ETW_EVENT_HC_ADD USBPORT_ETW_EVENT_HC_ADD"},
+    {2, "USBPORT_ETW_EVENT_HC_REMOVAL USBPORT_ETW_EVENT_HC_REMOVAL"},
+    {3, "USBPORT_ETW_EVENT_HC_INFORMATION USBPORT_ETW_EVENT_HC_INFORMATION"},
+    {4, "USBPORT_ETW_EVENT_HC_START USBPORT_ETW_EVENT_HC_START"},
+    {5, "USBPORT_ETW_EVENT_HC_STOP USBPORT_ETW_EVENT_HC_STOP"},
+    {6, "USBPORT_ETW_EVENT_HC_SUSPEND USBPORT_ETW_EVENT_HC_SUSPEND"},
+    {7, "USBPORT_ETW_EVENT_HC_RESUME USBPORT_ETW_EVENT_HC_RESUME"},
+    {8, "USBPORT_ETW_EVENT_HC_ASYNC_SCHEDULE_ENABLE"},
+    {9, "USBPORT_ETW_EVENT_HC_ASYNC_SCHEDULE_DISABLE"},
+    {10, "USBPORT_ETW_EVENT_HC_PERIODIC_SCHEDULE_ENABLE"},
+    {11, "USBPORT_ETW_EVENT_HC_PERIODIC_SCHEDULE_DISABLE"},
+    {12, "USBPORT_ETW_EVENT_DEVICE_CREATE"},
+    {13, "USBPORT_ETW_EVENT_DEVICE_INITIALIZE"},
+    {14, "USBPORT_ETW_EVENT_DEVICE_REMOVAL"},
+    {15, "USBPORT_ETW_EVENT_DEVICE_INFORMATION"},
+    {16, "USBPORT_ETW_EVENT_DEVICE_IDLE_STATE_SET"},
+    {17, "USBPORT_ETW_EVENT_DEVICE_IDLE_STATE_CLEAR"},
+    {18, "USBPORT_ETW_EVENT_ENDPOINT_OPEN"},
+    {19, "USBPORT_ETW_EVENT_ENDPOINT_CLOSE USBPORT_ETW_EVENT_ENDPOINT_CLOSE"},
+    {20, "USBPORT_ETW_EVENT_ENDPOINT_INFORMATION"},
+    {21, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SELECT_CONFIGURATION"},
+    {22, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SELECT_INTERFACE"},
+    {23, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_CURRENT_FRAME_NUMBER"},
+    {24, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CONTROL_TRANSFER"},
+    {25, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CONTROL_TRANSFER_EX"},
+    {26, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER"},
+    {27, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_ISOCH_TRANSFER"},
+    {28, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE"},
+    {29, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_DESCRIPTOR_TO_DEVICE"},
+    {30, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_DESCRIPTOR_FROM_ENDPOINT"},
+    {31, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_DESCRIPTOR_TO_ENDPOINT"},
+    {32, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_DESCRIPTOR_FROM_INTERFACE"},
+    {33, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE"},
+    {34, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_FEATURE_TO_DEVICE"},
+    {35, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_FEATURE_TO_INTERFACE"},
+    {36, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_FEATURE_TO_ENDPOINT"},
+    {37, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLEAR_FEATURE_TO_DEVICE"},
+    {38, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLEAR_FEATURE_TO_INTERFACE"},
+    {39, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLEAR_FEATURE_TO_ENDPOINT"},
+    {40, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLEAR_FEATURE_TO_OTHER"},
+    {41, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_FEATURE_TO_OTHER"},
+    {42, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_STATUS_FROM_DEVICE"},
+    {43, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_STATUS_FROM_INTERFACE"},
+    {44, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_STATUS_FROM_ENDPOINT"},
+    {45, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_STATUS_FROM_OTHER"},
+    {46, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_VENDOR_DEVICE"},
+    {47, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_VENDOR_INTERFACE"},
+    {48, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_VENDOR_ENDPOINT"},
+    {49, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLASS_DEVICE"},
+    {50, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLASS_INTERFACE"},
+    {51, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLASS_ENDPOINT"},
+    {52, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_CLASS_OTHER"},
+    {53, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_VENDOR_OTHER"},
+    {54, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_ABORT_PIPE"},
+    {55, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL"},
+    {56, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SYNC_RESET_PIPE"},
+    {57, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SYNC_CLEAR_STALL"},
+    {58, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_CONFIGURATION"},
+    {59, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_INTERFACE"},
+    {60, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_MS_FEATURE_DESCRIPTOR"},
+    {61, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_TAKE_FRAME_LENGTH_CONTROL"},
+    {62, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_RELEASE_FRAME_LENGTH_CONTROL"},
+    {63, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_GET_FRAME_LENGTH"},
+    {64, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_SET_FRAME_LENGTH"},
+    {65, "USBPORT_ETW_EVENT_DISPATCH_URB_FUNCTION_RESERVED"},
+    {66, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_CONTROL_TRANSFER"},
+    {67, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_CONTROL_TRANSFER_EX"},
+    {68, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_CONTROL_TRANSFER_DATA"},
+    {69, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_CONTROL_TRANSFER_EX_DATA"},
+    {70, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER"},
+    {71, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER_DATA"},
+    {72, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_ISOCH_TRANSFER"},
+    {73, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_ISOCH_TRANSFER_DATA"},
+    {74, "USBPORT_ETW_EVENT_INTERNAL_URB_FUNCTION_CONTROL_TRANSFER"},
+    {75, "USBPORT_ETW_EVENT_COMPLETE_INTERNAL_URB_FUNCTION_CONTROL_TRANSFER"},
+    {76, "USBPORT_ETW_EVENT_COMPLETE_INTERNAL_URB_FUNCTION_CONTROL_TRANSFER_DATA"},
+    {77, "USBPORT_ETW_EVENT_COMPLETE_URB_FUNCTION_ABORT_PIPE"},
+    {78, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_HEADER_LENGTH_WARNING"},
+    {79, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_FUNCTION"},
+    {80, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_HEADER_LENGTH"},
+    {81, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_DEVICE_HANDLE"},
+    {82, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_FUNCTION_NOT_SUPPORTED"},
+    {83, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_FUNCTION_RESERVED"},
+    {84, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_DUE_TO_HC_SUSPEND"},
+    {85, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_URB_LINK"},
+    {86, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_PIPE_HANDLE"},
+    {87, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_ZERO_BW_PIPE_HANDLE"},
+    {88, "USBPORT_ETW_EVENT_DISPATCH_URB_NOP_ZERO_BW_PIPE_HANDLE_REQUEST"},
+    {89, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_CONTROL_TRANSFER_ENDPOINT"},
+    {90, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_CONTROL_TRANSFER_BUFFER_LENGTH"},
+    {91, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_BULK_OR_INTERRUPT_TRANSFER_ENDPOINT"},
+    {92, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_BULK_OR_INTERRUPT_TRANSFER_BUFFER_LENGTH"},
+    {93, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_ISOCHRONOUS_TRANSFER_ENDPOINT"},
+    {94, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_NULL_TRANSFER_BUFFER_AND_MDL"},
+    {95, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_NON_NULL_TRANSFER_BUFFER_MDL"},
+    {96, "USBPORT_ETW_EVENT_DISPATCH_URB_ALLOCATE_MDL_FAILURE"},
+    {97, "USBPORT_ETW_EVENT_DISPATCH_URB_ALLOCATE_TRANSFER_CONTEXT_FAILURE"},
+    {98, "USBPORT_ETW_EVENT_DISPATCH_URB_NOP_ROOTHUB_PIPE_HANDLE_REQUEST"},
+    {99, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_ISOCHRONOUS_ZERO_LENGTH"},
+    {100, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_ISOCHRONOUS_NUM_PACKETS"},
+    {101, "USBPORT_ETW_EVENT_DISPATCH_URB_INVALID_ISOCHRONOUS_START_FRAME"},
+    {102, "USBPORT_ETW_EVENT_IRP_CANCEL"},
+    {103, "USBPORT_ETW_EVENT_USBUSER_OP_RAW_RESET_PORT_DISPATCH"},
+    {104, "USBPORT_ETW_EVENT_USBUSER_OP_RAW_RESET_PORT_STATUS1"},
+    {105, "USBPORT_ETW_EVENT_USBUSER_OP_RAW_RESET_PORT_STATUS2"},
+    {106, "USBPORT_ETW_EVENT_USBUSER_OP_RAW_RESET_PORT_STATUS3"},
+    {107, "USBPORT_ETW_EVENT_USBUSER_OP_RAW_RESET_PORT_COMPLETE"},
+    {108, "USBPORT_ETW_EVENT_USBUSER_OP_SEND_ONE_PACKET_DISPATCH"},
+    {109, "USBPORT_ETW_EVENT_USBUSER_OP_SEND_ONE_PACKET_DISPATCH_DATA"},
+    {110, "USBPORT_ETW_EVENT_USBUSER_OP_SEND_ONE_PACKET_TIMEOUT"},
+    {111, "USBPORT_ETW_EVENT_USBUSER_OP_SEND_ONE_PACKET_COMPLETE"},
+    {112, "USBPORT_ETW_EVENT_USBUSER_OP_SEND_ONE_PACKET_COMPLETE_DATA"},
+    {113, "USBPORT_ETW_EVENT_CODE_EXECUTION_TIME"},
+    {114, "USBPORT_ETW_EVENT_PUT_SGLIST_EXECUTION_TIME"},
+    {115, "USBPORT_ETW_EVENT_BUILD_SGLIST_EXECUTION_TIME"},
+    {1024, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_START_DISPATCH"},
+    {1025, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_START_COMPLETE"},
+    {1026, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_START_COMPLETE_ERROR_1"},
+    {1027, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_START_COMPLETE_ERROR_2"},
+    {1028, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_START_COMPLETE_ERROR_3"},
+    {1029, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_START_COMPLETE_ERROR_4"},
+    {1030, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_START_COMPLETE_ERROR_5"},
+    {1031, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_STOP_DISPATCH"},
+    {1032, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_STOP_COMPLETE"},
+    {1033, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_SUSPEND_DISPATCH"},
+    {1034, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_SUSPEND_COMPLETE"},
+    {1035, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_DISPATCH"},
+    {1036, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_COMPLETE"},
+    {1037, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_COMPLETE_ERROR_1"},
+    {1038, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_COMPLETE_ERROR_2"},
+    {1039, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_COMPLETE_ERROR_3"},
+    {1040, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_COMPLETE_ERROR_4"},
+    {1041, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_COMPLETE_ERROR_5"},
+    {1042, "USBPORT_ETW_EVENT_HC_EHCI_MINIPORT_RESUME_COMPLETE_ERROR_6"},
+    {2048, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_START_DISPATCH"},
+    {2049, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_START_COMPLETE"},
+    {2050, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_START_COMPLETE_ERROR_1"},
+    {2051, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_START_COMPLETE_ERROR_2"},
+    {2052, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_START_COMPLETE_ERROR_3"},
+    {2053, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_START_COMPLETE_ERROR_4"},
+    {2054, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_START_COMPLETE_ERROR_5"},
+    {2055, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_STOP_DISPATCH"},
+    {2056, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_STOP_COMPLETE"},
+    {2057, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_SUSPEND_DISPATCH"},
+    {2058, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_SUSPEND_COMPLETE"},
+    {2059, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_RESUME_DISPATCH"},
+    {2060, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_RESUME_COMPLETE"},
+    {2061, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_RESUME_COMPLETE_ERROR_1"},
+    {2062, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_RESUME_COMPLETE_ERROR_2"},
+    {2063, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_RESUME_COMPLETE_ERROR_3"},
+    {2064, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_RESUME_COMPLETE_ERROR_4"},
+    {2065, "USBPORT_ETW_EVENT_HC_OHCI_MINIPORT_RESUME_COMPLETE_ERROR_5"},
+    {3072, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_START_DISPATCH"},
+    {3073, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_START_COMPLETE"},
+    {3074, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_START_COMPLETE_ERROR_1"},
+    {3075, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_START_COMPLETE_ERROR_2"},
+    {3076, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_START_COMPLETE_ERROR_3"},
+    {3077, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_START_COMPLETE_ERROR_4"},
+    {3078, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_STOP_DISPATCH"},
+    {3079, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_STOP_COMPLETE"},
+    {3080, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_SUSPEND_DISPATCH"},
+    {3081, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_SUSPEND_COMPLETE"},
+    {3082, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_RESUME_DISPATCH"},
+    {3083, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_RESUME_COMPLETE"},
+    {3084, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_RESUME_COMPLETE_ERROR_1"},
+    {3085, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_RESUME_COMPLETE_ERROR_2"},
+    {3086, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_RESUME_COMPLETE_ERROR_3"},
+    {3087, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_RESUME_COMPLETE_ERROR_4"},
+    {3088, "USBPORT_ETW_EVENT_HC_UHCI_MINIPORT_RESUME_COMPLETE_ERROR_5"},
+    {3089, "USBPORT_ETW_EVENT_RTPM_TRANSITION"},
+    {3090, "USBPORT_ETW_EVENT_DISPATCH_WAIT_WAKE"},
+    {3091, "USBPORT_ETW_EVENT_COMPLETE_WAIT_WAKE"},
+    {0, NULL}
+};
+static value_string_ext netmon_event_id_vals_ext = VALUE_STRING_EXT_INIT(netmon_event_id_vals);
+
+static const value_string netmon_urb_function_vals[] = {
+    {0x0000, "SELECT_CONFIGURATION"},
+    {0x0001, "SELECT_INTERFACE"},
+    {0x0002, "ABORT_PIPE"},
+    {0x0003, "TAKE_FRAME_LENGTH_CONTROL"},
+    {0x0004, "RELEASE_FRAME_LENGTH_CONTROL"},
+    {0x0005, "GET_FRAME_LENGTH"},
+    {0x0006, "SET_FRAME_LENGTH"},
+    {0x0007, "GET_CURRENT_FRAME_NUMBER"},
+    {0x0008, "CONTROL_TRANSFER"},
+    {0x0009, "BULK_OR_INTERRUPT_TRANSFER"},
+    {0x000A, "ISOCH_TRANSFER"},
+    {0x000B, "GET_DESCRIPTOR_FROM_DEVICE"},
+    {0x000C, "SET_DESCRIPTOR_TO_DEVICE"},
+    {0x000D, "SET_FEATURE_TO_DEVICE"},
+    {0x000E, "SET_FEATURE_TO_INTERFACE"},
+    {0x000F, "SET_FEATURE_TO_ENDPOINT"},
+    {0x0010, "CLEAR_FEATURE_TO_DEVICE"},
+    {0x0011, "CLEAR_FEATURE_TO_INTERFACE"},
+    {0x0012, "CLEAR_FEATURE_TO_ENDPOINT"},
+    {0x0013, "GET_STATUS_FROM_DEVICE"},
+    {0x0014, "GET_STATUS_FROM_INTERFACE"},
+    {0x0015, "GET_STATUS_FROM_ENDPOINT"},
+    {0x0016, "RESERVED"},
+    {0x0017, "VENDOR_DEVICE"},
+    {0x0018, "VENDOR_INTERFACE"},
+    {0x0019, "VENDOR_ENDPOINT"},
+    {0x001A, "CLASS_DEVICE"},
+    {0x001B, "CLASS_INTERFACE"},
+    {0x001C, "CLASS_ENDPOINT"},
+    {0x001D, "RESERVE_0X001D"},
+    {0x001E, "SYNC_RESET_PIPE_AND_CLEAR_STALL"},
+    {0x001F, "CLASS_OTHER"},
+    {0x0020, "VENDOR_OTHER"},
+    {0x0021, "GET_STATUS_FROM_OTHER"},
+    {0x0022, "CLEAR_FEATURE_TO_OTHER"},
+    {0x0023, "SET_FEATURE_TO_OTHER"},
+    {0x0024, "GET_DESCRIPTOR_FROM_ENDPOINT"},
+    {0x0025, "SET_DESCRIPTOR_TO_ENDPOINT"},
+    {0x0026, "GET_CONFIGURATION"},
+    {0x0027, "GET_INTERFACE"},
+    {0x0028, "GET_DESCRIPTOR_FROM_INTERFACE"},
+    {0x0029, "SET_DESCRIPTOR_TO_INTERFACE"},
+    {0x002A, "GET_MS_FEATURE_DESCRIPTOR"},
+    {0x0030, "SYNC_RESET_PIPE"},
+    {0x0031, "SYNC_CLEAR_STALL"},
+    {0x0032, "CONTROL_TRANSFER_EX"},
+    {0x0035, "OPEN_STATIC_STREAMS"},
+    {0x0036, "CLOSE_STATIC_STREAMS"},
+    {0x0037, "BULK_OR_INTERRUPT_TRANSFER_USING_CHAINED_MDL"},
+    {0x0038, "ISOCH_TRANSFER_USING_CHAINED_MDL"},
+    {0, NULL}
+};
+static value_string_ext netmon_urb_function_vals_ext = VALUE_STRING_EXT_INIT(netmon_urb_function_vals);
+
+
 void proto_register_usb(void);
 void proto_reg_handoff_usb(void);
 
@@ -1538,7 +1681,7 @@ get_usb_conversation(packet_info *pinfo,
      */
     conversation = find_conversation(pinfo->num,
                                src_addr, dst_addr,
-                               pinfo->ptype,
+                               conversation_pt_to_endpoint_type(pinfo->ptype),
                                src_endpoint, dst_endpoint, 0);
     if (conversation) {
         return conversation;
@@ -1547,7 +1690,7 @@ get_usb_conversation(packet_info *pinfo,
     /* We don't yet have a conversation, so create one. */
     conversation = conversation_new(pinfo->num,
                            src_addr, dst_addr,
-                           pinfo->ptype,
+                           conversation_pt_to_endpoint_type(pinfo->ptype),
                            src_endpoint, dst_endpoint, 0);
     return conversation;
 }
@@ -1590,7 +1733,7 @@ static int
 usb_conversation_packet(void *pct, packet_info *pinfo, epan_dissect_t *edt _U_, const void *vip _U_)
 {
     conv_hash_t *hash = (conv_hash_t*) pct;
-    add_conversation_table_data(hash, &pinfo->src, &pinfo->dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &usb_ct_dissector_info, PT_NONE);
+    add_conversation_table_data(hash, &pinfo->src, &pinfo->dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &usb_ct_dissector_info, ENDPOINT_NONE);
 
     return 1;
 }
@@ -1603,6 +1746,12 @@ static const char* usb_host_get_filter_type(hostlist_talker_t* host, conv_filter
     return CONV_FILTER_INVALID;
 }
 
+static const char*
+usb_col_filter_str(const address* addr _U_, gboolean is_src)
+{
+    return is_src ? "usb.src" : "usb.dst";
+}
+
 static hostlist_dissector_info_t usb_host_dissector_info = {&usb_host_get_filter_type};
 
 static int
@@ -1613,8 +1762,8 @@ usb_hostlist_packet(void *pit, packet_info *pinfo, epan_dissect_t *edt _U_, cons
     /* Take two "add" passes per packet, adding for each direction, ensures that all
        packets are counted properly (even if address is sending to itself)
        XXX - this could probably be done more efficiently inside hostlist_table */
-    add_hostlist_table_data(hash, &pinfo->src, 0, TRUE, 1, pinfo->fd->pkt_len, &usb_host_dissector_info, PT_NONE);
-    add_hostlist_table_data(hash, &pinfo->dst, 0, FALSE, 1, pinfo->fd->pkt_len, &usb_host_dissector_info, PT_NONE);
+    add_hostlist_table_data(hash, &pinfo->src, 0, TRUE, 1, pinfo->fd->pkt_len, &usb_host_dissector_info, ENDPOINT_NONE);
+    add_hostlist_table_data(hash, &pinfo->dst, 0, FALSE, 1, pinfo->fd->pkt_len, &usb_host_dissector_info, ENDPOINT_NONE);
 
     return 1;
 }
@@ -3980,7 +4129,7 @@ dissect_linux_usb_iso_transfer(packet_info *pinfo _U_, proto_tree *urb_tree,
         tvb_memcpy(tvb, (guint8 *)&iso_len, offset+8,  4);
 
         iso_desc_ti = proto_tree_add_protocol_format(urb_tree, proto_usb, tvb, offset,
-                16, "USB isodesc %u [%s]", i, val_to_str_ext(iso_status, &usb_urb_status_vals_ext, "Error %d"));
+                16, "USB isodesc %u [%s]", i, val_to_str_ext(iso_status, &linux_negative_errno_vals_ext, "Error %d"));
         if (iso_len > 0)
             proto_item_append_text(iso_desc_ti, " (%u bytes)", iso_len);
         iso_desc_tree = proto_item_add_subtree(iso_desc_ti, ett_usb_isodesc);
@@ -4048,7 +4197,7 @@ dissect_usbip_iso_transfer(packet_info *pinfo _U_, proto_tree *urb_tree,
 
         iso_status = tvb_get_ntohl(tvb, desc_offset + 12);
         iso_desc_ti = proto_tree_add_protocol_format(urb_tree, proto_usb, tvb, desc_offset,
-                16, "USB isodesc %u [%s]", i, val_to_str_ext(iso_status, &usb_urb_status_vals_ext, "Error %d"));
+                16, "USB isodesc %u [%s]", i, val_to_str_ext(iso_status, &linux_negative_errno_vals_ext, "Error %d"));
         iso_desc_tree = proto_item_add_subtree(iso_desc_ti, ett_usb_isodesc);
 
         proto_tree_add_item_ret_uint(iso_desc_tree, hf_usb_iso_off, tvb, desc_offset, 4, ENC_BIG_ENDIAN, &iso_off);
@@ -4110,7 +4259,7 @@ dissect_darwin_usb_iso_transfer(packet_info *pinfo _U_, proto_tree *tree, usb_he
         frame_header_length = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
         frame_length        = tvb_get_guint32(tvb, offset + 4, ENC_LITTLE_ENDIAN);
 
-        if (len < frame_header_length) {
+        if ((len < frame_header_length) || (frame_header_length < 20)) {
             break;
         }
 
@@ -4272,6 +4421,274 @@ dissect_freebsd_usb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent, void 
             offset += (framelen + 3) & ~3;
         }
         proto_item_set_end(ti, tvb, offset);
+    }
+
+    return tvb_captured_length(tvb);
+}
+
+static int
+netmon_HostController2(proto_tree *tree, tvbuff_t *tvb, int offset, guint16 flags)
+{
+    proto_tree *host_tree;
+
+    host_tree = proto_tree_add_subtree(tree, tvb, offset, (flags & EVENT_HEADER_FLAG_64_BIT_HEADER) ? 20 : 16, ett_usbport_host_controller, NULL, "HostController");
+    netmon_etl_field(host_tree, tvb, &offset, hf_usbport_device_object, flags);
+
+    proto_tree_add_item(host_tree, hf_usbport_pci_bus, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+    offset += 4;
+    proto_tree_add_item(host_tree, hf_usbport_pci_device, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    proto_tree_add_item(host_tree, hf_usbport_pci_function, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    proto_tree_add_item(host_tree, hf_usbport_pci_vendor_id, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    proto_tree_add_item(host_tree, hf_usbport_pci_device_id, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+
+    return offset;
+}
+
+static int
+netmon_UsbPortPath(proto_tree *tree, tvbuff_t *tvb, int offset, packet_info *pinfo)
+{
+    proto_item *path_item, *depth_item;
+    proto_tree *path_tree;
+    guint32 path_depth, path0, path1, path2, path3, path4, path5;
+
+    path_tree = proto_tree_add_subtree(tree, tvb, offset, 28, ett_usbport_path, &path_item, "PortPath: ");
+    depth_item = proto_tree_add_item_ret_uint(path_tree, hf_usbport_port_path_depth, tvb, offset, 4, ENC_LITTLE_ENDIAN, &path_depth);
+    offset += 4;
+    proto_tree_add_item_ret_uint(path_tree, hf_usbport_port_path0, tvb, offset, 4, ENC_LITTLE_ENDIAN, &path0);
+    offset += 4;
+    proto_tree_add_item_ret_uint(path_tree, hf_usbport_port_path1, tvb, offset, 4, ENC_LITTLE_ENDIAN, &path1);
+    offset += 4;
+    proto_tree_add_item_ret_uint(path_tree, hf_usbport_port_path2, tvb, offset, 4, ENC_LITTLE_ENDIAN, &path2);
+    offset += 4;
+    proto_tree_add_item_ret_uint(path_tree, hf_usbport_port_path3, tvb, offset, 4, ENC_LITTLE_ENDIAN, &path3);
+    offset += 4;
+    proto_tree_add_item_ret_uint(path_tree, hf_usbport_port_path4, tvb, offset, 4, ENC_LITTLE_ENDIAN, &path4);
+    offset += 4;
+    proto_tree_add_item_ret_uint(path_tree, hf_usbport_port_path5, tvb, offset, 4, ENC_LITTLE_ENDIAN, &path5);
+    offset += 4;
+    if (path_depth == 0) {
+        proto_item_append_text(path_item, "-");
+    }
+    if (path_depth > 0) {
+        proto_item_append_text(path_item, "%d", path0);
+    }
+    if (path_depth > 1) {
+        proto_item_append_text(path_item, ",%d", path1);
+    }
+    if (path_depth > 2) {
+        proto_item_append_text(path_item, ",%d", path2);
+    }
+    if (path_depth > 3) {
+        proto_item_append_text(path_item, ",%d", path3);
+    }
+    if (path_depth > 4) {
+        proto_item_append_text(path_item, ",%d", path4);
+    }
+    if (path_depth > 5) {
+        proto_item_append_text(path_item, ",%d", path5);
+    }
+    if (path_depth > 6) {
+        expert_add_info(pinfo, depth_item, &ei_usbport_invalid_path_depth);
+    }
+
+    return offset;
+}
+
+static int
+netmon_fid_USBPORT_Device(proto_tree *tree, tvbuff_t *tvb, int offset, guint16 flags, packet_info *pinfo)
+{
+    proto_item *device_item;
+    proto_tree *device_tree;
+
+    device_tree = proto_tree_add_subtree(tree, tvb, offset, 4, ett_usbport_device, &device_item, "Device");
+    netmon_etl_field(device_tree, tvb, &offset, hf_usbport_device_handle, flags);
+    proto_tree_add_item(device_tree, hf_usb_idVendor, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    proto_tree_add_item(device_tree, hf_usb_idProduct, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    offset = netmon_UsbPortPath(device_tree, tvb, offset, pinfo);
+    proto_tree_add_item(device_tree, hf_usbport_device_speed, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+    offset += 4;
+    proto_tree_add_item(device_tree, hf_usb_device_address, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+    offset += 4;
+
+    return offset;
+}
+
+static int
+netmon_fid_USBPORT_Endpoint(proto_tree *tree, tvbuff_t *tvb, int offset, guint16 flags)
+{
+    proto_tree *endpoint_tree;
+
+    endpoint_tree = proto_tree_add_subtree(tree, tvb, offset, (flags & EVENT_HEADER_FLAG_64_BIT_HEADER) ? 24 : 12, ett_usbport_endpoint, NULL, "Endpoint");
+    netmon_etl_field(endpoint_tree, tvb, &offset, hf_usbport_endpoint, flags);
+    netmon_etl_field(endpoint_tree, tvb, &offset, hf_usbport_pipehandle, flags);
+    netmon_etl_field(endpoint_tree, tvb, &offset, hf_usbport_device_handle, flags);
+
+    return offset;
+}
+
+static int
+netmon_fid_USBPORT_Endpoint_Descriptor(proto_tree *tree, tvbuff_t *tvb, int offset)
+{
+    proto_tree *endpoint_desc_tree;
+
+    endpoint_desc_tree = proto_tree_add_subtree(tree, tvb, offset, 7, ett_usbport_endpoint_desc, NULL, "Endpoint Decriptor");
+    proto_tree_add_item(endpoint_desc_tree, hf_usbport_endpoint_desc_length, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+    proto_tree_add_item(endpoint_desc_tree, hf_usbport_endpoint_desc_type, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+    proto_tree_add_item(endpoint_desc_tree, hf_usbport_endpoint_address, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+    proto_tree_add_item(endpoint_desc_tree, hf_usbport_bm_attributes, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+    proto_tree_add_item(endpoint_desc_tree, hf_usbport_max_packet_size, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    proto_tree_add_item(endpoint_desc_tree, hf_usbport_interval, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    return offset;
+}
+
+static int
+netmon_URB(proto_tree *tree, tvbuff_t *tvb, int offset, guint16 flags)
+{
+    proto_item *urb_item;
+    proto_tree *urb_tree;
+    guint32 func;
+    int i, start_offset = offset;
+
+    urb_tree = proto_tree_add_subtree(tree, tvb, offset, 8, ett_usbport_urb, &urb_item, "URB");
+    proto_tree_add_item(urb_tree, hf_usbport_urb_header_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    proto_tree_add_item_ret_uint(urb_tree, hf_usbport_urb_header_function, tvb, offset, 2, ENC_LITTLE_ENDIAN, &func);
+    proto_item_append_text(urb_item, ": %s", val_to_str_ext_const(func, &netmon_urb_function_vals_ext, "Unknown"));
+    offset += 2;
+    proto_tree_add_item(urb_tree, hf_usbport_urb_header_status, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+    offset += 4;
+    netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_header_usbddevice_handle, flags);
+    netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_header_usbdflags, flags);
+
+    switch (func)
+    {
+    case 0x0000:
+        netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_configuration_desc, flags);
+        netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_configuration_handle, flags);
+        break;
+    case 0x0008: //URB_FUNCTION_CONTROL_TRANSFER
+    case 0x0009: //URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER
+    case 0x000A: //URB_FUNCTION_ISOCH_TRANSFER
+    case 0x000B: //URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE
+    case 0x000C: //URB_FUNCTION_SET_DESCRIPTOR_TO_DEVICE
+    case 0x000D: //URB_FUNCTION_SET_FEATURE_TO_DEVICE
+    case 0x000E: //URB_FUNCTION_SET_FEATURE_TO_INTERFACE
+    case 0x000F: //URB_FUNCTION_SET_FEATURE_TO_ENDPOINT
+    case 0x0010: //URB_FUNCTION_CLEAR_FEATURE_TO_DEVICE
+    case 0x0011: //URB_FUNCTION_CLEAR_FEATURE_TO_INTERFACE
+    case 0x0012: //URB_FUNCTION_CLEAR_FEATURE_TO_ENDPOINT
+    case 0x0013: //URB_FUNCTION_GET_STATUS_FROM_DEVICE
+    case 0x0014: //URB_FUNCTION_GET_STATUS_FROM_INTERFACE
+    case 0x0015: //URB_FUNCTION_GET_STATUS_FROM_ENDPOINT
+    case 0x0017: //URB_FUNCTION_VENDOR_DEVICE
+    case 0x0018: //URB_FUNCTION_VENDOR_INTERFACE
+    case 0x0019: //URB_FUNCTION_VENDOR_ENDPOINT
+    case 0x001A: //URB_FUNCTION_CLASS_DEVICE
+    case 0x001B: //URB_FUNCTION_CLASS_INTERFACE
+    case 0x001C: //URB_FUNCTION_CLASS_ENDPOINT
+    case 0x001F: //URB_FUNCTION_CLASS_OTHER
+    case 0x0020: //URB_FUNCTION_VENDOR_OTHER
+    case 0x0021: //URB_FUNCTION_GET_STATUS_FROM_OTHER
+    case 0x0022: //URB_FUNCTION_CLEAR_FEATURE_TO_OTHER
+    case 0x0023: //URB_FUNCTION_SET_FEATURE_TO_OTHER
+    case 0x0024: //URB_FUNCTION_GET_DESCRIPTOR_FROM_ENDPOINT
+    case 0x0025: //URB_FUNCTION_SET_DESCRIPTOR_TO_ENDPOINT
+    case 0x0026: //URB_FUNCTION_GET_CONFIGURATION
+    case 0x0027: //URB_FUNCTION_GET_INTERFACE
+    case 0x0028: //URB_FUNCTION_GET_DESCRIPTOR_FROM_INTERFACE
+    case 0x0029: //URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE
+    case 0x002A: //URB_FUNCTION_GET_MS_FEATURE_DESCRIPTOR
+    case 0x0032: //URB_FUNCTION_CONTROL_TRANSFER_EX
+    case 0x0037: //URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER_USING_CHAINED_MDL
+    case 0x0038: //URB_FUNCTION_ISOCH_TRANSFER_USING_CHAINED_MDL
+        netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_pipe_handle, flags);
+        proto_tree_add_bitmask(urb_tree, tvb, offset, hf_usbport_urb_xferflags, ett_usb_xferflags,
+                           usb_xferflags_fields, ENC_LITTLE_ENDIAN);
+        offset += 4;
+        proto_tree_add_item(urb_tree, hf_usbport_urb_transfer_buffer_length, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+        offset += 4;
+        netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_transfer_buffer, flags);
+        netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_transfer_buffer_mdl, flags);
+        netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_reserved_mbz, flags);
+        for (i = 0; i < 8; i++)
+        {
+            netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_reserved_hcd, flags);
+        }
+        break;
+
+    case 0x0002: //URB_FUNCTION_ABORT_PIPE
+    case 0x001E: //URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL
+    case 0x0030: //URB_FUNCTION_SYNC_RESET_PIPE
+    case 0x0031: //URB_FUNCTION_SYNC_CLEAR_STALL
+    case 0x0036: //URB_FUNCTION_CLOSE_STATIC_STREAMS
+        netmon_etl_field(urb_tree, tvb, &offset, hf_usbport_urb_pipe_handle, flags);
+        proto_tree_add_item(urb_tree, hf_usbport_urb_reserved, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+        offset += 4;
+        break;
+    }
+
+    proto_item_set_len(urb_item, offset-start_offset);
+    return offset;
+}
+
+#define USBPORT_KEYWORD_DIAGNOSTIC         G_GUINT64_CONSTANT(0x0000000000000001)
+#define USBPORT_KEYWORD_POWER_DIAGNOSTICS  G_GUINT64_CONSTANT(0x0000000000000002)
+#define USBPORT_KEYWORD_PERF_DIAGNOSTICS   G_GUINT64_CONSTANT(0x0000000000000004)
+#define USBPORT_KEYWORD_RESERVED1          G_GUINT64_CONSTANT(0xFFFFFFFFFFFFFFF8)
+
+static int
+dissect_netmon_usb_port(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent, void* data)
+{
+    proto_item *ti, *generated;
+    proto_tree *usb_port_tree;
+    int offset = 0;
+    struct netmon_provider_id_data *provider_id_data = (struct netmon_provider_id_data*)data;
+    static const int *keyword_fields[] = {
+        &hf_usbport_keyword_diagnostic,
+        &hf_usbport_keyword_power_diagnostics,
+        &hf_usbport_keyword_perf_diagnostics,
+        &hf_usbport_keyword_reserved1,
+        NULL
+    };
+
+    DISSECTOR_ASSERT(provider_id_data != NULL);
+
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "USBPort");
+    col_clear(pinfo->cinfo, COL_INFO);
+
+    ti = proto_tree_add_item(parent, proto_usbport, tvb, 0, -1, ENC_NA);
+    usb_port_tree = proto_item_add_subtree(ti, ett_usbport);
+
+    generated = proto_tree_add_uint(usb_port_tree, hf_usbport_event_id, tvb, 0, 0, provider_id_data->event_id);
+    PROTO_ITEM_SET_GENERATED(generated);
+    generated = proto_tree_add_bitmask_value(usb_port_tree, tvb, 0, hf_usbport_keyword, ett_usbport_keyword, keyword_fields, provider_id_data->keyword);
+    PROTO_ITEM_SET_GENERATED(generated);
+
+    switch (provider_id_data->event_id)
+    {
+    case 71:
+        offset = netmon_HostController2(usb_port_tree, tvb, offset, provider_id_data->event_flags);
+        offset = netmon_fid_USBPORT_Device(usb_port_tree, tvb, offset, provider_id_data->event_flags, pinfo);
+        offset = netmon_fid_USBPORT_Endpoint(usb_port_tree, tvb, offset, provider_id_data->event_flags);
+        offset = netmon_fid_USBPORT_Endpoint_Descriptor(usb_port_tree, tvb, offset);
+        netmon_etl_field(usb_port_tree, tvb, &offset, hf_usbport_irp, provider_id_data->event_flags);
+        netmon_etl_field(usb_port_tree, tvb, &offset, hf_usbport_urb, provider_id_data->event_flags);
+        offset = netmon_URB(usb_port_tree, tvb, offset, provider_id_data->event_flags);
+        proto_tree_add_item(usb_port_tree, hf_usbport_urb_transfer_data, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+        break;
     }
 
     return tvb_captured_length(tvb);
@@ -4929,7 +5346,7 @@ proto_register_usb(void)
 
         { &hf_usb_urb_status,
           { "URB status", "usb.urb_status",
-            FT_INT32, BASE_DEC|BASE_EXT_STRING, &usb_urb_status_vals_ext, 0x0,
+            FT_INT32, BASE_DEC|BASE_EXT_STRING, &linux_negative_errno_vals_ext, 0x0,
             NULL, HFILL }},
 
         { &hf_usb_urb_len,
@@ -5205,7 +5622,7 @@ proto_register_usb(void)
         /* fields of struct mon_bin_isodesc from linux/drivers/usb/mon/mon_bin.c */
         { &hf_usb_iso_status,                     /* host endian byte order */
           { "Status", "usb.iso.iso_status",
-            FT_INT32, BASE_DEC|BASE_EXT_STRING, &usb_urb_status_vals_ext, 0x0,
+            FT_INT32, BASE_DEC|BASE_EXT_STRING, &linux_negative_errno_vals_ext, 0x0,
             "ISO descriptor status", HFILL }},
 
         { &hf_usb_iso_off,                        /* host endian byte order */
@@ -5603,7 +6020,245 @@ proto_register_usb(void)
             FT_STRING, STR_ASCII, NULL, 0x0,
             NULL, HFILL }
         }
-   };
+    };
+
+    static hf_register_info hf_usbport[] = {
+        { &hf_usbport_event_id,
+            { "Event ID",               "usbport.event_id",
+            FT_UINT32, BASE_DEC_HEX|BASE_EXT_STRING, &netmon_event_id_vals_ext, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_device_object,
+            { "Device Object",          "usbport.device_object",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_pci_bus,
+            { "PCI Bus",          "usbport.pci_bus",
+            FT_UINT32, BASE_DEC_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_pci_device,
+            { "PCI Bus",          "usbport.pci_device",
+            FT_UINT16, BASE_DEC_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_pci_function,
+            { "PCI Function",          "usbport.pci_function",
+            FT_UINT16, BASE_DEC_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_pci_vendor_id,
+            { "PCI Vendor ID",          "usbport.pci_vendor_id",
+            FT_UINT16, BASE_DEC_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_pci_device_id,
+            { "PCI Device ID",          "usbport.pci_device_id",
+            FT_UINT16, BASE_DEC_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_port_path_depth,
+            { "Path Depth",          "usbport.port_path_depth",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_port_path0,
+            { "Path0",          "usbport.port_path0",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_port_path1,
+            { "Path1",          "usbport.port_path1",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_port_path2,
+            { "Path2",          "usbport.port_path2",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_port_path3,
+            { "Path3",          "usbport.port_path3",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_port_path4,
+            { "Path4",          "usbport.port_path4",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_port_path5,
+            { "Path5",          "usbport.port_path5",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_device_handle,
+            { "Device Handle",          "usbport.device_handle",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_device_speed,
+            { "Device Speed",          "usbport.device_speed",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_endpoint,
+            { "Endpoint",          "usbport.endpoint",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_pipehandle,
+            { "Pipe Handle",          "usbport.pipehandle",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_endpoint_desc_length,
+            { "Length",          "usbport.endpoint_desc_length",
+            FT_UINT8, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_endpoint_desc_type,
+            { "Description Type",          "usbport.endpoint_desc_type",
+            FT_UINT8, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_endpoint_address,
+            { "Endpoint Address",          "usbport.endpoint_address",
+            FT_UINT8, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_bm_attributes,
+            { "bmAttributes",          "usbport.bm_attributes",
+            FT_UINT8, BASE_DEC_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_max_packet_size,
+            { "Max Packet Size",          "usbport.max_packet_size",
+            FT_UINT16, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_interval,
+            { "Interval",          "usbport.interval",
+            FT_UINT8, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_irp,
+            { "IRP",          "usbport.irp",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb,
+            { "URB",          "usbport.urb",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_transfer_data,
+            { "URB Transfer data",          "usbport.urb_transfer_data",
+            FT_UINT_BYTES, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_header_length,
+            { "URB Header Length",          "usbport.urb_header_length",
+            FT_UINT16, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_header_function,
+            { "URB Header Function",          "usbport.urb_header_function",
+            FT_UINT16, BASE_DEC|BASE_EXT_STRING, &netmon_urb_function_vals_ext, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_header_status,
+            { "URB Header Status",          "usbport.urb_header_status",
+            FT_UINT16, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_header_usbddevice_handle,
+            { "URB Header Device Handle",          "usbport.urb_header_usbddevice_handle",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_header_usbdflags,
+            { "URB Header Flags",          "usbport.urb_header_usbdflags",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_configuration_desc,
+            { "URB Configuration Description",          "usbport.urb_configuration_desc",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_configuration_handle,
+            { "URB Configuration Handle",          "usbport.urb_configuration_handle",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_pipe_handle,
+            { "URB Pipe Handle",          "usbport.urb_pipe_handle",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_xferflags,
+            { "URB Transfer Flags",          "usbport.urb_xferflags",
+            FT_UINT32, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_transfer_buffer_length,
+            { "URB Transfer Buffer Length",          "usbport.urb_transfer_buffer_length",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_transfer_buffer,
+            { "URB Transfer Buffer",          "usbport.urb_transfer_buffer",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_transfer_buffer_mdl,
+            { "URB Transfer Buffer MDL",          "usbport.urb_transfer_buffer_mdl",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_reserved_mbz,
+            { "URB Reserved MBZ",          "usbport.urb_reserved_mbz",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_reserved_hcd,
+            { "URB Reserved HCD",          "usbport.urb_reserved_hcd",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_urb_reserved,
+            { "URB Reserved",          "usbport.urb_reserved",
+            FT_UINT32, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_keyword,
+            { "Keyword",          "usbport.keyword",
+            FT_UINT64, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_usbport_keyword_diagnostic,
+            { "USBPORT_ETW_KEYWORD_DIAGNOSTIC",          "usbport.keyword.diagnostic",
+            FT_BOOLEAN, 64, NULL, USBPORT_KEYWORD_DIAGNOSTIC,
+            NULL, HFILL }
+        },
+        { &hf_usbport_keyword_power_diagnostics,
+            { "USBPORT_ETW_KEYWORD_POWER_DIAGNOSTICS",          "usbport.keyword.power_diagnostics",
+            FT_BOOLEAN, 64, NULL, USBPORT_KEYWORD_POWER_DIAGNOSTICS,
+            NULL, HFILL }
+        },
+        { &hf_usbport_keyword_perf_diagnostics,
+            { "USBPORT_ETW_KEYWORD_PERF_DIAGNOSTICS",          "usbport.keyword.perf_diagnostics",
+            FT_BOOLEAN, 64, NULL, USBPORT_KEYWORD_PERF_DIAGNOSTICS,
+            NULL, HFILL }
+        },
+        { &hf_usbport_keyword_reserved1,
+            { "Reserved1",          "usbport.keyword.reserved1",
+            FT_UINT64, BASE_HEX, NULL, USBPORT_KEYWORD_RESERVED1,
+            NULL, HFILL }
+        },
+    };
 
     static gint *usb_subtrees[] = {
         &ett_usb_hdr,
@@ -5621,7 +6276,18 @@ proto_register_usb(void)
         &ett_configuration_bmAttributes,
         &ett_configuration_bEndpointAddress,
         &ett_endpoint_bmAttributes,
-        &ett_endpoint_wMaxPacketSize
+        &ett_endpoint_wMaxPacketSize,
+    };
+
+    static gint *usbport_subtrees[] = {
+        &ett_usbport,
+        &ett_usbport_host_controller,
+        &ett_usbport_path,
+        &ett_usbport_device,
+        &ett_usbport_endpoint,
+        &ett_usbport_endpoint_desc,
+        &ett_usbport_urb,
+        &ett_usbport_keyword,
     };
 
     static ei_register_info ei[] = {
@@ -5630,15 +6296,24 @@ proto_register_usb(void)
         { &ei_usb_desc_length_invalid, { "usb.desc_length.invalid", PI_MALFORMED, PI_ERROR, "Invalid descriptor length", EXPFILL }},
         { &ei_usb_invalid_setup, { "usb.setup.invalid", PI_MALFORMED, PI_ERROR, "Only control URBs may contain a setup packet", EXPFILL }}
     };
+    static ei_register_info ei_usbport[] = {
+        { &ei_usbport_invalid_path_depth, { "usbport.path_depth.invalid", PI_PROTOCOL, PI_WARN, "Invalid path depth", EXPFILL }},
+    };
 
-    expert_module_t* expert_usb;
+    expert_module_t *expert_usb, *expert_usbport;
 
     proto_usb = proto_register_protocol("USB", "USB", "usb");
+    proto_usbport = proto_register_protocol("USBPort", "USBPort", "usbport");
+
     proto_register_field_array(proto_usb, hf, array_length(hf));
+    proto_register_field_array(proto_usbport, hf_usbport, array_length(hf_usbport));
     proto_register_subtree_array(usb_subtrees, array_length(usb_subtrees));
+    proto_register_subtree_array(usbport_subtrees, array_length(usbport_subtrees));
 
     expert_usb = expert_register_protocol(proto_usb);
     expert_register_field_array(expert_usb, ei, array_length(ei));
+    expert_usbport = expert_register_protocol(proto_usbport);
+    expert_register_field_array(expert_usbport, ei_usbport, array_length(ei_usbport));
 
     device_to_product_table = wmem_tree_new_autoreset(wmem_epan_scope(), wmem_file_scope());
     device_to_protocol_table = wmem_tree_new_autoreset(wmem_epan_scope(), wmem_file_scope());
@@ -5671,7 +6346,7 @@ proto_register_usb(void)
     register_decode_as(&usb_product_da);
     register_decode_as(&usb_device_da);
 
-    usb_address_type = address_type_dissector_register("AT_USB", "USB Address", usb_addr_to_str, usb_addr_str_len, NULL, NULL, NULL, NULL, NULL);
+    usb_address_type = address_type_dissector_register("AT_USB", "USB Address", usb_addr_to_str, usb_addr_str_len, NULL, usb_col_filter_str, NULL, NULL, NULL);
 
     register_conversation_table(proto_usb, TRUE, usb_conversation_packet, usb_hostlist_packet);
 }
@@ -5684,6 +6359,8 @@ proto_reg_handoff_usb(void)
     dissector_handle_t  win32_usb_handle;
     dissector_handle_t  freebsd_usb_handle;
     dissector_handle_t  darwin_usb_handle;
+    dissector_handle_t  netmon_usb_port_handle;
+    static guid_key usb_port_key = {{ 0xc88a4ef5, 0xd048, 0x4013, { 0x94, 0x08, 0xe0, 0x4b, 0x7d, 0xb2, 0x81, 0x4a }}, 0 };
 
     linux_usb_handle = create_dissector_handle(dissect_linux_usb, proto_usb);
     linux_usb_mmapped_handle = create_dissector_handle(dissect_linux_usb_mmapped,
@@ -5697,6 +6374,10 @@ proto_reg_handoff_usb(void)
     dissector_add_uint("wtap_encap", WTAP_ENCAP_USBPCAP, win32_usb_handle);
     dissector_add_uint("wtap_encap", WTAP_ENCAP_USB_FREEBSD, freebsd_usb_handle);
     dissector_add_uint("wtap_encap", WTAP_ENCAP_USB_DARWIN, darwin_usb_handle);
+
+    netmon_usb_port_handle = create_dissector_handle( dissect_netmon_usb_port, proto_usbport);
+    dissector_add_guid( "netmon.provider_id", &usb_port_key, netmon_usb_port_handle);
+
 }
 
 /*

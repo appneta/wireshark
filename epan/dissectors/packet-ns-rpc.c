@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1140,7 +1128,7 @@ dissect_ns_rpc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 	ns_rpc_tree = proto_item_add_subtree(ti, ett_nsrpc);
 
 	proto_tree_add_item_ret_uint(ns_rpc_tree, hf_nsrpc_dlen, tvb, offset, 4, ENC_LITTLE_ENDIAN, &datalen);
-	offset += 8;
+	offset += 8;	/* skip length, signature, and 2 more bytes */
 	proto_tree_add_item_ret_uint(ns_rpc_tree, hf_nsrpc_cmd, tvb, offset, 1, ENC_LITTLE_ENDIAN, &rpc_cmd);
 	offset += 2;
 	if (rpc_cmd & 0x80)
@@ -1176,17 +1164,13 @@ dissect_ns_rpc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 static gboolean
 dissect_ns_rpc_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 {
-	guint16 ns_rpc_sig;
+	static const guint8 ns_rpc_sig[2] = { 0xA5, 0xA5 };
 
-	if (tvb_reported_length(tvb) < 6)
+	/* Check the signature */
+	if (tvb_memeql(tvb, 4, ns_rpc_sig, sizeof ns_rpc_sig) != 0)
 		return FALSE;
 
-	/* Get the signature */
-	ns_rpc_sig = tvb_get_letohs(tvb, 4);
-	if (ns_rpc_sig != 0xA5A5)
-		return FALSE;
-
-	dissect_ns_rpc_heur(tvb, pinfo, tree, data);
+	dissect_ns_rpc(tvb, pinfo, tree, data);
 	return TRUE;
 }
 

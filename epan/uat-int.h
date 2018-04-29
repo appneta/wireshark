@@ -11,19 +11,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2001 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  */
 #ifndef __UAT_INT_H__
@@ -110,6 +98,12 @@ void uat_insert_record_idx(uat_t *uat, guint rec_idx, const void *src_record);
  */
 WS_DLL_PUBLIC
 void uat_remove_record_idx(uat_t *uat, guint rec_idx);
+
+/**
+ * Moves the entry from the old position to the new one
+ */
+WS_DLL_PUBLIC
+void uat_move_index(uat_t *uat, guint old_idx, guint new_idx);
 
 /**
  * Removes and destroys all records from the UAT.

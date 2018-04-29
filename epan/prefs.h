@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __PREFS_H__
@@ -154,6 +142,7 @@ typedef struct _e_prefs {
   gboolean     gui_altern_colors; /* GTK only */
   gboolean     gui_expert_composite_eyecandy;
   gboolean     filter_toolbar_show_in_statusbar;
+  gboolean     restore_filter_after_following_stream;
   gint         gui_ptree_line_style;
   gint         gui_ptree_expander_style;
   gboolean     gui_hex_dump_highlight_style;
@@ -185,8 +174,8 @@ typedef struct _e_prefs {
   gchar       *gui_prepend_window_title;
   gchar       *gui_start_title;
   version_info_e gui_version_placement;
-  gboolean     gui_auto_scroll_on_expand;
-  guint        gui_auto_scroll_percentage;
+  gboolean     gui_auto_scroll_on_expand; /* GTK+ only */
+  guint        gui_auto_scroll_percentage; /* GTK+ only */
   layout_type_e gui_layout_type;
   layout_pane_content_e gui_layout_content_1;
   layout_pane_content_e gui_layout_content_2;
@@ -212,6 +201,7 @@ typedef struct _e_prefs {
   gboolean     capture_pcap_ng;
   gboolean     capture_real_time;
   gboolean     capture_auto_scroll;
+  gboolean     capture_no_extcap;
   gboolean     capture_show_info;
   GList       *capture_columns;
   guint        rtp_player_max_visible;
@@ -220,7 +210,7 @@ typedef struct _e_prefs {
   gboolean     display_byte_fields_with_spaces;
   gboolean     enable_incomplete_dissectors_check;
   gboolean     incomplete_dissectors_check_debug;
-  gpointer     filter_expressions;/* Actually points to &head */
+  gboolean     strict_conversation_tracking_heuristics;
   gboolean     gui_update_enabled;
   software_update_channel_e gui_update_channel;
   gint         gui_update_interval;
@@ -228,6 +218,8 @@ typedef struct _e_prefs {
   gboolean     unknown_prefs; /* unknown or obsolete pref(s) */
   gboolean     unknown_colorfilters; /* Warn when saving unknown or obsolete color filters. */
   gboolean     gui_qt_packet_list_separator;
+  gboolean     gui_qt_show_selected_packet;
+  gboolean     gui_qt_show_file_load_time;
   gboolean     gui_packet_editor; /* Enable Packet Editor */
   elide_mode_e gui_packet_list_elide_mode;
   gboolean     gui_packet_list_show_related;
@@ -242,9 +234,7 @@ typedef struct _e_prefs {
   gint         st_sort_defcolflag;
   gboolean     st_sort_defdescending;
   gboolean     st_sort_showfullname;
-#ifdef HAVE_EXTCAP
   gboolean     extcap_save_on_start;
-#endif
 } e_prefs;
 
 WS_DLL_PUBLIC e_prefs prefs;
@@ -293,6 +283,19 @@ void prefs_deregister_protocol(int id);
  * "description" is a longer human-readable description of the tap.
  */
 WS_DLL_PUBLIC module_t *prefs_register_stat(const char *name, const char *title,
+    const char *description, void (*apply_cb)(void));
+
+/*
+ * Register that a codec has preferences.
+ *
+ * "name" is a name for the codec to use on the command line with "-o"
+ * and in preference files.
+ *
+ * "title" is a short human-readable name for the codec.
+ *
+ * "description" is a longer human-readable description of the codec.
+ */
+WS_DLL_PUBLIC module_t *prefs_register_codec(const char *name, const char *title,
     const char *description, void (*apply_cb)(void));
 
 /*

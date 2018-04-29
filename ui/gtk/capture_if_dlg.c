@@ -22,6 +22,8 @@
 
 #include "config.h"
 
+#include "ws_attributes.h"
+
 #include <glib.h>
 
 #ifdef HAVE_LIBPCAP
@@ -172,24 +174,19 @@ store_selected(GtkWidget *choose_bt, gpointer name)
   for (i = 0; i < global_capture_opts.all_ifaces->len; i++) {
     device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
     if (strcmp((char *)name, device.if_info.name) == 0) {
-      if (!device.locked) {
-        device.selected ^= 1;
-        if (device.selected) {
-          global_capture_opts.num_selected++;
-        } else {
-          global_capture_opts.num_selected--;
-        }
-        global_capture_opts.all_ifaces = g_array_remove_index(global_capture_opts.all_ifaces, i);
-        g_array_insert_val(global_capture_opts.all_ifaces, i, device);
-        if (gtk_widget_is_focus(choose_bt) && get_welcome_window()) {
-          change_interface_selection(device.name, device.selected);
-        }
-        if (gtk_widget_is_focus(choose_bt) && capture_dlg_window_present()) {
-          enable_selected_interface(device.name, device.selected);
-        }
-        device.locked = FALSE;
-        global_capture_opts.all_ifaces = g_array_remove_index(global_capture_opts.all_ifaces, i);
-        g_array_insert_val(global_capture_opts.all_ifaces, i, device);
+      device.selected ^= 1;
+      if (device.selected) {
+        global_capture_opts.num_selected++;
+      } else {
+        global_capture_opts.num_selected--;
+      }
+      global_capture_opts.all_ifaces = g_array_remove_index(global_capture_opts.all_ifaces, i);
+      g_array_insert_val(global_capture_opts.all_ifaces, i, device);
+      if (gtk_widget_is_focus(choose_bt) && get_welcome_window()) {
+        change_interface_selection(device.name, device.selected);
+      }
+      if (gtk_widget_is_focus(choose_bt) && capture_dlg_window_present()) {
+        enable_selected_interface(device.name, device.selected);
       }
       break;
     }
@@ -415,13 +412,11 @@ GtkWidget * capture_get_if_icon(interface_t *device)
     return xpm_to_widget(network_virtual_16_xpm);
   case IF_WIRED:
     return PIXBUF_TO_WIDGET(network_wired_pb_data, "/org/wireshark/image/toolbar/network_wired_16.png");
-#ifdef HAVE_EXTCAP
   case IF_EXTCAP:
 #ifdef _WIN32
     if (strncmp(device->friendly_name, "USBPcap", 7) == 0) {
       return PIXBUF_TO_WIDGET(network_usb_pb_data, "/org/wireshark/image/toolbar/network_usb_16.png");
     }
-#endif
 #endif
   case IF_PIPE:
   case IF_STDIN:

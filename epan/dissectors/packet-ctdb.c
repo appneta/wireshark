@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -939,13 +927,13 @@ dissect_ctdb_req_control(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tr
 		ctdb_control=(ctdb_control_t *)wmem_tree_lookup32_array(ctdb_controls, &tkey[0]);
 	}
 
-
-	cd=find_control_dissector(ctdb_control->opcode, TRUE);
-	if (cd) {
-		cd(pinfo, tree, tvb, data_offset, 0, endianess);
+	if (ctdb_control) {
+		cd=find_control_dissector(ctdb_control->opcode, TRUE);
+		if (cd) {
+			cd(pinfo, tree, tvb, data_offset, 0, endianess);
+		}
+		ctdb_display_control(pinfo, tree, tvb, ctdb_control);
 	}
-
-	ctdb_display_control(pinfo, tree, tvb, ctdb_control);
 
 	return offset;
 }

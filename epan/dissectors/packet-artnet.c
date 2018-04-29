@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1999 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1934,6 +1922,10 @@ static int hf_artnet_time_sync = -1;
 
 /* ArtTrigger */
 static int hf_artnet_trigger = -1;
+static int hf_artnet_trigger_oemcode = -1;
+static int hf_artnet_trigger_key = -1;
+static int hf_artnet_trigger_subkey = -1;
+static int hf_artnet_trigger_data = -1;
 
 /* ArtDirectory */
 static int hf_artnet_directory = -1;
@@ -2253,13 +2245,13 @@ dissect_artnet_poll_reply(tvbuff_t *tvb, guint offset, proto_tree *tree)
                       offset, 1, ENC_BIG_ENDIAN);
   offset += 1;
 
-  proto_tree_add_item(tree, hf_artnet_poll_reply_style, tvb,
-                      offset, 1, ENC_BIG_ENDIAN);
-  offset += 1;
-
   proto_tree_add_item(tree, hf_artnet_spare, tvb,
                       offset, 3, ENC_NA);
   offset += 3;
+
+  proto_tree_add_item(tree, hf_artnet_poll_reply_style, tvb,
+                      offset, 1, ENC_BIG_ENDIAN);
+  offset += 1;
 
   proto_tree_add_item(tree, hf_artnet_poll_reply_mac,
                         tvb, offset, 6, ENC_NA);
@@ -3046,6 +3038,26 @@ dissect_artnet_time_sync(tvbuff_t *tvb _U_, guint offset, proto_tree *tree _U_)
 static guint
 dissect_artnet_trigger(tvbuff_t *tvb _U_, guint offset, proto_tree *tree _U_)
 {
+  proto_tree_add_item(tree, hf_artnet_filler, tvb,
+                      offset, 2, ENC_NA);
+  offset += 2;
+
+  proto_tree_add_item(tree, hf_artnet_trigger_oemcode, tvb,
+                      offset, 2, ENC_BIG_ENDIAN);
+  offset += 2;
+
+  proto_tree_add_item(tree, hf_artnet_trigger_key, tvb,
+                      offset, 1, ENC_BIG_ENDIAN);
+  offset += 1;
+
+  proto_tree_add_item(tree, hf_artnet_trigger_subkey, tvb,
+                      offset, 1, ENC_BIG_ENDIAN);
+  offset += 1;
+
+  proto_tree_add_item(tree, hf_artnet_trigger_data, tvb,
+                      offset, 512, ENC_NA);
+  offset += 512;
+
   return offset;
 }
 
@@ -5179,6 +5191,30 @@ proto_register_artnet(void) {
         "artnet.trigger",
         FT_NONE, BASE_NONE, NULL, 0,
         "Art-Net ArtTrigger packet", HFILL }},
+
+    { &hf_artnet_trigger_oemcode,
+      { "OEM Code",
+        "artnet.trigger.oemcode",
+        FT_UINT16, BASE_HEX, 0, 0x0,
+        NULL, HFILL }},
+
+    { &hf_artnet_trigger_key,
+      { "Key",
+        "artnet.trigger.key",
+        FT_UINT8, BASE_HEX_DEC, 0, 0x0,
+        NULL, HFILL }},
+
+    { &hf_artnet_trigger_subkey,
+      { "SubKey",
+        "artnet.trigger.subkey",
+        FT_UINT8, BASE_HEX_DEC, 0, 0x0,
+        NULL, HFILL }},
+
+    { &hf_artnet_trigger_data,
+      { "Data",
+        "artnet.trigger.data",
+        FT_BYTES, BASE_NONE, NULL, 0x0,
+        NULL, HFILL }},
 
     /* ArtDirectory */
     { &hf_artnet_directory,

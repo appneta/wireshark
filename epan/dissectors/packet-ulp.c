@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * ref OMA-TS-ULP-V2_0_2-20140708-A
  * http://www.openmobilealliance.org
@@ -709,7 +697,7 @@ static int hf_ulp_GANSSSignals_signal7 = -1;
 static int hf_ulp_GANSSSignals_signal8 = -1;
 
 /*--- End of included file: packet-ulp-hf.c ---*/
-#line 65 "./asn1/ulp/packet-ulp-template.c"
+#line 53 "./asn1/ulp/packet-ulp-template.c"
 static int hf_ulp_mobile_directory_number = -1;
 static int hf_ulp_ganssTimeModels_bit0 = -1;
 static int hf_ulp_ganssTimeModels_bit1 = -1;
@@ -940,7 +928,7 @@ static gint ett_ulp_PolygonArea = -1;
 static gint ett_ulp_PolygonDescription = -1;
 
 /*--- End of included file: packet-ulp-ett.c ---*/
-#line 79 "./asn1/ulp/packet-ulp-template.c"
+#line 67 "./asn1/ulp/packet-ulp-template.c"
 
 static dissector_handle_t ulp_tcp_handle;
 
@@ -1210,7 +1198,7 @@ ulp_Coordinate_longitude_fmt(gchar *s, guint32 v)
 #define maxWimaxBSMeas                 32
 
 /*--- End of included file: packet-ulp-val.h ---*/
-#line 329 "./asn1/ulp/packet-ulp-template.c"
+#line 317 "./asn1/ulp/packet-ulp-template.c"
 
 typedef struct
 {
@@ -7422,7 +7410,7 @@ static int dissect_ULP_PDU_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_
 
 
 /*--- End of included file: packet-ulp-fn.c ---*/
-#line 345 "./asn1/ulp/packet-ulp-template.c"
+#line 333 "./asn1/ulp/packet-ulp-template.c"
 
 
 static guint
@@ -9989,7 +9977,7 @@ void proto_register_ulp(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-ulp-hfarr.c ---*/
-#line 371 "./asn1/ulp/packet-ulp-template.c"
+#line 359 "./asn1/ulp/packet-ulp-template.c"
     { &hf_ulp_mobile_directory_number,
       { "Mobile Directory Number", "ulp.mobile_directory_number",
         FT_STRING, BASE_NONE, NULL, 0,
@@ -10243,7 +10231,7 @@ void proto_register_ulp(void) {
     &ett_ulp_PolygonDescription,
 
 /*--- End of included file: packet-ulp-ettarr.c ---*/
-#line 408 "./asn1/ulp/packet-ulp-template.c"
+#line 396 "./asn1/ulp/packet-ulp-template.c"
   };
 
   module_t *ulp_module;

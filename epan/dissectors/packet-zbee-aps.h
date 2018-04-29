@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef PACKET_ZBEE_APS_H
@@ -208,6 +196,7 @@
 #define ZBEE_ZCL_CID_BACNET_MULTISTATE_VALUE_EXT    0x0613
 
 /* ZCL Cluster IDs - Smart Energy */
+#define ZBEE_ZCL_CID_KEEP_ALIVE                     0x0025
 #define ZBEE_ZCL_CID_PRICE                          0x0700
 #define ZBEE_ZCL_CID_DEMAND_RESPONSE_LOAD_CONTROL   0x0701
 #define ZBEE_ZCL_CID_SIMPLE_METERING                0x0702
@@ -219,6 +208,7 @@
 #define ZBEE_ZCL_CID_DEVICE_MANAGEMENT              0x0708
 #define ZBEE_ZCL_CID_EVENTS                         0x0709
 #define ZBEE_ZCL_CID_MDU_PAIRING                    0x070A
+#define ZBEE_ZCL_CID_SUB_GHZ                        0x070B
 
 /* ZCL Cluster IDs - Key Establishment */
 #define ZBEE_ZCL_CID_KE                             0x0800
@@ -298,12 +288,24 @@ typedef struct{
     gboolean    src_present;
 } zbee_aps_packet;
 
+/* ZigBee Smart Energy version used for preferences */
+extern gint  gPREF_zbee_se_protocol_version;
+
+enum {
+    ZBEE_SE_VERSION_1_1B,
+    ZBEE_SE_VERSION_1_2,
+    ZBEE_SE_VERSION_1_2A,
+    ZBEE_SE_VERSION_1_2B,
+    ZBEE_SE_VERSION_1_4
+};
+
 /**************************************
  * Value Strings
  **************************************
  */
 
 extern const value_string zbee_aps_cid_names[];
+extern const range_string zbee_aps_apid_names[];
 
 #endif /* PACKET_ZBEE_APS_H*/
 

@@ -25,19 +25,7 @@
  * TODO - Move parts of dissection before and other parts after "if (tree)",
  * for example skip almost all but content type in replies if tree is closed.
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -389,6 +377,9 @@ static dissector_handle_t wsp_fromudp_handle;
 
 /* Handle for WTP-over-UDP dissector */
 static dissector_handle_t wtp_fromudp_handle;
+
+/* Handle for coap dissector */
+static dissector_handle_t coap_handle;
 
 /* Handle for generic media dissector */
 static dissector_handle_t media_handle;
@@ -1127,6 +1118,7 @@ static const value_string vals_wap_application_ids[] = {
     { 0x0008, "x-wap-application:drm.ua"},
     { 0x0009, "x-wap-application:emn.ua"},
     { 0x000A, "x-wap-application:wv.ua"},
+    { 0x001A, "x-wap-application:lwm2m.dm"},
     /* Registered by 3rd parties */
     { 0x8000, "x-wap-microsoft:localcontent.ua"},
     { 0x8001, "x-wap-microsoft:IMclient.ua"},
@@ -1294,7 +1286,7 @@ static void add_headers (proto_tree *tree, tvbuff_t *tvb, int hf, packet_info *p
 
 #define get_uintvar_integer(val,tvb,start,len,ok) \
     val = tvb_get_guintvar(tvb,start,&len, pinfo, &ei_wsp_oversized_uintvar); \
-    if (len>5) ok = FALSE; else ok = TRUE;
+    if (len>5 || len==0) ok = FALSE; else ok = TRUE;
 #define get_short_integer(val,tvb,start,len,ok) \
     val = tvb_get_guint8(tvb,start); \
     if (val & 0x80) ok = TRUE; else ok=FALSE; \
@@ -3884,7 +3876,7 @@ dissect_redirect(tvbuff_t *tvb, int offset, packet_info *pinfo,
     int                address_len;
     guint16            port_num;
     guint32            address_ipv4;
-    struct e_in6_addr  address_ipv6;
+    ws_in6_addr  address_ipv6;
     address            redir_address;
     conversation_t    *conv;
     guint32            idx            = 0; /* Address index */
@@ -4006,10 +3998,10 @@ dissect_redirect(tvbuff_t *tvb, int offset, packet_info *pinfo,
             redir_address.data = (const guint8 *)&address_ipv4;
             /* Find a conversation based on redir_address and pinfo->dst */
             conv = find_conversation(pinfo->num, &redir_address, &pinfo->dst,
-                PT_UDP, port_num, 0, NO_PORT_B);
+                ENDPOINT_UDP, port_num, 0, NO_PORT_B);
             if (conv == NULL) { /* This conversation does not exist yet */
                 conv = conversation_new(pinfo->num, &redir_address,
-                    &pinfo->dst, PT_UDP, port_num, 0, NO_PORT2);
+                    &pinfo->dst, ENDPOINT_UDP, port_num, 0, NO_PORT2);
             }
             /* Apply WSP dissection to the conversation */
             conversation_set_dissector(conv, dissector_handle);
@@ -4042,10 +4034,10 @@ dissect_redirect(tvbuff_t *tvb, int offset, packet_info *pinfo,
             redir_address.data = (const guint8 *)&address_ipv6;
             /* Find a conversation based on redir_address and pinfo->dst */
             conv = find_conversation(pinfo->num, &redir_address, &pinfo->dst,
-                PT_UDP, port_num, 0, NO_PORT_B);
+                ENDPOINT_UDP, port_num, 0, NO_PORT_B);
             if (conv == NULL) { /* This conversation does not exist yet */
                 conv = conversation_new(pinfo->num, &redir_address,
-                    &pinfo->dst, PT_UDP, port_num, 0, NO_PORT2);
+                    &pinfo->dst, ENDPOINT_UDP, port_num, 0, NO_PORT2);
             }
             /* Apply WSP dissection to the conversation */
             conversation_set_dissector(conv, dissector_handle);
@@ -4412,7 +4404,7 @@ add_headers (proto_tree *tree, tvbuff_t *tvb, int hf, packet_info *pinfo)
                 offset = WellKnownHeader[hdr_id & 0x7F](wsp_headers, tvb,
                                                         hdr_start, pinfo);
                 /* Make sure we're progressing forward */
-                if (save_offset <= offset) {
+                if (save_offset >= offset) {
                     expert_add_info(pinfo, ti, &ei_wsp_header_invalid);
                     break;
                 }
@@ -4423,7 +4415,7 @@ add_headers (proto_tree *tree, tvbuff_t *tvb, int hf, packet_info *pinfo)
                 offset = WellKnownOpenwaveHeader[hdr_id & 0x7F](wsp_headers,
                                                                 tvb, hdr_start, pinfo);
                 /* Make sure we're progressing forward */
-                if (save_offset <= offset) {
+                if (save_offset >= offset) {
                     expert_add_info(pinfo, ti, &ei_wsp_header_invalid);
                     break;
                 }
@@ -5030,8 +5022,19 @@ dissect_wsp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     found_match = dissector_try_string(media_type_table,
                             contentTypeStr, tmp_tvb, pinfo, tree, NULL);
                 }
-                if (! found_match) {
-                    if (! dissector_try_heuristic(heur_subdissector_list,
+                if (! found_match){
+                    /*
+                     * Try to dissect x-wap-application lwm2m.dm  data as COaP
+                     * see docs: (page 141)
+                     * http://www.openmobilealliance.org/release/LightweightM2M/V1_0_2-20180209-A/OMA-TS-LightweightM2M-V1_0_2-20180209-A.pdf
+                     * header bytes should be: 0xAF, 0x9A
+                     */
+                    if (tvb_get_guint8(tvb, headerStart + headerLength - 1) == 0xAF && /* x-wap app id */
+                        tvb_get_guint8(tvb, headerStart + headerLength) == 0x9A && /* x-wap app lwm2m.dm */
+                        tvb_reported_length(tmp_tvb) == 15  ){
+
+                        call_dissector(coap_handle, tmp_tvb, pinfo, tree);
+                    } else if (! dissector_try_heuristic(heur_subdissector_list,
                                 tmp_tvb, pinfo, tree, &hdtbl_entry, NULL)) {
 
                         pinfo->match_string = contentTypeStr;
@@ -5195,6 +5198,8 @@ add_capabilities (proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, guint8 pd
          * Get the length of the capability field
          */
         capaValueLen = tvb_get_guintvar(tvb, offset, &len, pinfo, &ei_wsp_oversized_uintvar);
+        if (len == 0)
+            return;
         capaLen = capaValueLen + len;
 
         cap_subtree = proto_tree_add_subtree(wsp_capabilities, tvb, offset, capaLen, ett_capabilities_entry, &cap_item, "Capability");
@@ -5594,17 +5599,17 @@ static stat_tap_table_item wsp_stat_fields[] = {
 static int unknown_pt_idx;
 static int unknown_sc_idx;
 
-static void wsp_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb gui_callback, void* gui_data)
+static void wsp_stat_init(stat_tap_table_ui* new_stat, stat_tap_gui_init_cb gui_callback, void* gui_data)
 {
 	int num_fields = sizeof(wsp_stat_fields)/sizeof(stat_tap_table_item);
-	stat_tap_table* pt_table = new_stat_tap_init_table("PDU Types", num_fields, 0, NULL, gui_callback, gui_data);
+	stat_tap_table* pt_table = stat_tap_init_table("PDU Types", num_fields, 0, NULL, gui_callback, gui_data);
 	stat_tap_table_item_type pt_items[sizeof(wsp_stat_fields)/sizeof(stat_tap_table_item)];
-	stat_tap_table* sc_table = new_stat_tap_init_table("Status Codes", num_fields, 0, NULL, gui_callback, gui_data);
+	stat_tap_table* sc_table = stat_tap_init_table("Status Codes", num_fields, 0, NULL, gui_callback, gui_data);
 	stat_tap_table_item_type sc_items[sizeof(wsp_stat_fields)/sizeof(stat_tap_table_item)];
 	int table_idx;
 
-	new_stat_tap_add_table(new_stat, pt_table);
-	new_stat_tap_add_table(new_stat, sc_table);
+	stat_tap_add_table(new_stat, pt_table);
+	stat_tap_add_table(new_stat, sc_table);
 
 	/* Add a row for each PDU type and status code */
 	table_idx = 0;
@@ -5616,12 +5621,12 @@ static void wsp_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb 
 		pt_items[MESSAGE_TYPE_COLUMN].value.string_value = g_strdup(wsp_vals_pdu_type[table_idx].strptr);
 		pt_items[MESSAGE_TYPE_COLUMN].user_data.uint_value = wsp_vals_pdu_type[table_idx].value;
 
-		new_stat_tap_init_table_row(pt_table, table_idx, num_fields, pt_items);
+		stat_tap_init_table_row(pt_table, table_idx, num_fields, pt_items);
 		table_idx++;
 	}
 	pt_items[MESSAGE_TYPE_COLUMN].value.string_value = g_strdup("Unknown PDU type");
 	pt_items[MESSAGE_TYPE_COLUMN].user_data.uint_value = 0;
-	new_stat_tap_init_table_row(pt_table, table_idx, num_fields, pt_items);
+	stat_tap_init_table_row(pt_table, table_idx, num_fields, pt_items);
 	unknown_pt_idx = table_idx;
 
 	table_idx = 0;
@@ -5633,19 +5638,19 @@ static void wsp_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb 
 		sc_items[MESSAGE_TYPE_COLUMN].value.string_value = g_strdup(wsp_vals_status[table_idx].strptr);
 		sc_items[MESSAGE_TYPE_COLUMN].user_data.uint_value = wsp_vals_status[table_idx].value;
 
-		new_stat_tap_init_table_row(sc_table, table_idx, num_fields, sc_items);
+		stat_tap_init_table_row(sc_table, table_idx, num_fields, sc_items);
 		table_idx++;
 	}
 	sc_items[MESSAGE_TYPE_COLUMN].value.string_value = g_strdup("Unknown status code");
 	sc_items[MESSAGE_TYPE_COLUMN].user_data.uint_value = 0;
-	new_stat_tap_init_table_row(sc_table, table_idx, num_fields, sc_items);
+	stat_tap_init_table_row(sc_table, table_idx, num_fields, sc_items);
 	unknown_sc_idx = table_idx;
 }
 
 static gboolean
 wsp_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const void *wiv_ptr)
 {
-	new_stat_data_t* stat_data = (new_stat_data_t*)tapdata;
+	stat_data_t* stat_data = (stat_data_t*)tapdata;
 	const wsp_info_value_t *value = (const wsp_info_value_t *)wiv_ptr;
 	stat_tap_table *pt_table, *sc_table;
 	guint element;
@@ -5657,7 +5662,7 @@ wsp_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, 
 
 	found = FALSE;
 	for (element = 0; element < pt_table->num_elements; element++) {
-		item_data = new_stat_tap_get_field_data(pt_table, element, MESSAGE_TYPE_COLUMN);
+		item_data = stat_tap_get_field_data(pt_table, element, MESSAGE_TYPE_COLUMN);
 		if (value->pdut == item_data->user_data.uint_value) {
 			found = TRUE;
 			break;
@@ -5666,14 +5671,14 @@ wsp_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, 
 	if (!found) {
 		element = unknown_pt_idx;
 	}
-	item_data = new_stat_tap_get_field_data(pt_table, element, PACKET_COLUMN);
+	item_data = stat_tap_get_field_data(pt_table, element, PACKET_COLUMN);
 	item_data->value.uint_value++;
-	new_stat_tap_set_field_data(pt_table, element, PACKET_COLUMN, item_data);
+	stat_tap_set_field_data(pt_table, element, PACKET_COLUMN, item_data);
 
 	if (value->status_code != 0) {
 		found = FALSE;
 		for (element = 0; element < sc_table->num_elements; element++) {
-			item_data = new_stat_tap_get_field_data(sc_table, element, MESSAGE_TYPE_COLUMN);
+			item_data = stat_tap_get_field_data(sc_table, element, MESSAGE_TYPE_COLUMN);
 			if (value->status_code == (int) item_data->user_data.uint_value) {
 				found = TRUE;
 				break;
@@ -5682,9 +5687,9 @@ wsp_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, 
 		if (!found) {
 			element = unknown_sc_idx;
 		}
-		item_data = new_stat_tap_get_field_data(sc_table, element, PACKET_COLUMN);
+		item_data = stat_tap_get_field_data(sc_table, element, PACKET_COLUMN);
 		item_data->value.uint_value++;
-		new_stat_tap_set_field_data(sc_table, element, PACKET_COLUMN, item_data);
+		stat_tap_set_field_data(sc_table, element, PACKET_COLUMN, item_data);
 	}
 
 	return TRUE;
@@ -5698,9 +5703,9 @@ wsp_stat_reset(stat_tap_table* table)
 
 	for (element = 0; element < table->num_elements; element++)
 	{
-		item_data = new_stat_tap_get_field_data(table, element, PACKET_COLUMN);
+		item_data = stat_tap_get_field_data(table, element, PACKET_COLUMN);
 		item_data->value.uint_value = 0;
-		new_stat_tap_set_field_data(table, element, PACKET_COLUMN, item_data);
+		stat_tap_set_field_data(table, element, PACKET_COLUMN, item_data);
 	}
 }
 
@@ -7207,6 +7212,7 @@ proto_reg_handoff_wsp(void)
      */
     wtp_fromudp_handle = find_dissector_add_dependency("wtp-udp", proto_wsp);
     media_handle = find_dissector_add_dependency("media", proto_wsp);
+    coap_handle = find_dissector_add_dependency("coap", proto_wsp);
     wbxml_uaprof_handle = find_dissector_add_dependency("wbxml-uaprof", proto_wsp);
 
     /* Only connection-less WSP has no previous handler */

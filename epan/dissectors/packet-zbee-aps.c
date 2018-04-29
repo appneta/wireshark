@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*  Include Files */
@@ -146,7 +134,6 @@ static int hf_zbee_aps_t2_cluster = -1;
 static int hf_zbee_aps_t2_btres_octet_sequence = -1;
 static int hf_zbee_aps_t2_btres_octet_sequence_length_requested = -1;
 static int hf_zbee_aps_t2_btres_status = -1;
-static int hf_zbee_aps_t2_btreq_octet_sequence = -1;
 static int hf_zbee_aps_t2_btreq_octet_sequence_length = -1;
 
 /* ZDP indices. */
@@ -631,6 +618,7 @@ const value_string zbee_aps_cid_names[] = {
     { ZBEE_ZCL_CID_BACNET_MULTISTATE_VALUE_EXT,     "BACnet Multistage Value (Extended)"},
 
 /* ZCL Cluster IDs - Smart Energy */
+    { ZBEE_ZCL_CID_KEEP_ALIVE,                      "Keep-Alive"},
     { ZBEE_ZCL_CID_PRICE,                           "Price"},
     { ZBEE_ZCL_CID_DEMAND_RESPONSE_LOAD_CONTROL,    "Demand Response and Load Control"},
     { ZBEE_ZCL_CID_SIMPLE_METERING,                 "Simple Metering"},
@@ -642,6 +630,7 @@ const value_string zbee_aps_cid_names[] = {
     { ZBEE_ZCL_CID_DEVICE_MANAGEMENT,               "Device Management"},
     { ZBEE_ZCL_CID_EVENTS,                          "Events"},
     { ZBEE_ZCL_CID_MDU_PAIRING,                     "MDU Pairing"},
+    { ZBEE_ZCL_CID_SUB_GHZ,                         "Sub-Ghz"},
 
 /* ZCL Cluster IDs - Key Establishment */
     { ZBEE_ZCL_CID_KE,                              "Key Establishment"},
@@ -1293,9 +1282,6 @@ dissect_zbee_aps_transport_key(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
 {
     guint8              key_type;
     guint8              key[ZBEE_APS_CMD_KEY_LENGTH];
-    GSList            **nwk_keyring;
-    key_record_t        key_record;
-    zbee_nwk_hints_t   *nwk_hints;
     guint               i;
 
     /* Get and display the key type. */
@@ -1313,28 +1299,7 @@ dissect_zbee_aps_transport_key(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
     offset += ZBEE_APS_CMD_KEY_LENGTH;
 
     /* Update the key ring for this pan */
-    if ( !pinfo->fd->flags.visited && (nwk_hints = (zbee_nwk_hints_t *)p_get_proto_data(wmem_file_scope(), pinfo,
-                    proto_get_id_by_filter_name(ZBEE_PROTOABBREV_NWK), 0))) {
-
-        nwk_keyring = (GSList **)g_hash_table_lookup(zbee_table_nwk_keyring, &nwk_hints->src_pan);
-        if ( !nwk_keyring ) {
-            nwk_keyring = (GSList **)g_malloc0(sizeof(GSList*));
-            g_hash_table_insert(zbee_table_nwk_keyring,
-                    g_memdup(&nwk_hints->src_pan, sizeof(nwk_hints->src_pan)), nwk_keyring);
-        }
-
-        if ( nwk_keyring ) {
-            if ( !*nwk_keyring ||
-                    memcmp( ((key_record_t *)((GSList *)(*nwk_keyring))->data)->key, &key,
-                        ZBEE_APS_CMD_KEY_LENGTH) ) {
-                /* Store a new or different key in the key ring */
-                key_record.frame_num = pinfo->num;
-                key_record.label = NULL;
-                memcpy(&key_record.key, &key, ZBEE_APS_CMD_KEY_LENGTH);
-                *nwk_keyring = g_slist_prepend(*nwk_keyring, g_memdup(&key_record, sizeof(key_record_t)));
-            }
-        }
-    }
+    zbee_sec_add_key_to_keyring(pinfo, key);
 
     /* Parse the rest of the key descriptor. */
     switch (key_type) {
@@ -1770,8 +1735,6 @@ dissect_zbee_t2(tvbuff_t *tvb, proto_tree *tree, guint16 cluster_id)
             payload_length = tvb_get_guint8(tvb, offset);
             proto_tree_add_uint(t2_tree, hf_zbee_aps_t2_btreq_octet_sequence_length, tvb, offset, 1, payload_length);
             offset += 1;
-            proto_tree_add_item(t2_tree, hf_zbee_aps_t2_btreq_octet_sequence, tvb, offset, payload_length, ENC_NA);
-            offset += payload_length;
             break;
     }
     return offset;
@@ -1858,6 +1821,18 @@ zbee_apf_transaction_len(tvbuff_t *tvb, guint offset, guint8 type)
         return (tvb_get_guint8(tvb, offset+1) + 2);
     }
 } /* zbee_apf_transaction_len */
+
+/* The ZigBee Smart Energy version in enum_val_t for the ZigBee Smart Energy version preferences. */
+static const enum_val_t zbee_zcl_protocol_version_enums[] = {
+    { "se1.1b",     "SE 1.1b",     ZBEE_SE_VERSION_1_1B },
+    { "se1.2",      "SE 1.2",      ZBEE_SE_VERSION_1_2 },
+    { "se1.2a",     "SE 1.2a",     ZBEE_SE_VERSION_1_2A },
+    { "se1.2b",     "SE 1.2b",     ZBEE_SE_VERSION_1_2B },
+    { "se1.4",      "SE 1.4",      ZBEE_SE_VERSION_1_4 },
+    { NULL, NULL, 0 }
+};
+
+gint gPREF_zbee_se_protocol_version = ZBEE_SE_VERSION_1_4;
 
 /**
  *ZigBee APS protocol registration routine.
@@ -2096,9 +2071,6 @@ void proto_register_zbee_aps(void)
                 { "Status", "zbee_aps.t2.btres.status", FT_UINT8, BASE_HEX, VALS(zbee_aps_t2_btres_status_names), 0x0,
                     NULL, HFILL }},
 
-            { &hf_zbee_aps_t2_btreq_octet_sequence,
-                { "Octet Sequence", "zbee_aps.t2.btreq.octet_sequence", FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-
             { &hf_zbee_aps_t2_btreq_octet_sequence_length,
                 { "Octet Sequence Length", "zbee_aps.t2.btreq.octet_sequence_length", FT_UINT8, BASE_DEC, NULL, 0x0,
                     NULL, HFILL }},
@@ -2150,6 +2122,14 @@ void proto_register_zbee_aps(void)
     /* Register the APS dissector and subdissector list. */
     zbee_aps_dissector_table = register_dissector_table("zbee.profile", "ZigBee Profile ID", proto_zbee_aps, FT_UINT16, BASE_HEX);
     zbee_aps_handle = register_dissector(ZBEE_PROTOABBREV_APS, dissect_zbee_aps, proto_zbee_aps);
+
+    /* Register preferences */
+    module_t* zbee_se_prefs = prefs_register_protocol(proto_zbee_aps, NULL);
+
+    prefs_register_enum_preference(zbee_se_prefs, "zbeeseversion", "ZigBee Smart Energy Version",
+            "Specifies the ZigBee Smart Energy version used when dissecting "
+            "ZigBee APS messages within the Smart Energy Profile",
+            &gPREF_zbee_se_protocol_version, zbee_zcl_protocol_version_enums, FALSE);
 
     /* Register reassembly table. */
     reassembly_table_register(&zbee_aps_reassembly_table,

@@ -6,20 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "config.h"
 
@@ -73,13 +60,13 @@ void
 cfile_open_failure_message(const char *progname, const char *filename,
                            int err, gchar *err_info)
 {
-    char *file_description;
-
-    /* Get a string that describes what we're opening */
-    file_description = input_file_description(filename);
-
     if (err < 0) {
-        /* Wiretap error. */
+        /*
+         * Wiretap error.
+         * Get a string that describes what we're opening.
+         */
+        char *file_description = input_file_description(filename);
+
         switch (err) {
 
         case WTAP_ERR_NOT_REGULAR_FILE:
@@ -136,6 +123,14 @@ cfile_open_failure_message(const char *progname, const char *filename,
             g_free(err_info);
             break;
 
+        case WTAP_ERR_DECOMPRESSION_NOT_SUPPORTED:
+            cmdarg_err("The %s cannot be decompressed; it is compressed in a way that we don't support."
+                       "(%s)",
+                       file_description,
+                       err_info != NULL ? err_info : "no information supplied");
+            g_free(err_info);
+            break;
+
         default:
             cmdarg_err("The %s could not be opened: %s.",
                        file_description,
@@ -159,13 +154,13 @@ void
 cfile_dump_open_failure_message(const char *progname, const char *filename,
                                 int err, int file_type_subtype)
 {
-    char *file_description;
-
-    /* Get a string that describes what we're opening */
-    file_description = output_file_description(filename);
-
     if (err < 0) {
-        /* Wiretap error. */
+        /*
+         * Wiretap error.
+         * Get a string that describes what we're opening.
+         */
+        char *file_description = input_file_description(filename);
+
         switch (err) {
 
         case WTAP_ERR_NOT_REGULAR_FILE:
@@ -260,6 +255,14 @@ cfile_read_failure_message(const char *progname, const char *filename,
 
     case WTAP_ERR_DECOMPRESS:
         cmdarg_err("The %s cannot be decompressed; it may be damaged or corrupt.\n"
+                   "(%s)",
+                   file_string,
+                   err_info != NULL ? err_info : "no information supplied");
+        g_free(err_info);
+        break;
+
+    case WTAP_ERR_DECOMPRESSION_NOT_SUPPORTED:
+        cmdarg_err("The %s cannot be decompressed; it is compressed in a way that we don't support.\n"
                    "(%s)",
                    file_string,
                    err_info != NULL ? err_info : "no information supplied");

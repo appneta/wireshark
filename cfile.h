@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __CFILE_H__
@@ -55,13 +43,17 @@ typedef enum {
   SD_BACKWARD
 } search_direction;
 
-#ifdef WANT_PACKET_EDITOR
-/* XXX, where this struct should go? */
-typedef struct {
-  struct wtap_pkthdr phdr; /**< Modified packet header */
-  char *pd;                /**< Modified packet data */
-} modified_frame_data;
-#endif
+/*
+ * Packet provider for programs using a capture file.
+ */
+struct packet_provider_data {
+  wtap        *wth;                  /* Wiretap session */
+  const frame_data *ref;
+  frame_data  *prev_dis;
+  frame_data  *prev_cap;
+  frame_data_sequence *frames;       /* Sequence of frames, if we're keeping that information */
+  GTree       *frames_user_comments; /* BST with user comments for frames (key = frame_data) */
+};
 
 typedef struct _capture_file {
   epan_t      *epan;
@@ -88,7 +80,6 @@ typedef struct _capture_file {
   guint32      drops;                /* Dropped packets */
   nstime_t     elapsed_time;         /* Elapsed time */
   int          snap;                 /* Maximum captured packet length; 0 if unknown */
-  wtap        *wth;                  /* Wiretap session */
   dfilter_t   *rfcode;               /* Compiled read filter program */
   dfilter_t   *dfcode;               /* Compiled display filter program */
   gchar       *dfilter;              /* Display filter string */
@@ -108,10 +99,11 @@ typedef struct _capture_file {
   search_direction dir;              /* Direction in which to do searches */
   gboolean     search_in_progress;   /* TRUE if user just clicked OK in the Find dialog or hit <control>N/B */
   /* packet data */
-  struct wtap_pkthdr phdr;           /* Packet header */
-  Buffer       buf;                  /* Packet data */
+  wtap_rec     rec;                  /* Record header */
+  Buffer       buf;                  /* Record data */
+  /* packet provider */
+  struct packet_provider_data provider;
   /* frames */
-  frame_data_sequence *frames;       /* Sequence of frames, if we're keeping that information */
   guint32      first_displayed;      /* Frame number of first frame displayed */
   guint32      last_displayed;       /* Frame number of last frame displayed */
   column_info  cinfo;                /* Column formatting information */
@@ -120,23 +112,18 @@ typedef struct _capture_file {
   gint         current_row;          /* Row number for current frame */
   epan_dissect_t *edt;               /* Protocol dissection for currently selected packet */
   field_info  *finfo_selected;       /* Field info for currently selected field */
-#ifdef WANT_PACKET_EDITOR
-  GTree       *edited_frames;        /* BST with modified frames */
-#endif
   gpointer     window;               /* Top-level window associated with file */
-  GTree       *frames_user_comments; /* BST with user comments for frames (key = frame_data) */
-  gulong       computed_elapsed;
+  gulong       computed_elapsed;     /* Elapsed time to load the file (in msec). */
 
   guint32      cum_bytes;
-  const frame_data *ref;
-  frame_data  *prev_dis;
-  frame_data  *prev_cap;
 } capture_file;
 
 extern void cap_file_init(capture_file *cf);
 
-extern const char *cap_file_get_interface_name(void *data, guint32 interface_id);
-extern const char *cap_file_get_interface_description(void *data, guint32 interface_id);
+const char *cap_file_provider_get_interface_name(struct packet_provider_data *prov, guint32 interface_id);
+const char *cap_file_provider_get_interface_description(struct packet_provider_data *prov, guint32 interface_id);
+const char *cap_file_provider_get_user_comment(struct packet_provider_data *prov, const frame_data *fd);
+void cap_file_provider_set_user_comment(struct packet_provider_data *prov, frame_data *fd, const char *new_comment);
 
 #ifdef __cplusplus
 }

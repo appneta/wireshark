@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * To quote the author of the previous H245 dissector:
  *   "This is a complete replacement of the previous limitied dissector
@@ -214,7 +202,7 @@ typedef enum _IndicationMessage_enum {
 } IndicationMessage_enum;
 
 /*--- End of included file: packet-h245-val.h ---*/
-#line 87 "./asn1/h245/packet-h245-template.c"
+#line 75 "./asn1/h245/packet-h245-template.c"
 
 static const value_string h245_RequestMessage_short_vals[] = {
 	{ RequestMessage_nonStandard              ,	"NSM" },
@@ -1921,7 +1909,7 @@ static int hf_h245_encrypted = -1;                /* OCTET_STRING */
 static int hf_h245_encryptedAlphanumeric = -1;    /* EncryptedAlphanumeric */
 
 /*--- End of included file: packet-h245-hf.c ---*/
-#line 387 "./asn1/h245/packet-h245-template.c"
+#line 375 "./asn1/h245/packet-h245-template.c"
 
 /* Initialize the subtree pointers */
 static int ett_h245 = -1;
@@ -2422,7 +2410,7 @@ static gint ett_h245_FlowControlIndication = -1;
 static gint ett_h245_MobileMultilinkReconfigurationIndication = -1;
 
 /*--- End of included file: packet-h245-ett.c ---*/
-#line 392 "./asn1/h245/packet-h245-template.c"
+#line 380 "./asn1/h245/packet-h245-template.c"
 
 /* Forward declarations */
 static int dissect_h245_MultimediaSystemControlMessage(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
@@ -3688,7 +3676,7 @@ dissect_h245_ParameterIdentifier(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *
   if (gefx) {
     ti = proto_tree_add_string(tree, hf_h245_debug_dissector_try_string, tvb, offset>>3, 0, gefx->key);
 	PROTO_ITEM_SET_HIDDEN(ti);
-    dissector_try_string(gef_name_dissector_table, gefx->key, tvb_new_subset_length_caplen(tvb, offset>>3, 0, 0), actx->pinfo, tree, actx);
+    dissector_try_string_new(gef_name_dissector_table, gefx->key, tvb_new_subset_length_caplen(tvb, offset>>3, 0, 0), actx->pinfo, tree, FALSE, actx);
   }
   actx->private_data = gefx;  /* subdissector could overwrite it */
 
@@ -3717,7 +3705,7 @@ dissect_h245_T_booleanArray(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx 
     ti = proto_tree_add_string(tree, hf_h245_debug_dissector_try_string, tvb, offset>>3, 0, gefx->key);
 	PROTO_ITEM_SET_HIDDEN(ti);
     add_new_data_source(actx->pinfo, value_tvb, "booleanArray");
-    dissector_try_string(gef_content_dissector_table, gefx->key, value_tvb, actx->pinfo, tree, actx);
+    dissector_try_string_new(gef_content_dissector_table, gefx->key, value_tvb, actx->pinfo, tree, FALSE, actx);
   }
 
 
@@ -6453,7 +6441,7 @@ dissect_h245_MultiplePayloadStreamCapability(tvbuff_t *tvb _U_, int offset _U_, 
 
 static int
 dissect_h245_MaxRedundancy(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-  offset = dissect_per_constrained_integer(tvb, offset, actx, tree, hf_index,
+  offset = dissect_per_constrained_integer_64b(tvb, offset, actx, tree, hf_index,
                                                             1U, NO_BOUND, NULL, FALSE);
 
   return offset;
@@ -9084,7 +9072,7 @@ dissect_h245_MultiplexEntryDescriptor(tvbuff_t *tvb _U_, int offset _U_, asn1_ct
                                    ett_h245_MultiplexEntryDescriptor, MultiplexEntryDescriptor_sequence);
 
   if(h223_set_mc_handle)
-    (*h223_set_mc_handle)(actx->pinfo, h223_mc, h223_me, actx->pinfo->ctype, actx->pinfo->circuit_id);
+    (*h223_set_mc_handle)(actx->pinfo, h223_mc, h223_me);
  /* stuff */
 
 
@@ -11114,9 +11102,9 @@ dissect_h245_OpenLogicalChannelAck(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t
 	DISSECTOR_ASSERT( ( h223_rev_lc_num &&  pend->rev_channel_params)
 				   || (!h223_rev_lc_num && !pend->rev_channel_params) );
 	if(h223_add_lc_handle) {
-	  (*h223_add_lc_handle)( actx->pinfo, h223_fw_lc_num, pend->fw_channel_params, actx->pinfo->ctype, actx->pinfo->circuit_id );
+	  (*h223_add_lc_handle)( actx->pinfo, h223_fw_lc_num, pend->fw_channel_params);
 	  if(h223_rev_lc_num)
-		(*h223_add_lc_handle)( actx->pinfo, h223_rev_lc_num, pend->rev_channel_params, actx->pinfo->ctype, actx->pinfo->circuit_id );
+		(*h223_add_lc_handle)( actx->pinfo, h223_rev_lc_num, pend->rev_channel_params);
 	}
   } else {
 	/* we missed the OpenLogicalChannel packet */
@@ -14509,7 +14497,7 @@ static int dissect_OpenLogicalChannel_PDU(tvbuff_t *tvb _U_, packet_info *pinfo 
 
 
 /*--- End of included file: packet-h245-fn.c ---*/
-#line 401 "./asn1/h245/packet-h245-template.c"
+#line 389 "./asn1/h245/packet-h245-template.c"
 
 static int
 dissect_h245(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* data _U_)
@@ -17452,15 +17440,15 @@ void proto_register_h245(void) {
         "OBJECT_IDENTIFIER", HFILL }},
     { &hf_h245_rfc2733rfc2198,
       { "rfc2733rfc2198", "h245.rfc2733rfc2198",
-        FT_UINT32, BASE_DEC, NULL, 0,
+        FT_UINT64, BASE_DEC, NULL, 0,
         "MaxRedundancy", HFILL }},
     { &hf_h245_rfc2733sameport,
       { "rfc2733sameport", "h245.rfc2733sameport",
-        FT_UINT32, BASE_DEC, NULL, 0,
+        FT_UINT64, BASE_DEC, NULL, 0,
         "MaxRedundancy", HFILL }},
     { &hf_h245_rfc2733diffport,
       { "rfc2733diffport", "h245.rfc2733diffport",
-        FT_UINT32, BASE_DEC, NULL, 0,
+        FT_UINT64, BASE_DEC, NULL, 0,
         "MaxRedundancy", HFILL }},
     { &hf_h245_rfc2733Format,
       { "rfc2733Format", "h245.rfc2733Format",
@@ -20208,7 +20196,7 @@ void proto_register_h245(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-h245-hfarr.c ---*/
-#line 487 "./asn1/h245/packet-h245-template.c"
+#line 475 "./asn1/h245/packet-h245-template.c"
   };
 
   /* List of subtrees */
@@ -20711,7 +20699,7 @@ void proto_register_h245(void) {
     &ett_h245_MobileMultilinkReconfigurationIndication,
 
 /*--- End of included file: packet-h245-ettarr.c ---*/
-#line 494 "./asn1/h245/packet-h245-template.c"
+#line 482 "./asn1/h245/packet-h245-template.c"
   };
   module_t *h245_module;
 

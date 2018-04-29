@@ -8,19 +8,7 @@
  *
  * Copied from packet-pop.c
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -91,6 +79,13 @@ static const value_string function_code_vals[] =
     { 0x11, "Send Multiple Data" },
     { 0x12, "Get Multiple Network Data" },
     { 0x13, "Send Multiple Network Data" },
+    { 0x14, "Set Multiple Data" },
+    { 0x15, "Get Multiple Data to Local Registers" },
+    { 0x16, "Set Data Block" },
+    { 0x17, "QSet Multiple Data" },
+    { 0x18, "Set Digital Data" },
+    { 0x1a, "Request RTU update" },
+    { 0x1b, "QSet Digital Data" },
     { 0x1e, "Cold Start" },
     { 0x1f, "Warm Start" },
     { 0x21, "Program Control" },

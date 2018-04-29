@@ -33,11 +33,11 @@ INCLUDEDIRS = -I$(top_srcdir)
 
 AM_CFLAGS = $(WERROR) $(WS_CFLAGS)
 
-GENERATED_CFLAGS = $(WS_CFLAGS)
+DIRTY_CFLAGS = $(WS_CFLAGS)
 
 AM_CXXFLAGS = $(WERROR) $(WS_CXXFLAGS)
 
-GENERATED_CXXFLAGS = $(WS_CXXFLAGS)
+DIRTY_CXXFLAGS = $(WS_CXXFLAGS)
 
 AM_LDFLAGS = $(WS_LDFLAGS)
 
@@ -76,13 +76,3 @@ am__v_YACC_0 = @echo "  YACC    " $@;
 
 .l.c:
 	$(AM_V_LEX)$(LEX) -o$@ --header-file=$(@:.c=_lex.h) $<
-
-# abi-compliance-checker descriptor
-abi_incdirs = $(subst -I,NEWLINE,$(filter -I%,$(AM_CPPFLAGS) -I$(abs_top_srcdir) -I$(abs_srcdir)))
-abi_sysdirs = $(subst -isystem,NEWLINE,$(filter -isystem%,$(AM_CPPFLAGS)))
-abi_includes = $(abi_incdirs) $(abi_sysdirs)
-abi-descriptor.xml: ../abi-descriptor.template
-	$(AM_V_SED)$(SED) \
-		-e 's|@INCLUDE_DIRS@|$(abi_includes)|g' \
-		-e 's/ *NEWLINE/\n    /g' \
-		-e 's|@LIBRARY_OUTPUT_PATH@|{RELPATH}/.libs|' $< > $@

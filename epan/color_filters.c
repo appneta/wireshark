@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 /*
  * Updated 1 Dec 10 jjm
@@ -173,10 +161,8 @@ color_filters_set_tmp(guint8 filt_nr, const gchar *filter, gboolean disabled, gc
                 g_free(local_err_msg);
                 return FALSE;
             } else {
-                if (colorf->filter_text != NULL)
-                    g_free(colorf->filter_text);
-                if (colorf->c_colorfilter != NULL)
-                    dfilter_free(colorf->c_colorfilter);
+                g_free(colorf->filter_text);
+                dfilter_free(colorf->c_colorfilter);
                 colorf->filter_text = g_strdup(tmpfilter);
                 colorf->c_colorfilter = compiled_filter;
                 colorf->disabled = ((i!=filt_nr) ? TRUE : disabled);
@@ -225,12 +211,9 @@ color_filters_reset_tmp(gchar **err_msg)
 void
 color_filter_delete(color_filter_t *colorf)
 {
-    if (colorf->filter_name != NULL)
-        g_free(colorf->filter_name);
-    if (colorf->filter_text != NULL)
-        g_free(colorf->filter_text);
-    if (colorf->c_colorfilter != NULL)
-        dfilter_free(colorf->c_colorfilter);
+    g_free(colorf->filter_name);
+    g_free(colorf->filter_text);
+    dfilter_free(colorf->c_colorfilter);
     g_free(colorf);
 }
 
@@ -720,6 +703,7 @@ color_filters_read_globals(gpointer user_data, gchar** err_msg, color_filter_add
          * There is no global filter file; treat that as equivalent to
          * that file existing bug being empty, and say we succeeded.
          */
+        g_free(path);
         return TRUE;
     }
 

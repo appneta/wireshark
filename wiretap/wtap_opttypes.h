@@ -4,19 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2001 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef WTAP_OPT_TYPES_H
@@ -170,7 +158,7 @@ typedef union {
     guint8 uint8val;
     guint64 uint64val;
     guint32 ipv4val;    /* network byte order */
-    struct e_in6_addr ipv6val;
+    ws_in6_addr ipv6val;
     char *stringval;
     struct wtap_opttype_custom customval;
 } wtap_optval_t;
@@ -339,7 +327,7 @@ wtap_block_get_ipv4_option_value(wtap_block_t block, guint option_id, guint32* v
  * error code otherwise
  */
 WS_DLL_PUBLIC wtap_opttype_return_val
-wtap_block_add_ipv6_option(wtap_block_t block, guint option_id, struct e_in6_addr *value);
+wtap_block_add_ipv6_option(wtap_block_t block, guint option_id, ws_in6_addr *value);
 
 /** Set IPv6 option value in a block
  *
@@ -350,7 +338,7 @@ wtap_block_add_ipv6_option(wtap_block_t block, guint option_id, struct e_in6_add
  * error code otherwise
  */
 WS_DLL_PUBLIC wtap_opttype_return_val
-wtap_block_set_ipv6_option_value(wtap_block_t block, guint option_id, struct e_in6_addr *value);
+wtap_block_set_ipv6_option_value(wtap_block_t block, guint option_id, ws_in6_addr *value);
 
 /** Get IPv6 option value from a block
  *
@@ -361,7 +349,7 @@ wtap_block_set_ipv6_option_value(wtap_block_t block, guint option_id, struct e_i
  * error code otherwise
  */
 WS_DLL_PUBLIC wtap_opttype_return_val
-wtap_block_get_ipv6_option_value(wtap_block_t block, guint option_id, struct e_in6_addr* value) G_GNUC_WARN_UNUSED_RESULT;
+wtap_block_get_ipv6_option_value(wtap_block_t block, guint option_id, ws_in6_addr* value) G_GNUC_WARN_UNUSED_RESULT;
 
 /** Add a string option to a block
  *

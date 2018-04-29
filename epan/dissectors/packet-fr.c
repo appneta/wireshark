@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * References:
  *
@@ -38,20 +26,19 @@
 #include <epan/capture_dissectors.h>
 #include <epan/prefs.h>
 #include <epan/expert.h>
+#include <epan/conversation.h>
 #include <wiretap/wtap.h>
 
 #include "packet-llc.h"
 #include "packet-chdlc.h"
 #include "packet-eth.h"
 #include "packet-ip.h"
-#include "packet-ipv6.h"
 #include "packet-ppp.h"
 #include "packet-juniper.h"
 #include "packet-sflow.h"
 #include "packet-l2tp.h"
 #include <epan/xdlc.h>
 #include <epan/etypes.h>
-#include <epan/oui.h>
 #include <epan/nlpid.h>
 
 void proto_register_fr(void);
@@ -509,9 +496,7 @@ dissect_fr_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
       proto_tree_add_uint(fr_tree, hf_fr_dlci, tvb, 0, offset, addr);
     }
 
-    pinfo->ctype = CT_DLCI;
-    pinfo->circuit_id = addr;
-
+    conversation_create_endpoint_by_id(pinfo, ENDPOINT_DLCI, addr, 0);
     col_add_fstr(pinfo->cinfo, COL_INFO, "DLCI %u", addr);
   }
 
@@ -894,7 +879,7 @@ proto_register_fr(void)
 
     { &hf_fr_oui,
       { "Organization Code", "fr.snap.oui",
-        FT_UINT24, BASE_HEX, VALS(oui_vals), 0x0,
+        FT_UINT24, BASE_OUI, NULL, 0x0,
         NULL, HFILL }},
 
     { &hf_fr_pid,

@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -43,7 +31,7 @@
 /* The read timeout in msec */
 #define CISCODUMP_READ_TIMEOUT 3000
 
-#define CISCODUMP_EXTCAP_INTERFACE "cisco"
+#define CISCODUMP_EXTCAP_INTERFACE "ciscodump"
 #define SSH_READ_BLOCK_SIZE 1024
 #define SSH_READ_TIMEOUT 10000
 
@@ -184,7 +172,7 @@ static int wait_until_data(ssh_channel channel, const guint32 count)
 	return EXIT_SUCCESS;
 }
 
-static int parse_line(char* packet _U_, unsigned* offset, char* line, int status)
+static int parse_line(char* packet, unsigned* offset, char* line, int status)
 {
 	char** parts;
 	char** part;
@@ -512,6 +500,8 @@ static int list_config(char *interface, unsigned int remote_port)
 		"{type=unsigned}{required=true}{tooltip=The number of remote packets to capture.}\n",
 		inc++);
 
+	extcap_config_debug(&inc);
+
 	g_free(ipfilter);
 
 	return EXIT_SUCCESS;
@@ -521,7 +511,6 @@ int main(int argc, char **argv)
 {
 	int result;
 	int option_idx = 0;
-	int i;
 	char* remote_host = NULL;
 	guint16 remote_port = 22;
 	char* remote_username = NULL;
@@ -579,9 +568,6 @@ int main(int argc, char **argv)
 		extcap_help_print(extcap_conf);
 		goto end;
 	}
-
-	for (i = 0; i < argc; i++)
-		g_debug("%s ", argv[i]);
 
 	while ((result = getopt_long(argc, argv, ":", longopts, &option_idx)) != -1) {
 
@@ -659,6 +645,8 @@ int main(int argc, char **argv)
 			}
 		}
 	}
+
+	extcap_cmdline_debug(argv, argc);
 
 	if (optind != argc) {
 		g_warning("Unexpected extra option: %s", argv[optind]);

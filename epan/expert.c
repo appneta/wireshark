@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -145,11 +133,7 @@ static void *uat_expert_copy_cb(void *n, const void *o, size_t siz _U_)
 	expert_level_entry_t       *new_record = (expert_level_entry_t*)n;
 	const expert_level_entry_t *old_record = (const expert_level_entry_t *)o;
 
-	if (old_record->field) {
-		new_record->field = g_strdup(old_record->field);
-	} else {
-		new_record->field = NULL;
-	}
+	new_record->field = g_strdup(old_record->field);
 
 	new_record->severity = old_record->severity;
 
@@ -160,8 +144,7 @@ static void uat_expert_free_cb(void*r)
 {
 	expert_level_entry_t *rec = (expert_level_entry_t *)r;
 
-	if (rec->field)
-		g_free(rec->field);
+	g_free(rec->field);
 }
 
 static void uat_expert_post_update_cb(void)
@@ -427,8 +410,8 @@ expert_register_field_array(expert_module_t *module, ei_register_info *exp, cons
 
 		/* Register with the header field info, so it's display filterable */
 		ptr->eiinfo.hf_info.p_id = &ptr->ids->hf;
+		ptr->eiinfo.hf_info.hfinfo.name = ptr->eiinfo.summary;
 		ptr->eiinfo.hf_info.hfinfo.abbrev = ptr->eiinfo.name;
-		ptr->eiinfo.hf_info.hfinfo.blurb = ptr->eiinfo.summary;
 
 		proto_register_field_array(module->proto_id, &ptr->eiinfo.hf_info, 1);
 	}

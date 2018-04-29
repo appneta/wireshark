@@ -10,19 +10,7 @@
  * (http://sourceforge.net/docman/display_doc.php?docid=34650&group_id=174379)
  * by   Paul Moore <paul.moore@hp.com>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -30,6 +18,7 @@
 #include <epan/packet.h>
 #include <epan/capture_dissectors.h>
 #include <epan/addr_resolv.h>
+#include <epan/maxmind_db.h>
 #include <epan/ipproto.h>
 #include <epan/expert.h>
 #include <epan/ip_opts.h>
@@ -60,11 +49,6 @@
 #include "packet-mpls.h"
 #include "packet-nsh.h"
 
-#ifdef HAVE_GEOIP
-#include <GeoIP.h>
-#include <epan/geoip_db.h>
-#endif /* HAVE_GEOIP */
-
 void proto_register_ip(void);
 void proto_reg_handoff_ip(void);
 
@@ -88,15 +72,14 @@ static gboolean ip_tso_supported = TRUE;
 /* Use heuristics to determine subdissector */
 static gboolean try_heuristic_first = FALSE;
 
-#ifdef HAVE_GEOIP
-/* Look up addresses in GeoIP */
+/* Look up addresses via mmdbresolve */
 static gboolean ip_use_geoip = TRUE;
-#endif /* HAVE_GEOIP */
 
 /* Interpret the reserved flag as security flag (RFC 3514) */
 static gboolean ip_security_flag = FALSE;
 
-int proto_ip = -1;
+static int proto_ip = -1;
+
 static int proto_ip_option_eol = -1;
 static int proto_ip_option_nop = -1;
 static int proto_ip_option_security = -1;
@@ -215,29 +198,29 @@ static int hf_ip_cipso_doi = -1;
 static int hf_ip_opt_time_stamp = -1;
 static int hf_ip_opt_time_stamp_addr = -1;
 
-#ifdef HAVE_GEOIP
 static int hf_geoip_country = -1;
+static int hf_geoip_country_iso = -1;
 static int hf_geoip_city = -1;
-static int hf_geoip_org = -1;
-static int hf_geoip_isp = -1;
-static int hf_geoip_asnum = -1;
-static int hf_geoip_lat = -1;
-static int hf_geoip_lon = -1;
+static int hf_geoip_as_number = -1;
+static int hf_geoip_as_org = -1;
+static int hf_geoip_latitude = -1;
+static int hf_geoip_longitude = -1;
+static int hf_geoip_src_summary = -1;
 static int hf_geoip_src_country = -1;
+static int hf_geoip_src_country_iso = -1;
 static int hf_geoip_src_city = -1;
-static int hf_geoip_src_org = -1;
-static int hf_geoip_src_isp = -1;
-static int hf_geoip_src_asnum = -1;
-static int hf_geoip_src_lat = -1;
-static int hf_geoip_src_lon = -1;
+static int hf_geoip_src_as_number = -1;
+static int hf_geoip_src_as_org = -1;
+static int hf_geoip_src_latitude = -1;
+static int hf_geoip_src_longitude = -1;
+static int hf_geoip_dst_summary = -1;
 static int hf_geoip_dst_country = -1;
+static int hf_geoip_dst_country_iso = -1;
 static int hf_geoip_dst_city = -1;
-static int hf_geoip_dst_org = -1;
-static int hf_geoip_dst_isp = -1;
-static int hf_geoip_dst_asnum = -1;
-static int hf_geoip_dst_lat = -1;
-static int hf_geoip_dst_lon = -1;
-#endif /* HAVE_GEOIP */
+static int hf_geoip_dst_as_number = -1;
+static int hf_geoip_dst_as_org = -1;
+static int hf_geoip_dst_latitude = -1;
+static int hf_geoip_dst_longitude = -1;
 
 static gint ett_ip = -1;
 static gint ett_ip_dsfield = -1;
@@ -282,9 +265,7 @@ static expert_field ei_ip_bogus_ip_version = EI_INIT;
 static dissector_handle_t ip_handle;
 static dissector_table_t ip_option_table;
 
-#ifdef HAVE_GEOIP
 static gint ett_geoip_info = -1;
-#endif /* HAVE_GEOIP */
 
 static const fragment_items ip_frag_items = {
   &ett_ip_fragment,
@@ -312,6 +293,17 @@ static capture_dissector_handle_t ip_cap_handle;
 
 
 /* IP structs and definitions */
+
+const value_string ip_version_vals[] = {
+  { IP_VERSION_NUM_RESERVED,       "Reserved" },
+  { IP_VERSION_NUM_INET,           "IPv4" },
+  { IP_VERSION_NUM_ST,             "ST Datagram" },
+  { IP_VERSION_NUM_INET6,          "IPv6" },
+  { IP_VERSION_NUM_TPIX,           "TP/IX" },
+  { IP_VERSION_NUM_PIP,            "PIP" },
+  { IP_VERSION_NUM_TUBA,           "TUBA" },
+  { 0, NULL },
+};
 
 /* Offsets of fields within an IP header. */
 #define IPH_V_HL                0
@@ -486,14 +478,6 @@ static capture_dissector_handle_t ip_cap_handle;
 #define IPLOCAL_NETWRK_CTRL_BLK_ANY_TTL         0x1000 /* larger than max ttl */
 #define IPLOCAL_NETWRK_CTRL_BLK_DEFAULT_TTL     0X01
 
-/* Return true if the address is in the 224.0.0.0/24 network block */
-#define is_a_local_network_control_block_addr(addr) \
-  ((addr & 0xffffff00) == 0xe0000000)
-
-/* Return true if the address is in the 224.0.0.0/4 network block */
-#define is_a_multicast_addr(addr) \
-  ((addr & 0xf0000000) == 0xe0000000)
-
 static void ip_prompt(packet_info *pinfo, gchar* result)
 {
     g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "IP protocol %u as",
@@ -525,9 +509,9 @@ static int
 ip_conversation_packet(void *pct, packet_info *pinfo, epan_dissect_t *edt _U_, const void *vip)
 {
     conv_hash_t *hash = (conv_hash_t*) pct;
-    const ws_ip *iph=(const ws_ip *)vip;
+    const ws_ip4 *iph=(const ws_ip4 *)vip;
 
-    add_conversation_table_data(hash, &iph->ip_src, &iph->ip_dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &ip_ct_dissector_info, PT_NONE);
+    add_conversation_table_data(hash, &iph->ip_src, &iph->ip_dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &ip_ct_dissector_info, ENDPOINT_NONE);
 
     return 1;
 }
@@ -546,13 +530,13 @@ static int
 ip_hostlist_packet(void *pit, packet_info *pinfo, epan_dissect_t *edt _U_, const void *vip)
 {
     conv_hash_t *hash = (conv_hash_t*) pit;
-    const ws_ip *iph=(const ws_ip *)vip;
+    const ws_ip4 *iph=(const ws_ip4 *)vip;
 
     /* Take two "add" passes per packet, adding for each direction, ensures that all
     packets are counted properly (even if address is sending to itself)
     XXX - this could probably be done more efficiently inside hostlist_table */
-    add_hostlist_table_data(hash, &iph->ip_src, 0, TRUE, 1, pinfo->fd->pkt_len, &ip_host_dissector_info, PT_NONE);
-    add_hostlist_table_data(hash, &iph->ip_dst, 0, FALSE, 1, pinfo->fd->pkt_len, &ip_host_dissector_info, PT_NONE);
+    add_hostlist_table_data(hash, &iph->ip_src, 0, TRUE, 1, pinfo->fd->pkt_len, &ip_host_dissector_info, ENDPOINT_NONE);
+    add_hostlist_table_data(hash, &iph->ip_dst, 0, FALSE, 1, pinfo->fd->pkt_len, &ip_host_dissector_info, ENDPOINT_NONE);
     return 1;
 }
 
@@ -584,110 +568,104 @@ capture_ip(const guchar *pd, int offset, int len, capture_packet_info_t *cpinfo,
   return try_capture_dissector("ip.proto", pd[offset + 9], pd, offset+IPH_MIN_LEN, len, cpinfo, pseudo_header);
 }
 
-#ifdef HAVE_GEOIP
 static void
-add_geoip_info_entry(proto_tree *geoip_info_tree, proto_item *geoip_info_item, tvbuff_t *tvb, gint offset, guint32 ip, int isdst)
+add_geoip_info_entry(proto_tree *tree, tvbuff_t *tvb, gint offset, guint32 ip, int isdst)
 {
-  guint num_dbs = geoip_db_num_dbs();
-  guint item_cnt = 0;
-  guint dbnum;
+  const mmdb_lookup_t *lookup = maxmind_db_lookup_ipv4(ip);
+  if (!lookup->found) return;
 
-  for (dbnum = 0; dbnum < num_dbs; dbnum++) {
-    char *geoip_str = geoip_db_lookup_ipv4(dbnum, ip, NULL);
-    int db_type = geoip_db_type(dbnum);
-
-    int geoip_hf, geoip_local_hf;
-
-    switch (db_type) {
-      case GEOIP_COUNTRY_EDITION:
-        geoip_hf = hf_geoip_country;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_country : hf_geoip_src_country;
-        break;
-      case GEOIP_CITY_EDITION_REV0:
-        geoip_hf = hf_geoip_city;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_city : hf_geoip_src_city;
-        break;
-      case GEOIP_CITY_EDITION_REV1:
-        geoip_hf = hf_geoip_city;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_city : hf_geoip_src_city;
-        break;
-      case GEOIP_ORG_EDITION:
-        geoip_hf = hf_geoip_org;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_org : hf_geoip_src_org;
-        break;
-      case GEOIP_ISP_EDITION:
-        geoip_hf = hf_geoip_isp;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_isp : hf_geoip_src_isp;
-        break;
-      case GEOIP_ASNUM_EDITION:
-        geoip_hf = hf_geoip_asnum;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_asnum : hf_geoip_src_asnum;
-        break;
-      case WS_LAT_FAKE_EDITION:
-        geoip_hf = hf_geoip_lat;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_lat : hf_geoip_src_lat;
-        break;
-      case WS_LON_FAKE_EDITION:
-        geoip_hf = hf_geoip_lon;
-        geoip_local_hf = (isdst) ? hf_geoip_dst_lon : hf_geoip_src_lon;
-        break;
-      default:
-        continue;
-    }
-
-    if (geoip_str) {
-      proto_item *item;
-      if (db_type == WS_LAT_FAKE_EDITION || db_type == WS_LON_FAKE_EDITION) {
-        /* Convert latitude, longitude to double. Fix bug #5077 */
-        item = proto_tree_add_double_format_value(geoip_info_tree, geoip_local_hf,
-          tvb, offset, 4, g_ascii_strtod(geoip_str, NULL), "%s", geoip_str);
-        PROTO_ITEM_SET_GENERATED(item);
-        item = proto_tree_add_double_format_value(geoip_info_tree, geoip_hf,
-          tvb, offset, 4, g_ascii_strtod(geoip_str, NULL), "%s", geoip_str);
-        PROTO_ITEM_SET_GENERATED(item);
-        PROTO_ITEM_SET_HIDDEN(item);
-      } else {
-        item = proto_tree_add_string(geoip_info_tree, geoip_local_hf,
-          tvb, offset, 4, geoip_str);
-        PROTO_ITEM_SET_GENERATED(item);
-        item = proto_tree_add_string(geoip_info_tree, geoip_hf,
-          tvb, offset, 4, geoip_str);
-        PROTO_ITEM_SET_GENERATED(item);
-        PROTO_ITEM_SET_HIDDEN(item);
-      }
-
-      item_cnt++;
-      proto_item_append_text(geoip_info_item, "%s%s",
-                             plurality(item_cnt, "", ", "), geoip_str);
-      wmem_free(NULL, geoip_str);
-    }
+  wmem_strbuf_t *summary = wmem_strbuf_new(wmem_packet_scope(), "");
+  if (lookup->city) {
+    wmem_strbuf_append(summary, lookup->city);
+  }
+  if (lookup->country_iso) {
+    if (wmem_strbuf_get_len(summary) > 0) wmem_strbuf_append(summary, ", ");
+    wmem_strbuf_append(summary, lookup->country_iso);
+  } else if (lookup->country) {
+    if (wmem_strbuf_get_len(summary) > 0) wmem_strbuf_append(summary, ", ");
+    wmem_strbuf_append(summary, lookup->country);
+  }
+  if (lookup->as_number > 0) {
+    if (wmem_strbuf_get_len(summary) > 0) wmem_strbuf_append(summary, ", ");
+    wmem_strbuf_append_printf(summary, "ASN %u", lookup->as_number);
+  }
+  if (lookup->as_org) {
+    if (wmem_strbuf_get_len(summary) > 0) wmem_strbuf_append(summary, ", ");
+    wmem_strbuf_append(summary, lookup->as_org);
   }
 
-  if (item_cnt == 0)
-    proto_item_append_text(geoip_info_item, "Unknown");
+  int addr_offset = offset + isdst ? IPH_DST : IPH_SRC;
+  int dir_hf = isdst ? hf_geoip_dst_summary : hf_geoip_src_summary;
+  proto_item *geoip_info_item = proto_tree_add_string(tree, dir_hf, tvb, addr_offset, 4, wmem_strbuf_finalize(summary));
+  PROTO_ITEM_SET_GENERATED(geoip_info_item);
+  proto_tree *geoip_info_tree = proto_item_add_subtree(geoip_info_item, ett_geoip_info);
+
+  proto_item *item;
+
+  if (lookup->city) {
+    dir_hf = isdst ? hf_geoip_dst_city : hf_geoip_src_city;
+    item = proto_tree_add_string(geoip_info_tree, dir_hf, tvb, addr_offset, 4, lookup->city);
+    PROTO_ITEM_SET_GENERATED(item);
+    item = proto_tree_add_string(geoip_info_tree, hf_geoip_city, tvb, addr_offset, 4, lookup->city);
+    PROTO_ITEM_SET_GENERATED(item);
+  }
+
+  if (lookup->country) {
+    dir_hf = isdst ? hf_geoip_dst_country : hf_geoip_src_country;
+    item = proto_tree_add_string(geoip_info_tree, dir_hf, tvb, addr_offset, 4, lookup->country);
+    PROTO_ITEM_SET_GENERATED(item);
+    item = proto_tree_add_string(geoip_info_tree, hf_geoip_country, tvb, addr_offset, 4, lookup->country);
+    PROTO_ITEM_SET_GENERATED(item);
+  }
+
+  if (lookup->country_iso) {
+    dir_hf = isdst ? hf_geoip_dst_country_iso : hf_geoip_src_country_iso;
+    item = proto_tree_add_string(geoip_info_tree, dir_hf, tvb, addr_offset, 4, lookup->country_iso);
+    PROTO_ITEM_SET_GENERATED(item);
+    item = proto_tree_add_string(geoip_info_tree, hf_geoip_country_iso, tvb, addr_offset, 4, lookup->country_iso);
+    PROTO_ITEM_SET_GENERATED(item);
+  }
+
+  if (lookup->as_number > 0) {
+    dir_hf = isdst ? hf_geoip_dst_as_number : hf_geoip_src_as_number;
+    item = proto_tree_add_uint(geoip_info_tree, dir_hf, tvb, addr_offset, 4, lookup->as_number);
+    PROTO_ITEM_SET_GENERATED(item);
+    item = proto_tree_add_uint(geoip_info_tree, hf_geoip_as_number, tvb, addr_offset, 4, lookup->as_number);
+    PROTO_ITEM_SET_GENERATED(item);
+  }
+
+  if (lookup->as_org) {
+    dir_hf = isdst ? hf_geoip_dst_as_org : hf_geoip_src_as_org;
+    item = proto_tree_add_string(geoip_info_tree, dir_hf, tvb, addr_offset, 4, lookup->as_org);
+    PROTO_ITEM_SET_GENERATED(item);
+    item = proto_tree_add_string(geoip_info_tree, hf_geoip_as_org, tvb, addr_offset, 4, lookup->as_org);
+    PROTO_ITEM_SET_GENERATED(item);
+  }
+
+  if (lookup->latitude >= -90.0 && lookup->latitude <= 90.0) {
+    dir_hf = isdst ? hf_geoip_dst_latitude : hf_geoip_src_latitude;
+    item = proto_tree_add_double(geoip_info_tree, dir_hf, tvb, addr_offset, 4, lookup->latitude);
+    PROTO_ITEM_SET_GENERATED(item);
+    item = proto_tree_add_double(geoip_info_tree, hf_geoip_latitude, tvb, addr_offset, 4, lookup->latitude);
+    PROTO_ITEM_SET_GENERATED(item);
+  }
+
+  if (lookup->longitude >= -180.0 && lookup->longitude <= 180.0) {
+    dir_hf = isdst ? hf_geoip_dst_longitude : hf_geoip_src_longitude;
+    item = proto_tree_add_double(geoip_info_tree, dir_hf, tvb, addr_offset, 4, lookup->longitude);
+    PROTO_ITEM_SET_GENERATED(item);
+    item = proto_tree_add_double(geoip_info_tree, hf_geoip_longitude, tvb, addr_offset, 4, lookup->longitude);
+    PROTO_ITEM_SET_GENERATED(item);
+  }
 }
 
 static void
 add_geoip_info(proto_tree *tree, tvbuff_t *tvb, gint offset, guint32 src32,
                guint32 dst32)
 {
-  guint num_dbs;
-  proto_item *geoip_info_item;
-  proto_tree *geoip_info_tree;
-
-  num_dbs = geoip_db_num_dbs();
-  if (num_dbs < 1)
-    return;
-
-  geoip_info_tree = proto_tree_add_subtree(tree, tvb, offset + IPH_SRC, 4, ett_geoip_info, &geoip_info_item, "Source GeoIP: ");
-  PROTO_ITEM_SET_GENERATED(geoip_info_item);
-  add_geoip_info_entry(geoip_info_tree, geoip_info_item, tvb, offset + IPH_SRC, src32, 0);
-
-  geoip_info_tree = proto_tree_add_subtree(tree, tvb, offset + IPH_DST, 4, ett_geoip_info, &geoip_info_item, "Destination GeoIP: ");
-  PROTO_ITEM_SET_GENERATED(geoip_info_item);
-  add_geoip_info_entry(geoip_info_tree, geoip_info_item, tvb, offset + IPH_DST, dst32, 1);
+  add_geoip_info_entry(tree, tvb, offset, g_htonl(src32), FALSE);
+  add_geoip_info_entry(tree, tvb, offset, g_htonl(dst32), TRUE);
 }
-#endif /* HAVE_GEOIP */
 
 const value_string ipopt_type_class_vals[] = {
   {(IPOPT_CONTROL & IPOPT_CLASS_MASK) >> 5, "Control"},
@@ -1515,7 +1493,7 @@ dissect_ipopt_qs(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void * dat
   proto_tree *field_tree;
   proto_item *tf;
   proto_item *ti;
-  ws_ip *iph = (ws_ip*)data;
+  ws_ip4 *iph = (ws_ip4 *)data;
   gint       offset = 2;
 
   guint8 command = tvb_get_guint8(tvb, offset);
@@ -1841,7 +1819,7 @@ static const true_false_string flags_sf_set_evil = {
 
 gboolean
 ip_try_dissect(gboolean heur_first, guint nxt, tvbuff_t *tvb, packet_info *pinfo,
-               proto_tree *tree, ws_ip *iph)
+               proto_tree *tree, void *iph)
 {
   heur_dtbl_entry_t *hdtbl_entry;
 
@@ -1872,21 +1850,35 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
   guint32    addr;
   int        offset = 0, dst_off;
   guint      hlen, optlen;
-  guint16    flags;
   guint16    ipsum;
   fragment_head *ipfd_head = NULL;
   tvbuff_t   *next_tvb;
   gboolean   update_col_info = TRUE;
   gboolean   save_fragmented;
-  ws_ip *iph;
+  ws_ip4 *iph;
   guint32    src32, dst32;
   proto_tree *tree;
   proto_item *item = NULL, *ttl_item;
   guint16 ttl;
-  int bit_offset;
+
+  static const int * ip_flags[] = {
+      &hf_ip_flags_rf,
+      &hf_ip_flags_df,
+      &hf_ip_flags_mf,
+      &hf_ip_frag_offset,
+      NULL
+  };
+  /* XXX do we realy want decoding of an april fools joke? */
+  static const int * ip_flags_evil[] = {
+      &hf_ip_flags_sf,
+      &hf_ip_flags_df,
+      &hf_ip_flags_mf,
+      &hf_ip_frag_offset,
+      NULL
+  };
 
   tree = parent_tree;
-  iph = wmem_new0(wmem_packet_scope(), ws_ip);
+  iph = wmem_new0(wmem_packet_scope(), ws_ip4);
 
   col_set_str(pinfo->cinfo, COL_PROTOCOL, "IPv4");
   col_clear(pinfo->cinfo, COL_INFO);
@@ -2031,35 +2023,19 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
     proto_tree_add_uint(ip_tree, hf_ip_id, tvb, offset + 4, 2, iph->ip_id);
 
   iph->ip_off = tvb_get_ntohs(tvb, offset + 6);
-  bit_offset = (offset + 6) * 8;
 
-  flags = (iph->ip_off & (IP_RF | IP_DF | IP_MF)) >> IP_OFFSET_WIDTH;
-  tf = proto_tree_add_uint(ip_tree, hf_ip_flags, tvb, offset + 6, 1, flags);
-  field_tree = proto_item_add_subtree(tf, ett_ip_off);
   if (ip_security_flag) {
-      proto_item *sf;
+    proto_item *sf;
 
-      sf = proto_tree_add_bits_item(field_tree, hf_ip_flags_sf, tvb,
-                                    bit_offset + 0, 1, ENC_BIG_ENDIAN);
-      if (iph->ip_off & IP_RF) {
-        proto_item_append_text(tf, " (Evil packet!)");
+    sf = proto_tree_add_bitmask_with_flags(ip_tree, tvb, offset + 6, hf_ip_flags,
+        ett_ip_off, ip_flags_evil, ENC_BIG_ENDIAN, BMT_NO_FALSE | BMT_NO_TFS | BMT_NO_INT);
+    if (iph->ip_off & IP_RF) {
         expert_add_info(pinfo, sf, &ei_ip_evil_packet);
-      }
+    }
   } else {
-      proto_tree_add_bits_item(field_tree, hf_ip_flags_rf, tvb, bit_offset + 0,
-                               1, ENC_LITTLE_ENDIAN);
+    proto_tree_add_bitmask_with_flags(ip_tree, tvb, offset + 6, hf_ip_flags,
+        ett_ip_off, ip_flags, ENC_BIG_ENDIAN, BMT_NO_FALSE | BMT_NO_TFS | BMT_NO_INT);
   }
-  if (iph->ip_off & IP_DF)
-    proto_item_append_text(tf, " (Don't Fragment)");
-
-  proto_tree_add_bits_item(field_tree, hf_ip_flags_df, tvb, bit_offset + 1,
-                             1, ENC_BIG_ENDIAN);
-  if (iph->ip_off & IP_MF)
-      proto_item_append_text(tf, " (More Fragments)");
-  proto_tree_add_bits_item(field_tree, hf_ip_flags_mf, tvb, bit_offset + 2,
-                             1, ENC_BIG_ENDIAN);
-  proto_tree_add_uint(ip_tree, hf_ip_frag_offset, tvb, offset + 6, 2,
-                        (iph->ip_off & IP_OFFSET)*8);
 
   iph->ip_ttl = tvb_get_guint8(tvb, offset + 8);
   if (tree) {
@@ -2068,7 +2044,7 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
     ttl_item = NULL;
   }
 
-  iph->ip_nxt = tvb_get_guint8(tvb, offset + 9);
+  iph->ip_proto = tvb_get_guint8(tvb, offset + 9);
   if (tree) {
     proto_tree_add_item(ip_tree, hf_ip_proto, tvb, offset + 9, 1, ENC_BIG_ENDIAN);
   }
@@ -2077,10 +2053,9 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 
   /*
    * If checksum checking is enabled, and we have the entire IP header
-   * available, and this isn't inside an ICMP error packet, check the
-   * checksum.
+   * available, check the checksum.
    */
-  if (ip_check_checksum && tvb_bytes_exist(tvb, offset, hlen)&&(!pinfo->flags.in_error_pkt)) {
+  if (ip_check_checksum && tvb_bytes_exist(tvb, offset, hlen)) {
     ipsum = ip_checksum_tvb(tvb, offset, hlen);
     item = proto_tree_add_checksum(ip_tree, tvb, offset + 10, hf_ip_checksum, hf_ip_checksum_status, &ei_ip_checksum_bad, pinfo, ipsum,
                                 ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY|PROTO_CHECKSUM_IN_CKSUM);
@@ -2105,9 +2080,7 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
                                         "0x%04x [%s]",
                                         iph->ip_sum,
                                         ip_check_checksum ?
-                                            (pinfo->flags.in_error_pkt ?
-                                             "in ICMP error packet" :
-                                             "not all data available") :
+                                            "not all data available" :
                                             "validation disabled");
     item = proto_tree_add_uint(ip_tree, hf_ip_checksum_status, tvb,
                                     offset + 10, 0, PROTO_CHECKSUM_E_UNVERIFIED);
@@ -2167,18 +2140,18 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
    * (e.g. 224.0.0.0/4) ... and the payload isn't protocol 103 (PIM).
    * (see http://tools.ietf.org/html/rfc3973#section-4.7).
    */
-  if (is_a_local_network_control_block_addr(dst32)) {
+  if (in4_addr_is_local_network_control_block(dst32)) {
     ttl = local_network_control_block_addr_valid_ttl(dst32);
     if (ttl != iph->ip_ttl && ttl != IPLOCAL_NETWRK_CTRL_BLK_ANY_TTL) {
       expert_add_info_format(pinfo, ttl_item, &ei_ip_ttl_lncb, "\"Time To Live\" != %d for a packet sent to the "
                              "Local Network Control Block (see RFC 3171)",
                              ttl);
     }
-  } else if (!is_a_multicast_addr(dst32) &&
+  } else if (!in4_addr_is_multicast(dst32) &&
 	/* At least BGP should appear here as well */
 	iph->ip_ttl < 5 &&
-        iph->ip_nxt != IP_PROTO_PIM &&
-        iph->ip_nxt != IP_PROTO_OSPF) {
+        iph->ip_proto != IP_PROTO_PIM &&
+        iph->ip_proto != IP_PROTO_OSPF) {
     expert_add_info_format(pinfo, ttl_item, &ei_ip_ttl_too_small, "\"Time To Live\" only %u", iph->ip_ttl);
   }
 
@@ -2219,13 +2192,11 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
       PROTO_ITEM_SET_GENERATED(item);
       PROTO_ITEM_SET_HIDDEN(item);
     }
-  }
 
-#ifdef HAVE_GEOIP
-  if (tree && ip_use_geoip) {
-    add_geoip_info(ip_tree, tvb, offset, src32, dst32);
+    if (ip_use_geoip) {
+      add_geoip_info(ip_tree, tvb, offset, src32, dst32);
+    }
   }
-#endif
 
   /* Decode IP options, if any. */
   if (hlen > IPH_MIN_LEN) {
@@ -2236,7 +2207,7 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
     dissect_ip_options(tvb, offset + 20, optlen, pinfo, field_tree, tf, iph);
   }
 
-  p_add_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num, GUINT_TO_POINTER((guint)iph->ip_nxt));
+  p_add_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num, GUINT_TO_POINTER((guint)iph->ip_proto));
   tap_queue_packet(ip_tap, pinfo, iph);
 
   /* Skip over header + options */
@@ -2253,7 +2224,7 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
       ipsum == 0) {
     ipfd_head = fragment_add_check(&ip_reassembly_table, tvb, offset,
                                    pinfo,
-                                   iph->ip_nxt ^ iph->ip_id ^ src32 ^ dst32 ^ pinfo->vlan_id,
+                                   iph->ip_proto ^ iph->ip_id ^ src32 ^ dst32 ^ pinfo->vlan_id,
                                    NULL,
                                    (iph->ip_off & IP_OFFSET) * 8,
                                    iph->ip_len - hlen,
@@ -2292,10 +2263,10 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
     /* Just show this as a fragment. */
     col_add_fstr(pinfo->cinfo, COL_INFO,
                  "Fragmented IP protocol (proto=%s %u, off=%u, ID=%04x)",
-                 ipprotostr(iph->ip_nxt), iph->ip_nxt,
+                 ipprotostr(iph->ip_proto), iph->ip_proto,
                  (iph->ip_off & IP_OFFSET) * 8, iph->ip_id);
     if ( ipfd_head && ipfd_head->reassembled_in != pinfo->num ) {
-      col_append_fstr(pinfo->cinfo, COL_INFO, " [Reassembled in #%u]",
+      col_append_frame_number(pinfo, COL_INFO, " [Reassembled in #%u]",
                       ipfd_head->reassembled_in);
     }
 
@@ -2313,12 +2284,12 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
      even be labeled as an IP frame; ideally, if a frame being dissected
      throws an exception, it'll be labeled as a mangled frame of the
      type in question. */
-    if (!ip_try_dissect(try_heuristic_first, iph->ip_nxt, next_tvb, pinfo,
+    if (!ip_try_dissect(try_heuristic_first, iph->ip_proto, next_tvb, pinfo,
                         parent_tree, iph)) {
       /* Unknown protocol */
       if (update_col_info) {
         col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%u)",
-                   ipprotostr(iph->ip_nxt), iph->ip_nxt);
+                   ipprotostr(iph->ip_proto), iph->ip_proto);
       }
       call_data_dissector(next_tvb, pinfo, parent_tree);
     }
@@ -2535,95 +2506,99 @@ proto_register_ip(void)
       { "Source or Destination Host", "ip.host", FT_STRING, BASE_NONE,
         NULL, 0x0, NULL, HFILL }},
 
-#ifdef HAVE_GEOIP
     { &hf_geoip_country,
       { "Source or Destination GeoIP Country", "ip.geoip.country",
+        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_country_iso,
+      { "Source or Destination GeoIP ISO Two Letter Country Code", "ip.geoip.country_iso",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
     { &hf_geoip_city,
       { "Source or Destination GeoIP City", "ip.geoip.city",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_org,
-      { "Source or Destination GeoIP Organization", "ip.geoip.org",
-        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_isp,
-      { "Source or Destination GeoIP ISP", "ip.geoip.isp",
-        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_asnum,
+    { &hf_geoip_as_number,
       { "Source or Destination GeoIP AS Number", "ip.geoip.asnum",
+        FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_as_org,
+      { "Source or Destination GeoIP AS Organization", "ip.geoip.org",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_lat,
+    { &hf_geoip_latitude,
       { "Source or Destination GeoIP Latitude", "ip.geoip.lat",
         FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_lon,
+    { &hf_geoip_longitude,
       { "Source or Destination GeoIP Longitude", "ip.geoip.lon",
         FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_src_summary,
+      { "Source GeoIP", "ip.geoip.src_summary",
+        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
     { &hf_geoip_src_country,
       { "Source GeoIP Country", "ip.geoip.src_country",
+        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_src_country_iso,
+      { "Source GeoIP ISO Two Letter Country Code", "ip.geoip.src_country_iso",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
     { &hf_geoip_src_city,
       { "Source GeoIP City", "ip.geoip.src_city",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_src_org,
-      { "Source GeoIP Organization", "ip.geoip.src_org",
-        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_src_isp,
-      { "Source GeoIP ISP", "ip.geoip.src_isp",
-        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_src_asnum,
+    { &hf_geoip_src_as_number,
       { "Source GeoIP AS Number", "ip.geoip.src_asnum",
+        FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_src_as_org,
+      { "Source GeoIP AS Organization", "ip.geoip.src_org",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_src_lat,
+    { &hf_geoip_src_latitude,
       { "Source GeoIP Latitude", "ip.geoip.src_lat",
         FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_src_lon,
+    { &hf_geoip_src_longitude,
       { "Source GeoIP Longitude", "ip.geoip.src_lon",
         FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_dst_summary,
+      { "Destination GeoIP", "ip.geoip.dst_summary",
+        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
     { &hf_geoip_dst_country,
       { "Destination GeoIP Country", "ip.geoip.dst_country",
+        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_dst_country_iso,
+      { "Destination GeoIP ISO Two Letter Country Code", "ip.geoip.dst_country_iso",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
     { &hf_geoip_dst_city,
       { "Destination GeoIP City", "ip.geoip.dst_city",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_dst_org,
-      { "Destination GeoIP Organization", "ip.geoip.dst_org",
-        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_dst_isp,
-      { "Destination GeoIP ISP", "ip.geoip.dst_isp",
-        FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_dst_asnum,
+    { &hf_geoip_dst_as_number,
       { "Destination GeoIP AS Number", "ip.geoip.dst_asnum",
+        FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+    { &hf_geoip_dst_as_org,
+      { "Destination GeoIP AS Organization", "ip.geoip.dst_org",
         FT_STRING, STR_UNICODE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_dst_lat,
+    { &hf_geoip_dst_latitude,
       { "Destination GeoIP Latitude", "ip.geoip.dst_lat",
         FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-    { &hf_geoip_dst_lon,
+    { &hf_geoip_dst_longitude,
       { "Destination GeoIP Longitude", "ip.geoip.dst_lon",
         FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-#endif /* HAVE_GEOIP */
 
     { &hf_ip_flags,
-      { "Flags", "ip.flags", FT_UINT8, BASE_HEX,
+      { "Flags", "ip.flags", FT_UINT16, BASE_HEX,
         NULL, 0x0, FLAGS_OFFSET_WIDTH_MSG(IP_FLAGS_WIDTH), HFILL }},
 
     { &hf_ip_flags_sf,
-      { "Security flag", "ip.flags.sf", FT_BOOLEAN, BASE_NONE,
-        TFS(&flags_sf_set_evil), 0x0, "Security flag (RFC 3514)", HFILL }},
+      { "Security flag", "ip.flags.sf", FT_BOOLEAN, 16,
+        TFS(&flags_sf_set_evil), 0x8000, "Security flag (RFC 3514)", HFILL }},
 
     { &hf_ip_flags_rf,
-      { "Reserved bit", "ip.flags.rb", FT_BOOLEAN, BASE_NONE,
-        TFS(&tfs_set_notset), 0x0, NULL, HFILL }},
+      { "Reserved bit", "ip.flags.rb", FT_BOOLEAN, 16,
+        TFS(&tfs_set_notset), 0x8000, NULL, HFILL }},
 
     { &hf_ip_flags_df,
-      { "Don't fragment", "ip.flags.df", FT_BOOLEAN, BASE_NONE,
-        TFS(&tfs_set_notset), 0x0, NULL, HFILL }},
+      { "Don't fragment", "ip.flags.df", FT_BOOLEAN, 16,
+        TFS(&tfs_set_notset), 0x4000, NULL, HFILL }},
 
     { &hf_ip_flags_mf,
-      { "More fragments", "ip.flags.mf", FT_BOOLEAN, BASE_NONE,
-        TFS(&tfs_set_notset), 0x0, NULL, HFILL }},
+      { "More fragments", "ip.flags.mf", FT_BOOLEAN, 16,
+        TFS(&tfs_set_notset), 0x2000, NULL, HFILL }},
 
     { &hf_ip_frag_offset,
       { "Fragment offset", "ip.frag_offset", FT_UINT16, BASE_DEC,
-        NULL, 0x0, FRAG_OFFSET_WIDTH_MSG(IP_OFFSET_WIDTH), HFILL }},
+        NULL, 0x1fff, FRAG_OFFSET_WIDTH_MSG(IP_OFFSET_WIDTH), HFILL }},
 
     { &hf_ip_ttl,
       { "Time to live", "ip.ttl", FT_UINT8, BASE_DEC,
@@ -2919,9 +2894,7 @@ proto_register_ip(void)
     &ett_ip_opt_type,
     &ett_ip_opt_sec_prot_auth_flags,
     &ett_ip_unknown_opt,
-#ifdef HAVE_GEOIP
     &ett_geoip_info
-#endif
   };
   static ei_register_info ei[] = {
      { &ei_ip_opt_len_invalid, { "ip.opt.len.invalid", PI_PROTOCOL, PI_WARN, "Invalid length for option", EXPFILL }},
@@ -2983,12 +2956,10 @@ proto_register_ip(void)
     "Support packet-capture from IP TSO-enabled hardware",
     "Whether to correct for TSO-enabled (TCP segmentation offload) hardware "
     "captures, such as spoofing the IP packet length", &ip_tso_supported);
-#ifdef HAVE_GEOIP
   prefs_register_bool_preference(ip_module, "use_geoip",
-    "Enable GeoIP lookups",
-    "Whether to look up IP addresses in each GeoIP database we have loaded",
+    "Enable IPv4 geolocation",
+    "Whether to look up IP addresses in each MaxMind database we have loaded",
     &ip_use_geoip);
-#endif /* HAVE_GEOIP */
   prefs_register_bool_preference(ip_module, "security_flag" ,
     "Interpret Reserved flag as Security flag (RFC 3514)",
     "Whether to interpret the originally reserved flag as security flag",
@@ -3067,6 +3038,7 @@ proto_reg_handoff_ip(void)
   dissector_add_uint("nsh.next_proto", NSH_IPV4, ip_handle);
 
   heur_dissector_add("tipc", dissect_ip_heur, "IP over TIPC", "ip_tipc", proto_ip, HEURISTIC_ENABLE);
+  heur_dissector_add("zbee_zcl_se.tun", dissect_ip_heur, "IP over ZigBee SE Tunneling", "ip_zbee_zcl_se.tun", proto_ip, HEURISTIC_ENABLE);
 
   capture_dissector_add_uint("ethertype", ETHERTYPE_IP, ip_cap_handle);
   capture_dissector_add_uint("ax25.pid", AX25_P_IP, ip_cap_handle);

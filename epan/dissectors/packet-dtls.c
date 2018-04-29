@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  *
  * DTLS dissection and decryption.
@@ -61,6 +49,7 @@
 #include <wsutil/str_util.h>
 #include <wsutil/strtoi.h>
 #include <wsutil/utf8_entities.h>
+#include <wsutil/rsa.h>
 #include "packet-ssl-utils.h"
 #include "packet-dtls.h"
 
@@ -252,7 +241,7 @@ dtls_parse_uat(void)
 
   /* parse private keys string, load available keys and put them in key hash*/
   dtls_key_hash = g_hash_table_new_full(ssl_private_key_hash,
-      ssl_private_key_equal, g_free, ssl_private_key_free);
+      ssl_private_key_equal, g_free, rsa_private_key_free);
 
   ssl_set_debug(dtls_debug_file_name);
 
@@ -618,7 +607,7 @@ decrypt_dtls_record(tvbuff_t *tvb, packet_info *pinfo, guint32 offset, SslDecryp
       ssl_debug_printf("decrypt_dtls_record: no decoder available\n");
       return FALSE;
     }
-    success = ssl_decrypt_record(ssl, decoder, content_type, record_version,
+    success = ssl_decrypt_record(ssl, decoder, content_type, record_version, FALSE,
                            tvb_get_ptr(tvb, offset, record_length), record_length,
                            &dtls_compressed_data, &dtls_decrypted_data, &dtls_decrypted_data_avail) == 0;
   }
@@ -1375,8 +1364,11 @@ dissect_dtls_handshake(tvbuff_t *tvb, packet_info *pinfo,
                                      0, length, session, NULL);
             break;
 
-          case SSL_HND_CERT_URL:
           case SSL_HND_CERT_STATUS:
+            tls_dissect_hnd_certificate_status(&dissect_dtls_hf, sub_tvb, pinfo, ssl_hand_tree, 0, length);
+            break;
+
+          case SSL_HND_CERT_URL:
           case SSL_HND_SUPPLEMENTAL_DATA:
           case SSL_HND_KEY_UPDATE:
           case SSL_HND_ENCRYPTED_EXTS:

@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* INTRODUCTION
@@ -3409,32 +3397,9 @@ static void* secmode_list_copy_cb(void *n, const void *o, size_t siz _U_)
     secmode_field_t *new_rec = (secmode_field_t *)n;
     const secmode_field_t *old_rec = (const secmode_field_t *)o;
 
-    if (old_rec->domain)
-    {
-        new_rec->domain = g_strdup(old_rec->domain);
-    }
-    else
-    {
-        new_rec->domain = NULL;
-    }
-
-    if (old_rec->identity)
-    {
-        new_rec->identity = g_strdup(old_rec->identity);
-    }
-    else
-    {
-        new_rec->identity = NULL;
-    }
-
-    if (old_rec->kek)
-    {
-        new_rec->kek = g_strdup(old_rec->kek);
-    }
-    else
-    {
-        new_rec->kek = NULL;
-    }
+    new_rec->domain = g_strdup(old_rec->domain);
+    new_rec->identity = g_strdup(old_rec->identity);
+    new_rec->kek = g_strdup(old_rec->kek);
 
     return new_rec;
 }
@@ -3443,12 +3408,9 @@ static void secmode_list_free_cb(void *r)
 {
     secmode_field_t *rec = (secmode_field_t *)r;
 
-    if (rec->domain)
-        g_free(rec->domain);
-    if (rec->identity)
-        g_free(rec->identity);
-    if (rec->kek)
-        g_free(rec->kek);
+    g_free(rec->domain);
+    g_free(rec->identity);
+    g_free(rec->kek);
 }
 
 
@@ -3477,14 +3439,7 @@ static void* seckey_list_copy_cb(void *n, const void *o, size_t siz _U_)
     seckey_field_t *new_rec = (seckey_field_t *)n;
     const seckey_field_t *old_rec = (const seckey_field_t *)o;
 
-    if (old_rec->key)
-    {
-        new_rec->key = g_strdup(old_rec->key);
-    }
-    else
-    {
-        new_rec->key = NULL;
-    }
+    new_rec->key = g_strdup(old_rec->key);
 
     return new_rec;
 }
@@ -3493,8 +3448,7 @@ static void seckey_list_free_cb(void *r)
 {
     seckey_field_t *rec = (seckey_field_t *)r;
 
-    if (rec->key)
-        g_free(rec->key);
+    g_free(rec->key);
 }
 
 
@@ -3557,32 +3511,9 @@ static void* identsecret_list_copy_cb(void *n, const void *o, size_t siz _U_)
     identsecret_field_t *new_rec = (identsecret_field_t *)n;
     const identsecret_field_t *old_rec = (const identsecret_field_t *)o;
 
-    if (old_rec->domain)
-    {
-        new_rec->domain = g_strdup(old_rec->domain);
-    }
-    else
-    {
-        new_rec->domain = NULL;
-    }
-
-    if (old_rec->identity)
-    {
-        new_rec->identity = g_strdup(old_rec->identity);
-    }
-    else
-    {
-        new_rec->identity = NULL;
-    }
-
-    if (old_rec->secret)
-    {
-        new_rec->secret = g_strdup(old_rec->secret);
-    }
-    else
-    {
-        new_rec->secret = NULL;
-    }
+    new_rec->domain = g_strdup(old_rec->domain);
+    new_rec->identity = g_strdup(old_rec->identity);
+    new_rec->secret = g_strdup(old_rec->secret);
 
     return new_rec;
 }
@@ -3591,12 +3522,9 @@ static void identsecret_list_free_cb(void *r)
 {
     identsecret_field_t *rec = (identsecret_field_t *)r;
 
-    if (rec->domain)
-        g_free(rec->domain);
-    if (rec->identity)
-        g_free(rec->identity);
-    if (rec->secret)
-        g_free(rec->secret);
+    g_free(rec->domain);
+    g_free(rec->identity);
+    g_free(rec->secret);
 }
 
 static void init_addr_port_tables(void);
@@ -5727,10 +5655,10 @@ static tcp_session_data* create_tcp_session_data(packet_info *pinfo, conversatio
 {
     tcp_session_data *packet = wmem_new0(wmem_file_scope(), tcp_session_data);
 
-    copy_address_wmem(wmem_file_scope(), &packet->client.addr, &conversation->key_ptr->addr1);
-    packet->client.port = conversation->key_ptr->port1;
-    copy_address_wmem(wmem_file_scope(), &packet->server.addr, &conversation->key_ptr->addr2);
-    packet->server.port = conversation->key_ptr->port2;
+    copy_address_wmem(wmem_file_scope(), &packet->client.addr, conversation_key_addr1(conversation->key_ptr));
+    packet->client.port = conversation_key_port1(conversation->key_ptr);
+    copy_address_wmem(wmem_file_scope(), &packet->server.addr, conversation_key_addr2(conversation->key_ptr));
+    packet->server.port = conversation_key_port2(conversation->key_ptr);
 
     packet->not_dps = FALSE;
 
@@ -5793,17 +5721,17 @@ static int dissect_dof_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         } */
 
         /* Register the source address as being DPS for the sender UDP port. */
-        conversation = find_conversation(pinfo->fd->num, &pinfo->src, &pinfo->dst, pinfo->ptype, pinfo->srcport, pinfo->destport, NO_ADDR_B | NO_PORT_B);
+        conversation = find_conversation(pinfo->fd->num, &pinfo->src, &pinfo->dst, conversation_pt_to_endpoint_type(pinfo->ptype), pinfo->srcport, pinfo->destport, NO_ADDR_B | NO_PORT_B);
         if (!conversation)
         {
-            conversation = conversation_new(pinfo->fd->num, &pinfo->src, &pinfo->dst, pinfo->ptype, pinfo->srcport, pinfo->destport, NO_ADDR_B | NO_PORT_B);
+            conversation = conversation_new(pinfo->fd->num, &pinfo->src, &pinfo->dst, conversation_pt_to_endpoint_type(pinfo->ptype), pinfo->srcport, pinfo->destport, NO_ADDR_B | NO_PORT_B);
             conversation_set_dissector(conversation, dof_udp_handle);
         }
 
         /* Find or create the conversation for this transport session. For UDP, the transport session is determined entirely by the
          * server port. This assumes that the first packet seen is from a client to the server.
          */
-        conversation = find_conversation(pinfo->fd->num, &pinfo->dst, &pinfo->src, PT_UDP, pinfo->destport, pinfo->srcport, NO_ADDR_B | NO_PORT_B);
+        conversation = find_conversation(pinfo->fd->num, &pinfo->dst, &pinfo->src, ENDPOINT_UDP, pinfo->destport, pinfo->srcport, NO_ADDR_B | NO_PORT_B);
         if (conversation)
         {
             /* TODO: Determine if this is valid or not. */
@@ -5812,7 +5740,7 @@ static int dissect_dof_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         }
 
         if (!conversation)
-            conversation = conversation_new(pinfo->fd->num, &pinfo->dst, &pinfo->src, PT_UDP, pinfo->destport, pinfo->srcport, NO_ADDR2 | NO_PORT2 | CONVERSATION_TEMPLATE);
+            conversation = conversation_new(pinfo->fd->num, &pinfo->dst, &pinfo->src, ENDPOINT_UDP, pinfo->destport, pinfo->srcport, NO_ADDR2 | NO_PORT2 | CONVERSATION_TEMPLATE);
 
         transport_session = (udp_session_data *)conversation_get_proto_data(conversation, proto_2008_1_dof_udp);
         if (transport_session == NULL)
@@ -5952,7 +5880,7 @@ static int dissect_dof_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
      * so we can "mirror" that by attaching our own data to that conversation. If our
      * data cannot be found, then it is a new connection (to us).
      */
-    conversation = find_conversation(pinfo->fd->num, &pinfo->src, &pinfo->dst, pinfo->ptype, pinfo->srcport, pinfo->destport, 0);
+    conversation = find_conversation_pinfo(pinfo, 0);
     {
         /* This should be impossible - the TCP dissector requires this conversation.
          * Bail...
@@ -6159,11 +6087,7 @@ static int dissect_tunnel_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     if (!udp_transport_session)
     udp_transport_session = se_alloc0(sizeof(*udp_transport_session));
 
-    conversation = find_conversation(pinfo->fd->num, &pinfo->src, &pinfo->dst, PT_UDP, pinfo->srcport, pinfo->destport, 0);
-    if (!conversation)
-    {
-        conversation = conversation_new(pinfo->fd->num, &pinfo->src, &pinfo->dst, PT_UDP, pinfo->srcport, pinfo->destport, 0);
-    }
+    conversation = find_or_create_conversation(pinfo);
 
     /* Add the packet data. */
     packet = p_get_proto_data(wmem_file_scope(), proto_2012_1_tunnel, 0);
@@ -6205,7 +6129,7 @@ static int dissect_tunnel_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     * so we can "mirror" that by attaching our own data to that conversation. If our
     * data cannot be found, then it is a new connection (to us).
     */
-    conversation = find_conversation(pinfo->fd->num, &pinfo->src, &pinfo->dst, pinfo->ptype, pinfo->srcport, pinfo->destport, 0);
+    conversation = find_conversation_pinfo(pinfo, 0);
     {
         /* This should be impossible - the TCP dissector requires this conversation.
         * Bail...
@@ -7940,18 +7864,14 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             gint e_len = tvb_captured_length(tvb) - offset;
             const guint8 *epp_buf = tvb_get_ptr(tvb, 0, -1);
             guint a_len = offset;
-            guint16 e_off;
-            guint8 *buf = (guint8 *)g_malloc(e_len);
+            guint8 *buf = (guint8 *)tvb_memdup(pinfo->pool, tvb, offset, e_len);
             tvbuff_t *app;
 
             /* The default nonce is a function of whether or not this is the server
             * or the client and the packet count. The packet count either comes from
             * the PDU or is a function of the previous value (of the sending node).
             */
-            guint8 nonce[] = { 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00,
-                0x00,
-                0x00, 0x00, 0x00, 0x00 };
+            guint8 nonce[11];
 
             nonce[0] = (pdata->nid) >> 24;
             nonce[1] = (pdata->nid) >> 16;
@@ -7968,8 +7888,6 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
             * This is a function of the sending node, the previous state and the
             * current PDU.
             */
-            for (e_off = 0; e_off < e_len; e_off++)
-                buf[e_off] = tvb_get_guint8(tvb, offset + e_off);
 
             app = NULL;
 
@@ -7979,7 +7897,6 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                 /* There is still a MAC involved, and even though we don't need a new
                 * buffer we need to adjust the length of the existing buffer.
                 */
-                g_free(buf);
                 app = tvb_new_subset_length_caplen(tvb, offset, e_len - session->mac_len, e_len - session->mac_len);
                 dof_packet->decrypted_tvb = app;
                 dof_packet->decrypted_offset = 0;
@@ -7999,6 +7916,7 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                 {
                     if (decrypt(session, pdata, nonce, epp_buf, a_len, buf, e_len))
                     {
+                        /* store decrypted buffer in file scope for reuse in next pass */
                         guint8 *cache = (guint8 *)wmem_alloc0(wmem_file_scope(), e_len - session->mac_len);
                         memcpy(cache, buf, e_len - session->mac_len);
                         app = tvb_new_real_data(cache, e_len - session->mac_len, e_len - session->mac_len);
@@ -8007,8 +7925,6 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                         dof_packet->decrypted_buffer = cache;
                         dof_packet->decrypted_offset = 0;
                         dof_packet->decrypted_tvb = app;
-
-                        g_free(buf);
                     }
                     else
                     {
@@ -8016,8 +7932,6 @@ static int dissect_ccm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                         * The packet is secure, so there is nothing we can do!
                         */
                         dof_packet->decrypted_buffer_error = "[Encrypted packet - decryption failure]";
-
-                        g_free(buf);
                     }
                 }
             }

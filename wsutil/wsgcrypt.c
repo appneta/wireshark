@@ -7,20 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "wsgcrypt.h"
@@ -69,6 +56,130 @@ void crypt_des_ecb(guint8 *output, const guint8 *buffer, const guint8 *key56)
 	}
 	gcry_cipher_encrypt(handle, output, 8, buffer, 8);
 	gcry_cipher_close(handle);
+}
+
+size_t rsa_decrypt_inplace(const guint len, guchar* data, gcry_sexp_t pk, gboolean pkcs1_padding, char **err)
+{
+	gint        rc = 0;
+	size_t      decr_len = 0, i = 0;
+	gcry_sexp_t s_data = NULL, s_plain = NULL;
+	gcry_mpi_t  encr_mpi = NULL, text = NULL;
+
+	*err = NULL;
+
+	/* create mpi representation of encrypted data */
+	rc = gcry_mpi_scan(&encr_mpi, GCRYMPI_FMT_USG, data, len, NULL);
+	if (rc != 0 ) {
+		*err = g_strdup_printf("can't convert data to mpi (size %d):%s", len, gcry_strerror(rc));
+		return 0;
+	}
+
+	/* put the data into a simple list */
+	rc = gcry_sexp_build(&s_data, NULL, "(enc-val(rsa(a%m)))", encr_mpi);
+	if (rc != 0) {
+		*err = g_strdup_printf("can't build encr_sexp:%s", gcry_strerror(rc));
+		decr_len = 0;
+		goto out;
+	}
+
+	/* pass it to libgcrypt */
+	rc = gcry_pk_decrypt(&s_plain, s_data, pk);
+	if (rc != 0)
+	{
+		*err = g_strdup_printf("can't decrypt key:%s", gcry_strerror(rc));
+		decr_len = 0;
+		goto out;
+	}
+
+	/* convert plain text sexp to mpi format */
+	text = gcry_sexp_nth_mpi(s_plain, 0, 0);
+	if (! text) {
+		*err = g_strdup("can't convert sexp to mpi");
+		decr_len = 0;
+		goto out;
+	}
+
+	/* compute size requested for plaintext buffer */
+	rc = gcry_mpi_print(GCRYMPI_FMT_USG, NULL, 0, &decr_len, text);
+	if (rc != 0) {
+		*err = g_strdup_printf("can't compute decr size:%s", gcry_strerror(rc));
+		decr_len = 0;
+		goto out;
+	}
+
+	/* sanity check on out buffer */
+	if (decr_len > len) {
+		*err = g_strdup_printf("decrypted data is too long ?!? (%" G_GSIZE_MODIFIER "u max %d)", decr_len, len);
+		decr_len = 0;
+		goto out;
+	}
+
+	/* write plain text to newly allocated buffer */
+	rc = gcry_mpi_print(GCRYMPI_FMT_USG, data, len, &decr_len, text);
+	if (rc != 0) {
+		*err = g_strdup_printf("can't print decr data to mpi (size %" G_GSIZE_MODIFIER "u):%s", decr_len, gcry_strerror(rc));
+		decr_len = 0;
+		goto out;
+	}
+
+	if (pkcs1_padding) {
+		/* strip the padding*/
+		rc = 0;
+		for (i = 1; i < decr_len; i++) {
+			if (data[i] == 0) {
+				rc = (gint) i+1;
+				break;
+			}
+		}
+
+		decr_len -= rc;
+		memmove(data, data+rc, decr_len);
+	}
+
+out:
+	gcry_sexp_release(s_data);
+	gcry_sexp_release(s_plain);
+	gcry_mpi_release(encr_mpi);
+	gcry_mpi_release(text);
+	return decr_len;
+}
+
+gcry_error_t
+hkdf_expand(int hashalgo, const guint8 *prk, guint prk_len, const guint8 *info, guint info_len,
+            guint8 *out, guint out_len)
+{
+	// Current maximum hash output size: 48 bytes for SHA-384.
+	guchar	        lastoutput[48];
+	gcry_md_hd_t    h;
+	gcry_error_t    err;
+	const guint     hash_len = gcry_md_get_algo_dlen(hashalgo);
+
+	/* Some sanity checks */
+	if (!(out_len > 0 && out_len <= 255 * hash_len) ||
+	    !(hash_len > 0 && hash_len <= sizeof(lastoutput))) {
+		return GPG_ERR_INV_ARG;
+	}
+
+	err = gcry_md_open(&h, hashalgo, GCRY_MD_FLAG_HMAC);
+	if (err) {
+		return err;
+	}
+
+	for (guint offset = 0; offset < out_len; offset += hash_len) {
+		gcry_md_reset(h);
+		gcry_md_setkey(h, prk, prk_len);                    /* Set PRK */
+		if (offset > 0) {
+			gcry_md_write(h, lastoutput, hash_len);     /* T(1..N) */
+		}
+		gcry_md_write(h, info, info_len);                   /* info */
+		gcry_md_putc(h, (guint8) (offset / hash_len + 1));  /* constant 0x01..N */
+
+		memcpy(lastoutput, gcry_md_read(h, hashalgo), hash_len);
+		memcpy(out + offset, lastoutput, MIN(hash_len, out_len - offset));
+	}
+
+	gcry_md_close(h);
+	return 0;
 }
 
 /*

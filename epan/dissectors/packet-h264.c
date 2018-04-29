@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * References:
  * http://www.ietf.org/rfc/rfc3984.txt?number=3984      Obsolete
@@ -2714,12 +2702,12 @@ dissect_h264_name(tvbuff_t *tvb _U_, packet_info *pinfo, proto_tree *tree, void*
 }
 
 
-static void range_delete_h264_rtp_pt_callback(guint32 rtp_pt) {
+static void range_delete_h264_rtp_pt_callback(guint32 rtp_pt, gpointer ptr _U_) {
     if (rtp_pt >= 96 && rtp_pt <= 127)
         dissector_delete_uint("rtp.pt", rtp_pt, h264_handle);
 }
 
-static void range_add_h264_rtp_pt_callback(guint32 rtp_pt) {
+static void range_add_h264_rtp_pt_callback(guint32 rtp_pt, gpointer ptr _U_) {
     if (rtp_pt >= 96 && rtp_pt <= 127)
         dissector_add_uint("rtp.pt", rtp_pt, h264_handle);
 }
@@ -3729,12 +3717,12 @@ proto_reg_handoff_h264(void)
         }
         h264_prefs_initialized = TRUE;
     } else {
-        range_foreach(dynamic_payload_type_range, range_delete_h264_rtp_pt_callback);
+        range_foreach(dynamic_payload_type_range, range_delete_h264_rtp_pt_callback, NULL);
         wmem_free(wmem_epan_scope(), dynamic_payload_type_range);
     }
 
     dynamic_payload_type_range = range_copy(wmem_epan_scope(), temp_dynamic_payload_type_range);
-    range_foreach(dynamic_payload_type_range, range_add_h264_rtp_pt_callback);
+    range_foreach(dynamic_payload_type_range, range_add_h264_rtp_pt_callback, NULL);
 }
 
 /*

@@ -8,19 +8,7 @@
 * By Gerald Combs <gerald@wireshark.org>
 * Copyright 1998 Gerald Combs
 *
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* as published by the Free Software Foundation; either version 2
-* of the License, or (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+* SPDX-License-Identifier: GPL-2.0-or-later
 */
 
 #include "config.h"
@@ -1003,9 +991,7 @@ dissect_spdu(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tree *tree,
 		guint32 ses_id = 0;
 
 		/* Use conversation index as segment id */
-		conversation  = find_conversation (pinfo->num,
-						   &pinfo->src, &pinfo->dst, pinfo->ptype,
-						   pinfo->srcport, pinfo->destport, 0);
+		conversation  = find_conversation_pinfo(pinfo, 0);
 		if (conversation != NULL) {
 			ses_id = conversation->conv_index;
 		}
@@ -1346,7 +1332,7 @@ proto_register_ses(void)
 			&hf_session_exception_report,
 			{
 				"Session exception report",
-				"ses.exception_report.",
+				"ses.exception_report",
 				FT_BOOLEAN, 16,
 				NULL,
 				SES_EXCEPTION_REPORT,

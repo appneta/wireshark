@@ -4,21 +4,9 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
+#include "log.h"
 #include "traffic_table_dialog.h"
 #include <ui_traffic_table_dialog.h>
 
@@ -66,9 +54,9 @@ TrafficTableDialog::TrafficTableDialog(QWidget &parent, CaptureFile &cf, const c
     ui->absoluteTimeCheckBox->hide();
     setWindowSubtitle(QString("%1s").arg(table_name));
 
-    QMenu *copy_menu = new QMenu();
-    QAction *ca;
     copy_bt_ = ui->buttonBox->addButton(tr("Copy"), QDialogButtonBox::ActionRole);
+    QMenu *copy_menu = new QMenu(copy_bt_);
+    QAction *ca;
     ca = copy_menu->addAction(tr("as CSV"));
     ca->setToolTip(tr("Copy all values of this page to the clipboard in CSV (Comma Separated Values) format."));
     connect(ca, SIGNAL(triggered()), this, SLOT(copyAsCsv()));
@@ -88,10 +76,8 @@ TrafficTableDialog::TrafficTableDialog(QWidget &parent, CaptureFile &cf, const c
     connect(wsApp, SIGNAL(addressResolutionChanged()), this, SLOT(updateWidgets()));
     connect(ui->trafficTableTabWidget, SIGNAL(currentChanged(int)),
             this, SLOT(currentTabChanged()));
-    connect(&cap_file_, SIGNAL(captureFileRetapStarted()),
-            this, SLOT(retapStarted()));
-    connect(&cap_file_, SIGNAL(captureFileRetapFinished()),
-            this, SLOT(retapFinished()));
+    connect(&cap_file_, SIGNAL(captureEvent(CaptureEvent)),
+            this, SLOT(captureEvent(CaptureEvent)));
 }
 
 TrafficTableDialog::~TrafficTableDialog()
@@ -128,12 +114,12 @@ public:
 gboolean TrafficTableDialog::fillTypeMenuFunc(const void *key, void *value, void *userdata)
 {
     register_ct_t* ct = (register_ct_t*)value;
-    QString title = (gchar*)key;
+    const QString title = (const gchar*)key;
     fillTypeMenuData* data = (fillTypeMenuData*)userdata;
     int proto_id = get_conversation_proto_id(ct);
 
     QAction *endp_action = new QAction(title, data->dialog_);
-    endp_action->setData(qVariantFromValue(proto_id));
+    endp_action->setData(QVariant::fromValue(proto_id));
     endp_action->setCheckable(true);
     endp_action->setChecked(data->enabled_protos_.contains(proto_id));
     data->dialog_->connect(endp_action, SIGNAL(triggered()), data->dialog_, SLOT(toggleTable()));
@@ -232,14 +218,23 @@ void TrafficTableDialog::on_displayFilterCheckBox_toggled(bool checked)
     cap_file_.retapPackets();
 }
 
-void TrafficTableDialog::retapStarted()
+void TrafficTableDialog::captureEvent(CaptureEvent e)
 {
-    ui->displayFilterCheckBox->setEnabled(false);
-}
+    if (e.captureContext() == CaptureEvent::Retap)
+    {
+        switch (e.eventType())
+        {
+        case CaptureEvent::Started:
+            ui->displayFilterCheckBox->setEnabled(false);
+            break;
+        case CaptureEvent::Finished:
+            ui->displayFilterCheckBox->setEnabled(true);
+            break;
+        default:
+            break;
+        }
+    }
 
-void TrafficTableDialog::retapFinished()
-{
-    ui->displayFilterCheckBox->setEnabled(true);
 }
 
 void TrafficTableDialog::setTabText(QWidget *tree, const QString &text)
@@ -316,7 +311,7 @@ void TrafficTableDialog::copyAsCsv()
         foreach (QVariant v, curTreeRowData(row)) {
             if (!v.isValid()) {
                 rdsl << "\"\"";
-            } else if ((int) v.type() == (int) QMetaType::QString) {
+            } else if (v.type() == QVariant::String) {
                 rdsl << QString("\"%1\"").arg(v.toString());
             } else {
                 rdsl << v.toString();

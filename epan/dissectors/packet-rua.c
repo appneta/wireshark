@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * Ref: 3GPP TS 25.468 version 8.1.0 Release 8
  */
@@ -82,7 +70,7 @@ typedef enum _ProtocolIE_ID_enum {
 } ProtocolIE_ID_enum;
 
 /*--- End of included file: packet-rua-val.h ---*/
-#line 49 "./asn1/rua/packet-rua-template.c"
+#line 37 "./asn1/rua/packet-rua-template.c"
 
 /* Initialize the protocol and registered fields */
 static int proto_rua = -1;
@@ -159,7 +147,7 @@ static int hf_rua_successfulOutcome_value = -1;   /* SuccessfulOutcome_value */
 static int hf_rua_unsuccessfulOutcome_value = -1;  /* UnsuccessfulOutcome_value */
 
 /*--- End of included file: packet-rua-hf.c ---*/
-#line 54 "./asn1/rua/packet-rua-template.c"
+#line 42 "./asn1/rua/packet-rua-template.c"
 
 /* Initialize the subtree pointers */
 static int ett_rua = -1;
@@ -208,7 +196,7 @@ static gint ett_rua_SuccessfulOutcome = -1;
 static gint ett_rua_UnsuccessfulOutcome = -1;
 
 /*--- End of included file: packet-rua-ett.c ---*/
-#line 62 "./asn1/rua/packet-rua-template.c"
+#line 50 "./asn1/rua/packet-rua-template.c"
 
 /* Global variables */
 static guint32 ProcedureCode;
@@ -1359,7 +1347,7 @@ static int dissect_RUA_PDU_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_
 
 
 /*--- End of included file: packet-rua-fn.c ---*/
-#line 86 "./asn1/rua/packet-rua-template.c"
+#line 74 "./asn1/rua/packet-rua-template.c"
 
 static int dissect_ProtocolIEFieldValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
@@ -1683,7 +1671,7 @@ module_t *rua_module;
         "UnsuccessfulOutcome_value", HFILL }},
 
 /*--- End of included file: packet-rua-hfarr.c ---*/
-#line 137 "./asn1/rua/packet-rua-template.c"
+#line 125 "./asn1/rua/packet-rua-template.c"
   };
 
   /* List of subtrees */
@@ -1730,7 +1718,7 @@ module_t *rua_module;
     &ett_rua_UnsuccessfulOutcome,
 
 /*--- End of included file: packet-rua-ettarr.c ---*/
-#line 143 "./asn1/rua/packet-rua-template.c"
+#line 131 "./asn1/rua/packet-rua-template.c"
   };
 
 
@@ -1787,7 +1775,7 @@ proto_reg_handoff_rua(void)
 
 
 /*--- End of included file: packet-rua-dis-tab.c ---*/
-#line 180 "./asn1/rua/packet-rua-template.c"
+#line 168 "./asn1/rua/packet-rua-template.c"
 
         } else {
                 dissector_delete_uint("sctp.port", sctp_port, rua_handle);

@@ -4,29 +4,18 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "wireshark_application.h"
 #include "main_window_preferences_frame.h"
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 
 #include <ui_main_window_preferences_frame.h>
 #include "ui/language.h"
 
 #include <epan/prefs-int.h>
+#include <ui/qt/models/pref_models.h>
 #include <wsutil/filesystem.h>
 
 #include <QFileDialog>
@@ -46,8 +35,6 @@ MainWindowPreferencesFrame::MainWindowPreferencesFrame(QWidget *parent) :
     pref_recent_df_entries_max_ = prefFromPrefPtr(&prefs.gui_recent_df_entries_max);
     pref_recent_files_count_max_ = prefFromPrefPtr(&prefs.gui_recent_files_count_max);
     pref_ask_unsaved_ = prefFromPrefPtr(&prefs.gui_ask_unsaved);
-    pref_auto_scroll_on_expand_ = prefFromPrefPtr(&prefs.gui_auto_scroll_on_expand);
-    pref_auto_scroll_percentage_ = prefFromPrefPtr(&prefs.gui_auto_scroll_percentage);
     pref_toolbar_main_style_ = prefFromPrefPtr(&prefs.gui_toolbar_main_style);
     pref_toolbar_filter_style_ = prefFromPrefPtr(&prefs.gui_toolbar_filter_style);
 
@@ -62,12 +49,9 @@ MainWindowPreferencesFrame::MainWindowPreferencesFrame(QWidget *parent) :
     ui->maxFilterLineEdit->setStyleSheet(indent_ss);
     ui->maxRecentLineEdit->setStyleSheet(indent_ss);
 
-    ui->autoScrollPercentageLabel->setStyleSheet(indent_ss);
-
     int num_entry_width = ui->maxFilterLineEdit->fontMetrics().height() * 3;
     ui->maxFilterLineEdit->setMaximumWidth(num_entry_width);
     ui->maxRecentLineEdit->setMaximumWidth(num_entry_width);
-    ui->autoScrollPercentageLineEdit->setMaximumWidth(num_entry_width);
 
     QString globalLanguagesPath(QString(get_datafile_dir()) + "/languages/");
     QString userLanguagesPath(gchar_free_to_qstring(get_persconffile_path("languages/", FALSE)));
@@ -139,8 +123,6 @@ void MainWindowPreferencesFrame::updateWidgets()
     ui->maxRecentLineEdit->setText(QString::number(prefs_get_uint_value_real(pref_recent_files_count_max_, pref_stashed)));
 
     ui->confirmUnsavedCheckBox->setChecked(prefs_get_bool_value(pref_ask_unsaved_, pref_stashed));
-    ui->autoScrollCheckBox->setChecked(prefs_get_bool_value(pref_auto_scroll_on_expand_, pref_stashed));
-    ui->autoScrollPercentageLineEdit->setText(QString::number(prefs_get_uint_value_real(pref_auto_scroll_on_expand_, pref_stashed)));
 
     ui->mainToolbarComboBox->setCurrentIndex(prefs_get_enum_value(pref_toolbar_main_style_, pref_stashed));
 
@@ -207,18 +189,6 @@ void MainWindowPreferencesFrame::on_confirmUnsavedCheckBox_toggled(bool checked)
     prefs_set_bool_value(pref_ask_unsaved_, checked, pref_stashed);
 }
 
-void MainWindowPreferencesFrame::on_autoScrollCheckBox_toggled(bool checked)
-{
-    prefs_set_bool_value(pref_auto_scroll_on_expand_, checked, pref_stashed);
-}
-
-void MainWindowPreferencesFrame::on_autoScrollPercentageLineEdit_textEdited(const QString &new_pct)
-{
-    prefs_set_uint_value(pref_auto_scroll_percentage_, new_pct.toUInt(), pref_stashed);
-    prefs_set_bool_value(pref_auto_scroll_on_expand_, TRUE, pref_stashed);
-    ui->autoScrollCheckBox->setChecked(true);
-}
-
 void MainWindowPreferencesFrame::on_mainToolbarComboBox_currentIndexChanged(int index)
 {
     prefs_set_enum_value(pref_toolbar_main_style_, index, pref_stashed);
@@ -226,8 +196,7 @@ void MainWindowPreferencesFrame::on_mainToolbarComboBox_currentIndexChanged(int 
 
 void MainWindowPreferencesFrame::on_languageComboBox_currentIndexChanged(int index)
 {
-    if (language)
-        g_free(language);
+    g_free(language);
 
     language = g_strdup(ui->languageComboBox->itemData(index).toString().toStdString().c_str());
 }

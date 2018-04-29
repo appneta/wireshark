@@ -6,25 +6,14 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 /*
  * TDMoP protocol is proprietary protocol developed by "NSC Communication Siberia Ltd."
  */
 #include "config.h"
 #include <epan/packet.h>
+#include <epan/conversation.h>
 #include <epan/prefs.h>
 
 /*Using of ethertype 0x0808(assigned to Frame Realy ARP) was implemented in hardware, when ethertype was not assigned*/
@@ -94,8 +83,7 @@ static int dissect_tdmop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
     gint offset;
     proto_item    *ti;
     proto_tree    *tdmop_tree;
-    guint32 dstch;
-    guint32 srcch;
+    guint32 dstch, srcch;
     flags = tvb_get_guint8(tvb, 4);
     offset = 0;
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "TDMoP");
@@ -104,21 +92,20 @@ static int dissect_tdmop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
     {
         col_add_fstr(pinfo->cinfo, COL_INFO, "Lost Request");
     }
-    /*conversation*/
-    dstch = tvb_get_guint8(tvb, offset + 2);
-    srcch = tvb_get_guint8(tvb, offset + 3);
-    pinfo->destport = dstch;
-    pinfo->srcport = srcch;
-    pinfo->ptype = PT_TDMOP;
+
     ti = proto_tree_add_item(tree, proto_tdmop, tvb, 0, -1, ENC_NA);
     tdmop_tree = proto_item_add_subtree(ti, ett_tdmop);
     /*path info*/
     proto_tree_add_item(tdmop_tree, hf_tdmop_TransferID, tvb, offset, 4, ENC_LITTLE_ENDIAN);
     offset += 2;
-    proto_tree_add_item(tdmop_tree, hf_tdmop_DstCh, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item_ret_uint(tdmop_tree, hf_tdmop_DstCh, tvb, offset, 1, ENC_LITTLE_ENDIAN, &dstch);
     offset += 1;
-    proto_tree_add_item(tdmop_tree, hf_tdmop_SrcCh, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item_ret_uint(tdmop_tree, hf_tdmop_SrcCh, tvb, offset, 1, ENC_LITTLE_ENDIAN, &srcch);
     offset += 1;
+
+    /*conversation*/
+    conversation_create_endpoint(pinfo, &pinfo->src, &pinfo->dst, ENDPOINT_TDMOP, srcch, dstch, 0);
+
     /*flags*/
     proto_tree_add_item(tdmop_tree, hf_tdmop_Flags, tvb, offset, 1, ENC_NA);
     proto_tree_add_item(tdmop_tree, hf_tdmop_Flags_no_data, tvb, offset, 1, ENC_NA);

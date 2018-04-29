@@ -3,19 +3,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2001 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -94,17 +82,17 @@ same_ftype(const enum ftenum ftype)
 		case FT_UINT32:
 			return FT_UINT32;
 
-    case FT_INT40:
-    case FT_INT48:
-    case FT_INT56:
+		case FT_INT40:
+		case FT_INT48:
+		case FT_INT56:
 		case FT_INT64:
-      return FT_INT64;
+			return FT_INT64;
 
 		case FT_UINT40:
 		case FT_UINT48:
 		case FT_UINT56:
 		case FT_UINT64:
-      return FT_UINT64;
+			return FT_UINT64;
 
 		case FT_STRING:
 		case FT_STRINGZ:
@@ -123,7 +111,7 @@ same_ftype(const enum ftenum ftype)
 		case FT_REL_OID:
 			return FT_OID;
 
-		/* XXX: the folowing are unqiue for now */
+		/* XXX: the folowing are unique for now */
 		case FT_IPv4:
 		case FT_IPv6:
 
@@ -629,7 +617,6 @@ fvalue_get(fvalue_t *fv)
 			fv->ftype->ftype == FT_SYSTEM_ID ||
 			fv->ftype->ftype == FT_FCWWN ||
 			fv->ftype->ftype == FT_GUID ||
-			fv->ftype->ftype == FT_IPv4 ||
 			fv->ftype->ftype == FT_IPv6 ||
 			fv->ftype->ftype == FT_PCRE ||
 			fv->ftype->ftype == FT_PROTOCOL ||
@@ -651,7 +638,8 @@ fvalue_get_uinteger(fvalue_t *fv)
 			fv->ftype->ftype == FT_UINT24 ||
 			fv->ftype->ftype == FT_UINT32 ||
 			fv->ftype->ftype == FT_IPXNET ||
-			fv->ftype->ftype == FT_FRAMENUM);
+			fv->ftype->ftype == FT_FRAMENUM ||
+			fv->ftype->ftype == FT_IPv4);
 	g_assert(fv->ftype->get_value.get_value_uinteger);
 	return fv->ftype->get_value.get_value_uinteger(fv);
 }

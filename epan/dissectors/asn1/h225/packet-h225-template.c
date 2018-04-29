@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * To quote the author of the previous H323/H225/H245 dissector:
  *   "This is a complete replacement of the previous limitied dissector
@@ -44,6 +32,7 @@
 #include <epan/tap.h>
 #include <epan/stat_tap_ui.h>
 #include <epan/rtd_table.h>
+#include "packet-frame.h"
 #include "packet-tpkt.h"
 #include "packet-per.h"
 #include "packet-h225.h"
@@ -138,8 +127,8 @@ static gboolean h225_tp_in_tree = TRUE;
 
 /* Global variables */
 static guint32 ipv4_address;
-static struct e_in6_addr ipv6_address;
-static struct e_in6_addr ipv6_address_zeros = {{0}};
+static ws_in6_addr ipv6_address;
+static ws_in6_addr ipv6_address_zeros = {{0}};
 static guint32 ip_port;
 static gboolean contains_faststart = FALSE;
 static e_guid_t *call_id_guid;
@@ -329,6 +318,14 @@ h225ras_call_t * append_h225ras_call(h225ras_call_t *prev_call, packet_info *pin
   return h225ras_call;
 }
 
+static void
+h225_frame_end(void)
+{
+  /* next_tvb pointers are allocated in packet scope, clear it. */
+  next_tvb_init(&h245_list);
+  next_tvb_init(&tp_list);
+}
+
 static int
 dissect_h225_H323UserInformation(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
@@ -342,6 +339,7 @@ dissect_h225_H323UserInformation(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
   h225_pi->msg_type = H225_CS;
   p_add_proto_data(pinfo->pool, pinfo, proto_h225, 0, h225_pi);
 
+  register_frame_end_routine(pinfo, h225_frame_end);
   next_tvb_init(&h245_list);
   next_tvb_init(&tp_list);
 
@@ -376,6 +374,8 @@ dissect_h225_h225_RasMessage(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree
   h225_pi = create_h225_packet_info(pinfo);
   h225_pi->msg_type = H225_RAS;
   p_add_proto_data(pinfo->pool, pinfo, proto_h225, 0, h225_pi);
+
+  register_frame_end_routine(pinfo, h225_frame_end);
 
   col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
 
@@ -442,14 +442,14 @@ static guint facility_reason_idx[FACILITY_REASONS];
 
 static guint other_idx;
 
-static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb gui_callback, void* gui_data)
+static void h225_stat_init(stat_tap_table_ui* new_stat, stat_tap_gui_init_cb gui_callback, void* gui_data)
 {
   int num_fields = sizeof(h225_stat_fields)/sizeof(stat_tap_table_item);
-  stat_tap_table* table = new_stat_tap_init_table("H.225 Messages and Message Reasons", num_fields, 0, NULL, gui_callback, gui_data);
+  stat_tap_table* table = stat_tap_init_table("H.225 Messages and Message Reasons", num_fields, 0, NULL, gui_callback, gui_data);
   int row_idx = 0, msg_idx;
   stat_tap_table_item_type items[sizeof(h225_stat_fields)/sizeof(stat_tap_table_item)];
 
-  new_stat_tap_add_table(new_stat, table);
+  stat_tap_add_table(new_stat, table);
 
   items[MESSAGE_TYPE_COLUMN].type = TABLE_ITEM_STRING;
   items[COUNT_COLUMN].type = TABLE_ITEM_UINT;
@@ -466,7 +466,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown RAS message";
     ras_msg_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (h225_RasMessage_vals[msg_idx].strptr);
@@ -480,7 +480,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown CS message";
     cs_msg_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (T_h323_message_body_vals[msg_idx].strptr);
@@ -494,7 +494,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown gatekeeper reject reason";
     grj_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (GatekeeperRejectReason_vals[msg_idx].strptr);
@@ -508,7 +508,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown registration reject reason";
     rrj_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (RegistrationRejectReason_vals[msg_idx].strptr);
@@ -522,7 +522,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown unregistration request reason";
     urq_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (UnregRequestReason_vals[msg_idx].strptr);
@@ -536,7 +536,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown unregistration reject reason";
     urj_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (UnregRejectReason_vals[msg_idx].strptr);
@@ -550,7 +550,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown admission reject reason";
     arj_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (AdmissionRejectReason_vals[msg_idx].strptr);
@@ -564,7 +564,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown band reject reason";
     brj_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (BandRejectReason_vals[msg_idx].strptr);
@@ -578,7 +578,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown disengage reason";
     drq_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (DisengageReason_vals[msg_idx].strptr);
@@ -592,7 +592,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown disengage reject reason";
     drj_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (DisengageRejectReason_vals[msg_idx].strptr);
@@ -606,7 +606,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown location reject reason";
     lrj_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (LocationRejectReason_vals[msg_idx].strptr);
@@ -620,7 +620,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown info request nak reason";
     irqnak_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (InfoRequestNakReason_vals[msg_idx].strptr);
@@ -634,7 +634,7 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown release complete reason";
     rel_cmp_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (h225_ReleaseCompleteReason_vals[msg_idx].strptr);
@@ -648,21 +648,21 @@ static void h225_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb
       : "Unknown facility reason";
     facility_reason_idx[msg_idx] = row_idx;
 
-    new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+    stat_tap_init_table_row(table, row_idx, num_fields, items);
     row_idx++;
     msg_idx++;
   } while (FacilityReason_vals[msg_idx].strptr);
 
 
   items[MESSAGE_TYPE_COLUMN].value.string_value = "Unknown H.225 message";
-  new_stat_tap_init_table_row(table, row_idx, num_fields, items);
+  stat_tap_init_table_row(table, row_idx, num_fields, items);
   other_idx = row_idx;
 }
 
 static gboolean
 h225_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const void *hpi_ptr)
 {
-  new_stat_data_t* stat_data = (new_stat_data_t*)tapdata;
+  stat_data_t* stat_data = (stat_data_t*)tapdata;
   const h225_packet_info *hpi = (const h225_packet_info *)hpi_ptr;
   int tag_idx = -1;
   int reason_idx = -1;
@@ -750,14 +750,14 @@ h225_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_,
 
   if (tag_idx >= 0) {
     stat_tap_table*table = g_array_index(stat_data->stat_tap_data->tables, stat_tap_table*, 0);
-    stat_tap_table_item_type* msg_data = new_stat_tap_get_field_data(table, tag_idx, COUNT_COLUMN);;
+    stat_tap_table_item_type* msg_data = stat_tap_get_field_data(table, tag_idx, COUNT_COLUMN);;
     msg_data->value.uint_value++;
-    new_stat_tap_set_field_data(table, tag_idx, COUNT_COLUMN, msg_data);
+    stat_tap_set_field_data(table, tag_idx, COUNT_COLUMN, msg_data);
 
     if (reason_idx >= 0) {
-      msg_data = new_stat_tap_get_field_data(table, reason_idx, COUNT_COLUMN);;
+      msg_data = stat_tap_get_field_data(table, reason_idx, COUNT_COLUMN);;
       msg_data->value.uint_value++;
-      new_stat_tap_set_field_data(table, reason_idx, COUNT_COLUMN, msg_data);
+      stat_tap_set_field_data(table, reason_idx, COUNT_COLUMN, msg_data);
     }
 
     return TRUE;
@@ -773,9 +773,9 @@ h225_stat_reset(stat_tap_table* table)
 
   for (element = 0; element < table->num_elements; element++)
   {
-    item_data = new_stat_tap_get_field_data(table, element, COUNT_COLUMN);
+    item_data = stat_tap_get_field_data(table, element, COUNT_COLUMN);
     item_data->value.uint_value = 0;
-    new_stat_tap_set_field_data(table, element, COUNT_COLUMN, item_data);
+    stat_tap_set_field_data(table, element, COUNT_COLUMN, item_data);
   }
 }
 
@@ -1041,9 +1041,7 @@ static void ras_call_matching(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     /* end of request message handling*/
     }
     else {          /* Confirm or Reject Message */
-      conversation = find_conversation(pinfo->num, &pinfo->src,
-        &pinfo->dst, pinfo->ptype, pinfo->srcport,
-        pinfo->destport, 0);
+      conversation = find_conversation_pinfo(pinfo, 0);
       if (conversation != NULL) {
         /* look only for matching request, if
            matching conversation is available. */

@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -2730,7 +2718,7 @@ proto_register_btavdtp(void)
     proto_register_field_array(proto_btavdtp, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
 
-    module = prefs_register_protocol(proto_btavdtp, NULL);
+    module = prefs_register_protocol_subtree("Bluetooth", proto_btavdtp, NULL);
     prefs_register_static_text_preference(module, "avdtp.version",
             "Bluetooth Protocol AVDTP version: 1.3",
             "Version of protocol supported by this dissector.");
@@ -3076,7 +3064,7 @@ dissect_bta2dp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     if (bta2dp_codec_info.content_protection_type == 0 && codec_dissector == aptx_handle) {
         call_dissector_with_data(aptx_handle, tvb, pinfo, tree, &bta2dp_codec_info);
     } else {
-        bluetooth_add_address(pinfo, &pinfo->net_dst, sep_data.stream_number, "BT A2DP", pinfo->num, FALSE, &bta2dp_codec_info);
+        bluetooth_add_address(pinfo, &pinfo->net_dst, sep_data.stream_number, "BT A2DP", pinfo->num, RTP_MEDIA_AUDIO, &bta2dp_codec_info);
         call_dissector(rtp_handle, tvb, pinfo, tree);
     }
     offset += tvb_reported_length_remaining(tvb, offset);
@@ -3147,7 +3135,7 @@ proto_register_bta2dp(void)
 
     bta2dp_handle = register_dissector("bta2dp", dissect_bta2dp, proto_bta2dp);
 
-    module = prefs_register_protocol(proto_bta2dp, NULL);
+    module = prefs_register_protocol_subtree("Bluetooth", proto_bta2dp, NULL);
     prefs_register_static_text_preference(module, "a2dp.version",
             "Bluetooth Profile A2DP version: 1.3",
             "Version of profile supported by this dissector.");
@@ -3309,7 +3297,7 @@ dissect_btvdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     pinfo->destport = sep_data.stream_number;
 #endif
 
-    bluetooth_add_address(pinfo, &pinfo->net_dst, 0, "BT VDP", pinfo->num, TRUE, &btvdp_codec_info);
+    bluetooth_add_address(pinfo, &pinfo->net_dst, 0, "BT VDP", pinfo->num, RTP_MEDIA_VIDEO, &btvdp_codec_info);
     call_dissector(rtp_handle, tvb, pinfo, tree);
     offset += tvb_reported_length_remaining(tvb, offset);
 
@@ -3387,7 +3375,7 @@ proto_register_btvdp(void)
     expert_btavdtp = expert_register_protocol(proto_btvdp);
     expert_register_field_array(expert_btavdtp, ei, array_length(ei));
 
-    module = prefs_register_protocol(proto_btvdp, NULL);
+    module = prefs_register_protocol_subtree("Bluetooth", proto_btvdp, NULL);
     prefs_register_static_text_preference(module, "vdp.version",
             "Bluetooth Profile VDP version: 1.1",
             "Version of profile supported by this dissector.");

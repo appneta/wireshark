@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -475,7 +463,7 @@ static int hf_dap_SearchControlOptions_separateFamilyMembers = -1;
 static int hf_dap_SearchControlOptions_searchFamily = -1;
 
 /*--- End of included file: packet-dap-hf.c ---*/
-#line 61 "./asn1/dap/packet-dap-template.c"
+#line 49 "./asn1/dap/packet-dap-template.c"
 
 /* Initialize the subtree pointers */
 static gint ett_dap = -1;
@@ -654,7 +642,7 @@ static gint ett_dap_UpdateError = -1;
 static gint ett_dap_T_signedUpdateError = -1;
 
 /*--- End of included file: packet-dap-ett.c ---*/
-#line 65 "./asn1/dap/packet-dap-template.c"
+#line 53 "./asn1/dap/packet-dap-template.c"
 
 static expert_field ei_dap_anonymous = EI_INIT;
 
@@ -681,7 +669,7 @@ static expert_field ei_dap_anonymous = EI_INIT;
 #define id_errcode_dsaReferral         9
 
 /*--- End of included file: packet-dap-val.h ---*/
-#line 69 "./asn1/dap/packet-dap-template.c"
+#line 57 "./asn1/dap/packet-dap-template.c"
 
 
 /*--- Included file: packet-dap-table.c ---*/
@@ -719,7 +707,7 @@ static const value_string dap_err_code_string_vals[] = {
 
 
 /*--- End of included file: packet-dap-table.c ---*/
-#line 71 "./asn1/dap/packet-dap-template.c"
+#line 59 "./asn1/dap/packet-dap-template.c"
 
 
 /*--- Included file: packet-dap-fn.c ---*/
@@ -4769,7 +4757,7 @@ static int dissect_UpdateError_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, pr
 
 
 /*--- End of included file: packet-dap-fn.c ---*/
-#line 73 "./asn1/dap/packet-dap-template.c"
+#line 61 "./asn1/dap/packet-dap-template.c"
 
 
 /*--- Included file: packet-dap-table11.c ---*/
@@ -4801,7 +4789,7 @@ static const ros_opr_t dap_opr_tab[] = {
 
 
 /*--- End of included file: packet-dap-table11.c ---*/
-#line 75 "./asn1/dap/packet-dap-template.c"
+#line 63 "./asn1/dap/packet-dap-template.c"
 
 /*--- Included file: packet-dap-table21.c ---*/
 #line 1 "./asn1/dap/packet-dap-table21.c"
@@ -4830,7 +4818,7 @@ static const ros_err_t dap_err_tab[] = {
 
 
 /*--- End of included file: packet-dap-table21.c ---*/
-#line 76 "./asn1/dap/packet-dap-template.c"
+#line 64 "./asn1/dap/packet-dap-template.c"
 
 static const ros_info_t dap_ros_info = {
   "DAP",
@@ -6470,7 +6458,7 @@ void proto_register_dap(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-dap-hfarr.c ---*/
-#line 95 "./asn1/dap/packet-dap-template.c"
+#line 83 "./asn1/dap/packet-dap-template.c"
   };
 
   /* List of subtrees */
@@ -6651,7 +6639,7 @@ void proto_register_dap(void) {
     &ett_dap_T_signedUpdateError,
 
 /*--- End of included file: packet-dap-ettarr.c ---*/
-#line 101 "./asn1/dap/packet-dap-template.c"
+#line 89 "./asn1/dap/packet-dap-template.c"
   };
 
   static ei_register_info ei[] = {

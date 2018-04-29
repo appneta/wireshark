@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include <glib.h>
 #include "manage_interfaces_dialog.h"
@@ -28,28 +15,28 @@
 #include "capture_opts.h"
 #include "ui/capture_globals.h"
 #include "ui/qt/capture_interfaces_dialog.h"
-#include "ui/qt/interface_tree_cache_model.h"
-#include "ui/qt/interface_sort_filter_model.h"
+#include <ui/qt/models/interface_tree_cache_model.h>
+#include <ui/qt/models/interface_sort_filter_model.h>
 #ifdef HAVE_PCAP_REMOTE
 #include "ui/qt/remote_capture_dialog.h"
 #include "ui/qt/remote_settings_dialog.h"
+#include "caputils/capture-pcap-util.h"
+#include "ui/recent.h"
 #endif
 #include "ui/iface_lists.h"
 #include "ui/preference_utils.h"
-#include "ui/ui_util.h"
+#include "ui/ws_ui_util.h"
 #include <wsutil/utf8_entities.h>
 
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 
 #include "wireshark_application.h"
 
 #include <QDebug>
 
-#ifdef HAVE_LIBPCAP
-
 #include "ui/capture_ui_utils.h"
 
-#include "ui/qt/path_chooser_delegate.h"
+#include <ui/qt/models/path_chooser_delegate.h>
 
 #include <QCheckBox>
 #include <QFileDialog>
@@ -57,6 +44,7 @@
 #include <QLineEdit>
 #include <QStandardItemModel>
 #include <QTreeWidgetItemIterator>
+#include <QMessageBox>
 
 // To do:
 // - Check the validity of pipes and remote interfaces and provide feedback
@@ -83,12 +71,64 @@ enum {
     tab_remote_
 };
 
+#ifdef HAVE_PCAP_REMOTE
+static void populateExistingRemotes(gpointer key, gpointer value, gpointer user_data)
+{
+    ManageInterfacesDialog *dialog = (ManageInterfacesDialog*)user_data;
+    const gchar *host = (const gchar *)key;
+    struct remote_host *remote_host = (struct remote_host *)value;
+    remote_options global_remote_opts;
+    int err;
+    gchar *err_str;
+
+    global_remote_opts.src_type = CAPTURE_IFREMOTE;
+    global_remote_opts.remote_host_opts.remote_host = g_strdup(host);
+    global_remote_opts.remote_host_opts.remote_port = g_strdup(remote_host->remote_port);
+    global_remote_opts.remote_host_opts.auth_type = remote_host->auth_type;
+    global_remote_opts.remote_host_opts.auth_username = g_strdup(remote_host->auth_username);
+    global_remote_opts.remote_host_opts.auth_password = g_strdup(remote_host->auth_password);
+    global_remote_opts.remote_host_opts.datatx_udp  = FALSE;
+    global_remote_opts.remote_host_opts.nocap_rpcap = TRUE;
+    global_remote_opts.remote_host_opts.nocap_local = FALSE;
+#ifdef HAVE_PCAP_SETSAMPLING
+    global_remote_opts.sampling_method = CAPTURE_SAMP_NONE;
+    global_remote_opts.sampling_param  = 0;
+#endif
+    GList *rlist = get_remote_interface_list(global_remote_opts.remote_host_opts.remote_host,
+                                              global_remote_opts.remote_host_opts.remote_port,
+                                              global_remote_opts.remote_host_opts.auth_type,
+                                              global_remote_opts.remote_host_opts.auth_username,
+                                              global_remote_opts.remote_host_opts.auth_password,
+                                              &err, &err_str);
+    if (rlist == NULL) {
+        switch (err) {
+        case 0:
+            QMessageBox::warning(dialog, QObject::tr("Error"), QObject::tr("No remote interfaces found."));
+            break;
+        case CANT_GET_INTERFACE_LIST:
+            QMessageBox::critical(dialog, QObject::tr("Error"), err_str);
+            break;
+        case DONT_HAVE_PCAP:
+            QMessageBox::critical(dialog, QObject::tr("Error"), QObject::tr("PCAP not found"));
+            break;
+        default:
+            QMessageBox::critical(dialog, QObject::tr("Error"), QObject::tr("Unknown error"));
+            break;
+        }
+        return;
+    }
+
+    emit dialog->remoteAdded(rlist, &global_remote_opts);
+}
+#endif /* HAVE_PCAP_REMOTE */
+
 ManageInterfacesDialog::ManageInterfacesDialog(QWidget *parent) :
     GeometryStateDialog(parent),
     ui(new Ui::ManageInterfacesDialog)
 {
     ui->setupUi(this);
     loadGeometry();
+    setAttribute(Qt::WA_DeleteOnClose, true);
 
 #ifdef Q_OS_MAC
     ui->addPipe->setAttribute(Qt::WA_MacSmallSize, true);
@@ -153,6 +193,7 @@ ManageInterfacesDialog::ManageInterfacesDialog(QWidget *parent) :
     connect(this, SIGNAL(remoteAdded(GList*, remote_options*)), this, SLOT(addRemoteInterfaces(GList*, remote_options*)));
     connect(this, SIGNAL(remoteSettingsChanged(interface_t *)), this, SLOT(setRemoteSettings(interface_t *)));
     connect(ui->remoteList, SIGNAL(itemClicked(QTreeWidgetItem*, int)), this, SLOT(remoteSelectionChanged(QTreeWidgetItem*, int)));
+    recent_remote_host_list_foreach(populateExistingRemotes, this);
 #endif
 
     ui->tabWidget->setCurrentIndex(tab_local_);
@@ -211,7 +252,9 @@ void ManageInterfacesDialog::updateWidgets()
 
 void ManageInterfacesDialog::on_buttonBox_accepted()
 {
+#ifdef HAVE_LIBPCAP
     sourceModel->save();
+#endif
 #ifdef HAVE_PCAP_REMOTE
     remoteAccepted();
 #endif
@@ -220,6 +263,7 @@ void ManageInterfacesDialog::on_buttonBox_accepted()
     emit ifsChanged();
 }
 
+#ifdef HAVE_LIBPCAP
 void ManageInterfacesDialog::on_addPipe_clicked()
 {
     interface_t device;
@@ -233,6 +277,7 @@ void ManageInterfacesDialog::on_addPipe_clicked()
     device.has_snaplen  = global_capture_opts.default_options.has_snaplen;
     device.snaplen      = global_capture_opts.default_options.snaplen;
     device.cfilter      = g_strdup(global_capture_opts.default_options.cfilter);
+    device.timestamp_type = g_strdup(global_capture_opts.default_options.timestamp_type);
 #ifdef CAN_SET_CAPTURE_BUFFER_SIZE
     device.buffer       = DEFAULT_CAPTURE_BUFFER_SIZE;
 #endif
@@ -241,6 +286,7 @@ void ManageInterfacesDialog::on_addPipe_clicked()
     device.if_info.type = IF_PIPE;
 
     sourceModel->addDevice(&device);
+
     updateWidgets();
 }
 
@@ -254,6 +300,7 @@ void ManageInterfacesDialog::on_delPipe_clicked()
     sourceModel->deleteDevice( pipeProxyModel->mapToSource(selIndex) );
     updateWidgets();
 }
+#endif
 
 void ManageInterfacesDialog::on_buttonBox_helpRequested()
 {
@@ -347,6 +394,7 @@ void ManageInterfacesDialog::updateRemoteInterfaceList(GList* rlist, remote_opti
             device.snaplen = global_capture_opts.default_options.snaplen;
         }
         device.cfilter = g_strdup(global_capture_opts.default_options.cfilter);
+        device.timestamp_type = g_strdup(global_capture_opts.default_options.timestamp_type);
         monitor_mode = prefs_capture_device_monitor_mode(if_string);
         if (roptions->remote_host_opts.auth_type == CAPTURE_AUTH_PWD) {
             auth_str = g_strdup_printf("%s:%s", roptions->remote_host_opts.auth_username,
@@ -453,12 +501,10 @@ void ManageInterfacesDialog::remoteAccepted()
 
     while(*it) {
         for (guint i = 0; i < global_capture_opts.all_ifaces->len; i++) {
-            interface_t device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
-            if ((*it)->text(col_r_host_dev_).compare(device.name))
+            interface_t *device = &g_array_index(global_capture_opts.all_ifaces, interface_t, i);
+            if ((*it)->text(col_r_host_dev_).compare(device->name))
                 continue;
-            device.hidden = ((*it)->checkState(col_r_show_) == Qt::Checked ? false : true);
-            global_capture_opts.all_ifaces = g_array_remove_index(global_capture_opts.all_ifaces, i);
-            g_array_insert_val(global_capture_opts.all_ifaces, i, device);
+            device->hidden = ((*it)->checkState(col_r_show_) == Qt::Checked ? false : true);
         }
         ++it;
     }
@@ -476,11 +522,11 @@ void ManageInterfacesDialog::on_remoteList_itemClicked(QTreeWidgetItem *item, in
     }
 
     for (guint i = 0; i < global_capture_opts.all_ifaces->len; i++) {
-        interface_t device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
-        if (!device.local) {
-            if (item->text(col_r_host_dev_).compare(device.name))
+        interface_t *device = &g_array_index(global_capture_opts.all_ifaces, interface_t, i);
+        if (!device->local) {
+            if (item->text(col_r_host_dev_).compare(device->name))
                 continue;
-            device.hidden = (item->checkState(col_r_show_) == Qt::Checked ? false : true);
+            device->hidden = (item->checkState(col_r_show_) == Qt::Checked ? false : true);
         }
     }
 }
@@ -493,9 +539,10 @@ void ManageInterfacesDialog::on_delRemote_clicked()
     }
 
     for (guint i = 0; i < global_capture_opts.all_ifaces->len; i++) {
-        interface_t device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
-        if (item->text(col_r_host_dev_).compare(device.remote_opts.remote_host_opts.remote_host))
+        interface_t *device = &g_array_index(global_capture_opts.all_ifaces, interface_t, i);
+        if (item->text(col_r_host_dev_).compare(device->remote_opts.remote_host_opts.remote_host))
             continue;
+        capture_opts_free_interface_t(device);
         global_capture_opts.all_ifaces = g_array_remove_index(global_capture_opts.all_ifaces, i);
     }
     delete item;
@@ -511,22 +558,22 @@ void ManageInterfacesDialog::on_addRemote_clicked()
 void ManageInterfacesDialog::showRemoteInterfaces()
 {
     guint i;
-    interface_t device;
+    interface_t *device;
     QTreeWidgetItem *item = NULL;
 
     // We assume that remote interfaces are grouped by host.
     for (i = 0; i < global_capture_opts.all_ifaces->len; i++) {
         QTreeWidgetItem *child;
-        device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
-        if (!device.local) {
-            if (!item || item->text(col_r_host_dev_).compare(device.remote_opts.remote_host_opts.remote_host) != 0) {
+        device = &g_array_index(global_capture_opts.all_ifaces, interface_t, i);
+        if (!device->local) {
+            if (!item || item->text(col_r_host_dev_).compare(device->remote_opts.remote_host_opts.remote_host) != 0) {
                 item = new QTreeWidgetItem(ui->remoteList);
-                item->setText(col_r_host_dev_, device.remote_opts.remote_host_opts.remote_host);
+                item->setText(col_r_host_dev_, device->remote_opts.remote_host_opts.remote_host);
                 item->setExpanded(true);
             }
             child = new QTreeWidgetItem(item);
-            child->setCheckState(col_r_show_, device.hidden ? Qt::Unchecked : Qt::Checked);
-            child->setText(col_r_host_dev_, QString(device.name));
+            child->setCheckState(col_r_show_, device->hidden ? Qt::Unchecked : Qt::Checked);
+            child->setText(col_r_host_dev_, QString(device->name));
         }
     }
 }
@@ -534,19 +581,19 @@ void ManageInterfacesDialog::showRemoteInterfaces()
 void ManageInterfacesDialog::on_remoteSettings_clicked()
 {
     guint i = 0;
-    interface_t device;
+    interface_t *device;
     QTreeWidgetItem* item = ui->remoteList->currentItem();
     if (!item) {
         return;
     }
 
     for (i = 0; i < global_capture_opts.all_ifaces->len; i++) {
-        device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
-        if (!device.local) {
-            if (item->text(col_r_host_dev_).compare(device.name)) {
+        device = &g_array_index(global_capture_opts.all_ifaces, interface_t, i);
+        if (!device->local) {
+            if (item->text(col_r_host_dev_).compare(device->name)) {
                continue;
             } else {
-                RemoteSettingsDialog *dlg = new RemoteSettingsDialog(this, &device);
+                RemoteSettingsDialog *dlg = new RemoteSettingsDialog(this, device);
                 dlg->show();
                 break;
             }
@@ -557,25 +604,21 @@ void ManageInterfacesDialog::on_remoteSettings_clicked()
 void ManageInterfacesDialog::setRemoteSettings(interface_t *iface)
 {
     for (guint i = 0; i < global_capture_opts.all_ifaces->len; i++) {
-        interface_t device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
-        if (!device.local) {
-            if (strcmp(iface->name, device.name)) {
+        interface_t *device = &g_array_index(global_capture_opts.all_ifaces, interface_t, i);
+        if (!device->local) {
+            if (strcmp(iface->name, device->name)) {
                 continue;
             }
-            device.remote_opts.remote_host_opts.nocap_rpcap = iface->remote_opts.remote_host_opts.nocap_rpcap;
-            device.remote_opts.remote_host_opts.datatx_udp = iface->remote_opts.remote_host_opts.datatx_udp;
+            device->remote_opts.remote_host_opts.nocap_rpcap = iface->remote_opts.remote_host_opts.nocap_rpcap;
+            device->remote_opts.remote_host_opts.datatx_udp = iface->remote_opts.remote_host_opts.datatx_udp;
 #ifdef HAVE_PCAP_SETSAMPLING
-            device.remote_opts.sampling_method = iface->remote_opts.sampling_method;
-            device.remote_opts.sampling_param = iface->remote_opts.sampling_param;
+            device->remote_opts.sampling_method = iface->remote_opts.sampling_method;
+            device->remote_opts.sampling_param = iface->remote_opts.sampling_param;
 #endif //HAVE_PCAP_SETSAMPLING
-            global_capture_opts.all_ifaces = g_array_remove_index(global_capture_opts.all_ifaces, i);
-            g_array_insert_val(global_capture_opts.all_ifaces, i, device);
         }
     }
 }
 #endif // HAVE_PCAP_REMOTE
-
-#endif /* HAVE_LIBPCAP */
 
 /*
  * Editor modelines

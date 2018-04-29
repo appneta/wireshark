@@ -6,19 +6,7 @@
  *
  * Copyright (C) 1999 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -147,7 +135,10 @@ main(int argc, char **argv)
 		g_free(init_progfile_dir_error);
 	}
 
-	wtap_init();
+	init_report_message(failure_warning_message, failure_warning_message,
+				NULL, NULL, NULL);
+
+	wtap_init(TRUE);
 
 	cmdarg_err_init(failure_warning_message, failure_message_cont);
 
@@ -155,24 +146,6 @@ main(int argc, char **argv)
 	arg_list_utf_16to8(argc, argv);
 	create_app_running_mutex();
 #endif /* _WIN32 */
-
-#ifdef HAVE_PLUGINS
-	/* Register wiretap plugins */
-	init_report_message(failure_warning_message, failure_warning_message,
-	    NULL, NULL, NULL);
-
-	/* Scan for plugins.  This does *not* call their registration routines;
-	   that's done later.
-
-	   Don't report failures to load plugins because most
-	   (non-wiretap) plugins *should* fail to load (because
-	   we're not linked against libwireshark and dissector
-	   plugins need libwireshark). */
-	scan_plugins(DONT_REPORT_LOAD_FAILURE);
-
-	/* Register all libwiretap plugin modules. */
-	register_all_wiretap_modules();
-#endif
 
 	while ((opt = getopt_long(argc, argv, "b:c:ht:r", long_options, NULL)) != -1) {
 		switch (opt) {

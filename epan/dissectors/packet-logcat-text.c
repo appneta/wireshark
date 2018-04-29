@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -257,8 +245,8 @@ static int dissect_logcat_text_process(tvbuff_t *tvb, packet_info *pinfo, proto_
     dissect_info_t dinfo = { &process_regex, getters, array_length(getters) };
 
     add_exported_pdu(tvb,pinfo,"logcat_text_process");
-    set_address(&pinfo->dst, AT_STRINGZ, 0, "");
-    set_address(&pinfo->src, AT_STRINGZ, 0, "");
+    set_address(&pinfo->dst, AT_STRINGZ, 1, "");
+    set_address(&pinfo->src, AT_STRINGZ, 1, "");
 
     return dissect_logcat_text(tvb, tree, pinfo, &dinfo);
 }
@@ -278,8 +266,8 @@ static int dissect_logcat_text_thread(tvbuff_t *tvb, packet_info *pinfo, proto_t
     dissect_info_t dinfo = { &thread_regex, getters, array_length(getters) };
 
     add_exported_pdu(tvb,pinfo,"logcat_text_brief");
-    set_address(&pinfo->dst, AT_STRINGZ, 0, "");
-    set_address(&pinfo->src, AT_STRINGZ, 0, "");
+    set_address(&pinfo->dst, AT_STRINGZ, 1, "");
+    set_address(&pinfo->src, AT_STRINGZ, 1, "");
 
     return dissect_logcat_text(tvb, tree, pinfo, &dinfo);
 }

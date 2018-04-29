@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 /*
  * LAPD bitstream over RTP handling
@@ -88,6 +76,7 @@ static expert_field ei_lapd_abort = EI_INIT;
 static expert_field ei_lapd_checksum_bad = EI_INIT;
 
 static dissector_handle_t lapd_handle;
+static dissector_handle_t linux_lapd_handle;
 static dissector_handle_t lapd_bitstream_handle;
 
 static dissector_table_t lapd_sapi_dissector_table;
@@ -199,7 +188,7 @@ typedef struct lapd_convo_data {
 
 
 static void
-dissect_lapd_full(tvbuff_t*, packet_info*, proto_tree*, gboolean);
+dissect_lapd_full(tvbuff_t*, packet_info*, proto_tree*, guint32);
 
 /* got new LAPD frame byte */
 static void new_byte(char full_byte, char data[], int *data_len) {
@@ -219,6 +208,12 @@ lapd_log_abort(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint offset
 	ti = proto_tree_add_item(tree, proto_lapd, tvb, offset, 1, ENC_NA);
 	expert_add_info_format(pinfo, ti, &ei_lapd_abort, "%s", msg);
 }
+
+/*
+ * Flags to pass to dissect_lapd_full.
+ */
+#define LAPD_HAS_CRC		0x00000001
+#define LAPD_HAS_LINUX_SLL	0x00000002
 
 static int
 dissect_lapd_bitstream(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dissector_data _U_)
@@ -312,7 +307,7 @@ dissect_lapd_bitstream(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 						lapd_log_abort(tvb, pinfo, tree, offset, "Abort! 6 ones that don't match 0x7e!");
 
 					}
-					dissect_lapd_full(new_tvb, pinfo, tree, TRUE);
+					dissect_lapd_full(new_tvb, pinfo, tree, LAPD_HAS_CRC);
 				} else if (ones >= 7) { /* frame reset or 11111111 flag byte */
 					data_len = 0;
 					state = OUT_OF_SYNC;
@@ -391,8 +386,8 @@ dissect_lapd_bitstream(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 					lapd_byte_state = wmem_new(wmem_file_scope(), lapd_byte_state_t);
 					fill_lapd_byte_state(lapd_byte_state, state, full_byte, bit_offset, ones, data, data_len);
 					convo_data = wmem_new(wmem_file_scope(), lapd_convo_data_t);
-					copy_address(&convo_data->addr_a, &pinfo->src);
-					copy_address(&convo_data->addr_b, &pinfo->dst);
+					copy_address_wmem(wmem_file_scope(), &convo_data->addr_a, &pinfo->src);
+					copy_address_wmem(wmem_file_scope(), &convo_data->addr_b, &pinfo->dst);
 					convo_data->port_a = pinfo->srcport;
 					convo_data->port_b = pinfo->destport;
 					convo_data->byte_state_a = lapd_byte_state;
@@ -406,14 +401,21 @@ dissect_lapd_bitstream(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 }
 
 static int
+dissect_linux_lapd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
+{
+	dissect_lapd_full(tvb, pinfo, tree, LAPD_HAS_LINUX_SLL);
+	return tvb_captured_length(tvb);
+}
+
+static int
 dissect_lapd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
-	dissect_lapd_full(tvb, pinfo, tree, FALSE);
+	dissect_lapd_full(tvb, pinfo, tree, 0);
 	return tvb_captured_length(tvb);
 }
 
 static void
-dissect_lapd_full(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean has_crc)
+dissect_lapd_full(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 flags)
 {
 	proto_tree	*lapd_tree, *addr_tree;
 	proto_item	*lapd_ti, *addr_ti;
@@ -441,7 +443,7 @@ dissect_lapd_full(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean 
 	col_append_fstr(pinfo->cinfo, COL_INFO, "TEI:%02u ", tei);
 	col_set_fence(pinfo->cinfo, COL_INFO);
 
-	if (pinfo->pkt_encap == WTAP_ENCAP_LINUX_LAPD) {
+	if (flags & LAPD_HAS_LINUX_SLL) {
 		/* frame is captured via libpcap */
 		if (pinfo->pseudo_header->lapd.pkttype == 4 /*PACKET_OUTGOING*/) {
 			if (pinfo->pseudo_header->lapd.we_network) {
@@ -537,7 +539,7 @@ dissect_lapd_full(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean 
 	if (tree)
 		proto_item_set_len(lapd_ti, lapd_header_len);
 
-	if (has_crc) {
+	if (flags & LAPD_HAS_CRC) {
 
 		/* check checksum */
 		checksum_offset = tvb_reported_length(tvb) - 2;
@@ -567,28 +569,6 @@ dissect_lapd_full(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean 
 		}
 	} else
 		call_data_dissector(next_tvb, pinfo, tree);
-}
-
-static gboolean
-dissect_udp_lapd(tvbuff_t *tvb, packet_info *pinfo _U_ , proto_tree *tree, void *data _U_)
-{
-	if (pinfo->srcport < 3001 || pinfo->srcport > 3015
-		|| pinfo->destport < 3001 || pinfo->destport > 3015
-		|| pinfo->destport != pinfo->srcport)
-			return FALSE;
-
-	/*
-	 * XXX - check for a valid LAPD address field.
-	 */
-
-	/*
-	 * OK, check whether the control field looks valid.
-	 */
-	if (!check_xdlc_control(tvb, 2, NULL, NULL, FALSE, FALSE))
-		return FALSE;
-
-    dissect_lapd(tvb, pinfo, tree, data);
-	return TRUE;
 }
 
 void
@@ -711,6 +691,7 @@ proto_register_lapd(void)
 	expert_register_field_array(expert_lapd, ei, array_length(ei));
 
 	lapd_handle = register_dissector("lapd", dissect_lapd, proto_lapd);
+	linux_lapd_handle = register_dissector("linux-lapd", dissect_linux_lapd, proto_lapd);
 	lapd_bitstream_handle = register_dissector("lapd-bitstream", dissect_lapd_bitstream, proto_lapd);
 
 	lapd_sapi_dissector_table = register_dissector_table("lapd.sapi",
@@ -745,13 +726,13 @@ proto_reg_handoff_lapd(void)
 	static guint lapd_sctp_ppi;
 
 	if (!init) {
-		dissector_add_uint("wtap_encap", WTAP_ENCAP_LINUX_LAPD, lapd_handle);
+		dissector_add_uint("wtap_encap", WTAP_ENCAP_LINUX_LAPD, linux_lapd_handle);
 		dissector_add_uint("wtap_encap", WTAP_ENCAP_LAPD, lapd_handle);
 		dissector_add_uint("l2tp.pw_type", L2TPv3_PROTOCOL_LAPD, lapd_handle);
-		heur_dissector_add("udp", dissect_udp_lapd, "LAPD over UDP", "lapd_udp", proto_lapd, HEURISTIC_ENABLE);
 
 		dissector_add_for_decode_as("sctp.ppi", lapd_handle);
 		dissector_add_for_decode_as("sctp.port", lapd_handle);
+		dissector_add_uint_range_with_preference("udp.port", "", lapd_handle);
 
 		init = TRUE;
 	} else {
@@ -769,6 +750,7 @@ proto_reg_handoff_lapd(void)
 	lapd_sctp_ppi = pref_lapd_sctp_ppi;
 	if (lapd_sctp_ppi > 0)
 		dissector_add_uint("sctp.ppi", lapd_sctp_ppi, lapd_handle);
+
 }
 
 /*

@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __UNIT_STRINGS_H__
@@ -39,9 +27,9 @@ typedef struct unit_name_string {
     char *plural;          /* name to use for < 1 or > 1 units */
 } unit_name_string;
 
-WS_DLL_PUBLIC char* unit_name_string_get_value(guint32 value, unit_name_string* units);
-WS_DLL_PUBLIC char* unit_name_string_get_value64(guint64 value, unit_name_string* units);
-WS_DLL_PUBLIC char* unit_name_string_get_double(double value, unit_name_string* units);
+WS_DLL_PUBLIC const char* unit_name_string_get_value(guint32 value, const unit_name_string* units);
+WS_DLL_PUBLIC const char* unit_name_string_get_value64(guint64 value, const unit_name_string* units);
+WS_DLL_PUBLIC const char* unit_name_string_get_double(double value, const unit_name_string* units);
 
 /*
  * A default set of unit strings that dissectors can use for
@@ -50,6 +38,7 @@ WS_DLL_PUBLIC char* unit_name_string_get_double(double value, unit_name_string* 
 WS_DLL_PUBLIC const unit_name_string units_foot_feet;
 WS_DLL_PUBLIC const unit_name_string units_bit_bits;
 WS_DLL_PUBLIC const unit_name_string units_byte_bytes;
+WS_DLL_PUBLIC const unit_name_string units_byte_bytespsecond;
 WS_DLL_PUBLIC const unit_name_string units_octet_octets;
 WS_DLL_PUBLIC const unit_name_string units_word_words;
 WS_DLL_PUBLIC const unit_name_string units_tick_ticks;
@@ -72,6 +61,7 @@ WS_DLL_PUBLIC const unit_name_string units_nanoseconds; //only seconds abbreviat
 WS_DLL_PUBLIC const unit_name_string units_nanometers;
 WS_DLL_PUBLIC const unit_name_string units_degree_degrees;
 WS_DLL_PUBLIC const unit_name_string units_degree_celsius;
+WS_DLL_PUBLIC const unit_name_string units_degree_bearing;
 WS_DLL_PUBLIC const unit_name_string units_decibels;
 WS_DLL_PUBLIC const unit_name_string units_dbm;
 WS_DLL_PUBLIC const unit_name_string units_dbi;
@@ -100,6 +90,9 @@ WS_DLL_PUBLIC const unit_name_string units_revolutions_per_minute;
 WS_DLL_PUBLIC const unit_name_string units_kilopascal;
 WS_DLL_PUBLIC const unit_name_string units_newton_metre;
 WS_DLL_PUBLIC const unit_name_string units_liter_per_hour;
+WS_DLL_PUBLIC const unit_name_string units_amp;
+WS_DLL_PUBLIC const unit_name_string units_watthour;
+WS_DLL_PUBLIC const unit_name_string units_watt;
 
 #ifdef __cplusplus
 }

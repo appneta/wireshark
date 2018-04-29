@@ -5,19 +5,7 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 2006 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 include Custom.make
 
@@ -44,6 +32,7 @@ SUBDIRS =		\
 	dop		\
 	dsp		\
 	ess		\
+	f1ap		\
 	ftam		\
 	goose		\
 	gprscdr		\
@@ -81,6 +70,7 @@ SUBDIRS =		\
 	mudurl 		\
 	nbap		\
 	novell_pkis		\
+	nr-rrc		\
 	ns_cert_exts	\
 	ocsp		\
 	p1		\
@@ -128,15 +118,11 @@ SUBDIRS =		\
 	x509if		\
 	x509sat
 
-# x721 doesn't build
-DONT_BUILD_SUBDIRS = \
-	x721
-
-DIST_SUBDIRS = $(SUBDIRS) $(DONT_BUILD_SUBDIRS)
-
 EXTRA_DIST = \
 	CMakeLists.txt	\
-	Makefile.inc
-
-MAINTAINERCLEANFILES = \
-	Makefile.in
+	Makefile.inc	\
+	x721/CMakeLists.txt \
+	x721/Attribute-ASN1Module.asn \
+	x721/ManagedObjectClassesDefinitions.asn \
+	x721/Notification-ASN1Module.asn \
+	x721/Parameter-ASN1Module.asn

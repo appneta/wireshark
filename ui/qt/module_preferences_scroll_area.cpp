@@ -4,29 +4,16 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "module_preferences_scroll_area.h"
 #include <ui_module_preferences_scroll_area.h>
-#include "syntax_line_edit.h"
-#include "qt_ui_utils.h"
+#include <ui/qt/widgets/syntax_line_edit.h>
+#include <ui/qt/utils/qt_ui_utils.h>
 #include "uat_dialog.h"
 #include "wireshark_application.h"
 
-#include <ui/qt/variant_pointer.h>
+#include <ui/qt/utils/variant_pointer.h>
 
 #include <epan/prefs-int.h>
 
@@ -100,14 +87,16 @@ pref_show(pref_t *pref, gpointer layout_ptr)
     case PREF_ENUM:
     {
         const enum_val_t *ev;
-        if (prefs_get_enumvals(pref) == NULL) return 0;
+        ev = prefs_get_enumvals(pref);
+        if (!ev || !ev->description)
+            return 0;
 
         if (prefs_get_enum_radiobuttons(pref)) {
             QLabel *label = new QLabel(prefs_get_title(pref));
             label->setToolTip(tooltip);
             vb->addWidget(label);
             QButtonGroup *enum_bg = new QButtonGroup(vb);
-            for (ev = prefs_get_enumvals(pref); ev && ev->description; ev++) {
+            while (ev->description) {
                 QRadioButton *enum_rb = new QRadioButton(title_to_shortcut(ev->description));
                 enum_rb->setToolTip(tooltip);
                 QStyleOption style_opt;
@@ -120,6 +109,7 @@ pref_show(pref_t *pref, gpointer layout_ptr)
                                   .arg(enum_rb->style()->subElementRect(QStyle::SE_CheckBoxContents, &style_opt).left()));
                 enum_bg->addButton(enum_rb, ev->value);
                 vb->addWidget(enum_rb);
+                ev++;
             }
         } else {
             QHBoxLayout *hb = new QHBoxLayout();

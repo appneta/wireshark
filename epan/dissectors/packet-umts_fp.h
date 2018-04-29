@@ -5,25 +5,14 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
 #include <glib.h>
 
 /* Channel types */
+#define CHANNEL_UNKNOWN           0
 #define CHANNEL_RACH_FDD          1
 #define CHANNEL_RACH_TDD          2
 #define CHANNEL_FACH_FDD          3
@@ -51,7 +40,7 @@
 #define MAX_FP_CHANS  64
 #define MAX_EDCH_DDIS 16
 #define MAX_NUM_HSDHSCH_MACDFLOW 8
-#define FP_maxNrOfTFs 32 /* From NBAC-Constants.asn */
+#define FP_maxNrOfDCHs 128 /* From NBAP-Constants.asn */
 
 enum fp_interface_type
 {
@@ -111,6 +100,7 @@ typedef struct fp_crnti_allocation_info_t
 {
     guint32 alloc_frame_number; /* Frame where C-RNTI was allocated */
     guint32 urnti; /* The U-RNTI to which the C-RNTI was allocated*/
+    guint32 global_retrieval_count; /* How many times this alloc info was retrieved for FACH channels*/
 } fp_crnti_allocation_info_t;
 
 /* Used in the 'channel_specific_info' field for FACH channels */
@@ -203,9 +193,9 @@ typedef struct
 
     /* DCH's in this flow */
     gint num_dch_in_flow;
-    gint dch_ids_in_flow_list[FP_maxNrOfTFs];
+    gint dch_ids_in_flow_list[FP_maxNrOfDCHs];
     /* DCH type channel data */
-    fp_dch_channel_info_t fp_dch_channel_info[FP_maxNrOfTFs];
+    fp_dch_channel_info_t fp_dch_channel_info[FP_maxNrOfDCHs];
     guint8 dch_crc_present;    /* 0=No, 1=Yes, 2=Unknown */
 
     gboolean reset_frag;  /*Used to indicate that a stream has been reconfigured, hence we need to reset the fragtable*/

@@ -4,19 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -73,11 +61,11 @@ static void address_type_register(int addr_type, address_type_t *at)
     g_assert(type_list[addr_type] == NULL);
 
     /* Sanity check */
-    DISSECTOR_ASSERT(at->name);
-    DISSECTOR_ASSERT(at->pretty_name);
-    DISSECTOR_ASSERT(at->addr_to_str);
-    DISSECTOR_ASSERT(at->addr_str_len);
-    DISSECTOR_ASSERT(((at->addr_name_res_str != NULL) && (at->addr_name_res_len != NULL)) ||
+    g_assert(at->name);
+    g_assert(at->pretty_name);
+    g_assert(at->addr_to_str);
+    g_assert(at->addr_str_len);
+    g_assert(((at->addr_name_res_str != NULL) && (at->addr_name_res_len != NULL)) ||
                      ((at->addr_name_res_str == NULL) && (at->addr_name_res_len == NULL)));
 
     type_list[addr_type] = at;
@@ -91,16 +79,16 @@ int address_type_dissector_register(const char* name, const char* pretty_name,
     int addr_type;
 
     /* Ensure valid data/functions for required fields */
-    DISSECTOR_ASSERT(name);
-    DISSECTOR_ASSERT(pretty_name);
-    DISSECTOR_ASSERT(to_str_func);
-    DISSECTOR_ASSERT(str_len_func);
+    g_assert(name);
+    g_assert(pretty_name);
+    g_assert(to_str_func);
+    g_assert(str_len_func);
     /* Either have both or neither */
-    DISSECTOR_ASSERT(((name_res_str_func != NULL) && (name_res_len_func != NULL)) ||
+    g_assert(((name_res_str_func != NULL) && (name_res_len_func != NULL)) ||
                      ((name_res_str_func == NULL) && (name_res_len_func == NULL)));
 
     /* This shouldn't happen, so flag it for fixing */
-    DISSECTOR_ASSERT(num_dissector_addr_type < MAX_DISSECTOR_ADDR_TYPE);
+    g_assert(num_dissector_addr_type < MAX_DISSECTOR_ADDR_TYPE);
 
     addr_type = AT_END_OF_LIST+num_dissector_addr_type;
     dissector_type_addresses[num_dissector_addr_type].addr_type = addr_type;
@@ -214,7 +202,7 @@ static int ipv4_to_str(const address* addr, gchar *buf, int buf_len)
 
 static int ipv4_str_len(const address* addr _U_)
 {
-    return MAX_IP_STR_LEN;
+    return WS_INET_ADDRSTRLEN;
 }
 
 static const char* ipv4_col_filter_str(const address* addr _U_, gboolean is_src)
@@ -247,13 +235,12 @@ static int ipv4_name_res_len(void)
  ******************************************************************************/
 static int ipv6_to_str(const address* addr, gchar *buf, int buf_len)
 {
-    ip6_to_str_buf((const struct e_in6_addr *)addr->data, buf, buf_len);
-    return (int)(strlen(buf)+1);
+    return ip6_to_str_buf((const ws_in6_addr *)addr->data, buf, buf_len) + 1;
 }
 
 static int ipv6_str_len(const address* addr _U_)
 {
-    return MAX_IP6_STR_LEN;
+    return WS_INET6_ADDRSTRLEN;
 }
 
 static const char* ipv6_col_filter_str(const address* addr _U_, gboolean is_src)
@@ -271,7 +258,7 @@ static int ipv6_len(void)
 
 static const gchar* ipv6_name_res_str(const address* addr)
 {
-    struct e_in6_addr ip6_addr;
+    ws_in6_addr ip6_addr;
     memcpy(&ip6_addr.bytes, addr->data, sizeof ip6_addr.bytes);
     return get_hostname6(&ip6_addr);
 }
@@ -419,7 +406,7 @@ static int eui64_addr_to_str(const address* addr, gchar *buf, int buf_len _U_)
 {
     buf = bytes_to_hexstr_punct(buf, (const guint8 *)addr->data, 8, ':');
     *buf = '\0'; /* NULL terminate */
-    return sizeof(buf) + 1;
+    return EUI64_STR_LEN;
 }
 
 static int eui64_str_len(const address* addr _U_)
@@ -436,22 +423,16 @@ static int eui64_len(void)
  * AT_IB
  ******************************************************************************/
 static int
-ib_addr_to_str( const address *addr, gchar *buf, int buf_len){
+ib_addr_to_str(const address *addr, gchar *buf, int buf_len)
+{
     if (addr->len >= 16) { /* GID is 128bits */
-        #define PREAMBLE_STR_LEN ((int)(sizeof("GID: ") - 1))
-        g_strlcpy(buf, "GID: ", buf_len);
-        if (buf_len < PREAMBLE_STR_LEN ||
-                ws_inet_ntop6(addr->data, buf + PREAMBLE_STR_LEN,
-                          buf_len - PREAMBLE_STR_LEN) == NULL ) /* Returns NULL if no space and does not touch buf */
-            g_strlcpy(buf, BUF_TOO_SMALL_ERR, buf_len); /* Let the unexpected value alert user */
-    } else {    /* this is a LID (16 bits) */
-        guint16 lid_number;
-
-        memcpy((void *)&lid_number, addr->data, sizeof lid_number);
-        g_snprintf(buf,buf_len,"LID: %u",lid_number);
+        return ip6_to_str_buf_with_pfx((const ws_in6_addr *)addr->data, buf, buf_len, "GID: ");
     }
 
-    return sizeof(buf) + 1;
+    /* this is a LID (16 bits) */
+    g_snprintf(buf,buf_len,"LID: %u", *(const guint16 *)addr->data);
+
+    return (int)(strlen(buf)+1);
 }
 
 static int ib_str_len(const address* addr _U_)

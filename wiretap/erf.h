@@ -7,30 +7,7 @@
 * along with the DAG PCI network capture cards. For further information please
 * visit http://www.endace.com/.
 *
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are met:
-*
-*  1. Redistributions of source code must retain the above copyright notice,
-*  this list of conditions and the following disclaimer.
-*
-*  2. Redistributions in binary form must reproduce the above copyright
-*  notice, this list of conditions and the following disclaimer in the
-*  documentation and/or other materials provided with the distribution.
-*
-*  3. The name of Endace Technology Ltd may not be used to endorse or promote
-*  products derived from this software without specific prior written
-*  permission.
-*
-* THIS SOFTWARE IS PROVIDED BY ENDACE TECHNOLOGY LTD ``AS IS'' AND ANY EXPRESS
-* OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-* OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-* EVENT SHALL ENDACE TECHNOLOGY LTD BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-* BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
+* SPDX-License-Identifier: BSD-3-Clause
 */
 
 #ifndef __W_ERF_H__
@@ -101,9 +78,11 @@
 #define ERF_EXT_HDR_TYPE_BFS             6
 #define ERF_EXT_HDR_TYPE_CHANNELISED    12
 #define ERF_EXT_HDR_TYPE_SIGNATURE      14
+#define ERF_EXT_HDR_TYPE_PKT_ID         15
 #define ERF_EXT_HDR_TYPE_FLOW_ID        16
 #define ERF_EXT_HDR_TYPE_HOST_ID        17
 #define ERF_EXT_HDR_TYPE_ANCHOR_ID      18
+#define ERF_EXT_HDR_TYPE_ENTROPY        19
 
 /* Host ID and Anchor ID*/
 #define ERF_EHDR_HOST_ID_MASK G_GUINT64_CONSTANT(0xffffffffffff)
@@ -188,6 +167,12 @@
 #define ERF_META_TAG_cpu_numa_nodes    51
 #define ERF_META_TAG_dag_attribute     52
 #define ERF_META_TAG_dag_version       53
+#define ERF_META_TAG_stream_flags      54
+#define ERF_META_TAG_entropy_threshold 55
+#define ERF_META_TAG_smart_trunc_default 56
+#define ERF_META_TAG_ext_hdrs_added    57
+#define ERF_META_TAG_ext_hdrs_removed  58
+#define ERF_META_TAG_relative_snaplen  59
 
 #define ERF_META_TAG_if_num            64
 #define ERF_META_TAG_if_vc             65
@@ -210,6 +195,10 @@
 #define ERF_META_TAG_if_phy_mode       82
 #define ERF_META_TAG_if_port_type      83
 #define ERF_META_TAG_if_rx_latency     84
+#define ERF_META_TAG_tap_mode          85
+#define ERF_META_TAG_tap_fail_mode     86
+#define ERF_META_TAG_watchdog_expired  87
+#define ERF_META_TAG_watchdog_interval 88
 
 #define ERF_META_TAG_src_ipv4          128
 #define ERF_META_TAG_dest_ipv4         129
@@ -234,6 +223,21 @@
 #define ERF_META_TAG_filter_match      148
 #define ERF_META_TAG_filter_match_name 149
 #define ERF_META_TAG_error_flags       150
+#define ERF_META_TAG_initiator_pkts    151
+#define ERF_META_TAG_responder_pkts    152
+#define ERF_META_TAG_initiator_bytes   153
+#define ERF_META_TAG_responder_bytes   154
+#define ERF_META_TAG_initiator_min_entropy 155
+#define ERF_META_TAG_responder_min_entropy 156
+#define ERF_META_TAG_initiator_avg_entropy 157
+#define ERF_META_TAG_responder_avg_entropy 158
+#define ERF_META_TAG_initiator_max_entropy 159
+#define ERF_META_TAG_responder_max_entropy 160
+#define ERF_META_TAG_dpi_application   161
+#define ERF_META_TAG_dpi_confidence    162
+#define ERF_META_TAG_dpi_state         163
+#define ERF_META_TAG_dpi_protocol_stack 164
+#define ERF_META_TAG_flow_state        165
 
 #define ERF_META_TAG_start_time        193
 #define ERF_META_TAG_end_time          194

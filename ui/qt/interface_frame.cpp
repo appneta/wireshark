@@ -6,39 +6,26 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 #include "config.h"
 #include <ui_interface_frame.h>
 
 #include "caputils/capture_ifinfo.h"
 #include "ui/qt/interface_frame.h"
-#include "ui/qt/interface_tree_model.h"
+#include <ui/qt/models/interface_tree_model.h>
 
-#include "sparkline_delegate.h"
+#include <ui/qt/models/sparkline_delegate.h>
 #include "wireshark_application.h"
 
-#ifdef HAVE_EXTCAP
 #include "extcap.h"
-#endif
 
 #include <QFrame>
 #include <QPushButton>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QItemSelection>
+
+#include <epan/prefs.h>
 
 #define BTN_IFTYPE_PROPERTY "ifType"
 
@@ -47,8 +34,11 @@ const int stat_update_interval_ = 1000; // ms
 #endif
 
 InterfaceFrame::InterfaceFrame(QWidget * parent)
-: AccordionFrame(parent),
+: QFrame(parent),
   ui(new Ui::InterfaceFrame)
+  , proxyModel(Q_NULLPTR)
+  , sourceModel(Q_NULLPTR)
+  , infoModel(this)
 #ifdef HAVE_LIBPCAP
   ,stat_timer_(NULL)
 #endif // HAVE_LIBPCAP
@@ -77,26 +67,23 @@ InterfaceFrame::InterfaceFrame(QWidget * parent)
     ifTypeDescription.insert(IF_WIRELESS, tr("Wireless"));
     ifTypeDescription.insert(IF_DIALUP, tr("Dial-Up"));
     ifTypeDescription.insert(IF_USB, tr("USB"));
-#ifdef HAVE_EXTCAP
     ifTypeDescription.insert(IF_EXTCAP, tr("External Capture"));
-#endif
     ifTypeDescription.insert(IF_VIRTUAL, tr ("Virtual"));
 
-    proxyModel = new InterfaceSortFilterModel(this);
-    sourceModel = new InterfaceTreeModel(this);
-
     QList<InterfaceTreeColumns> columns;
-#ifdef HAVE_EXTCAP
     columns.append(IFTREE_COL_EXTCAP);
-#endif
     columns.append(IFTREE_COL_NAME);
     columns.append(IFTREE_COL_STATS);
-    proxyModel->setColumns(columns);
-    proxyModel->setStoreOnChange(true);
-    proxyModel->setSourceModel(sourceModel);
-    ui->interfaceTree->setModel(proxyModel);
+    proxyModel.setColumns(columns);
+    proxyModel.setStoreOnChange(true);
+    proxyModel.setSourceModel(&sourceModel);
 
-    ui->interfaceTree->setItemDelegateForColumn(proxyModel->mapSourceToColumn(IFTREE_COL_STATS), new SparkLineDelegate(this));
+    infoModel.setSourceModel(&proxyModel);
+    infoModel.setColumn(columns.indexOf(IFTREE_COL_STATS));
+   
+    ui->interfaceTree->setModel(&infoModel);
+
+    ui->interfaceTree->setItemDelegateForColumn(proxyModel.mapSourceToColumn(IFTREE_COL_STATS), new SparkLineDelegate(this));
 
     connect(wsApp, SIGNAL(appInitialized()), this, SLOT(interfaceListChanged()));
     connect(wsApp, SIGNAL(localInterfaceListChanged()), this, SLOT(interfaceListChanged()));
@@ -107,15 +94,13 @@ InterfaceFrame::InterfaceFrame(QWidget * parent)
 
 InterfaceFrame::~InterfaceFrame()
 {
-    delete sourceModel;
-    delete proxyModel;
     delete ui;
 }
 
 QMenu * InterfaceFrame::getSelectionMenu()
 {
     QMenu * contextMenu = new QMenu(this);
-    QList<int> typesDisplayed = proxyModel->typesDisplayed();
+    QList<int> typesDisplayed = proxyModel.typesDisplayed();
 
     QMap<int, QString>::const_iterator it = ifTypeDescription.constBegin();
     while(it != ifTypeDescription.constEnd())
@@ -125,9 +110,9 @@ QMenu * InterfaceFrame::getSelectionMenu()
         if ( typesDisplayed.contains(ifType) )
         {
             QAction *endp_action = new QAction(it.value(), this);
-            endp_action->setData(qVariantFromValue(ifType));
+            endp_action->setData(QVariant::fromValue(ifType));
             endp_action->setCheckable(true);
-            endp_action->setChecked(proxyModel->isInterfaceTypeShown(ifType));
+            endp_action->setChecked(proxyModel.isInterfaceTypeShown(ifType));
             connect(endp_action, SIGNAL(triggered()), this, SLOT(triggeredIfTypeButton()));
             contextMenu->addAction(endp_action);
         }
@@ -135,11 +120,11 @@ QMenu * InterfaceFrame::getSelectionMenu()
     }
 
 #ifdef HAVE_PCAP_REMOTE
-    if ( proxyModel->remoteInterfacesExist() )
+    if ( proxyModel.remoteInterfacesExist() )
     {
         QAction * toggleRemoteAction = new QAction(tr("Remote interfaces"), this);
         toggleRemoteAction->setCheckable(true);
-        toggleRemoteAction->setChecked(! proxyModel->remoteDisplay());
+        toggleRemoteAction->setChecked(! proxyModel.remoteDisplay());
         connect(toggleRemoteAction, SIGNAL(triggered()), this, SLOT(toggleRemoteInterfaces()));
         contextMenu->addAction(toggleRemoteAction);
     }
@@ -160,12 +145,12 @@ QMenu * InterfaceFrame::getSelectionMenu()
 
 int InterfaceFrame::interfacesHidden()
 {
-    return proxyModel->interfacesHidden();
+    return proxyModel.interfacesHidden();
 }
 
 int InterfaceFrame::interfacesPresent()
 {
-    return sourceModel->rowCount() - proxyModel->interfacesHidden();
+    return sourceModel.rowCount() - proxyModel.interfacesHidden();
 }
 
 void InterfaceFrame::ensureSelectedInterface()
@@ -173,8 +158,8 @@ void InterfaceFrame::ensureSelectedInterface()
 #ifdef HAVE_LIBPCAP
     if (interfacesPresent() < 1) return;
 
-    if (sourceModel->selectedDevices().count() < 1) {
-        QModelIndex first_idx = proxyModel->index(0, 0);
+    if (sourceModel.selectedDevices().count() < 1) {
+        QModelIndex first_idx = infoModel.mapFromSource(proxyModel.index(0, 0));
         ui->interfaceTree->setCurrentIndex(first_idx);
     }
 
@@ -186,7 +171,7 @@ void InterfaceFrame::hideEvent(QHideEvent *) {
 #ifdef HAVE_LIBPCAP
     if (stat_timer_)
         stat_timer_->stop();
-    sourceModel->stopStatistic();
+    sourceModel.stopStatistic();
 #endif // HAVE_LIBPCAP
 }
 
@@ -203,7 +188,7 @@ void InterfaceFrame::actionButton_toggled(bool checked)
     QVariant ifType = sender()->property(BTN_IFTYPE_PROPERTY);
     if ( ifType.isValid() )
     {
-        proxyModel->setInterfaceTypeVisible(ifType.toInt(), checked);
+        proxyModel.setInterfaceTypeVisible(ifType.toInt(), checked);
     }
 
     resetInterfaceTreeDisplay();
@@ -215,7 +200,7 @@ void InterfaceFrame::triggeredIfTypeButton()
     if ( sender )
     {
         int ifType = sender->data().value<int>();
-        proxyModel->toggleTypeVisibility(ifType);
+        proxyModel.toggleTypeVisibility(ifType);
 
         resetInterfaceTreeDisplay();
         emit typeSelectionChanged();
@@ -224,6 +209,10 @@ void InterfaceFrame::triggeredIfTypeButton()
 
 void InterfaceFrame::interfaceListChanged()
 {
+    infoModel.clearInfos();
+    if ( prefs.capture_no_extcap )
+        infoModel.appendInfo(tr("External capture interfaces disabled."));
+
     resetInterfaceTreeDisplay();
     // Ensure that device selection is consistent with the displayed selection.
     updateSelectedInterfaces();
@@ -240,7 +229,7 @@ void InterfaceFrame::interfaceListChanged()
 
 void InterfaceFrame::toggleHiddenInterfaces()
 {
-    proxyModel->toggleFilterHidden();
+    proxyModel.toggleFilterHidden();
 
     emit typeSelectionChanged();
 }
@@ -248,39 +237,37 @@ void InterfaceFrame::toggleHiddenInterfaces()
 #ifdef HAVE_PCAP_REMOTE
 void InterfaceFrame::toggleRemoteInterfaces()
 {
-    proxyModel->toggleRemoteDisplay();
+    proxyModel.toggleRemoteDisplay();
     emit typeSelectionChanged();
 }
 #endif
 
 void InterfaceFrame::resetInterfaceTreeDisplay()
 {
-    if ( proxyModel->rowCount() == 0 )
+    if ( proxyModel.rowCount() == 0 )
     {
         ui->interfaceTree->setHidden(true);
         ui->lblNoInterfaces->setHidden(false);
 
-        ui->lblNoInterfaces->setText( proxyModel->interfaceError() );
+        ui->lblNoInterfaces->setText( proxyModel.interfaceError() );
     }
     else
     {
         ui->interfaceTree->setHidden(false);
         ui->lblNoInterfaces->setHidden(true);
-#ifdef HAVE_EXTCAP
-        ui->interfaceTree->resizeColumnToContents(proxyModel->mapSourceToColumn(IFTREE_COL_EXTCAP));
-#endif
-        ui->interfaceTree->resizeColumnToContents(proxyModel->mapSourceToColumn(IFTREE_COL_NAME));
-        ui->interfaceTree->resizeColumnToContents(proxyModel->mapSourceToColumn(IFTREE_COL_STATS));
+        ui->interfaceTree->resizeColumnToContents(proxyModel.mapSourceToColumn(IFTREE_COL_EXTCAP));
+        ui->interfaceTree->resizeColumnToContents(proxyModel.mapSourceToColumn(IFTREE_COL_NAME));
+        ui->interfaceTree->resizeColumnToContents(proxyModel.mapSourceToColumn(IFTREE_COL_STATS));
     }
 }
 
 void InterfaceFrame::updateSelectedInterfaces()
 {
-    if ( sourceModel->rowCount() == 0 )
+    if ( sourceModel.rowCount() == 0 )
         return;
 #ifdef HAVE_LIBPCAP
-    QItemSelection sourceSelection = sourceModel->selectedDevices();
-    QItemSelection mySelection = proxyModel->mapSelectionFromSource(sourceSelection);
+    QItemSelection sourceSelection = sourceModel.selectedDevices();
+    QItemSelection mySelection = infoModel.mapSelectionFromSource(proxyModel.mapSelectionFromSource(sourceSelection));
 
     ui->interfaceTree->selectionModel()->clearSelection();
     ui->interfaceTree->selectionModel()->select(mySelection, QItemSelectionModel::SelectCurrent );
@@ -291,30 +278,30 @@ void InterfaceFrame::interfaceTreeSelectionChanged(const QItemSelection & select
 {
     if (selected.count() == 0 && deselected.count() == 0)
         return;
-    if ( sourceModel->rowCount() == 0 )
+    if ( sourceModel.rowCount() == 0 )
         return;
 
 #ifdef HAVE_LIBPCAP
     /* Take all selected interfaces, not just the newly ones */
     QItemSelection allSelected = ui->interfaceTree->selectionModel()->selection();
-    QItemSelection sourceSelection = proxyModel->mapSelectionToSource(allSelected);
+    QItemSelection sourceSelection = proxyModel.mapSelectionToSource(infoModel.mapSelectionToSource(allSelected));
 
-    if ( sourceModel->updateSelectedDevices(sourceSelection) )
+    if ( sourceModel.updateSelectedDevices(sourceSelection) )
         emit itemSelectionChanged();
 #endif
 }
 
 void InterfaceFrame::on_interfaceTree_doubleClicked(const QModelIndex &index)
 {
-    QModelIndex realIndex = proxyModel->mapToSource(index);
+    QModelIndex realIndex = proxyModel.mapToSource(infoModel.mapToSource(index));
 
     if ( ! realIndex.isValid() )
         return;
 
-#if defined(HAVE_EXTCAP) && defined(HAVE_LIBPCAP)
+#ifdef HAVE_LIBPCAP
 
-    QString device_name = sourceModel->getColumnContent(realIndex.row(), IFTREE_COL_INTERFACE_NAME).toString();
-    QString extcap_string = sourceModel->getColumnContent(realIndex.row(), IFTREE_COL_EXTCAP_PATH).toString();
+    QString device_name = sourceModel.getColumnContent(realIndex.row(), IFTREE_COL_INTERFACE_NAME).toString();
+    QString extcap_string = sourceModel.getColumnContent(realIndex.row(), IFTREE_COL_EXTCAP_PATH).toString();
 
     /* We trust the string here. If this interface is really extcap, the string is
      * being checked immediatly before the dialog is being generated */
@@ -331,18 +318,18 @@ void InterfaceFrame::on_interfaceTree_doubleClicked(const QModelIndex &index)
     emit startCapture();
 }
 
-#if defined(HAVE_EXTCAP) && defined(HAVE_LIBPCAP)
+#ifdef HAVE_LIBPCAP
 void InterfaceFrame::on_interfaceTree_clicked(const QModelIndex &index)
 {
     if ( index.column() == 0 )
     {
-        QModelIndex realIndex = proxyModel->mapToSource(index);
+        QModelIndex realIndex = proxyModel.mapToSource(infoModel.mapToSource(index));
 
         if ( ! realIndex.isValid() )
             return;
 
-        QString device_name = sourceModel->getColumnContent(realIndex.row(), IFTREE_COL_INTERFACE_NAME).toString();
-        QString extcap_string = sourceModel->getColumnContent(realIndex.row(), IFTREE_COL_EXTCAP_PATH).toString();
+        QString device_name = sourceModel.getColumnContent(realIndex.row(), IFTREE_COL_INTERFACE_NAME).toString();
+        QString extcap_string = sourceModel.getColumnContent(realIndex.row(), IFTREE_COL_EXTCAP_PATH).toString();
 
         /* We trust the string here. If this interface is really extcap, the string is
          * being checked immediatly before the dialog is being generated */
@@ -361,18 +348,18 @@ void InterfaceFrame::on_interfaceTree_clicked(const QModelIndex &index)
 
 void InterfaceFrame::updateStatistics(void)
 {
-    if ( sourceModel->rowCount() == 0 )
+    if ( sourceModel.rowCount() == 0 )
         return;
 
 #ifdef HAVE_LIBPCAP
 
-    for( int idx = 0; idx < proxyModel->rowCount(); idx++ )
+    for( int idx = 0; idx < proxyModel.rowCount(); idx++ )
     {
-        QModelIndex selectIndex = proxyModel->mapFromSource(sourceModel->index(idx, 0));
+        QModelIndex selectIndex = infoModel.mapFromSource(proxyModel.mapFromSource(sourceModel.index(idx, 0)));
 
         /* Proxy model has not masked out the interface */
         if ( selectIndex.isValid() )
-            sourceModel->updateStatistic(idx);
+            sourceModel.updateStatistic(idx);
     }
 
 #endif
@@ -381,7 +368,7 @@ void InterfaceFrame::updateStatistics(void)
 /* Proxy Method so we do not need to expose the source model */
 void InterfaceFrame::getPoints(int idx, PointList * pts)
 {
-    sourceModel->getPoints(idx, pts);
+    sourceModel.getPoints(idx, pts);
 }
 
 /*

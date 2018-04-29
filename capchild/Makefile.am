@@ -21,7 +21,7 @@
 
 include $(top_srcdir)/Makefile.am.inc
 
-AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(GLIB_CFLAGS)
+AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(GLIB_CFLAGS) $(PCAP_CFLAGS)
 
 noinst_LIBRARIES = libcapchild.a
 
@@ -39,12 +39,7 @@ EXTRA_DIST = \
 	doxygen.cfg.in
 
 CLEANFILES = \
-	doxygen-capchild.tag	\
-	libcapchild.a		\
-	*~
-
-MAINTAINERCLEANFILES = \
-	Makefile.in
+	doxygen-capchild.tag
 
 doxygen:
 if HAVE_DOXYGEN

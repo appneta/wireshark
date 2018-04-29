@@ -13,19 +13,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * Specification reference:
  * RFC 5050
@@ -204,6 +192,7 @@ static int hf_block_control_block_cteb_creator_custodian_eid = -1;
 
 /* Non-Primary Block Type Code Variable */
 static int hf_bundle_block_type_code = -1;
+static int hf_bundle_age_extension_block_code = -1;
 static int hf_bundle_unprocessed_block_data = -1;
 
 /* ECOS Flag Variables */
@@ -368,6 +357,7 @@ static const value_string bundle_block_type_codes[] = {
     {0x09, "Extension Security Block"},
     {0x0a, "Custody Transfer Enhancement Block"},
     {0x13, "Extended Class of Service Block"},
+    {0x14, "Bundle Age Extension Block"},
     {0, NULL}
 };
 
@@ -1509,6 +1499,7 @@ display_extension_block(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo, int
     int           sdnv_length;
     int           block_length;
     int           block_overhead;
+    int           bundle_age;
     guint8        type;
     unsigned int  control_flags;
     proto_tree   *block_flag_tree;
@@ -1595,6 +1586,13 @@ display_extension_block(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo, int
     {
         proto_tree_add_string(block_tree, hf_bundle_unprocessed_block_data, tvb, offset, block_length, "Block data");
         /* not yet dissected, skip past data */
+        offset += block_length;
+        break;
+    }
+    case BUNDLE_BLOCK_TYPE_BUNDLE_AGE_EXTENSION:
+    {
+        bundle_age = evaluate_sdnv(tvb, offset, &sdnv_length);
+        proto_tree_add_int(block_tree, hf_bundle_age_extension_block_code, tvb, offset, sdnv_length, bundle_age/1000000);
         offset += block_length;
         break;
     }
@@ -2191,7 +2189,7 @@ dissect_tcpcl_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
                 col_add_str(pinfo->cinfo, COL_INFO, ", TCPL KEEPALIVE Segment");
             }
         } else {
-            col_set_str(pinfo->cinfo, COL_INFO, "TCPL KEEPALIVE Sgement");
+            col_set_str(pinfo->cinfo, COL_INFO, "TCPL KEEPALIVE Segment");
         }
         /*No valid flags in Keep Alive*/
         processed_length = 1;
@@ -2203,7 +2201,7 @@ dissect_tcpcl_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
                 col_add_str(pinfo->cinfo, COL_INFO, ", TCPL SHUTDOWN Segment");
             }
         } else {
-            col_set_str(pinfo->cinfo, COL_INFO, "TCPL SHUTDOWN Sgement");
+            col_set_str(pinfo->cinfo, COL_INFO, "TCPL SHUTDOWN Segment");
         }
         /* Add tree for Shutdown Flags */
         sub_item = proto_tree_add_item(conv_tree, hf_tcp_convergence_shutdown_flags, tvb,
@@ -2234,7 +2232,7 @@ dissect_tcpcl_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
                 col_add_str(pinfo->cinfo, COL_INFO, ", TCPL REFUSE_BUNDLE Segment");
             }
         } else {
-            col_set_str(pinfo->cinfo, COL_INFO, "TCPL REFUSE_BUNDLE Sgement");
+            col_set_str(pinfo->cinfo, COL_INFO, "TCPL REFUSE_BUNDLE Segment");
         }
         /*No valid flags*/
         processed_length = tvb_captured_length(tvb);
@@ -2854,6 +2852,10 @@ proto_register_bundle(void)
         {&hf_bundle_block_type_code,
          {"Block Type Code", "bundle.block_type_code",
           FT_UINT8, BASE_DEC, VALS(bundle_block_type_codes), 0x0, NULL, HFILL}
+        },
+        {&hf_bundle_age_extension_block_code,
+         {"Bundle Age in seconds", "bundle.age_extension_block_code",
+          FT_INT32, BASE_DEC, NULL, 0x0, NULL, HFILL}
         },
         {&hf_bundle_unprocessed_block_data,
          {"Block Data", "bundle.block_data",

@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "resolved_addresses_dialog.h"
 #include <ui_resolved_addresses_dialog.h>
@@ -50,7 +37,7 @@ ipv4_hash_table_resolved_to_qstringlist(gpointer, gpointer value, gpointer sl_pt
     QStringList *string_list = (QStringList *) sl_ptr;
     hashipv4_t *ipv4_hash_table_entry = (hashipv4_t *) value;
 
-    if((ipv4_hash_table_entry->flags & DUMMY_ADDRESS_ENTRY) == 0) {
+    if((ipv4_hash_table_entry->flags & NAME_RESOLVED)) {
         QString entry = QString("%1\t%2")
                 .arg(ipv4_hash_table_entry->ip)
                 .arg(ipv4_hash_table_entry->name);
@@ -64,7 +51,7 @@ ipv6_hash_table_resolved_to_qstringlist(gpointer, gpointer value, gpointer sl_pt
     QStringList *string_list = (QStringList *) sl_ptr;
     hashipv6_t *ipv6_hash_table_entry = (hashipv6_t *) value;
 
-    if((ipv6_hash_table_entry->flags & DUMMY_ADDRESS_ENTRY) == 0) {
+    if((ipv6_hash_table_entry->flags & NAME_RESOLVED)) {
         QString entry = QString("%1\t%2")
                 .arg(ipv6_hash_table_entry->ip6)
                 .arg(ipv6_hash_table_entry->name);
@@ -77,7 +64,7 @@ ipv4_hash_table_to_qstringlist(gpointer key, gpointer value, gpointer sl_ptr)
 {
     QStringList *string_list = (QStringList *) sl_ptr;
     hashipv4_t *ipv4_hash_table_entry = (hashipv4_t *)value;
-    int addr = GPOINTER_TO_UINT(key);
+    guint addr = GPOINTER_TO_UINT(key);
 
     QString entry = QString("Key: 0x%1 IPv4: %2, Name: %3")
             .arg(QString::number(addr, 16))
@@ -92,7 +79,7 @@ ipv6_hash_table_to_qstringlist(gpointer key, gpointer value, gpointer sl_ptr)
 {
     QStringList *string_list = (QStringList *) sl_ptr;
     hashipv6_t *ipv6_hash_table_entry = (hashipv6_t *)value;
-    int addr = GPOINTER_TO_UINT(key);
+    guint addr = GPOINTER_TO_UINT(key);
 
     QString entry = QString("Key: 0x%1 IPv4: %2, Name: %3")
             .arg(QString::number(addr, 16))
@@ -194,7 +181,7 @@ ResolvedAddressesDialog::ResolvedAddressesDialog(QWidget *parent, CaptureFile *c
     ui->plainTextEdit->setTabStopWidth(ui->plainTextEdit->fontMetrics().averageCharWidth() * 8);
 
     if (capture_file->isValid()) {
-        wtap* wth = capture_file->capFile()->wth;
+        wtap* wth = capture_file->capFile()->provider.wth;
         if (wth) {
             // might return null
             wtap_block_t nrb_hdr;
@@ -281,7 +268,7 @@ void ResolvedAddressesDialog::fillShowMenu()
     show_bt->setText(tr("Show"));
 
     if (!show_bt->menu()) {
-        show_bt->setMenu(new QMenu());
+        show_bt->setMenu(new QMenu(show_bt));
     }
 
     QMenu *show_menu = show_bt->menu();

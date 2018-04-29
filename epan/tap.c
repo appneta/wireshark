@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -108,66 +96,22 @@ typedef struct _tap_listener_t {
 static volatile tap_listener_t *tap_listener_queue=NULL;
 
 #ifdef HAVE_PLUGINS
-
-#include <gmodule.h>
-
-#include <wsutil/plugins.h>
-
-/*
- * List of tap plugins.
- */
-typedef struct {
-	void (*register_tap_listener_fn)(void);   /* routine to call to register tap listener */
-} tap_plugin;
-
 static GSList *tap_plugins = NULL;
 
-/*
- * Callback for each plugin found.
- */
-static gboolean
-check_for_tap_plugin(GModule *handle)
-{
-	gpointer gp;
-	void (*register_tap_listener_fn)(void);
-	tap_plugin *plugin;
-
-	/*
-	 * Do we have a register_tap_listener routine?
-	 */
-	if (!g_module_symbol(handle, "plugin_register_tap_listener", &gp)) {
-		/* No, so this isn't a tap plugin. */
-		return FALSE;
-	}
-
-	/*
-	 * Yes - this plugin includes one or more taps.
-	 */
-DIAG_OFF(pedantic)
-	register_tap_listener_fn = (void (*)(void))gp;
-DIAG_ON(pedantic)
-
-	/*
-	 * Add this one to the list of tap plugins.
-	 */
-	plugin = (tap_plugin *)g_malloc(sizeof (tap_plugin));
-	plugin->register_tap_listener_fn = register_tap_listener_fn;
-	tap_plugins = g_slist_append(tap_plugins, plugin);
-	return TRUE;
-}
-
 void
-register_tap_plugin_type(void)
+tap_register_plugin(const tap_plugin *plug)
 {
-	add_plugin_type("tap", check_for_tap_plugin);
+	tap_plugins = g_slist_prepend(tap_plugins, (tap_plugin *)plug);
 }
 
 static void
-register_tap_plugin_listener(gpointer data, gpointer user_data _U_)
+call_plugin_register_tap_listener(gpointer data, gpointer user_data _U_)
 {
-	tap_plugin *plugin = (tap_plugin *)data;
+	tap_plugin *plug = (tap_plugin *)data;
 
-	(plugin->register_tap_listener_fn)();
+	if (plug->register_tap_listener) {
+		plug->register_tap_listener();
+	}
 }
 
 /*
@@ -176,15 +120,8 @@ register_tap_plugin_listener(gpointer data, gpointer user_data _U_)
 void
 register_all_plugin_tap_listeners(void)
 {
-	g_slist_foreach(tap_plugins, register_tap_plugin_listener, NULL);
+	g_slist_foreach(tap_plugins, call_plugin_register_tap_listener, NULL);
 }
-
-static void
-tap_plugin_destroy(gpointer p)
-{
-	g_free(p);
-}
-
 #endif /* HAVE_PLUGINS */
 
 /* **********************************************************************
@@ -222,7 +159,7 @@ tap_init(void)
 int
 register_tap(const char *name)
 {
-	tap_dissector_t *td, *tdl = NULL, *tdl_prev;
+	tap_dissector_t *td, *tdl = NULL, *tdl_prev = NULL;
 	int i=0;
 
 	if(tap_dissector_list){
@@ -516,9 +453,7 @@ free_tap_listener(volatile tap_listener_t *tl)
 {
 	if(!tl)
 		return;
-	if(tl->code){
-		dfilter_free(tl->code);
-	}
+	dfilter_free(tl->code);
 	g_free(tl->fstring);
 DIAG_OFF(cast-qual)
 	g_free((gpointer)tl);
@@ -773,7 +708,8 @@ void tap_cleanup(void)
 	}
 
 #ifdef HAVE_PLUGINS
-	g_slist_free_full(tap_plugins, tap_plugin_destroy);
+	g_slist_free(tap_plugins);
+	tap_plugins = NULL;
 #endif /* HAVE_PLUGINS */
 }
 

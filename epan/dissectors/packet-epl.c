@@ -41,19 +41,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1999 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1329,11 +1317,11 @@ struct object_mapping {
 	struct {
 		guint32 first, last;
 	} frame; /* frames for which object_mapping applies */
-	struct od_entry *info;
+	const struct od_entry *info;
 	const char *index_name;
-	const char *title;
+	char title[32];
 };
-#define OBJECT_MAPPING_INITIALIZER { { 0, 0 }, { 0, 0 }, 0, 0, 0, { 0, 0 }, 0, 0, 0 }
+#define OBJECT_MAPPING_INITIALIZER { { 0, 0 }, { 0, 0 }, 0, 0, 0, { 0, 0 }, 0, 0, { 0 } }
 
 #define CONVO_FOR_RESPONSE  1
 #define CONVO_FOR_REQUEST   2
@@ -1346,7 +1334,7 @@ struct read_req {
 	guint8 sendsequence;
 
 	const char *index_name;
-	struct od_entry *info;
+	const struct od_entry *info;
 };
 
 struct epl_convo {
@@ -1778,8 +1766,6 @@ static gint ett_epl_pdo_meta                  = -1;
 static expert_field ei_duplicated_frame       = EI_INIT;
 static expert_field ei_recvseq_value          = EI_INIT;
 static expert_field ei_sendseq_value          = EI_INIT;
-static expert_field ei_recvcon_value          = EI_INIT;
-static expert_field ei_sendcon_value          = EI_INIT;
 static expert_field ei_real_length_differs    = EI_INIT;
 
 static dissector_handle_t epl_handle;
@@ -1926,7 +1912,7 @@ profile_new(wmem_allocator_t *parent_pool)
 }
 
 static struct object *object_lookup(struct profile *profile, guint16 idx);
-static struct subobject *subobject_lookup(struct object *obj, guint8 subindex);
+static const struct subobject *subobject_lookup(struct object *obj, guint8 subindex);
 
 struct object *
 epl_profile_object_add(struct profile *profile, guint16 idx)
@@ -1995,7 +1981,7 @@ epl_profile_object_mappings_update(struct profile *profile)
 		{
 			struct object_mapping *map = &mappings[i];
 			struct object *mapping_obj;
-			struct subobject *mapping_subobj;
+			const struct subobject *mapping_subobj;
 
 			if (!(mapping_obj = object_lookup(profile, map->pdo.idx)))
 				continue;
@@ -2184,7 +2170,7 @@ epl_get_convo(packet_info *pinfo, int opts)
 	node_addr = &epl_placeholder_mac;
 
 	if ((epan_convo = find_conversation(pinfo->num, node_addr, node_addr,
-				pinfo->ptype, node_port, node_port, NO_ADDR_B|NO_PORT_B)))
+				conversation_pt_to_endpoint_type(pinfo->ptype), node_port, node_port, NO_ADDR_B|NO_PORT_B)))
 	{
 		/* XXX Do I need to check setup_frame != pinfo->num in order to not
 		 * create unnecessary new conversations?
@@ -2201,7 +2187,7 @@ epl_get_convo(packet_info *pinfo, int opts)
 	{
 new_convo_creation:
 		epan_convo = conversation_new(pinfo->num, node_addr, node_addr,
-				pinfo->ptype, node_port, node_port, NO_ADDR2|NO_PORT2);
+				conversation_pt_to_endpoint_type(pinfo->ptype), node_port, node_port, NO_ADDR2|NO_PORT2);
 	}
 
 	convo = (struct epl_convo*)conversation_get_proto_data(epan_convo, proto_epl);
@@ -2285,11 +2271,11 @@ object_lookup(struct profile *profile, guint16 idx)
 	return (struct object*)wmem_map_lookup(profile->objects, GUINT_TO_POINTER(idx));
 }
 
-static struct subobject *
+static const struct subobject *
 subobject_lookup(struct object *obj, guint8 subindex)
 {
 	if (!obj || !obj->subindices) return NULL;
-	return (struct subobject*)epl_wmem_iarray_find(obj->subindices, subindex);
+	return (const struct subobject*)epl_wmem_iarray_find(obj->subindices, subindex);
 }
 
 /* epl duplication table hash function */
@@ -2324,9 +2310,7 @@ static void
 free_key(gpointer ptr)
 {
 	duplication_key *key = (duplication_key *)ptr;
-
-	if(key)
-		g_slice_free(duplication_key, key);
+	g_slice_free(duplication_key, key);
 }
 
 /* removes the table entries of a specific transfer */
@@ -2523,9 +2507,9 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 		 * so we need to check we can actually index into the buffer
 		 */
 		if (pinfo->net_dst.type == AT_IPv4)
-			pinfo->destport = ((guint8*)pinfo->net_dst.data)[3];
+			pinfo->destport = ((const guint8*)pinfo->net_dst.data)[3];
 		if (pinfo->net_src.type == AT_IPv4)
-			pinfo->srcport  = ((guint8*)pinfo->net_src.data)[3];
+			pinfo->srcport  = ((const guint8*)pinfo->net_src.data)[3];
 	}
 	else
 	{
@@ -3637,14 +3621,6 @@ dissect_epl_sdo_sequence(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo
 		{
 			expert_add_info(pinfo, epl_tree, &ei_sendseq_value);
 		}
-		if(rcon > EPL_RETRANSMISSION)
-		{
-			expert_add_info(pinfo, epl_tree, &ei_recvcon_value);
-		}
-		if(scon > EPL_RETRANSMISSION)
-		{
-			expert_add_info(pinfo, epl_tree, &ei_sendcon_value);
-		}
 		duplication = 0x00;
 		epl_set_sequence_nr(pinfo, 0x00);
 	}
@@ -3775,11 +3751,12 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 			proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_command_id, tvb, offset, 1, ENC_LITTLE_ENDIAN);
 			offset += 1;
 
-			proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_segment_size, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+			item = proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_segment_size, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 			offset += 4;
+			if ( tvb_reported_length_remaining(tvb, offset) < segment_size )
+				expert_add_info_format(pinfo, item, &ei_real_length_differs,
+								"Captured length differs, only %d octets will be displayed", tvb_reported_length_remaining(tvb, offset) - 4 );
 		}
-		/* adjust size of packet */
-		tvb_set_reported_length(tvb, offset + segment_size);
 
 		if (segmented == EPL_ASND_SDO_CMD_SEGMENTATION_INITIATE_TRANSFER)
 		{
@@ -3908,7 +3885,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 	const gchar *index_str, *sub_str, *sub_index_str;
 	fragment_head *frag_msg = NULL;
 	struct object *obj = NULL;
-	struct subobject *subobj = NULL;
+	const struct subobject *subobj = NULL;
 
 	/* get the current frame number */
 	frame = pinfo->num;
@@ -4157,7 +4134,7 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	struct object_mapping map = OBJECT_MAPPING_INITIALIZER;
 	struct object *mapping_obj;
 	int *ett;
-	struct subobject *mapping_subobj;
+	const struct subobject *mapping_subobj;
 	gboolean nosub = FALSE;
 
 	/* If we don't populate the tree or record mappings, skip over it */
@@ -4222,9 +4199,9 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	{
 		/* TODO One could think of a better string here? */
 		if (nosub)
-			map.title = g_strdup_printf("PDO - %04X", map.pdo.idx);
+			g_snprintf(map.title, sizeof(map.title), "PDO - %04X", map.pdo.idx);
 		else
-			map.title = g_strdup_printf("PDO - %04X:%02X", map.pdo.idx, map.pdo.subindex);
+			g_snprintf(map.title, sizeof(map.title), "PDO - %04X:%02X", map.pdo.idx, map.pdo.subindex);
 
 		add_object_mapping(mappings, &map);
 	}
@@ -4245,7 +4222,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 	proto_item *psf_item;
 	proto_tree *psf_od_tree;
 	struct object *obj = NULL;
-	struct subobject *subobj = NULL;
+	const struct subobject *subobj = NULL;
 
 
 	/* Offset is calculated simply by only applying EPL payload offset, not packet offset.
@@ -4492,7 +4469,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 		 * we start the loop. */
 		while ( remlength > 0 )
 		{
-			guint16 sod_index = error;
+			guint16 sod_index;
 			if ((tvb_get_guint8 ( tvb, offset + 3 ) & 0x80) == 0x80)
 				is_abort = TRUE;
 
@@ -4585,7 +4562,7 @@ dissect_epl_sdo_command_read_multiple_by_index(struct epl_convo *convo, proto_tr
 	proto_item *psf_item, *psf_od_item;
 	proto_tree *psf_tree, *psf_od_tree;
 	struct object *obj = NULL;
-	struct subobject *subobj = NULL;
+	const struct subobject *subobj = NULL;
 	const char *name;
 
 	/* Offset is calculated simply by only applying EPL payload offset, not packet offset.
@@ -4897,7 +4874,7 @@ dissect_epl_sdo_command_read_multiple_by_index(struct epl_convo *convo, proto_tr
 				}
 				else if(sod_index == error)
 				{
-					name = obj ? obj->info.name :val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
+					name = val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
 					proto_item_append_text(psf_entry," (%s)", name);
 				}
 				else
@@ -4966,7 +4943,7 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 	gboolean end_segment = FALSE;
 	fragment_head *frag_msg = NULL;
 	struct object *obj = NULL;
-	struct subobject *subobj = NULL;
+	const struct subobject *subobj = NULL;
 	struct read_req *req;
 	const struct epl_datatype *type = NULL;
 
@@ -5116,8 +5093,6 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 
 	return offset;
 }
-
-static gboolean epl_profile_uat_fld_fileopen_check_cb(void *, const char *path, guint len, const void *, const void *, char **err);
 
 static struct profile *profile_load(wmem_allocator_t *allocator, const char *path)
 {
@@ -6147,14 +6122,6 @@ proto_register_epl(void)
 		{ &ei_sendseq_value,
 			{ "epl.error.value.send.sequence", PI_PROTOCOL, PI_ERROR,
 				"Invalid Value for SendSequenceNumber", EXPFILL }
-		},
-		{ &ei_recvcon_value,
-			{ "epl.error.receive.connection", PI_PROTOCOL, PI_ERROR,
-				"Invalid Value for ReceiveCon", EXPFILL }
-		},
-		{ &ei_sendcon_value,
-			{ "epl.error.send.connection", PI_PROTOCOL, PI_ERROR,
-				"Invalid Value for SendCon", EXPFILL }
 		},
 		{ &ei_real_length_differs,
 			{ "epl.error.payload.length.differs", PI_PROTOCOL, PI_ERROR,

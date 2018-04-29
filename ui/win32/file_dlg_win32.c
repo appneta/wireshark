@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2004 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -31,7 +19,7 @@
 #include <richedit.h>
 #include <strsafe.h>
 
-#include "file.h"
+#include "globals.h"
 
 #include "wsutil/file_util.h"
 #include "wsutil/str_util.h"
@@ -48,10 +36,16 @@
 #include "ui/simple_dialog.h"
 #include "ui/ssl_key_export.h"
 #include "ui/util.h"
-#include "ui/ui_util.h"
+#include "ui/ws_ui_util.h"
 #include "ui/all_files_wildcard.h"
 
 #include "file_dlg_win32.h"
+
+typedef enum {
+    merge_append,
+    merge_chrono,
+    merge_prepend
+} merge_action_e;
 
 #define FILE_OPEN_DEFAULT 1 /* All Files */
 
@@ -309,7 +303,7 @@ win32_check_save_as_with_comments(HWND parent, capture_file *cf, int file_type)
     switch (response) {
 
     case IDNO: /* "No" means "Save in another format" in the first dialog */
-        /* OK, the only other format we support is pcap-ng.  Make that
+        /* OK, the only other format we support is pcapng.  Make that
            the one and only format in the combo box, and return to
            let the user continue with the dialog.
 
@@ -317,7 +311,7 @@ win32_check_save_as_with_comments(HWND parent, capture_file *cf, int file_type)
            the compressed checkbox; get the current value and restore
            it.
 
-           XXX - we know pcap-ng can be compressed; if we ever end up
+           XXX - we know pcapng can be compressed; if we ever end up
            supporting saving comments in a format that *can't* be
            compressed, such as NetMon format, we must check this. */
         /* XXX - need a compressed checkbox here! */
@@ -1117,24 +1111,17 @@ preview_set_file_info(HWND of_hwnd, gchar *preview_file) {
     HWND        cur_ctrl;
     int         i;
     wtap       *wth;
-    const struct wtap_pkthdr *phdr;
-    int         err = 0;
+    int         err;
     gchar      *err_info;
+    ws_file_preview_stats stats;
+    ws_file_preview_stats_status status;
     TCHAR       string_buff[PREVIEW_STR_MAX];
     TCHAR       first_buff[PREVIEW_STR_MAX];
-    gint64      data_offset;
-    guint       packet = 0;
     gint64      filesize;
     gchar      *size_str;
     time_t      ti_time;
     struct tm  *ti_tm;
     guint       elapsed_time;
-    time_t      time_preview;
-    time_t      time_current;
-    double      start_time = 0;
-    double      stop_time = 0;
-    double      cur_time;
-    gboolean    is_breaked = FALSE;
 
     for (i = EWFD_PTX_FORMAT; i <= EWFD_PTX_START_ELAPSED; i++) {
         cur_ctrl = GetDlgItem(of_hwnd, i);
@@ -1188,33 +1175,13 @@ preview_set_file_info(HWND of_hwnd, gchar *preview_file) {
     // Windows Explorer uses IEC.
     size_str = format_size(filesize, format_size_unit_bytes|format_size_prefix_iec);
 
-    time(&time_preview);
-    while ( (wtap_read(wth, &err, &err_info, &data_offset)) ) {
-        phdr = wtap_phdr(wth);
-        cur_time = nstime_to_sec( (const nstime_t *) &phdr->ts );
-        if(packet == 0) {
-            start_time  = cur_time;
-            stop_time = cur_time;
-        }
-        if (cur_time < start_time) {
-            start_time = cur_time;
-        }
-        if (cur_time > stop_time){
-            stop_time = cur_time;
-        }
-        packet++;
-        if(packet%100 == 0) {
-            time(&time_current);
-            if(time_current-time_preview >= (time_t) prefs.gui_fileopen_preview) {
-                is_breaked = TRUE;
-                break;
-            }
-        }
-    }
+    status = get_stats_for_preview(wth, &stats, &err, &err_info);
 
-    if(err != 0) {
-        utf_8to16_snprintf(string_buff, PREVIEW_STR_MAX, "%s, error after %u packets",
-            size_str, packet);
+    if(status == PREVIEW_READ_ERROR) {
+        /* XXX - give error details? */
+        g_free(err_info);
+        utf_8to16_snprintf(string_buff, PREVIEW_STR_MAX, "%s, error after %u records",
+            size_str, stats.records);
         g_free(size_str);
         cur_ctrl = GetDlgItem(of_hwnd, EWFD_PTX_SIZE);
         SetWindowText(cur_ctrl, string_buff);
@@ -1222,44 +1189,67 @@ preview_set_file_info(HWND of_hwnd, gchar *preview_file) {
         return TRUE;
     }
 
-    /* Packets */
-    if(is_breaked) {
-        utf_8to16_snprintf(string_buff, PREVIEW_STR_MAX, "%s, timed out at %u packets",
-            size_str, packet);
+    /* Packet count */
+    if(status == PREVIEW_TIMED_OUT) {
+        utf_8to16_snprintf(string_buff, PREVIEW_STR_MAX, "%s, timed out at %u data records",
+            size_str, stats.data_records);
     } else {
-        utf_8to16_snprintf(string_buff, PREVIEW_STR_MAX, "%s, %u packets",
-            size_str, packet);
+        utf_8to16_snprintf(string_buff, PREVIEW_STR_MAX, "%s, %u data records",
+            size_str, stats.data_records);
     }
     g_free(size_str);
     cur_ctrl = GetDlgItem(of_hwnd, EWFD_PTX_SIZE);
     SetWindowText(cur_ctrl, string_buff);
 
     /* First packet / elapsed time */
-    ti_time = (long)start_time;
-    ti_tm = localtime( &ti_time );
-    if(ti_tm) {
-        StringCchPrintf(first_buff, PREVIEW_STR_MAX,
-                 _T("%04d-%02d-%02d %02d:%02d:%02d"),
-                 ti_tm->tm_year + 1900,
-                 ti_tm->tm_mon + 1,
-                 ti_tm->tm_mday,
-                 ti_tm->tm_hour,
-                 ti_tm->tm_min,
-                 ti_tm->tm_sec);
+    if(stats.have_times) {
+        /*
+         * We saw at least one record with a time stamp, so we can give
+         * a start time (if we have a mix of records with and without
+         * time stamps, and there were records without time stamps
+         * before the one with a time stamp, this may be inaccurate).
+         */
+        ti_time = (long)stats.start_time;
+        ti_tm = localtime( &ti_time );
+        if(ti_tm) {
+            StringCchPrintf(first_buff, PREVIEW_STR_MAX,
+                     _T("%04d-%02d-%02d %02d:%02d:%02d"),
+                     ti_tm->tm_year + 1900,
+                     ti_tm->tm_mon + 1,
+                     ti_tm->tm_mday,
+                     ti_tm->tm_hour,
+                     ti_tm->tm_min,
+                     ti_tm->tm_sec);
+        } else {
+            StringCchPrintf(first_buff, PREVIEW_STR_MAX, _T("?"));
+        }
     } else {
-        StringCchPrintf(first_buff, PREVIEW_STR_MAX, _T("?"));
+        StringCchPrintf(first_buff, PREVIEW_STR_MAX, _T("unknown"));
     }
 
-    elapsed_time = (unsigned int)(stop_time-start_time);
-    if(elapsed_time/86400) {
-        StringCchPrintf(string_buff, PREVIEW_STR_MAX, _T("%s / %02u days %02u:%02u:%02u"),
-        first_buff, elapsed_time/86400, elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60);
+    /* Elapsed time */
+    if(status == PREVIEW_SUCCEEDED && stats.have_times) {
+        /*
+         * We didn't time out, so we looked at all packets, and we got
+         * at least one packet with a time stamp, so we can calculate
+         * an elapsed time from the time stamp of the last packet with
+         * with a time stamp (if we have a mix of records with and without
+         * time stamps, and there were records without time stamps after
+         * the last one with a time stamp, this may be inaccurate).
+         */
+        elapsed_time = (unsigned int)(stats.stop_time-stats.start_time);
+        if(status == PREVIEW_TIMED_OUT) {
+            StringCchPrintf(string_buff, PREVIEW_STR_MAX, _T("%s / unknown"), first_buff);
+        } else if(elapsed_time/86400) {
+            StringCchPrintf(string_buff, PREVIEW_STR_MAX, _T("%s / %02u days %02u:%02u:%02u"),
+                first_buff, elapsed_time/86400, elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60);
+        } else {
+            StringCchPrintf(string_buff, PREVIEW_STR_MAX, _T("%s / %02u:%02u:%02u"),
+                first_buff, elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60);
+        }
     } else {
-        StringCchPrintf(string_buff, PREVIEW_STR_MAX, _T("%s / %02u:%02u:%02u"),
-        first_buff, elapsed_time%86400/3600, elapsed_time%3600/60, elapsed_time%60);
-    }
-    if(is_breaked) {
-        StringCchPrintf(string_buff, PREVIEW_STR_MAX, _T("%s / unknown"), first_buff);
+        StringCchPrintf(string_buff, PREVIEW_STR_MAX, _T("%s / unknown"),
+            first_buff);
     }
     cur_ctrl = GetDlgItem(of_hwnd, EWFD_PTX_START_ELAPSED);
     SetWindowText(cur_ctrl, string_buff);
@@ -1323,8 +1313,7 @@ filter_tb_syntax_check(HWND hwnd, TCHAR *filter_text) {
         SendMessage(hwnd, EM_SETBKGNDCOLOR, (WPARAM) 1, COLOR_WINDOW);
         return;
     } else if (dfilter_compile(utf_16to8(strval), &dfp, NULL)) { /* colorize filter string entry */
-        if (dfp != NULL)
-            dfilter_free(dfp);
+        dfilter_free(dfp);
         /* Valid (light green) */
         SendMessage(hwnd, EM_SETBKGNDCOLOR, 0, RGB(0xe4, 0xff, 0xc7)); /* tango_chameleon_1 */
     } else {
@@ -1332,7 +1321,7 @@ filter_tb_syntax_check(HWND hwnd, TCHAR *filter_text) {
         SendMessage(hwnd, EM_SETBKGNDCOLOR, 0, RGB(0xff, 0xcc, 0xcc)); /* tango_scarlet_red_1 */
     }
 
-    if (strval) g_free(strval);
+    g_free(strval);
 }
 
 
@@ -1365,8 +1354,7 @@ open_file_hook_proc(HWND of_hwnd, UINT msg, WPARAM w_param, LPARAM l_param) {
                 case CDN_FILEOK:
                     /* Fetch the read filter */
                     cur_ctrl = GetDlgItem(of_hwnd, EWFD_FILTER_EDIT);
-                    if (g_dfilter_str)
-                        g_free(g_dfilter_str);
+                    g_free(g_dfilter_str);
                     g_dfilter_str = filter_tb_get(cur_ctrl);
 
                     cur_ctrl = GetDlgItem(of_hwnd, EWFD_FORMAT_TYPE);
@@ -2220,8 +2208,7 @@ merge_file_hook_proc(HWND mf_hwnd, UINT msg, WPARAM w_param, LPARAM l_param) {
                 case CDN_FILEOK:
                     /* Fetch the read filter */
                     cur_ctrl = GetDlgItem(mf_hwnd, EWFD_FILTER_EDIT);
-                    if (g_dfilter_str)
-                        g_free(g_dfilter_str);
+                    g_free(g_dfilter_str);
                     g_dfilter_str = filter_tb_get(cur_ctrl);
 
                     cur_ctrl = GetDlgItem(mf_hwnd, EWFD_MERGE_CHRONO_BTN);
@@ -2340,7 +2327,7 @@ export_raw_file_hook_proc(HWND ef_hwnd, UINT msg, WPARAM w_param, LPARAM l_param
     switch(msg) {
         case WM_INITDIALOG:
             StringCchPrintf(raw_msg, STATIC_LABEL_CHARS, _T("%d byte%s of raw binary data will be written"),
-                    ofnp->lCustData, utf_8to16(plurality(ofnp->lCustData, "", "s")));
+                    (int)ofnp->lCustData, utf_8to16(plurality(ofnp->lCustData, "", "s")));
             cur_ctrl = GetDlgItem(ef_hwnd, EWFD_EXPORTRAW_ST);
             SetWindowText(cur_ctrl, raw_msg);
             break;
@@ -2368,7 +2355,7 @@ export_sslkeys_file_hook_proc(HWND ef_hwnd, UINT msg, WPARAM w_param, LPARAM l_p
     switch(msg) {
         case WM_INITDIALOG:
             StringCchPrintf(sslkeys_msg, STATIC_LABEL_CHARS, _T("%d SSL Session Key%s will be written"),
-                    ofnp->lCustData, utf_8to16(plurality(ofnp->lCustData, "", "s")));
+                    (int)ofnp->lCustData, utf_8to16(plurality(ofnp->lCustData, "", "s")));
             cur_ctrl = GetDlgItem(ef_hwnd, EWFD_EXPORTSSLKEYS_ST);
             SetWindowText(cur_ctrl, sslkeys_msg);
             break;

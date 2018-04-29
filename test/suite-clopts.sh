@@ -6,19 +6,7 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 2005 Ulf Lamping
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
 # common exit status values
@@ -327,6 +315,18 @@ test_dump_glossary_utf8() {
 	fi
 }
 
+test_dump_glossary_plugins() {
+	# We do a similar test in fuzz-test.sh.
+	$TSHARK -G plugins > ./testout.txt 2> /dev/null
+	PLUGIN_COUNT=$( grep dissector ./testout.txt | wc -l )
+	if [ $PLUGIN_COUNT -lt 10 ] ; then
+		test_step_output_print ./testout.txt
+		test_step_failed "Fewer than 10 dissector plugins found"
+	else
+		test_step_ok
+	fi
+}
+
 # check that dumping the glossaries succeeds (at least doesn't crash)
 # this catches extended value strings without the BASE_EXT_STRING flag
 # among other problems
@@ -335,6 +335,7 @@ clopts_suite_dump_glossaries() {
 		test_step_add "Dumping $glossary glossary" "test_dump_glossary $glossary"
 		test_step_add "Testing $glossary output encoding" "test_dump_glossary_utf8 $glossary"
 	done
+	test_step_add "Testing plugins" test_dump_glossary_plugins
 }
 
 # check exit status of some basic functions

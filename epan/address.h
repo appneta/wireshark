@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __ADDRESS_H__
@@ -82,7 +70,7 @@ clear_address(address *addr)
  * @param addr [in,out] The address to initialize.
  * @param addr_type [in] Address type.
  * @param addr_len [in] The length in bytes of the address data. For example, 4 for
- *                     AT_IPv4 or sizeof(struct e_in6_addr) for AT_IPv6.
+ *                     AT_IPv4 or sizeof(ws_in6_addr) for AT_IPv6.
  * @param addr_data [in] Pointer to the address data.
  */
 static inline void
@@ -115,7 +103,7 @@ set_address(address *addr, int addr_type, int addr_len, const void *addr_data) {
  * @param tvb [in] Pointer to the TVB.
  * @param offset [in] Offset within the TVB.
  * @param addr_len [in] The length in bytes of the address data. For example, 4 for
- *                     AT_IPv4 or sizeof(struct e_in6_addr) for AT_IPv6.
+ *                     AT_IPv4 or sizeof(ws_in6_addr) for AT_IPv6.
  */
 static inline void
 set_address_tvb(address *addr, int addr_type, int addr_len, tvbuff_t *tvb, int offset) {
@@ -137,7 +125,7 @@ set_address_tvb(address *addr, int addr_type, int addr_len, tvbuff_t *tvb, int o
  * @param addr [in,out] The address to initialize.
  * @param addr_type [in] Address type.
  * @param addr_len [in] The length in bytes of the address data. For example, 4 for
- *                     AT_IPv4 or sizeof(struct e_in6_addr) for AT_IPv6.
+ *                     AT_IPv4 or sizeof(ws_in6_addr) for AT_IPv6.
  * @param addr_data [in] Pointer to the address data.
  */
 static inline void
@@ -168,7 +156,7 @@ alloc_address_wmem(wmem_allocator_t *scope, address *addr,
  * @param addr [in,out] The address to initialize.
  * @param addr_type [in] Address type.
  * @param addr_len [in] The length in bytes of the address data. For example, 4 for
- *                     AT_IPv4 or sizeof(struct e_in6_addr) for AT_IPv6.
+ *                     AT_IPv4 or sizeof(ws_in6_addr) for AT_IPv6.
  * @param tvb [in] Pointer to the TVB.
  * @param offset [in] Offset within the TVB.
  */
@@ -362,35 +350,13 @@ typedef enum {
     PT_UDP,             /* UDP */
     PT_DCCP,            /* DCCP */
     PT_IPX,             /* IPX sockets */
-    PT_NCP,             /* NCP connection */
-    PT_EXCHG,           /* Fibre Channel exchange */
     PT_DDP,             /* DDP AppleTalk connection */
-    PT_SBCCS,           /* FICON */
     PT_IDP,             /* XNS IDP sockets */
-    PT_TIPC,            /* TIPC PORT */
     PT_USB,             /* USB endpoint 0xffff means the host */
     PT_I2C,
     PT_IBQP,            /* Infiniband QP number */
-    PT_BLUETOOTH,
-    PT_TDMOP
+    PT_BLUETOOTH
 } port_type;
-
-/* Types of circuit IDs Wireshark knows about. */
-typedef enum {
-    CT_NONE,            /* no circuit type */
-    CT_DLCI,            /* Frame Relay DLCI */
-    CT_ISDN,            /* ISDN channel number */
-    CT_X25,             /* X.25 logical channel number */
-    CT_ISUP,            /* ISDN User Part CIC */
-    CT_IAX2,            /* IAX2 call id */
-    CT_H223,            /* H.223 logical channel number */
-    CT_BICC,            /* BICC Circuit identifier */
-    CT_DVBCI,           /* DVB-CI session number|transport connection id */
-    CT_ISO14443         /* ISO14443 connection between terminal and card
-                           the circuit ID is always 0, there's only one
-                           such connection */
-    /* Could also have ATM VPI/VCI pairs */
-} circuit_type;
 
 #ifdef __cplusplus
 }

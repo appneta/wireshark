@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* 2014-04      Philip Rosenberg-Watt <p.rosenberg-watt[at]cablelabs.com>
@@ -81,12 +69,14 @@ dissect_epon(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
   guint       dpoe_sec_byte;
   gboolean    dpoe_encrypted = FALSE;
 
-  /* Start_of_Packet delimiter (/S/) can either happen in byte 1 or byte 2,
-   * making the captured preamble either 7 or 6 bytes in length. If the
+  /* Start_of_Packet delimiter (/S/) can happen in byte 1, 2 or 3,
+   * making the captured preamble 8, 7 or 6 bytes in length. If the
    * preamble starts with 0x55, then /S/ happened in byte 1, making the
    * captured preamble 7 bytes in length.
    */
-  if (tvb_get_ntoh24(tvb, 0) == 0x55D555) {
+  if (tvb_get_ntohl(tvb, 0) == 0x5555D555) {
+    offset += 2;
+  } else if (tvb_get_ntoh24(tvb, 0) == 0x55D555) {
     offset += 1;
   } else if (tvb_get_ntohs(tvb, 0) == 0xD555) {
     offset += 0;

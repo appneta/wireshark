@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1999 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* Include files */
@@ -28,7 +16,6 @@
 
 #include <epan/packet.h>
 #include <epan/prefs.h>
-#include "dwarf.h"
 #include "packet-tcp.h"
 
 void proto_register_netsync(void);
@@ -158,7 +145,7 @@ static gint dissect_netsync_cmd_error( tvbuff_t *tvb,  gint offset, proto_tree *
 {
 	guint64 len = 0;
 
-	offset += dissect_uleb128( tvb, offset, &len );
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 
 	proto_tree_add_item(tree, hf_netsync_cmd_error_msg, tvb,
 				offset, (gint)len, ENC_ASCII|ENC_NA );
@@ -177,15 +164,13 @@ static gint dissect_netsync_cmd_hello(tvbuff_t *tvb,  gint offset, proto_tree *t
 {
 	guint64 len = 0;
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_hello_keyname, tvb,
 				offset, (gint)len, ENC_ASCII|ENC_NA );
 	offset += (gint)len;
 
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_hello_key, tvb,
 				offset, (gint)len, ENC_NA );
 	offset += (gint)len;
@@ -206,8 +191,7 @@ static gint dissect_netsync_cmd_anonymous(tvbuff_t *tvb,  gint offset, proto_tre
 				offset, 1, ENC_BIG_ENDIAN );
 	offset += 1;
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_anonymous_collection, tvb,
 				offset, (gint)len, ENC_ASCII|ENC_NA );
 	offset += (gint)len;
@@ -229,8 +213,7 @@ static gint dissect_netsync_cmd_auth(tvbuff_t *tvb,  gint offset, proto_tree *tr
 	offset += 1;
 
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_auth_collection, tvb,
 				offset, (gint)len, ENC_ASCII|ENC_NA );
 	offset += (gint)len;
@@ -251,8 +234,7 @@ static gint dissect_netsync_cmd_auth(tvbuff_t *tvb,  gint offset, proto_tree *tr
 				offset, NETSNYC_MERKLE_HASH_LENGTH, ENC_NA );
 	offset += NETSNYC_MERKLE_HASH_LENGTH;
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_auth_sig, tvb,
 				offset, (gint)len, ENC_NA );
 	offset += (gint)len;
@@ -265,8 +247,7 @@ static gint dissect_netsync_cmd_confirm(tvbuff_t *tvb,  gint offset, proto_tree 
 {
 	guint64 len = 0;
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_confirm_sig, tvb,
 				offset, (gint)len, ENC_NA );
 	offset += (gint)len;
@@ -288,13 +269,10 @@ static gint dissect_netsync_cmd_refine(tvbuff_t *tvb,  gint offset, proto_tree *
 
 static gint dissect_netsync_cmd_done(tvbuff_t *tvb,  gint offset, proto_tree *tree, guint size _U_)
 {
-	guint64 len = 0;
-	guint bytes = 0;
+	gint bytes = 0;
 
-	bytes = dissect_uleb128( tvb, offset, &len );
-
-	proto_tree_add_uint(tree, hf_netsync_cmd_done_level, tvb,
-					offset, bytes, (guint32)len );
+	proto_tree_add_item_ret_length(tree, hf_netsync_cmd_done_level, tvb,
+					offset, -1, ENC_LITTLE_ENDIAN|ENC_VARINT_PROTOBUF, &bytes);
 	offset += bytes;
 
 	proto_tree_add_item(tree, hf_netsync_cmd_done_type, tvb,
@@ -354,8 +332,7 @@ static gint dissect_netsync_cmd_data(tvbuff_t *tvb,  gint offset, proto_tree *tr
 				offset, 1, ENC_BIG_ENDIAN );
 	offset += 1;
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_data_payload, tvb,
 				offset, (gint)len, ENC_NA );
 	offset += (gint)len;
@@ -384,8 +361,7 @@ static gint dissect_netsync_cmd_delta(tvbuff_t *tvb,  gint offset, proto_tree *t
 				offset, 1, ENC_BIG_ENDIAN );
 	offset += 1;
 
-	offset += dissect_uleb128( tvb, offset, &len );
-
+	offset += tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &len, ENC_VARINT_PROTOBUF );
 	proto_tree_add_item(tree, hf_netsync_cmd_delta_payload, tvb,
 				offset, (gint)len, ENC_NA );
 	offset += (gint)len;
@@ -416,7 +392,7 @@ get_netsync_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *dat
 	/* skip version and command */
 	offset += 2;
 
-	size_bytes = dissect_uleb128( tvb, offset, &size );
+	size_bytes = tvb_get_varint( tvb, offset, FT_VARINT_MAX_LEN, &size, ENC_VARINT_PROTOBUF );
 
 	/* the calculated size if for the data only, this doesn't
 	 * include the version (1 byte), command (1 byte),

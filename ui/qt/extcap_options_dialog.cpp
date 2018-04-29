@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include <config.h>
 
@@ -28,7 +15,6 @@
 
 #include <wireshark_application.h>
 
-#ifdef HAVE_EXTCAP
 #include <QMessageBox>
 #include <QMap>
 #include <QHBoxLayout>
@@ -43,7 +29,7 @@
 #include "ui/iface_lists.h"
 #include "ui/last_open_dir.h"
 
-#include "ui/ui_util.h"
+#include "ui/ws_ui_util.h"
 #include "ui/util.h"
 #include <wsutil/utf8_entities.h>
 
@@ -54,13 +40,13 @@
 #include <extcap.h>
 #include <extcap_parser.h>
 
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 
 #include <epan/prefs.h>
 #include <ui/preference_utils.h>
 
 #include <ui/qt/wireshark_application.h>
-#include <ui/qt/variant_pointer.h>
+#include <ui/qt/utils/variant_pointer.h>
 
 #include <ui/qt/extcap_argument.h>
 #include <ui/qt/extcap_argument_file.h>
@@ -83,7 +69,7 @@ ExtcapOptionsDialog::ExtcapOptionsDialog(QWidget *parent) :
 
 ExtcapOptionsDialog * ExtcapOptionsDialog::createForDevice(QString &dev_name, QWidget *parent)
 {
-    interface_t device;
+    interface_t *device;
     ExtcapOptionsDialog * resultDialog = NULL;
     bool dev_found = false;
     guint if_idx;
@@ -93,8 +79,8 @@ ExtcapOptionsDialog * ExtcapOptionsDialog::createForDevice(QString &dev_name, QW
 
     for (if_idx = 0; if_idx < global_capture_opts.all_ifaces->len; if_idx++)
     {
-        device = g_array_index(global_capture_opts.all_ifaces, interface_t, if_idx);
-        if (dev_name.compare(QString(device.name)) == 0 && device.if_info.type == IF_EXTCAP)
+        device = &g_array_index(global_capture_opts.all_ifaces, interface_t, if_idx);
+        if (dev_name.compare(QString(device->name)) == 0 && device->if_info.type == IF_EXTCAP)
         {
             dev_found = true;
             break;
@@ -108,7 +94,7 @@ ExtcapOptionsDialog * ExtcapOptionsDialog::createForDevice(QString &dev_name, QW
     resultDialog->device_name = QString(dev_name);
     resultDialog->device_idx = if_idx;
 
-    resultDialog->setWindowTitle(wsApp->windowTitleString(tr("Interface Options") + ": " + device.display_name));
+    resultDialog->setWindowTitle(wsApp->windowTitleString(tr("Interface Options") + ": " + device->display_name));
 
     resultDialog->updateWidgets();
 
@@ -316,11 +302,11 @@ void ExtcapOptionsDialog::on_buttonBox_rejected()
 
 void ExtcapOptionsDialog::on_buttonBox_helpRequested()
 {
-    interface_t device;
+    interface_t *device;
     QString interface_help = NULL;
 
-    device = g_array_index(global_capture_opts.all_ifaces, interface_t, device_idx);
-    interface_help = QString(extcap_get_help_for_ifname(device.name));
+    device = &g_array_index(global_capture_opts.all_ifaces, interface_t, device_idx);
+    interface_help = QString(extcap_get_help_for_ifname(device->name));
     /* The extcap interface didn't provide an help. Let's go with the default */
     if (interface_help.isEmpty()) {
         wsApp->helpTopicAction(HELP_EXTCAP_OPTIONS_DIALOG);
@@ -343,7 +329,7 @@ void ExtcapOptionsDialog::on_buttonBox_helpRequested()
     {
         QMessageBox::warning(this, tr("Extcap Help cannot be found"),
                 QString(tr("The help for the extcap interface %1 cannot be found. Given file: %2"))
-                    .arg(device.name).arg(help_url.path()),
+                    .arg(device->name).arg(help_url.path()),
                 QMessageBox::Ok);
     }
 
@@ -352,11 +338,9 @@ void ExtcapOptionsDialog::on_buttonBox_helpRequested()
 bool ExtcapOptionsDialog::saveOptionToCaptureInfo()
 {
     GHashTable * ret_args;
-    interface_t device;
+    interface_t *device;
 
-    device = g_array_index(global_capture_opts.all_ifaces, interface_t, device_idx);
-    global_capture_opts.all_ifaces = g_array_remove_index(global_capture_opts.all_ifaces, device_idx);
-
+    device = &g_array_index(global_capture_opts.all_ifaces, interface_t, device_idx);
     ret_args = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
     ExtcapArgumentList::const_iterator iter;
@@ -381,12 +365,9 @@ bool ExtcapOptionsDialog::saveOptionToCaptureInfo()
         g_hash_table_insert(ret_args, call_string, value_string );
     }
 
-    if (device.external_cap_args_settings != NULL)
-      g_hash_table_unref(device.external_cap_args_settings);
-    device.external_cap_args_settings = ret_args;
-
-    g_array_insert_val(global_capture_opts.all_ifaces, device_idx, device);
-
+    if (device->external_cap_args_settings != NULL)
+      g_hash_table_unref(device->external_cap_args_settings);
+    device->external_cap_args_settings = ret_args;
     return true;
 }
 
@@ -510,9 +491,6 @@ void ExtcapOptionsDialog::storeValues()
 
     }
 }
-
-
-#endif /* HAVE_LIBPCAP */
 
 /*
  * Editor modelines

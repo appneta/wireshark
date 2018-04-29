@@ -5,20 +5,7 @@
  * By David Hampton <dhampton@mac.com>
  * Copyright 2001 David Hampton
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 #include "config.h"
 
 #include <stdlib.h>
@@ -36,7 +23,7 @@
 #include "wsutil/file_util.h"
 #include "wsutil/filesystem.h"
 #include "wsutil/cmdarg_err.h"
-#include "ws_version_info.h"
+#include "version_info.h"
 
 /* XXX - We might want to switch this to a UAT */
 
@@ -184,17 +171,17 @@ find_protocol_name_func(const gchar *table _U_, gpointer handle, gpointer user_d
 gboolean decode_as_command_option(const gchar *cl_param)
 {
     gchar                        *table_name;
-    guint32                       selector, selector2;
+    guint32                       selector = 0, selector2 = 0;
     gchar                        *decoded_param;
     gchar                        *remaining_param;
-    gchar                        *selector_str;
+    gchar                        *selector_str = NULL;
     gchar                        *dissector_str;
     dissector_handle_t            dissector_matching;
     dissector_table_t             table_matching;
     ftenum_t                      dissector_table_selector_type;
     struct protocol_name_search   user_protocol_name;
     guint64                       i;
-    char                          op;
+    char                          op = '\0';
 
     /* The following code will allocate and copy the command-line options in a string pointed by decoded_param */
 
@@ -212,7 +199,14 @@ gboolean decode_as_command_option(const gchar *cl_param)
 
     remaining_param = strchr(table_name, '=');
     if (remaining_param == NULL) {
-        cmdarg_err("Parameter \"%s\" doesn't follow the template \"%s\"", cl_param, DECODE_AS_ARG_TEMPLATE);
+        /* Dissector tables of type FT_NONE aren't required to specify a value, so for now
+           just check for comma */
+        remaining_param = strchr(table_name, ',');
+        if (remaining_param == NULL) {
+            cmdarg_err("Parameter \"%s\" doesn't follow the template \"%s\"", cl_param, DECODE_AS_ARG_TEMPLATE);
+        } else {
+            *remaining_param = '\0'; /* Terminate the layer type string (table_name) where ',' was detected */
+        }
         /* If the argument does not follow the template, carry on anyway to check
         if the table name is at least correct.  If remaining_param is NULL,
         we'll exit anyway further down */
@@ -254,31 +248,34 @@ gboolean decode_as_command_option(const gchar *cl_param)
         return FALSE;
     }
 
-    if (*(remaining_param + 1) != '=') { /* Check for "==" and not only '=' */
-        cmdarg_err("WARNING: -d requires \"==\" instead of \"=\". Option will be treated as \"%s==%s\"", table_name, remaining_param + 1);
-    }
-    else {
-        remaining_param++; /* Move to the second '=' */
-        *remaining_param = '\0'; /* Remove the second '=' */
-    }
-    remaining_param++; /* Position after the layer type string */
-
-    /* This section extracts a selector value (selector_str) from decoded_param */
-
-    selector_str = remaining_param; /* Next part starts with the selector number */
-
-    remaining_param = strchr(selector_str, ',');
-    if (remaining_param == NULL) {
-        cmdarg_err("Parameter \"%s\" doesn't follow the template \"%s\"", cl_param, DECODE_AS_ARG_TEMPLATE);
-        /* If the argument does not follow the template, carry on anyway to check
-        if the selector value is at least correct.  If remaining_param is NULL,
-        we'll exit anyway further down */
-    }
-    else {
-        *remaining_param = '\0'; /* Terminate the selector number string (selector_str) where ',' was detected */
-    }
-
     dissector_table_selector_type = get_dissector_table_selector_type(table_name);
+
+    if (dissector_table_selector_type != FT_NONE) {
+        if (*(remaining_param + 1) != '=') { /* Check for "==" and not only '=' */
+                cmdarg_err("WARNING: -d requires \"==\" instead of \"=\". Option will be treated as \"%s==%s\"", table_name, remaining_param + 1);
+        }
+        else {
+            remaining_param++; /* Move to the second '=' */
+            *remaining_param = '\0'; /* Remove the second '=' */
+        }
+        remaining_param++; /* Position after the layer type string */
+
+
+        /* This section extracts a selector value (selector_str) from decoded_param */
+
+        selector_str = remaining_param; /* Next part starts with the selector number */
+
+        remaining_param = strchr(selector_str, ',');
+        if (remaining_param == NULL) {
+            cmdarg_err("Parameter \"%s\" doesn't follow the template \"%s\"", cl_param, DECODE_AS_ARG_TEMPLATE);
+            /* If the argument does not follow the template, carry on anyway to check
+            if the selector value is at least correct.  If remaining_param is NULL,
+            we'll exit anyway further down */
+        }
+        else {
+            *remaining_param = '\0'; /* Terminate the selector number string (selector_str) where ',' was detected */
+        }
+    }
 
     switch (dissector_table_selector_type) {
 
@@ -286,19 +283,42 @@ gboolean decode_as_command_option(const gchar *cl_param)
     case FT_UINT16:
     case FT_UINT24:
     case FT_UINT32:
+    {
         /* The selector for this table is an unsigned number.  Parse it as such.
-        There's no need to remove leading and trailing spaces from the
-        selector number string, because sscanf will do that for us. */
-        switch (sscanf(selector_str, "%u%c%u", &selector, &op, &selector2)) {
-        case 1:
+        Skip leading spaces for backwards compatibility (previously sscanf was used). */
+        gchar *str = selector_str;
+        gchar *end;
+        guint64 val;
+
+        while (g_ascii_isspace(*str)) {
+            str++;
+        }
+
+        val = g_ascii_strtoull(str, &end, 0);
+        if (str == end || val > G_MAXUINT32) {
+            cmdarg_err("Invalid selector number \"%s\"", selector_str);
+            g_free(decoded_param);
+            return FALSE;
+        }
+        selector = (guint32) val;
+
+        if (*end == '\0') {
+            /* not a range, but a single (valid) value */
             op = '\0';
-            break;
-        case 3:
-            if (op != ':' && op != '-') {
+            selector2 = 0;
+        } else if (*end == ':' || *end == '-') {
+            /* range value such as "8888:3" or "8888-8890" */
+            op = *end;
+            str = end + 1;
+
+            val = g_ascii_strtoull(str, &end, 0);
+            if (str == end || val > G_MAXUINT32 || *end != '\0') {
                 cmdarg_err("Invalid selector numeric range \"%s\"", selector_str);
                 g_free(decoded_param);
                 return FALSE;
             }
+            selector2 = (guint32) val;
+
             if (op == ':') {
                 if ((selector2 == 0) || ((guint64)selector + selector2 - 1) > G_MAXUINT32) {
                     cmdarg_err("Invalid selector numeric range \"%s\"", selector_str);
@@ -313,19 +333,24 @@ gboolean decode_as_command_option(const gchar *cl_param)
                 g_free(decoded_param);
                 return FALSE;
             }
-            break;
-        default:
+        } else {
+            /* neither a valid single value, nor a range. */
             cmdarg_err("Invalid selector number \"%s\"", selector_str);
             g_free(decoded_param);
             return FALSE;
         }
         break;
+    }
 
     case FT_STRING:
     case FT_STRINGZ:
     case FT_UINT_STRING:
     case FT_STRINGZPAD:
         /* The selector for this table is a string. */
+        break;
+
+    case FT_NONE:
+        /* There is no selector for this table */
         break;
 
     default:
@@ -438,6 +463,11 @@ gboolean decode_as_command_option(const gchar *cl_param)
     case FT_STRINGZPAD:
         /* The selector for this table is a string. */
         dissector_change_string(table_name, selector_str, dissector_matching);
+        break;
+
+    case FT_NONE:
+        /* Just directly set the dissector found. */
+        dissector_change_payload(table_name, dissector_matching);
         break;
 
     default:

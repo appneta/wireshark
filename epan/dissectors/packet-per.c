@@ -11,19 +11,7 @@ proper helper routines
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1572,7 +1560,7 @@ DEBUG_ENTRY("dissect_per_constrained_integer_64b");
 		/* 10.5.7.4 */
 		/* 12.2.6 */
 		/* calculate the number of bits to hold the length */
-		if ((range & G_GINT64_CONSTANT(0xffffffff0000000)) != 0){
+		if ((range & G_GINT64_CONSTANT(0xffffffff00000000)) != 0){
 			n_bits=3;
 		}else{
 			n_bits=2;
@@ -1697,7 +1685,7 @@ dissect_per_choice(tvbuff_t *tvb, guint32 offset, asn1_ctx_t *actx, proto_tree *
 	int extension_addition_entries;
 	guint32 choice_index;
 	int i, idx, cidx;
-	guint32 ext_length;
+	guint32 ext_length = 0;
 	guint32 old_offset = offset;
 	proto_item *choice_item = NULL;
 	proto_tree *choice_tree = NULL;
@@ -2612,6 +2600,8 @@ static const per_choice_t External_encoding_choice[] = {
 
 static int
 dissect_per_External_encoding(tvbuff_t *tvb, int offset, asn1_ctx_t *actx, proto_tree *tree, int hf_index) {
+	// This assertion is used to remove clang's warning.
+	DISSECTOR_ASSERT(actx);
 	offset = dissect_per_choice(tvb, offset, actx, tree, hf_index,
 				    ett_per_External_encoding, External_encoding_choice,
 				    &actx->external.encoding);

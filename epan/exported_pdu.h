@@ -7,29 +7,19 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef EXPORTED_PDU_H
 #define EXPORTED_PDU_H
 
-#include <config.h>
-
 #include "ws_symbol_export.h"
+#include "ws_attributes.h"
 
 #include <glib.h>
+
+#include <epan/tvbuff.h>
+#include <epan/packet_info.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -161,6 +151,29 @@ typedef struct _exp_pdu_data_t {
 #define EXP_PDU_TAG_DVBCI_EVT_LEN       1
 
 #define EXP_PDU_TAG_DISSECTOR_TABLE_NUM_VAL_LEN     4
+
+/* Port types are no longer used for conversation/endpoints so
+   many of the enumerated values have been eliminated
+   Since export PDU functionality is serializing them,
+   keep the old values around for conversion */
+#define OLD_PT_NONE         0
+#define OLD_PT_SCTP         1
+#define OLD_PT_TCP          2
+#define OLD_PT_UDP          3
+#define OLD_PT_DCCP         4
+#define OLD_PT_IPX          5
+#define OLD_PT_NCP          6
+#define OLD_PT_EXCHG        7
+#define OLD_PT_DDP          8
+#define OLD_PT_SBCCS        9
+#define OLD_PT_IDP          10
+#define OLD_PT_TIPC         11
+#define OLD_PT_USB          12
+#define OLD_PT_I2C          13
+#define OLD_PT_IBQP         14
+#define OLD_PT_BLUETOOTH    15
+#define OLD_PT_TDMOP        16
+
 
 /** Compute the size (in bytes) of a pdu item
 *

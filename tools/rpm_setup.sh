@@ -5,19 +5,7 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 # We drag in tools that might not be needed by all users; it's easier
 # that way.
@@ -37,7 +25,7 @@ BASIC_LIST="autoconf automake libtool gcc flex bison python perl lua-devel lua \
 desktop-file-utils fop asciidoc git git-review gtk2-devel gtk3-devel glib2-devel \
 libpcap-devel zlib-devel"
 
-ADDITIONAL_LIST="libnl3-devel libnghttp2-devel libcap libcap-devel lynx \
+ADDITIONAL_LIST="libnl3-devel libnghttp2-devel libcap libcap-devel \
 libgcrypt-devel libssh-devel krb5-devel perl-Parse-Yapp sbc-devel libsmi-devel \
 snappy-devel lz4"
 
@@ -121,8 +109,8 @@ echo "lz4 devel is unavailable" >&2
 
 add_package ADDITIONAL_LIST libcap-progs || echo "cap progs are unavailable" >&2
 
-add_package ADDITIONAL_LIST GeoIP-devel || add_package ADDITIONAL_LIST libGeoIP-devel ||
-echo "GeoIP devel is unavailable" >&2
+add_package ADDITIONAL_LIST libmaxminddb-devel ||
+echo "MaxMind DB devel is unavailable" >&2
 
 add_package ADDITIONAL_LIST gnutls-devel || add_package ADDITIONAL_LIST libgnutls-devel ||
 echo "gnutls devel is unavailable" >&2
@@ -132,6 +120,9 @@ echo "Gettext devel is unavailable" >&2
 
 add_package ADDITIONAL_LIST perl-Pod-Html ||
 echo "perl-Pod-Html is unavailable" >&2
+
+add_package ADDITIONAL_LIST asciidoctor ||
+echo "asciidoctor is unavailable" >&2
 
 $PM install $BASIC_LIST
 

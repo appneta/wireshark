@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #ifndef VOIP_CALLS_DIALOG_H
 #define VOIP_CALLS_DIALOG_H
@@ -26,15 +13,15 @@
 
 #include <glib.h>
 
+#include "cfile.h"
+
 #include "ui/voip_calls.h"
 
-#include "voip_calls_info_model.h"
-#include "cache_proxy_model.h"
+#include <ui/qt/models/voip_calls_info_model.h>
+#include <ui/qt/models/cache_proxy_model.h>
 #include "wireshark_dialog.h"
 
 #include <QMenu>
-
-struct _capture_file;
 
 class QAbstractButton;
 
@@ -52,16 +39,14 @@ public:
     explicit VoipCallsDialog(QWidget &parent, CaptureFile &cf, bool all_flows = false);
     ~VoipCallsDialog();
 
-public slots:
-    void endRetapPackets();
-
 signals:
     void updateFilter(QString filter, bool force = false);
-    void captureFileChanged(struct _capture_file *cf);
+    void captureFileChanged(capture_file *cf);
     void goToPacket(int packet_num);
 
 protected:
     void contextMenuEvent(QContextMenuEvent *event);
+    virtual void removeTapListeners();
 
 protected slots:
     void changeEvent(QEvent* event);

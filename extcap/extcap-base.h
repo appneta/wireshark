@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 #ifndef __EXTCAP_BASE_H__
 #define __EXTCAP_BASE_H__
@@ -54,7 +42,8 @@
 	EXTCAP_OPT_CAPTURE, \
 	EXTCAP_OPT_CAPTURE_FILTER, \
 	EXTCAP_OPT_FIFO, \
-	EXTCAP_OPT_DEBUG
+	EXTCAP_OPT_DEBUG, \
+	EXTCAP_OPT_DEBUG_FILE
 
 
 #define EXTCAP_BASE_OPTIONS \
@@ -66,7 +55,8 @@
 	{ "capture", no_argument, NULL, EXTCAP_OPT_CAPTURE}, \
 	{ "extcap-capture-filter", required_argument,	NULL, EXTCAP_OPT_CAPTURE_FILTER}, \
 	{ "fifo", required_argument, NULL, EXTCAP_OPT_FIFO}, \
-	{ "debug", optional_argument, NULL, EXTCAP_OPT_DEBUG} \
+	{ "debug", required_argument, NULL, EXTCAP_OPT_DEBUG}, \
+	{ "debug-file", required_argument, NULL, EXTCAP_OPT_DEBUG_FILE}
 
 #if defined(_WIN32)
 	BOOLEAN IsHandleRedirected(DWORD handle);
@@ -105,7 +95,9 @@ void extcap_base_cleanup(extcap_parameters ** extcap);
 void extcap_help_add_header(extcap_parameters * extcap, char * help_header);
 void extcap_help_add_option(extcap_parameters * extcap, const char * help_option_name, const char * help_optionn_desc);
 void extcap_help_print(extcap_parameters * extcap);
-
+void extcap_cmdline_debug(char** ar, const unsigned n);
+void extcap_init_custom_log(const char* filename);
+void extcap_config_debug(unsigned* count);
 void extcap_base_help(void);
 
 #endif

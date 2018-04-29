@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1009,7 +997,7 @@ ip_to_str_buf(const guint8 *ad, gchar *buf, const int buf_len)
 	register gchar const *p;
 	register gchar *b=buf;
 
-	if (buf_len < MAX_IP_STR_LEN) {
+	if (buf_len < WS_INET_ADDRSTRLEN) {
 		g_strlcpy(buf, BUF_TOO_SMALL_ERR, buf_len);  /* Let the unexpected value alert user */
 		return;
 	}
@@ -1043,15 +1031,37 @@ ip_to_str_buf(const guint8 *ad, gchar *buf, const int buf_len)
 	*b=0;
 }
 
-void
-ip6_to_str_buf(const struct e_in6_addr *ad, gchar *buf, int buf_len)
+int
+ip6_to_str_buf_with_pfx(const ws_in6_addr *addr, gchar *buf, int buf_size, const char *prefix)
 {
-	if (buf_len < WS_INET6_ADDRSTRLEN) {
-		g_strlcpy(buf, BUF_TOO_SMALL_ERR, buf_len);  /* Let the unexpected value alert user */
-		return;
-	}
+	int bytes;    /* the number of bytes which would be produced if the buffer was large enough. */
+	gchar addr_buf[WS_INET6_ADDRSTRLEN];
+	int len;
 
-	ws_inet_ntop6(ad, buf, buf_len);
+	if (prefix == NULL)
+		prefix = "";
+	bytes = g_snprintf(buf, buf_size, "%s%s", prefix, ws_inet_ntop6(addr, addr_buf, sizeof(addr_buf)));
+	len = bytes - 1;
+
+	if (len > buf_size - 1) { /* size minus nul terminator */
+		len = (int)g_strlcpy(buf, BUF_TOO_SMALL_ERR, buf_size);  /* Let the unexpected value alert user */
+	}
+	return len;
+}
+
+int
+ip6_to_str_buf(const ws_in6_addr *addr, gchar *buf, int buf_size)
+{
+	gchar addr_buf[WS_INET6_ADDRSTRLEN];
+	int len;
+
+	/* slightly more efficient than ip6_to_str_buf_with_pfx(addr, buf, buf_size, NULL) */
+	len = (int)g_strlcpy(buf, ws_inet_ntop6(addr, addr_buf, sizeof(addr_buf)), buf_size);     /* this returns len = strlen(addr_buf) */
+
+	if (len > buf_size - 1) { /* size minus nul terminator */
+		len = (int)g_strlcpy(buf, BUF_TOO_SMALL_ERR, buf_size);  /* Let the unexpected value alert user */
+	}
+	return len;
 }
 
 gchar *
@@ -1115,17 +1125,12 @@ port_type_to_str (port_type type)
 		case PT_UDP:		return "UDP";
 		case PT_DCCP:		return "DCCP";
 		case PT_IPX:		return "IPX";
-		case PT_NCP:		return "NCP";
-		case PT_EXCHG:		return "FC EXCHG";
 		case PT_DDP:		return "DDP";
-		case PT_SBCCS:		return "FICON SBCCS";
 		case PT_IDP:		return "IDP";
-		case PT_TIPC:		return "TIPC";
 		case PT_USB:		return "USB";
 		case PT_I2C:		return "I2C";
 		case PT_IBQP:		return "IBQP";
 		case PT_BLUETOOTH:	return "BLUETOOTH";
-		case PT_TDMOP:		return "TDMOP";
 		default:		return "[Unknown]";
 	}
 }

@@ -14,21 +14,9 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Reference: 3GPP TS 36.443 v13.3.0
+ * Reference: 3GPP TS 36.443 v14.0.0
  */
 
 #include "config.h"
@@ -127,11 +115,14 @@ typedef enum _ProtocolIE_ID_enum {
   id_Active_MBMS_Session_List =  42,
   id_MBMS_Suspension_Notification_List =  43,
   id_MBMS_Suspension_Notification_Item =  44,
-  id_SC_PTM_Information =  45
+  id_SC_PTM_Information =  45,
+  id_Modification_PeriodExtended =  46,
+  id_Repetition_PeriodExtended =  47,
+  id_MCH_Scheduling_PeriodExtended2 =  48
 } ProtocolIE_ID_enum;
 
 /*--- End of included file: packet-m2ap-val.h ---*/
-#line 47 "./asn1/m2ap/packet-m2ap-template.c"
+#line 35 "./asn1/m2ap/packet-m2ap-template.c"
 
 /* Initialize the protocol and registered fields */
 static int proto_m2ap = -1;
@@ -159,8 +150,11 @@ static int hf_m2ap_MCCHrelatedBCCH_ConfigPerMBSFNArea_Item_PDU = -1;  /* MCCHrel
 static int hf_m2ap_MCE_MBMS_M2AP_ID_PDU = -1;     /* MCE_MBMS_M2AP_ID */
 static int hf_m2ap_MCEname_PDU = -1;              /* MCEname */
 static int hf_m2ap_MCH_Scheduling_PeriodExtended_PDU = -1;  /* MCH_Scheduling_PeriodExtended */
+static int hf_m2ap_MCH_Scheduling_PeriodExtended2_PDU = -1;  /* MCH_Scheduling_PeriodExtended2 */
 static int hf_m2ap_Modulation_Coding_Scheme2_PDU = -1;  /* Modulation_Coding_Scheme2 */
+static int hf_m2ap_Modification_PeriodExtended_PDU = -1;  /* Modification_PeriodExtended */
 static int hf_m2ap_Common_Subframe_Allocation_Period_PDU = -1;  /* Common_Subframe_Allocation_Period */
+static int hf_m2ap_Repetition_PeriodExtended_PDU = -1;  /* Repetition_PeriodExtended */
 static int hf_m2ap_SC_PTM_Information_PDU = -1;   /* SC_PTM_Information */
 static int hf_m2ap_TimeToWait_PDU = -1;           /* TimeToWait */
 static int hf_m2ap_TMGI_PDU = -1;                 /* TMGI */
@@ -247,6 +241,8 @@ static int hf_m2ap_typeOfError = -1;              /* TypeOfError */
 static int hf_m2ap_pLMN_Identity = -1;            /* PLMN_Identity */
 static int hf_m2ap_eUTRANcellIdentifier = -1;     /* EUTRANCellIdentifier */
 static int hf_m2ap_macro_eNB_ID = -1;             /* BIT_STRING_SIZE_20 */
+static int hf_m2ap_short_Macro_eNB_ID = -1;       /* BIT_STRING_SIZE_18 */
+static int hf_m2ap_long_Macro_eNB_ID = -1;        /* BIT_STRING_SIZE_21 */
 static int hf_m2ap_mbsfnSynchronisationArea = -1;  /* MBSFN_SynchronisationArea_ID */
 static int hf_m2ap_mbmsServiceAreaList = -1;      /* MBMS_Service_Area_ID_List */
 static int hf_m2ap_mBMSConfigData = -1;           /* ENB_MBMS_Configuration_data_Item */
@@ -318,7 +314,7 @@ static int hf_m2ap_successfulOutcome_value = -1;  /* SuccessfulOutcome_value */
 static int hf_m2ap_unsuccessfulOutcome_value = -1;  /* UnsuccessfulOutcome_value */
 
 /*--- End of included file: packet-m2ap-hf.c ---*/
-#line 54 "./asn1/m2ap/packet-m2ap-template.c"
+#line 42 "./asn1/m2ap/packet-m2ap-template.c"
 
 /* Initialize the subtree pointers */
 static int ett_m2ap = -1;
@@ -415,7 +411,7 @@ static gint ett_m2ap_SuccessfulOutcome = -1;
 static gint ett_m2ap_UnsuccessfulOutcome = -1;
 
 /*--- End of included file: packet-m2ap-ett.c ---*/
-#line 60 "./asn1/m2ap/packet-m2ap-template.c"
+#line 48 "./asn1/m2ap/packet-m2ap-template.c"
 
 static expert_field ei_m2ap_invalid_ip_address_len = EI_INIT;
 
@@ -579,6 +575,9 @@ static const value_string m2ap_ProtocolIE_ID_vals[] = {
   { id_MBMS_Suspension_Notification_List, "id-MBMS-Suspension-Notification-List" },
   { id_MBMS_Suspension_Notification_Item, "id-MBMS-Suspension-Notification-Item" },
   { id_SC_PTM_Information, "id-SC-PTM-Information" },
+  { id_Modification_PeriodExtended, "id-Modification-PeriodExtended" },
+  { id_Repetition_PeriodExtended, "id-Repetition-PeriodExtended" },
+  { id_MCH_Scheduling_PeriodExtended2, "id-MCH-Scheduling-PeriodExtended2" },
   { 0, NULL }
 };
 
@@ -1114,13 +1113,37 @@ dissect_m2ap_BIT_STRING_SIZE_20(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *a
 }
 
 
+
+static int
+dissect_m2ap_BIT_STRING_SIZE_18(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  offset = dissect_per_bit_string(tvb, offset, actx, tree, hf_index,
+                                     18, 18, FALSE, NULL, NULL);
+
+  return offset;
+}
+
+
+
+static int
+dissect_m2ap_BIT_STRING_SIZE_21(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  offset = dissect_per_bit_string(tvb, offset, actx, tree, hf_index,
+                                     21, 21, FALSE, NULL, NULL);
+
+  return offset;
+}
+
+
 static const value_string m2ap_ENB_ID_vals[] = {
   {   0, "macro-eNB-ID" },
+  {   1, "short-Macro-eNB-ID" },
+  {   2, "long-Macro-eNB-ID" },
   { 0, NULL }
 };
 
 static const per_choice_t ENB_ID_choice[] = {
   {   0, &hf_m2ap_macro_eNB_ID   , ASN1_EXTENSION_ROOT    , dissect_m2ap_BIT_STRING_SIZE_20 },
+  {   1, &hf_m2ap_short_Macro_eNB_ID, ASN1_NOT_EXTENSION_ROOT, dissect_m2ap_BIT_STRING_SIZE_18 },
+  {   2, &hf_m2ap_long_Macro_eNB_ID, ASN1_NOT_EXTENSION_ROOT, dissect_m2ap_BIT_STRING_SIZE_21 },
   { 0, NULL, 0, NULL }
 };
 
@@ -1753,11 +1776,50 @@ dissect_m2ap_MCH_Scheduling_PeriodExtended(tvbuff_t *tvb _U_, int offset _U_, as
 }
 
 
+static const value_string m2ap_MCH_Scheduling_PeriodExtended2_vals[] = {
+  {   0, "rf1" },
+  {   1, "rf2" },
+  { 0, NULL }
+};
+
+
+static int
+dissect_m2ap_MCH_Scheduling_PeriodExtended2(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  offset = dissect_per_enumerated(tvb, offset, actx, tree, hf_index,
+                                     2, NULL, TRUE, 0, NULL);
+
+  return offset;
+}
+
+
 
 static int
 dissect_m2ap_Modulation_Coding_Scheme2(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_per_constrained_integer(tvb, offset, actx, tree, hf_index,
                                                             0U, 27U, NULL, FALSE);
+
+  return offset;
+}
+
+
+static const value_string m2ap_Modification_PeriodExtended_vals[] = {
+  {   0, "rf1" },
+  {   1, "rf2" },
+  {   2, "rf4" },
+  {   3, "rf8" },
+  {   4, "rf16" },
+  {   5, "rf32" },
+  {   6, "rf64" },
+  {   7, "rf128" },
+  {   8, "rf256" },
+  { 0, NULL }
+};
+
+
+static int
+dissect_m2ap_Modification_PeriodExtended(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  offset = dissect_per_enumerated(tvb, offset, actx, tree, hf_index,
+                                     9, NULL, TRUE, 0, NULL);
 
   return offset;
 }
@@ -1806,6 +1868,25 @@ static int
 dissect_m2ap_Common_Subframe_Allocation_Period(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_per_enumerated(tvb, offset, actx, tree, hf_index,
                                      7, NULL, FALSE, 0, NULL);
+
+  return offset;
+}
+
+
+static const value_string m2ap_Repetition_PeriodExtended_vals[] = {
+  {   0, "rf1" },
+  {   1, "rf2" },
+  {   2, "rf4" },
+  {   3, "rf8" },
+  {   4, "rf16" },
+  { 0, NULL }
+};
+
+
+static int
+dissect_m2ap_Repetition_PeriodExtended(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  offset = dissect_per_enumerated(tvb, offset, actx, tree, hf_index,
+                                     5, NULL, TRUE, 0, NULL);
 
   return offset;
 }
@@ -2915,6 +2996,14 @@ static int dissect_MCH_Scheduling_PeriodExtended_PDU(tvbuff_t *tvb _U_, packet_i
   offset += 7; offset >>= 3;
   return offset;
 }
+static int dissect_MCH_Scheduling_PeriodExtended2_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
+  int offset = 0;
+  asn1_ctx_t asn1_ctx;
+  asn1_ctx_init(&asn1_ctx, ASN1_ENC_PER, TRUE, pinfo);
+  offset = dissect_m2ap_MCH_Scheduling_PeriodExtended2(tvb, offset, &asn1_ctx, tree, hf_m2ap_MCH_Scheduling_PeriodExtended2_PDU);
+  offset += 7; offset >>= 3;
+  return offset;
+}
 static int dissect_Modulation_Coding_Scheme2_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
   int offset = 0;
   asn1_ctx_t asn1_ctx;
@@ -2923,11 +3012,27 @@ static int dissect_Modulation_Coding_Scheme2_PDU(tvbuff_t *tvb _U_, packet_info 
   offset += 7; offset >>= 3;
   return offset;
 }
+static int dissect_Modification_PeriodExtended_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
+  int offset = 0;
+  asn1_ctx_t asn1_ctx;
+  asn1_ctx_init(&asn1_ctx, ASN1_ENC_PER, TRUE, pinfo);
+  offset = dissect_m2ap_Modification_PeriodExtended(tvb, offset, &asn1_ctx, tree, hf_m2ap_Modification_PeriodExtended_PDU);
+  offset += 7; offset >>= 3;
+  return offset;
+}
 static int dissect_Common_Subframe_Allocation_Period_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
   int offset = 0;
   asn1_ctx_t asn1_ctx;
   asn1_ctx_init(&asn1_ctx, ASN1_ENC_PER, TRUE, pinfo);
   offset = dissect_m2ap_Common_Subframe_Allocation_Period(tvb, offset, &asn1_ctx, tree, hf_m2ap_Common_Subframe_Allocation_Period_PDU);
+  offset += 7; offset >>= 3;
+  return offset;
+}
+static int dissect_Repetition_PeriodExtended_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
+  int offset = 0;
+  asn1_ctx_t asn1_ctx;
+  asn1_ctx_init(&asn1_ctx, ASN1_ENC_PER, TRUE, pinfo);
+  offset = dissect_m2ap_Repetition_PeriodExtended(tvb, offset, &asn1_ctx, tree, hf_m2ap_Repetition_PeriodExtended_PDU);
   offset += 7; offset >>= 3;
   return offset;
 }
@@ -3342,36 +3447,36 @@ static int dissect_M2AP_PDU_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto
 
 
 /*--- End of included file: packet-m2ap-fn.c ---*/
-#line 89 "./asn1/m2ap/packet-m2ap-template.c"
+#line 77 "./asn1/m2ap/packet-m2ap-template.c"
 
 static int
 dissect_ProtocolIEFieldValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint(m2ap_ies_dissector_table, ProtocolIE_ID, tvb, pinfo, tree)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(m2ap_ies_dissector_table, ProtocolIE_ID, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_ProtocolExtensionFieldExtensionValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint(m2ap_extension_dissector_table, ProtocolIE_ID, tvb, pinfo, tree)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(m2ap_extension_dissector_table, ProtocolIE_ID, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_InitiatingMessageValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint(m2ap_proc_imsg_dissector_table, ProcedureCode, tvb, pinfo, tree)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(m2ap_proc_imsg_dissector_table, ProcedureCode, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_SuccessfulOutcomeValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint(m2ap_proc_sout_dissector_table, ProcedureCode, tvb, pinfo, tree)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(m2ap_proc_sout_dissector_table, ProcedureCode, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_UnsuccessfulOutcomeValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint(m2ap_proc_uout_dissector_table, ProcedureCode, tvb, pinfo, tree)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(m2ap_proc_uout_dissector_table, ProcedureCode, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 
@@ -3484,13 +3589,25 @@ proto_register_m2ap(void) {
       { "MCH-Scheduling-PeriodExtended", "m2ap.MCH_Scheduling_PeriodExtended",
         FT_UINT32, BASE_DEC, VALS(m2ap_MCH_Scheduling_PeriodExtended_vals), 0,
         NULL, HFILL }},
+    { &hf_m2ap_MCH_Scheduling_PeriodExtended2_PDU,
+      { "MCH-Scheduling-PeriodExtended2", "m2ap.MCH_Scheduling_PeriodExtended2",
+        FT_UINT32, BASE_DEC, VALS(m2ap_MCH_Scheduling_PeriodExtended2_vals), 0,
+        NULL, HFILL }},
     { &hf_m2ap_Modulation_Coding_Scheme2_PDU,
       { "Modulation-Coding-Scheme2", "m2ap.Modulation_Coding_Scheme2",
         FT_UINT32, BASE_DEC, NULL, 0,
         NULL, HFILL }},
+    { &hf_m2ap_Modification_PeriodExtended_PDU,
+      { "Modification-PeriodExtended", "m2ap.Modification_PeriodExtended",
+        FT_UINT32, BASE_DEC, VALS(m2ap_Modification_PeriodExtended_vals), 0,
+        NULL, HFILL }},
     { &hf_m2ap_Common_Subframe_Allocation_Period_PDU,
       { "Common-Subframe-Allocation-Period", "m2ap.Common_Subframe_Allocation_Period",
         FT_UINT32, BASE_DEC, VALS(m2ap_Common_Subframe_Allocation_Period_vals), 0,
+        NULL, HFILL }},
+    { &hf_m2ap_Repetition_PeriodExtended_PDU,
+      { "Repetition-PeriodExtended", "m2ap.Repetition_PeriodExtended",
+        FT_UINT32, BASE_DEC, VALS(m2ap_Repetition_PeriodExtended_vals), 0,
         NULL, HFILL }},
     { &hf_m2ap_SC_PTM_Information_PDU,
       { "SC-PTM-Information", "m2ap.SC_PTM_Information_element",
@@ -3836,6 +3953,14 @@ proto_register_m2ap(void) {
       { "macro-eNB-ID", "m2ap.macro_eNB_ID",
         FT_BYTES, BASE_NONE, NULL, 0,
         "BIT_STRING_SIZE_20", HFILL }},
+    { &hf_m2ap_short_Macro_eNB_ID,
+      { "short-Macro-eNB-ID", "m2ap.short_Macro_eNB_ID",
+        FT_BYTES, BASE_NONE, NULL, 0,
+        "BIT_STRING_SIZE_18", HFILL }},
+    { &hf_m2ap_long_Macro_eNB_ID,
+      { "long-Macro-eNB-ID", "m2ap.long_Macro_eNB_ID",
+        FT_BYTES, BASE_NONE, NULL, 0,
+        "BIT_STRING_SIZE_21", HFILL }},
     { &hf_m2ap_mbsfnSynchronisationArea,
       { "mbsfnSynchronisationArea", "m2ap.mbsfnSynchronisationArea",
         FT_UINT32, BASE_DEC, NULL, 0,
@@ -4114,7 +4239,7 @@ proto_register_m2ap(void) {
         "UnsuccessfulOutcome_value", HFILL }},
 
 /*--- End of included file: packet-m2ap-hfarr.c ---*/
-#line 156 "./asn1/m2ap/packet-m2ap-template.c"
+#line 144 "./asn1/m2ap/packet-m2ap-template.c"
   };
 
   /* List of subtrees */
@@ -4213,7 +4338,7 @@ proto_register_m2ap(void) {
     &ett_m2ap_UnsuccessfulOutcome,
 
 /*--- End of included file: packet-m2ap-ettarr.c ---*/
-#line 164 "./asn1/m2ap/packet-m2ap-template.c"
+#line 152 "./asn1/m2ap/packet-m2ap-template.c"
   };
 
   expert_module_t* expert_m2ap;
@@ -4291,6 +4416,9 @@ proto_reg_handoff_m2ap(void)
   dissector_add_uint("m2ap.ies", id_SC_PTM_Information, create_dissector_handle(dissect_SC_PTM_Information_PDU, proto_m2ap));
   dissector_add_uint("m2ap.extension", id_Modulation_Coding_Scheme2, create_dissector_handle(dissect_Modulation_Coding_Scheme2_PDU, proto_m2ap));
   dissector_add_uint("m2ap.extension", id_MCH_Scheduling_PeriodExtended, create_dissector_handle(dissect_MCH_Scheduling_PeriodExtended_PDU, proto_m2ap));
+  dissector_add_uint("m2ap.extension", id_Repetition_PeriodExtended, create_dissector_handle(dissect_Repetition_PeriodExtended_PDU, proto_m2ap));
+  dissector_add_uint("m2ap.extension", id_Modification_PeriodExtended, create_dissector_handle(dissect_Modification_PeriodExtended_PDU, proto_m2ap));
+  dissector_add_uint("m2ap.extension", id_MCH_Scheduling_PeriodExtended2, create_dissector_handle(dissect_MCH_Scheduling_PeriodExtended2_PDU, proto_m2ap));
   dissector_add_uint("m2ap.proc.imsg", id_sessionStart, create_dissector_handle(dissect_SessionStartRequest_PDU, proto_m2ap));
   dissector_add_uint("m2ap.proc.sout", id_sessionStart, create_dissector_handle(dissect_SessionStartResponse_PDU, proto_m2ap));
   dissector_add_uint("m2ap.proc.uout", id_sessionStart, create_dissector_handle(dissect_SessionStartFailure_PDU, proto_m2ap));
@@ -4322,5 +4450,5 @@ proto_reg_handoff_m2ap(void)
 
 
 /*--- End of included file: packet-m2ap-dis-tab.c ---*/
-#line 196 "./asn1/m2ap/packet-m2ap-template.c"
+#line 184 "./asn1/m2ap/packet-m2ap-template.c"
 }

@@ -11,19 +11,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -317,7 +305,7 @@ static int wslua_instancemeta_index_impl(lua_State *L, gboolean is_getter)
             lua_pop(L, 1);      /* Remove cfunction from stack */
             lua_remove(L, 2);   /* Remove key from stack */
             /*
-             * Note: this re-uses the current closure as optimization, exposing
+             * Note: This re-uses the current closure as optimization, exposing
              * its upvalues via pseudo-indices. The alternative is to create a
              * new C closure (via lua_call), but this is more expensive.
              * Callees should not rely on the availability of the upvalues.
@@ -513,7 +501,7 @@ static void wslua_push_attributes(lua_State *L, const wslua_attribute_table *t, 
 void wslua_register_classinstance_meta(lua_State *L, const wslua_class *cls_def)
 {
     /* Register metatable for use by class instances. STACK = { MT } */
-    /* NOTE: the name can be changed as long as luaL_checkudata is also adapted */
+    /* NOTE: The name can be changed as long as luaL_checkudata is also adapted */
     luaL_newmetatable(L, cls_def->name);
     if (cls_def->instance_meta) {
         wslua_setfuncs(L, cls_def->instance_meta, 0);
@@ -535,7 +523,8 @@ void wslua_register_classinstance_meta(lua_State *L, const wslua_class *cls_def)
     lua_pushstring(L, cls_def->name);                       /* upval 1: class name */
     wslua_push_attributes(L, cls_def->attrs, TRUE, -2);     /* upval 2: getters table */
 #ifdef WSLUA_WITH_INTROSPECTION
-    lua_pushvalue(L, -1), lua_rawsetfield(L, -5, "__getters"); /* set (transition) property on mt, remove later! */
+    lua_pushvalue(L, -1);
+    lua_rawsetfield(L, -5, "__getters"); /* set (transition) property on mt, remove later! */
 #endif
     lua_rawgetfield(L, -4, "__index");                      /* upval 3: fallback __index method from metatable */
     lua_pushvalue(L, -4);                                   /* upval 4: class methods table */
@@ -546,7 +535,8 @@ void wslua_register_classinstance_meta(lua_State *L, const wslua_class *cls_def)
     lua_pushstring(L, cls_def->name);                       /* upval 1: class name */
     wslua_push_attributes(L, cls_def->attrs, FALSE, -2);    /* upval 2: setters table */
 #ifdef WSLUA_WITH_INTROSPECTION
-    lua_pushvalue(L, -1), lua_rawsetfield(L, -5, "__setters"); /* set (transition) property on mt, remove later! */
+    lua_pushvalue(L, -1);
+    lua_rawsetfield(L, -5, "__setters"); /* set (transition) property on mt, remove later! */
 #endif
     lua_rawgetfield(L, -4, "__newindex");                   /* upval 3: fallback __newindex method from metatable */
     lua_pushcclosure(L, wslua_instancemeta_newindex, 3);
@@ -564,9 +554,9 @@ void wslua_register_classinstance_meta(lua_State *L, const wslua_class *cls_def)
  * This functions basically creates a class (type table) with this structure:
  *
  *  Class = { class_methods }
- *  Class.__typeof = "Class"                -- NOTE: might be removed in future
+ *  Class.__typeof = "Class"                -- NOTE: Might be removed in future
  *  Class.__metatable = { class_meta }
- *  Class.__metatable.__typeof = "Class"    -- NOTE: might be removed in future
+ *  Class.__metatable.__typeof = "Class"    -- NOTE: Might be removed in future
  *  Class.__metatable.__index = function_that_errors_out
  *  Class.__metatable.__newindex = function_that_errors_out
  *

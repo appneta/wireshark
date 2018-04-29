@@ -1,6 +1,6 @@
 # lte-rrc.cnf
 # lte-rrc conformation file
-# Copyright 2008 Vincent Helfre, 2009-2017 Pascal Quantin
+# Copyright 2008 Vincent Helfre, 2009-2018 Pascal Quantin
 
 #.OPT
 PER
@@ -9,13 +9,25 @@ UNALIGNED
 
 #.USE_VALS_EXT
 BandclassCDMA2000
+CarrierFreq-NB-r13/carrierFreqOffset-r13
+DelayBudgetReport-r14/type1
+DelayBudgetReport-r14/type2
 DRX-Config/setup/drx-InactivityTimer
+DRX-Config-r13/drx-ULRetransmissionTimer-r13
+DRX-Config-NB-r13/setup/drx-ULRetransmissionTimer-r13
 PDCP-Config/eag_3/t-Reordering-r12
+PDCP-Config/eag_4/statusFeedback-r13/setup/statusPDU-Periodicity-Type1-r13
+PDCP-Config/eag_4/statusFeedback-r13/setup/statusPDU-Periodicity-Type2-r13
+PollByte-r14
+PowerRampingParameters-NB-v1450/powerRampingParametersCE1-r14/preambleInitialReceivedTargetPowerCE1-r14
 Q-OffsetRange
 RRM-Config/ue-InactiveTime
+RRM-Config-NB/ue-InactiveTime
 SIB-Type
+SL-CommResourcePoolV2X-r14/sizeSubchannel-r14
 SL-PeriodComm-r12
 SupportedBandUTRA-FDD
+SystemInformation-r8-IEs/sib-TypeAndInfo
 T-PollRetransmit
 T-Reordering
 T-StatusProhibit
@@ -28,13 +40,10 @@ HandoverPreparationInformation-NB_PDU
 RLF-Report-r9_PDU
 RLF-Report-v9e0_PDU
 SCG-ConfigInfo-r12_PDU
+UECapabilityInformation_PDU
 UEPagingCoverageInformation_PDU
 UEPagingCoverageInformation-NB_PDU
-UERadioAccessCapabilityInformation_PDU
-UERadioAccessCapabilityInformation-NB_PDU
 UE-EUTRA-Capability_PDU
-UERadioPagingInformation_PDU
-UERadioPagingInformation-NB_PDU
 VisitedCellInfoList-r12_PDU
 #.END
 
@@ -47,10 +56,10 @@ RLF-Report-v9e0
 SCG-ConfigInfo-r12
 UEPagingCoverageInformation
 UEPagingCoverageInformation-NB
-UERadioAccessCapabilityInformation
-UERadioAccessCapabilityInformation-NB
-UERadioPagingInformation
-UERadioPagingInformation-NB
+UERadioAccessCapabilityInformation    @ue_radio_access_cap_info
+UERadioAccessCapabilityInformation-NB @ue_radio_access_cap_info.nb
+UERadioPagingInformation              @ue_radio_paging_info
+UERadioPagingInformation-NB           @ue_radio_paging_info.nb
 VisitedCellInfoList-r12
 BCCH-BCH-Message             @bcch.bch
 BCCH-DL-SCH-Message          @bcch.dl.sch
@@ -65,6 +74,7 @@ SC-MCCH-Message-r13          @sc.mcch
 UECapabilityInformation      @ue_cap_info
 UE-EUTRA-Capability          @ue_eutra_cap
 SBCCH-SL-BCH-Message         @sbcch.sl.bch
+SBCCH-SL-BCH-Message-V2X-r14 @sbcch.sl.bch.v2x
 BCCH-BCH-Message-NB          @bcch.bch.nb
 BCCH-DL-SCH-Message-NB       @bcch.dl.sch.nb
 PCCH-Message-NB              @pcch.nb
@@ -72,6 +82,9 @@ DL-CCCH-Message-NB           @dl.ccch.nb
 DL-DCCH-Message-NB           @dl.dcch.nb
 UL-CCCH-Message-NB           @ul.ccch.nb
 UL-DCCH-Message-NB           @ul.dcch.nb
+SC-MCCH-Message-NB           @sc.mcch.nb
+BCCH-BCH-Message-MBMS        @bcch.bch.mbms
+BCCH-DL-SCH-Message-MBMS     @bcch.dl.sch.mbms
 #.END
 
 #.OMIT_ASSIGNMENT
@@ -80,6 +93,10 @@ CellsTriggeredList
 CSI-RS-TriggeredList-r12
 LogMeasInfoList2-r10
 RSRP-RangeSL3-r12
+SL-CBR-PPPP-TxPreconfigList-r14
+SL-CBR-PreconfigTxConfigList-r14
+SL-OffsetIndicatorSync-r14
+SL-PPPP-TxPreconfigIndex-r14
 SL-PreconfigCommPool-r12
 SL-PreconfigCommPoolList4-r12
 SL-PreconfigCommRxPoolList-r13
@@ -90,7 +107,16 @@ SL-PreconfigDiscTxPoolList-r13
 SL-PreconfigGeneral-r12
 SL-PreconfigRelay-r13
 SL-PreconfigSync-r12
+SL-PreconfigV2X-Sync-r14
+SL-PreconfigV2X-RxPoolList-r14
+SL-PreconfigV2X-TxPoolList-r14
 SL-Preconfiguration-r12
+SL-V2X-PreconfigCommPool-r14
+SL-V2X-PreconfigFreqInfo-r14
+SL-V2X-PreconfigFreqList-r14
+SL-V2X-Preconfiguration-r14
+SL-V2X-SyncOffsetIndicators-r14
+Tx-PreconfigIndex-r14
 VarConnEstFailReport-r11
 VarLogMeasConfig-r10
 VarLogMeasConfig-r11
@@ -151,7 +177,7 @@ SI-OrPSI-GERAN TYPE_PREFIX
 
 #RAT-Type ::=						ENUMERATED {
 #										eutra, utra, geran-cs, geran-ps, cdma2000-1XRTT,
-#										spare3, spare2, spare1, ...}
+#										nr, eutra-nr, spare1, ...}
 # ueCapabilityRAT-Container
 # Container for the UE capabilities of the indicated RAT. The encoding is defined in the specification of each RAT:
 # For E-UTRA: the encoding of UE capabilities is defined in IE UE-EUTRA-Capability.
@@ -173,6 +199,8 @@ SI-OrPSI-GERAN TYPE_PREFIX
 # For CDMA2000-1XRTT: the octet string contains the A21 Mobile Subscription Information and the encoding of this is
 # defined in A.S0008 [33]. The A21 Mobile Subscription Information contains the supported CDMA2000 1xRTT band
 # class and band sub-class information.
+# For NR: The octet string contains the IE UE-NR-Capability as defined in TS 38.331 [82].
+# For EUTRA-NR: The octet string contains the IE UE-MRDC-Capability as defined in TS 38.331 [82]
 
 #.FN_BODY UE-CapabilityRAT-Container/ueCapabilityRAT-Container VAL_PTR = &ue_cap_tvb
   tvbuff_t *ue_cap_tvb=NULL;
@@ -227,6 +255,14 @@ if(ue_cap_tvb){
   case RAT_Type_cdma2000_1XRTT:
     /* cdma2000-1XRTT */
     /* dissection of "A21 Mobile Subscription Information" could be added to packet-ansi_a.c */
+    break;
+  case RAT_Type_nr:
+    /* nr */
+    dissect_nr_rrc_UE_NR_Capability_PDU(ue_cap_tvb, actx->pinfo, subtree, NULL);
+    break;
+  case RAT_Type_eutra_nr:
+    /* eutra-nr */
+    dissect_nr_rrc_UE_MRDC_Capability_PDU(ue_cap_tvb, actx->pinfo, subtree, NULL);
     break;
   default:
     break;
@@ -915,7 +951,27 @@ RRCConnectionRelease-v1020-IEs/extendedWaitTime-r10 DISPLAY=BASE_DEC|BASE_UNIT_S
 SystemInformationBlockType1/cellSelectionInfo/q-RxLevMinOffset STRINGS=VALS(lte_rrc_q_RxLevMinOffset_vals)
 
 #.TYPE_ATTR
+CellSelectionInfoCE1-v1360/delta-RxLevMinCE1-v1360 STRINGS=VALS(lte_rrc_delta_RxLevMin_vals)
+
+#.TYPE_ATTR
 CellSelectionInfo-v920/q-QualMinOffset-r9 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
+
+#.TYPE_ATTR
+MobilityControlInfo/eag_4/schedulingInfoSIB1-BR-r14 TYPE=FT_UINT32 DISPLAY=BASE_DEC|BASE_EXT_STRING STRINGS=&lte_rrc_schedulingInfoSIB1_BR_r13_vals_ext
+
+#.TYPE_ATTR
+TrafficPatternInfo-r14/timingOffset-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_milliseconds
+
+#.FN_BODY TrafficPatternInfo-r14/messageSize-r14 VAL_PTR = &messageSize_r14_tvb HF_INDEX = -1
+  tvbuff_t *messageSize_r14_tvb = NULL;
+%(DEFAULT_BODY)s
+  if (messageSize_r14_tvb) {
+    guint bitvalue = tvb_get_bits8(messageSize_r14_tvb, 0, 6);
+    actx->created_item = proto_tree_add_uint(tree, hf_index, messageSize_r14_tvb, 0, 1, bitvalue);
+  }
+
+#.TYPE_ATTR
+TrafficPatternInfo-r14/messageSize-r14 TYPE=FT_UINT8 DISPLAY=BASE_DEC|BASE_EXT_STRING STRINGS=&lte_rrc_messageSize_r14_vals_ext
 
 #.TYPE_ATTR
 RLF-Report-r9/eag_1/timeConnFailure-r10 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_timeConnFailure_r10_fmt)
@@ -1121,6 +1177,12 @@ UplinkPowerControlCommonSCell-v1310/p0-NominalPUCCH DISPLAY=BASE_DEC|BASE_UNIT_S
 UplinkPowerControlCommonSCell-r10/p0-NominalPUSCH-r10 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
 
 #.TYPE_ATTR
+UplinkPowerControlCommonPUSCH-LessCell-v1430/p0-Nominal-PeriodicSRS-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
+
+#.TYPE_ATTR
+UplinkPowerControlCommonPUSCH-LessCell-v1430/p0-Nominal-AperiodicSRS-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
+
+#.TYPE_ATTR
 UplinkPowerControlDedicated/p0-UE-PUSCH DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
 
 #.TYPE_ATTR
@@ -1131,6 +1193,12 @@ UplinkPowerControlDedicated-v1250/set2PowerControlParameter/setup/p0-NominalPUSC
 
 #.TYPE_ATTR
 UplinkPowerControlDedicated-v1250/set2PowerControlParameter/setup/p0-UE-PUSCH-SubframeSet2-r12 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
+
+#.TYPE_ATTR
+UplinkPUSCH-LessPowerControlDedicated-v1430/p0-UE-PeriodicSRS-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
+
+#.TYPE_ATTR
+UplinkPUSCH-LessPowerControlDedicated-v1430/p0-UE-AperiodicSRS-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
 
 #.TYPE_ATTR
 UplinkPowerControlDedicatedSCell-r10/p0-UE-PUSCH-r10 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
@@ -1226,6 +1294,9 @@ ThresholdUTRA/utra-EcN0 DISPLAY=BASE_DEC|BASE_EXT_STRING STRINGS=&lte_rrc_thresh
 RSRP-Range DISPLAY=BASE_DEC|BASE_EXT_STRING STRINGS=&lte_rrc_RSRP_Range_vals_ext
 
 #.TYPE_ATTR
+RSRP-Range-v1360 DISPLAY=BASE_DEC|BASE_EXT_STRING STRINGS=&lte_rrc_RSRP_Range_v1360_vals_ext
+
+#.TYPE_ATTR
 RSRP-RangeSL-r12 DISPLAY=BASE_DEC STRINGS=VALS(lte_rrc_RSRP_RangeSL_vals)
 
 #.TYPE_ATTR
@@ -1280,26 +1351,26 @@ SoundingRS-UL-ConfigDedicated/setup/duration STRINGS=TFS(&lte_rrc_duration_val)
 
 #.FN_HDR SystemInformation
 
-  if (private_data_get_bcch_dl_sch_msg_br(actx) == FALSE) {
+  if (private_data_get_bcch_dl_sch_msg(actx) == FALSE) {
     col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SystemInformation [");
   }
 
 #.FN_BODY SystemInformation
 
 %(DEFAULT_BODY)s
-  if (private_data_get_bcch_dl_sch_msg_br(actx) == FALSE) {
+  if (private_data_get_bcch_dl_sch_msg(actx) == FALSE) {
     col_append_str(actx->pinfo->cinfo, COL_INFO, " ]");
   }
 
 #.FN_HDR SystemInformationBlockType1
 
-  if (private_data_get_bcch_dl_sch_msg_br(actx) == FALSE) {
+  if (private_data_get_bcch_dl_sch_msg(actx) == FALSE) {
     col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SystemInformationBlockType1");
     }
 
 #.FN_HDR SystemInformation-BR-r13
 
-  private_data_set_bcch_dl_sch_msg_br(actx, TRUE);
+  private_data_set_bcch_dl_sch_msg(actx, TRUE);
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SystemInformation-BR-r13 [");
 
 #.FN_BODY SystemInformation-BR-r13
@@ -1309,8 +1380,22 @@ SoundingRS-UL-ConfigDedicated/setup/duration STRINGS=TFS(&lte_rrc_duration_val)
 
 #.FN_HDR SystemInformationBlockType1-BR-r13
 
-  private_data_set_bcch_dl_sch_msg_br(actx, TRUE);
+  private_data_set_bcch_dl_sch_msg(actx, TRUE);
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SystemInformationBlockType1-BR-r13");
+
+#.FN_HDR SystemInformation-MBMS-r14
+
+  private_data_set_bcch_dl_sch_msg(actx, TRUE);
+  col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SystemInformation-MBMS-r14 [");
+
+#.FN_BODY SystemInformation-MBMS-r14
+
+%(DEFAULT_BODY)s
+  col_append_str(actx->pinfo->cinfo, COL_INFO, " ]");
+
+#.FN_HDR SystemInformationBlockType1-MBMS-r14
+
+  col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SystemInformationBlockType1-MBMS-r14");
 
 #.FN_HDR SystemInformationBlockType2
 
@@ -1387,6 +1472,10 @@ SoundingRS-UL-ConfigDedicated/setup/duration STRINGS=TFS(&lte_rrc_duration_val)
 #.FN_HDR SystemInformationBlockType20-r13
 
   col_append_str(actx->pinfo->cinfo, COL_INFO, " SIB20");
+
+#.FN_HDR SystemInformationBlockType21-r14
+
+  col_append_str(actx->pinfo->cinfo, COL_INFO, " SIB21");
 
 #.FN_HDR MBSFNAreaConfiguration-r9
 
@@ -1579,9 +1668,17 @@ SoundingRS-UL-ConfigDedicated/setup/duration STRINGS=TFS(&lte_rrc_duration_val)
 
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "RRCConnectionResumeComplete-r13");
 
+#.FN_HDR ULInformationTransferMRDC
+
+  col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "ULInformationTransferMRDC");
+
 #.FN_HDR SCPTMConfiguration-r13
 
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SCPTMConfiguration-r13");
+
+#.FN_HDR SCPTMConfiguration-BR-r14
+
+  col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SCPTMConfiguration-BR-r14");
 
 #.FN_BODY Paging/systemInfoModification
 %(DEFAULT_BODY)s
@@ -1632,6 +1729,12 @@ SoundingRS-UL-ConfigDedicated/setup/duration STRINGS=TFS(&lte_rrc_duration_val)
                              "SI Info Value changed (now %%u, was %%u)", value, previous);
     }
   }
+
+#.TYPE_ATTR
+SystemInformationBlockType5/eag_6/scptm-FreqOffset-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_scptm_FreqOffset_r14_fmt)
+
+#.TYPE_ATTR
+SL-V2X-ConfigCommon-r14/offsetDFN-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_offsetDFN_r14_fmt)
 
 #.FN_BODY Paging/etws-Indication
 %(DEFAULT_BODY)s
@@ -1769,6 +1872,9 @@ SoundingRS-UL-ConfigDedicated/setup/duration STRINGS=TFS(&lte_rrc_duration_val)
     mapping->ul_priority_present = TRUE;
   }
 
+#.TYPE_ATTR
+LWA-Config-r13/eag_1/wt-MAC-Address-r14 TYPE=FT_ETHER
+
 #.FN_BODY PDCP-Config/rlc-UM/pdcp-SN-Size VAL_PTR=&value
   guint32 value;
   drb_mapping_t *mapping = private_data_get_drb_mapping(actx);
@@ -1793,6 +1899,12 @@ SoundingRS-UL-ConfigDedicated/setup/duration STRINGS=TFS(&lte_rrc_duration_val)
     mapping->pdcp_sn_size = 18;
     mapping->pdcp_sn_size_present = TRUE;
   }
+
+#.TYPE_ATTR
+LBT-Config-r14/maxEnergyDetectionThreshold-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
+
+#.TYPE_ATTR
+LBT-Config-r14/energyDetectionThresholdOffset-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
 
 #.FN_BODY NeighCellsInfo-r12/transmissionModeList-r12 VAL_PTR=&tm_list_tvb
   tvbuff_t *tm_list_tvb=NULL;
@@ -2192,6 +2304,15 @@ WLAN-OffloadConfig-r12/thresholdWLAN-RSSI-r12/thresholdWLAN-RSSI-High-r12 DISPLA
   proto_item_append_text(actx->created_item, "Kbps");
 
 #.TYPE_ATTR
+SL-CBR-PSSCH-TxConfig-r14/cr-Limit-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_cr_Limit_r14_fmt)
+
+#.TYPE_ATTR
+SL-CBR-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_SL_CBR_r14_fmt)
+
+#.TYPE_ATTR
+SL-CommResourcePoolV2X-r14/threshS-RSSI-CBR-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_threshS_RSSI_CBR_r14_fmt)
+
+#.TYPE_ATTR
 SL-DiscResourcePool-r12/eag_1/txParamsAddNeighFreq-r13/setup/referenceSignalPower DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
 
 #.TYPE_ATTR
@@ -2201,7 +2322,156 @@ SL-DiscSysInfoReport-r13/cellSelectionInfo-r13/q-RxLevMinOffset-r13 STRINGS=VALS
 SL-DiscSysInfoReport-r13/referenceSignalPower-r13 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
 
 #.TYPE_ATTR
+SL-V2X-InterFreqUE-Config-r14/offsetDFN-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_offsetDFN_r14_fmt)
+
+#.TYPE_ATTR
 P0-SL-r12 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
+
+#.FN_BODY RRCConnectionReconfiguration-v15x0-IEs/endc-Config-r15/nr-SecondaryCellGroupConfig-r15 VAL_PTR = &rrc_reconfiguration_tvb
+  tvbuff_t *rrc_reconfiguration_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (rrc_reconfiguration_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_nr_SecondaryCellGroupConfig_r15);
+    dissect_nr_rrc_RRCReconfiguration_PDU(rrc_reconfiguration_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY RRCConnectionReconfiguration-v15x0-IEs/endc-Config-r15/nr-RadioBearerConfig-r15 VAL_PTR = &radio_bearer_config_tvb
+  tvbuff_t *radio_bearer_config_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (radio_bearer_config_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_nr_RadioBearerConfig_r15);
+    dissect_nr_rrc_RadioBearerConfig_PDU(radio_bearer_config_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY RRCConnectionReconfiguration-v15x0-IEs/endc-Config-r15/nr-RadioBearerConfigS-r15 VAL_PTR = &radio_bearer_config_tvb
+  tvbuff_t *radio_bearer_config_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (radio_bearer_config_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_nr_RadioBearerConfigS_r15);
+    dissect_nr_rrc_RadioBearerConfig_PDU(radio_bearer_config_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY RRCConnectionReconfigurationComplete-v15xy-IEs/scg-ConfigResponseNR-r15 VAL_PTR = &rrc_reconfiguration_complete_tvb
+  tvbuff_t *rrc_reconfiguration_complete_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (rrc_reconfiguration_complete_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_scg_ConfigResponseNR_r15);
+    dissect_nr_rrc_RRCReconfigurationComplete_PDU(rrc_reconfiguration_complete_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY RRCConnectionResume-v15x0-IEs/nr-RadioBearerConfig-r15 VAL_PTR = &radio_bearer_config_tvb
+  tvbuff_t *radio_bearer_config_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (radio_bearer_config_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_nr_RadioBearerConfig_r15);
+    dissect_nr_rrc_RadioBearerConfig_PDU(radio_bearer_config_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY RRCConnectionResume-v15x0-IEs/nr-RadioBearerConfigS-r15 VAL_PTR = &radio_bearer_config_tvb
+  tvbuff_t *radio_bearer_config_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (radio_bearer_config_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_nr_RadioBearerConfigS_r15);
+    dissect_nr_rrc_RadioBearerConfig_PDU(radio_bearer_config_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY FailureReportSCG-NR-r15/measResultSCG-r15 VAL_PTR = &meas_results_tvb
+  tvbuff_t *meas_results_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (meas_results_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_measResultSCG_r15);
+    dissect_nr_rrc_MeasResults_PDU(meas_results_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY ULInformationTransferMRDC-r15-IEs/ul-DCCH-MessageNR-r15 VAL_PTR = &nr_ul_dcch_tvb
+  tvbuff_t *nr_ul_dcch_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (nr_ul_dcch_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_ul_DCCH_MessageNR_r15);
+    dissect_nr_rrc_UL_DCCH_Message_PDU(nr_ul_dcch_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#
+# EUTRA-InterNodeDefinitions
+#
+
+#.FN_BODY AS-Config/eag_4/sourceRB-ConfigNR-r15 VAL_PTR = &radio_bearer_config_tvb
+  tvbuff_t *radio_bearer_config_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (radio_bearer_config_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_sourceRB_ConfigNR_r15);
+    dissect_nr_rrc_RadioBearerConfig_PDU(radio_bearer_config_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY AS-Config/eag_4/sourceRB-ConfigSN-NR-r15 VAL_PTR = &radio_bearer_config_tvb
+  tvbuff_t *radio_bearer_config_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (radio_bearer_config_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_sourceRB_ConfigSN_NR_r15);
+    dissect_nr_rrc_RadioBearerConfig_PDU(radio_bearer_config_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY AS-Config/eag_4/sourceOtherConfigSN-NR-r15 VAL_PTR = &rrc_reconfiguration_tvb
+  tvbuff_t *rrc_reconfiguration_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (rrc_reconfiguration_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_sourceOtherConfigSN_NR_r15);
+    dissect_nr_rrc_RRCReconfiguration_PDU(rrc_reconfiguration_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#.FN_BODY AS-Context-v1130/eag_2/sourceContextENDC-r15 VAL_PTR = &scg_config_info_tvb
+  tvbuff_t *scg_config_info_tvb = NULL;
+
+%(DEFAULT_BODY)s
+
+  if (scg_config_info_tvb) {
+    proto_tree *subtree;
+    subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_sourceContextENDC_r15);
+    dissect_nr_rrc_SCG_ConfigInfo_PDU(scg_config_info_tvb, actx->pinfo, subtree, NULL);
+  }
+
+#
+# EUTRA-Sidelink-Preconf
+#
+
+#.TYPE_ATTR
+SL-V2X-PreconfigFreqInfo-r14/offsetDFN-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_offsetDFN_r14_fmt)
+
+#.TYPE_ATTR
+SL-V2X-PreconfigCommPool-r14/threshS-RSSI-CBR-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_threshS_RSSI_CBR_r14_fmt)
 
 #
 # PC5-RRC-Definitions
@@ -2209,6 +2479,9 @@ P0-SL-r12 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
 
 #.FN_HDR MasterInformationBlock-SL
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "MasterInformationBlock-SL");
+
+#.FN_HDR MasterInformationBlock-SL-V2X-r14
+  col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "MasterInformationBlock-SL-V2X-r14");
 
 #
 # NBIOT-RRC-Definitions
@@ -2284,6 +2557,9 @@ P0-SL-r12 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
 #.FN_HDR RRCConnectionResumeRequest-NB
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "RRCConnectionResumeRequest-NB");
 
+#.FN_HDR SCPTMConfiguration-NB-r14
+  col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "SCPTMConfiguration-NB-r14");
+
 #.FN_HDR RRCConnectionReconfigurationComplete-NB
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "RRCConnectionReconfigurationComplete-NB");
 
@@ -2302,6 +2578,15 @@ P0-SL-r12 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_dbm
 #.FN_HDR RRCConnectionResumeComplete-NB
   col_append_sep_str(actx->pinfo->cinfo, COL_INFO, NULL, "RRCConnectionResumeComplete-NB");
 
+#.FN_HDR SystemInformationBlockType15-NB-r14
+  col_append_str(actx->pinfo->cinfo, COL_INFO, " SIB15");
+
+#.FN_HDR SystemInformationBlockType20-NB-r14
+  col_append_str(actx->pinfo->cinfo, COL_INFO, " SIB20");
+
+#.FN_HDR SystemInformationBlockType22-NB-r14
+  col_append_str(actx->pinfo->cinfo, COL_INFO, " SIB22");
+
 #.TYPE_ATTR
 MasterInformationBlock-NB/schedulingInfoSIB1-r13 TYPE=FT_UINT32 DISPLAY=BASE_DEC|BASE_EXT_STRING STRINGS=&lte_rrc_schedulingInfoSIB1_NB_r13_vals_ext
 
@@ -2312,16 +2597,22 @@ RRCConnectionReject-NB-r13-IEs/extendedWaitTime-r13 DISPLAY=BASE_DEC|BASE_UNIT_S
 RRCConnectionRelease-NB-r13-IEs/extendedWaitTime-r13 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_seconds
 
 #.TYPE_ATTR
-CellSelectionInfo-NB-v1350/delta-RxLevMin-v1350 STRINGS=VALS(lte_rrc_delta_RxLevMin_v1350_vals)
+RRCConnectionRelease-NB-v1430-IEs/extendedWaitTime-CPdata-r14 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_seconds
+
+#.TYPE_ATTR
+CellSelectionInfo-NB-v1350/delta-RxLevMin-v1350 STRINGS=VALS(lte_rrc_delta_RxLevMin_vals)
 
 #.TYPE_RENAME
 SystemInformationBlockType2-NB-r13/multiBandInfoList-r13 AdditionalSpectrumEmission_r13
 
 #.TYPE_ATTR
-IntraFreqCellReselectionInfo-NB-v1350/delta-RxLevMin-v1350 STRINGS=VALS(lte_rrc_delta_RxLevMin_v1350_vals)
+IntraFreqCellReselectionInfo-NB-v1350/delta-RxLevMin-v1350 STRINGS=VALS(lte_rrc_delta_RxLevMin_vals)
 
 #.TYPE_ATTR
-InterFreqCarrierFreqInfo-NB-r13/eag_1/delta-RxLevMin-v1350 STRINGS=VALS(lte_rrc_delta_RxLevMin_v1350_vals)
+SystemInformationBlockType5/eag_1/scptm-FreqOffset-r14 DISPLAY=BASE_CUSTOM STRINGS=CF_FUNC(lte_rrc_scptm_FreqOffset_r14_fmt)
+
+#.TYPE_ATTR
+InterFreqCarrierFreqInfo-NB-r13/eag_1/delta-RxLevMin-v1350 STRINGS=VALS(lte_rrc_delta_RxLevMin_vals)
 
 #.TYPE_ATTR
 AB-Config-NB-r13/ab-Category-r13 STRINGS=VALS(lte_rrc_eab_category_vals)
@@ -2404,3 +2695,6 @@ UplinkPowerControlCommon-NB-r13/deltaPreambleMsg3-r13 STRINGS=VALS(lte_rrc_delta
 
 #.TYPE_ATTR
 UplinkPowerControlDedicated-NB-r13/p0-UE-NPUSCH-r13 DISPLAY=BASE_DEC|BASE_UNIT_STRING STRINGS=&units_decibels
+
+#.TYPE_ATTR
+ReselectionThreshold-NB-v1360  DISPLAY=BASE_DEC|BASE_EXT_STRING STRINGS=&lte_rrc_ReselectionThreshold_NB_vals_ext

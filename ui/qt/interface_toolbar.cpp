@@ -4,27 +4,14 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "config.h"
 
 #include <errno.h>
 
 #include "interface_toolbar.h"
-#include "interface_toolbar_lineedit.h"
+#include <ui/qt/widgets/interface_toolbar_lineedit.h>
 #include "simple_dialog.h"
 #include "ui/main_statusbar.h"
 #include <ui_interface_toolbar.h>
@@ -56,7 +43,7 @@ enum InterfaceControlCommand {
     commandStatusMessage       = 6,
     commandInformationMessage  = 7,
     commandWarningMessage      = 8,
-    commandErrorMessage        = 9,
+    commandErrorMessage        = 9
 };
 
 // To do:
@@ -740,15 +727,14 @@ void InterfaceToolbar::startCapture(GArray *ifaces)
     if (!ifaces || ifaces->len == 0)
         return;
 
-#ifdef HAVE_EXTCAP
     const QString &selected_ifname = ui->interfacesComboBox->currentText();
     QString first_capturing_ifname;
     bool selected_found = false;
 
     for (guint i = 0; i < ifaces->len; i++)
     {
-        interface_options interface_opts = g_array_index(ifaces, interface_options, i);
-        QString ifname(interface_opts.name);
+        interface_options *interface_opts = &g_array_index(ifaces, interface_options, i);
+        QString ifname(interface_opts->name);
 
         if (!interface_.contains(ifname))
             // This interface is not for us
@@ -766,11 +752,11 @@ void InterfaceToolbar::startCapture(GArray *ifaces)
 
         // Open control out channel
 #ifdef _WIN32
-        startReaderThread(ifname, interface_opts.extcap_control_in_h);
-        interface_[ifname].out_fd = _open_osfhandle((intptr_t)interface_opts.extcap_control_out_h, O_APPEND | O_BINARY);
+        startReaderThread(ifname, interface_opts->extcap_control_in_h);
+        interface_[ifname].out_fd = _open_osfhandle((intptr_t)interface_opts->extcap_control_out_h, O_APPEND | O_BINARY);
 #else
-        startReaderThread(ifname, interface_opts.extcap_control_in);
-        interface_[ifname].out_fd = ws_open(interface_opts.extcap_control_out, O_WRONLY | O_BINARY, 0);
+        startReaderThread(ifname, interface_opts->extcap_control_in);
+        interface_[ifname].out_fd = ws_open(interface_opts->extcap_control_out, O_WRONLY | O_BINARY, 0);
 #endif
         sendChangedValues(ifname);
         controlSend(ifname, 0, commandControlInitialized);
@@ -792,7 +778,6 @@ void InterfaceToolbar::startCapture(GArray *ifaces)
     {
         updateWidgets();
     }
-#endif // HAVE_EXTCAP
 }
 
 void InterfaceToolbar::stopCapture()
@@ -948,6 +933,7 @@ void InterfaceToolbar::updateWidgets()
 
 void InterfaceToolbar::interfaceListChanged()
 {
+#ifdef HAVE_LIBPCAP
     const QString &selected_ifname = ui->interfacesComboBox->currentText();
     bool keep_selected = false;
 
@@ -956,20 +942,20 @@ void InterfaceToolbar::interfaceListChanged()
 
     for (guint i = 0; i < global_capture_opts.all_ifaces->len; i++)
     {
-        interface_t device = g_array_index(global_capture_opts.all_ifaces, interface_t, i);
-        if (device.hidden)
+        interface_t *device = &g_array_index(global_capture_opts.all_ifaces, interface_t, i);
+        if (device->hidden)
             continue;
 
-        if (interface_.keys().contains(device.name))
+        if (interface_.keys().contains(device->name))
         {
-            ui->interfacesComboBox->addItem(device.name);
-            if (selected_ifname.compare(device.name) == 0)
+            ui->interfacesComboBox->addItem(device->name);
+            if (selected_ifname.compare(device->name) == 0)
             {
                 // Keep selected interface
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-                ui->interfacesComboBox->setCurrentText(device.name);
+                ui->interfacesComboBox->setCurrentText(device->name);
 #else
-                int new_index = ui->interfacesComboBox->findText(device.name);
+                int new_index = ui->interfacesComboBox->findText(device->name);
                 if (new_index >= 0)
                 {
                     ui->interfacesComboBox->setCurrentIndex(new_index);
@@ -989,6 +975,7 @@ void InterfaceToolbar::interfaceListChanged()
     }
 
     updateWidgets();
+#endif
 }
 
 void InterfaceToolbar::on_interfacesComboBox_currentIndexChanged(const QString &ifname)

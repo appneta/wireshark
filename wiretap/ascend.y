@@ -29,20 +29,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+* SPDX-License-Identifier: GPL-2.0-or-later *
  */
 
 /*
@@ -161,12 +148,16 @@ XMIT-Max7:20: (task "_brouterControlTask" at 0xb094ac20, time: 1481.51) 20 octet
 #include "ascendtext.h"
 #include "ascend-int.h"
 #include "ascend.h"
+DIAG_OFF_BYACC
 #include "ascend_scanner_lex.h"
+DIAG_ON_BYACC
 #include "file_wrappers.h"
 
 #define NO_USER "<none>"
 
 extern void yyerror (void *yyscanner, ascend_state_t *state, FILE_T fh _U_, const char *s);
+
+DIAG_OFF_BYACC
 %}
 
 %union {
@@ -442,9 +433,11 @@ datagroup: dataln
 
 %%
 
+DIAG_ON_BYACC
+
 /* Run the parser. */
 int
-run_ascend_parser(FILE_T fh, struct wtap_pkthdr *phdr, guint8 *pd,
+run_ascend_parser(FILE_T fh, wtap_rec *rec, guint8 *pd,
                   ascend_state_t *parser_state, int *err, gchar **err_info)
 {
   yyscan_t scanner = NULL;
@@ -462,7 +455,7 @@ run_ascend_parser(FILE_T fh, struct wtap_pkthdr *phdr, guint8 *pd,
   parser_state->ascend_parse_error = NULL;
   parser_state->err = 0;
   parser_state->err_info = NULL;
-  parser_state->pseudo_header = &phdr->pseudo_header.ascend;
+  parser_state->pseudo_header = &rec->rec_header.packet_header.pseudo_header.ascend;
   parser_state->pkt_data = pd;
 
   /*
@@ -502,3 +495,5 @@ yyerror (void *yyscanner, ascend_state_t *state _U_, FILE_T fh _U_, const char *
 {
   ascendget_extra(yyscanner)->ascend_parse_error = s;
 }
+
+DIAG_OFF_BYACC

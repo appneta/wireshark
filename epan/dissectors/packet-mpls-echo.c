@@ -15,25 +15,13 @@
  * (c) Copyright 2012, Subramanian Ramachandran <sramach6@ncsu.edu>
  *                     - Support for BFD for MPLS as per RFC 5884
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
 
 #include <epan/packet.h>
-#include <epan/sminmpec.h>
+#include <epan/addr_resolv.h>
 #include <epan/expert.h>
 #include <epan/to_str.h>
 
@@ -2121,7 +2109,7 @@ proto_register_mpls_echo(void)
         },
         { &hf_mpls_echo_tlv_vendor,
           { "Vendor Id", "mpls_echo.tlv.vendor_id",
-            FT_UINT32, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0x0, "MPLS ECHO Vendor Id", HFILL}
+            FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0, "MPLS ECHO Vendor Id", HFILL}
         },
         { &hf_mpls_echo_tlv_ilso_addr_type,
           { "Address Type", "mpls_echo.tlv.ilso.addr_type",

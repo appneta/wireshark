@@ -4,19 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 // warning C4267: 'argument' : conversion from 'size_t' to 'int', possible loss of data
@@ -33,6 +21,7 @@
 #include "wsutil/filesystem.h"
 
 #include "epan/addr_resolv.h"
+#include "epan/column-utils.h"
 #include "epan/disabled_protos.h"
 #include "epan/ftypes/ftypes.h"
 #include "epan/prefs.h"
@@ -49,17 +38,15 @@
 #include "ui/simple_dialog.h"
 #include "ui/util.h"
 
-#include "qt_ui_utils.h"
-#include "color_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
+#include <ui/qt/utils/color_utils.h>
 #include "coloring_rules_dialog.h"
 
 #include "epan/color_filters.h"
 #include "log.h"
 #include "recent_file_status.h"
 
-#ifdef HAVE_EXTCAP
 #include "extcap.h"
-#endif
 #ifdef HAVE_LIBPCAP
 #include <caputils/iface_monitor.h>
 #endif
@@ -80,22 +67,30 @@
 #  include <QSettings>
 #endif /* _WIN32 */
 
+#include <ui/qt/capture_file.h>
+
 #include <QAction>
 #include <QApplication>
+#include <QColorDialog>
 #include <QDesktopServices>
 #include <QDir>
 #include <QEvent>
 #include <QFileOpenEvent>
-#include <QFontMetrics>
 #include <QFontInfo>
+#include <QFontMetrics>
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QMainWindow>
 #include <QMutableListIterator>
 #include <QSocketNotifier>
-#include <QThread>
+#include <QThreadPool>
 #include <QUrl>
-#include <QColorDialog>
+#include <qmath.h>
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+#include <QFontDatabase>
+#include <QMimeDatabase>
+#endif
 
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -113,6 +108,32 @@ static QHash<int, QList<QAction *> > added_menu_groups_;
 static QHash<int, QList<QAction *> > removed_menu_groups_;
 
 QString WiresharkApplication::window_title_separator_ = QString::fromUtf8(" " UTF8_MIDDLE_DOT " ");
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+
+// QMimeDatabase parses a large-ish XML file and can be slow to initialize.
+// Do so in a worker thread as early as possible.
+// https://github.com/lxde/pcmanfm-qt/issues/415
+class MimeDatabaseInitThread : public QRunnable
+{
+private:
+    void run()
+    {
+        QMimeDatabase mime_db;
+        mime_db.mimeTypeForData(QByteArray());
+    }
+};
+
+// Populating the font database can be slow as well.
+class FontDatabaseInitThread : public QRunnable
+{
+private:
+    void run()
+    {
+        QFontDatabase font_db;
+    }
+};
+#endif
 
 void
 topic_action(topic_action_e action)
@@ -199,7 +220,7 @@ extern "C" void menu_recent_file_write_all(FILE *rf) {
         /* get capture filename from the menu item label */
         cf_name = rii.previous()->filename;
         if (cf_name != NULL) {
-            fprintf (rf, RECENT_KEY_CAPTURE_FILE ": %s\n", cf_name.toUtf8().constData());
+            fprintf (rf, RECENT_KEY_CAPTURE_FILE ": %s\n", qUtf8Printable(cf_name));
         }
     }
 }
@@ -222,7 +243,7 @@ extern "C" void software_update_shutdown_request_callback(void) {
 // Check each recent item in a separate thread so that we don't hang while
 // calling stat(). This is called periodically because files and entire
 // volumes can disappear and reappear at any time.
-void WiresharkApplication::refreshRecentCaptures(void) {
+void WiresharkApplication::refreshRecentCaptures() {
     recent_item_status *ri;
     RecentFileStatus *rf_status;
 
@@ -233,21 +254,17 @@ void WiresharkApplication::refreshRecentCaptures(void) {
         if (ri->in_thread) {
             continue;
         }
-
         rf_status = new RecentFileStatus(ri->filename, this);
-
-        connect(rf_status, SIGNAL(statusFound(QString, qint64, bool)),
-                this, SLOT(itemStatusFinished(QString, qint64, bool)), Qt::QueuedConnection);
-        connect(rf_status, SIGNAL(finished()), rf_status, SLOT(deleteLater()));
-        rf_status->start();
+        QThreadPool::globalInstance()->start(rf_status);
     }
 }
 
-void WiresharkApplication::refreshAddressResolution()
+void WiresharkApplication::refreshPacketData()
 {
-    // Anything new show up?
     if (host_name_lookup_process()) {
         emit addressResolutionChanged();
+    } else if (col_data_changed()) {
+        emit columnDataChanged();
     }
 }
 
@@ -260,8 +277,8 @@ QDir WiresharkApplication::lastOpenDir() {
     return QDir(last_open_dir);
 }
 
-void WiresharkApplication::setLastOpenDir(QString *dir_str) {
-    setLastOpenDir(dir_str->toUtf8().constData());
+void WiresharkApplication::setLastOpenDir(QString dir_str) {
+    setLastOpenDir(qUtf8Printable(dir_str));
 }
 
 void WiresharkApplication::helpTopicAction(topic_action_e action)
@@ -271,6 +288,14 @@ void WiresharkApplication::helpTopicAction(topic_action_e action)
     if(!url.isEmpty()) {
         QDesktopServices::openUrl(QUrl(url));
     }
+}
+
+const QFont WiresharkApplication::monospaceFont(bool zoomed) const
+{
+    if (zoomed) {
+        return zoomed_font_;
+    }
+    return mono_font_;
 }
 
 void WiresharkApplication::setMonospaceFont(const char *font_string) {
@@ -437,6 +462,22 @@ void WiresharkApplication::reloadLuaPluginsDelayed()
     QTimer::singleShot(0, this, SIGNAL(reloadLuaPlugins()));
 }
 
+const QIcon &WiresharkApplication::normalIcon()
+{
+    if (normal_icon_.isNull()) {
+        initializeIcons();
+    }
+    return normal_icon_;
+}
+
+const QIcon &WiresharkApplication::captureIcon()
+{
+    if (capture_icon_.isNull()) {
+        initializeIcons();
+    }
+    return capture_icon_;
+}
+
 const QString WiresharkApplication::windowTitleString(QStringList title_parts)
 {
     QMutableStringListIterator tii(title_parts);
@@ -588,10 +629,11 @@ void WiresharkApplication::checkForDbar()
         if (inproc_default.isEmpty()) continue;
 
         foreach (QString dbar_dll, dbar_dlls) {
+            if (! inproc_default.contains(dbar_dll, Qt::CaseInsensitive)) continue;
             // XXX We don't expand environment variables in the path.
             unsigned int dll_version = fileVersion(inproc_default);
             unsigned int bad_version = 1 << 16 | 8; // Offending DBAR version is 1.8.
-            if (inproc_default.contains(dbar_dll, Qt::CaseInsensitive) && dll_version == bad_version) {
+            if (dll_version == bad_version) {
                 QMessageBox dbar_msgbox;
                 dbar_msgbox.setIcon(QMessageBox::Warning);
                 dbar_msgbox.setStandardButtons(QMessageBox::Ok);
@@ -650,29 +692,10 @@ bool WiresharkApplication::event(QEvent *event)
     return QApplication::event(event);
 }
 
-void WiresharkApplication::captureStarted()
-{
-    active_captures_++;
-    emit captureActive(active_captures_);
-}
-
-void WiresharkApplication::captureFinished()
-{
-    active_captures_--;
-    emit captureActive(active_captures_);
-}
-
 void WiresharkApplication::clearRecentCaptures() {
     qDeleteAll(recent_captures_);
     recent_captures_.clear();
     emit updateRecentCaptureStatus(NULL, 0, false);
-}
-
-void WiresharkApplication::captureFileReadStarted()
-{
-    // Doesn't appear to do anything. Logic probably needs to be in file.c.
-    QTimer::singleShot(TAP_UPDATE_DEFAULT_INTERVAL / 5, this, SLOT(updateTaps()));
-    QTimer::singleShot(TAP_UPDATE_DEFAULT_INTERVAL / 2, this, SLOT(updateTaps()));
 }
 
 void WiresharkApplication::cleanup()
@@ -685,6 +708,8 @@ void WiresharkApplication::cleanup()
 
     qDeleteAll(recent_captures_);
     recent_captures_.clear();
+    // We might end up here via exit_application.
+    QThreadPool::globalInstance()->waitForDone();
 }
 
 void WiresharkApplication::itemStatusFinished(const QString filename, qint64 size, bool accessible) {
@@ -711,10 +736,17 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     wsApp = this;
     setApplicationName("Wireshark");
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    MimeDatabaseInitThread *mime_db_init_thread = new(MimeDatabaseInitThread);
+    QThreadPool::globalInstance()->start(mime_db_init_thread);
+    FontDatabaseInitThread *font_db_init_thread = new (FontDatabaseInitThread);
+    QThreadPool::globalInstance()->start(font_db_init_thread);
+#endif
+
     Q_INIT_RESOURCE(about);
     Q_INIT_RESOURCE(i18n);
     Q_INIT_RESOURCE(layout);
-    Q_INIT_RESOURCE(toolbar);
+    Q_INIT_RESOURCE(stock_icons);
     Q_INIT_RESOURCE(wsicon);
     Q_INIT_RESOURCE(languages);
 
@@ -726,15 +758,6 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 1, 0))
     setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
-
-    QList<int> icon_sizes = QList<int>() << 16 << 24 << 32 << 48 << 64 << 128 << 256 << 512 << 1024;
-    foreach (int icon_size, icon_sizes) {
-        QString icon_path = QString(":/wsicon/wsicon%1.png").arg(icon_size);
-        normal_icon_.addFile(icon_path);
-        icon_path = QString(":/wsicon/wsiconcap%1.png").arg(icon_size);
-        capture_icon_.addFile(icon_path);
-    }
-
     //
     // XXX - this means we try to check for the existence of all files
     // in the recent list every 2 seconds; that causes noticeable network
@@ -825,9 +848,9 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
     connect(&recent_timer_, SIGNAL(timeout()), this, SLOT(refreshRecentCaptures()));
     recent_timer_.start(2000);
 
-    addr_resolv_timer_.setParent(this);
-    connect(&addr_resolv_timer_, SIGNAL(timeout()), this, SLOT(refreshAddressResolution()));
-    addr_resolv_timer_.start(1000);
+    packet_data_timer_.setParent(this);
+    connect(&packet_data_timer_, SIGNAL(timeout()), this, SLOT(refreshPacketData()));
+    packet_data_timer_.start(1000);
 
     tap_update_timer_.setParent(this);
     tap_update_timer_.setInterval(TAP_UPDATE_DEFAULT_INTERVAL);
@@ -864,6 +887,8 @@ WiresharkApplication::WiresharkApplication(int &argc,  char **argv) :
 
 WiresharkApplication::~WiresharkApplication()
 {
+    wsApp = NULL;
+    clearDynamicMenuGroupItems();
     free_filter_lists();
 }
 
@@ -898,6 +923,9 @@ void WiresharkApplication::emitAppSignal(AppSignal signal)
         break;
     case PacketDissectionChanged:
         emit packetDissectionChanged();
+        break;
+    case ProfileChanging:
+        emit profileChanging();
         break;
     case RecentCapturesChanged:
         emit updateRecentCaptureStatus(NULL, 0, false);
@@ -970,6 +998,26 @@ void WiresharkApplication::removeDynamicMenuGroupItem(int group, QAction *sg_act
     dynamic_menu_groups_[group].removeAll(sg_action);
 }
 
+void WiresharkApplication::clearDynamicMenuGroupItems()
+{
+    foreach (int group, dynamic_menu_groups_.uniqueKeys()) {
+        dynamic_menu_groups_[group].clear();
+    }
+}
+
+void WiresharkApplication::initializeIcons()
+{
+    // Do this as late as possible in order to allow time for
+    // MimeDatabaseInitThread to do its work.
+    QList<int> icon_sizes = QList<int>() << 16 << 24 << 32 << 48 << 64 << 128 << 256 << 512 << 1024;
+    foreach (int icon_size, icon_sizes) {
+        QString icon_path = QString(":/wsicon/wsicon%1.png").arg(icon_size);
+        normal_icon_.addFile(icon_path);
+        icon_path = QString(":/wsicon/wsiconcap%1.png").arg(icon_size);
+        capture_icon_.addFile(icon_path);
+    }
+}
+
 QList<QAction *> WiresharkApplication::dynamicMenuGroupItems(int group)
 {
     if (!dynamic_menu_groups_.contains(group)) {
@@ -1027,12 +1075,12 @@ iface_mon_event_cb(const char *iface, int up)
 {
     int present = 0;
     guint ifs, j;
-    interface_t device;
-    interface_options interface_opts;
+    interface_t *device;
+    interface_options *interface_opts;
 
     for (ifs = 0; ifs < global_capture_opts.all_ifaces->len; ifs++) {
-        device = g_array_index(global_capture_opts.all_ifaces, interface_t, ifs);
-        if (strcmp(device.name, iface) == 0) {
+        device = &g_array_index(global_capture_opts.all_ifaces, interface_t, ifs);
+        if (strcmp(device->name, iface) == 0) {
             present = 1;
             if (!up) {
                 /*
@@ -1041,9 +1089,9 @@ iface_mon_event_cb(const char *iface, int up)
                  * for capturing.
                  */
                 for (j = 0; j < global_capture_opts.ifaces->len; j++) {
-                    interface_opts = g_array_index(global_capture_opts.ifaces, interface_options, j);
-                    if (strcmp(interface_opts.name, device.name) == 0) {
-                        g_array_remove_index(global_capture_opts.ifaces, j);
+                    interface_opts = &g_array_index(global_capture_opts.ifaces, interface_options, j);
+                    if (strcmp(interface_opts->name, device->name) == 0) {
+                        capture_opts_del_iface(&global_capture_opts, j);
                 }
              }
           }
@@ -1077,9 +1125,7 @@ void WiresharkApplication::ifChangeEventsAvailable()
 
 void WiresharkApplication::refreshLocalInterfaces()
 {
-#ifdef HAVE_EXTCAP
     extcap_clear_interfaces();
-#endif
 
 #ifdef HAVE_LIBPCAP
     /*
@@ -1255,6 +1301,19 @@ void WiresharkApplication::doTriggerMenuItem(MainMenuItem menuItem)
     }
 }
 
+void WiresharkApplication::zoomTextFont(int zoomLevel)
+{
+    // Scale by 10%, rounding to nearest half point, minimum 1 point.
+    // XXX Small sizes repeat. It might just be easier to create a map of multipliers.
+    zoomed_font_ = mono_font_;
+    qreal zoom_size = mono_font_.pointSize() * 2 * qPow(qreal(1.1), zoomLevel);
+    zoom_size = qRound(zoom_size) / qreal(2.0);
+    zoom_size = qMax(zoom_size, qreal(1.0));
+    zoomed_font_.setPointSizeF(zoom_size);
+
+    emit zoomMonospaceFont(zoomed_font_);
+}
+
 #ifdef HAVE_SOFTWARE_UPDATE
 bool WiresharkApplication::softwareUpdateCanShutdown() {
     software_update_ok_ = true;
@@ -1283,6 +1342,49 @@ void WiresharkApplication::softwareUpdateShutdownRequest() {
     emit softwareUpdateQuit();
 }
 #endif
+
+void WiresharkApplication::captureEventHandler(CaptureEvent ev)
+{
+    switch(ev.captureContext())
+    {
+#ifdef HAVE_LIBPCAP
+    case CaptureEvent::Update:
+    case CaptureEvent::Fixed:
+        switch ( ev.eventType() )
+        {
+        case CaptureEvent::Started:
+            active_captures_++;
+            emit captureActive(active_captures_);
+            break;
+        case CaptureEvent::Finished:
+            active_captures_--;
+            emit captureActive(active_captures_);
+            break;
+        default:
+            break;
+        }
+        break;
+#endif
+    case CaptureEvent::File:
+    case CaptureEvent::Reload:
+    case CaptureEvent::Rescan:
+        switch ( ev.eventType() )
+        {
+        case CaptureEvent::Started:
+            QTimer::singleShot(TAP_UPDATE_DEFAULT_INTERVAL / 5, this, SLOT(updateTaps()));
+            QTimer::singleShot(TAP_UPDATE_DEFAULT_INTERVAL / 2, this, SLOT(updateTaps()));
+            break;
+        case CaptureEvent::Finished:
+            updateTaps();
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+}
 
 /*
  * Editor modelines

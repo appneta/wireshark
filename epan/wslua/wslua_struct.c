@@ -1,24 +1,8 @@
 /******************************************************************************
 * Copyright (C) 2010-2012 Lua.org, PUC-Rio.  All rights reserved.
 *
-* Permission is hereby granted, free of charge, to any person obtaining
-* a copy of this software and associated documentation files (the
-* "Software"), to deal in the Software without restriction, including
-* without limitation the rights to use, copy, modify, merge, publish,
-* distribute, sublicense, and/or sell copies of the Software, and to
-* permit persons to whom the Software is furnished to do so, subject to
-* the following conditions:
+* SPDX-License-Identifier: MIT
 *
-* The above copyright notice and this permission notice shall be
-* included in all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ******************************************************************************/
 /*
 ** {======================================================
@@ -60,7 +44,7 @@
 ** b/B   - signed/unsigned byte
 ** h/H   - signed/unsigned short
 ** in/In - signed/unsigned integer of size `n' bytes
-          Note: unpack of i/I is done to a Lua_number, typically a double,
+          Note: Unpack of i/I is done to a Lua_number, typically a double,
           so unpacking a 64-bit field (i8/I8) will lose precision.
           Use e/E to unpack into a Wireshark Int64/UInt64 object/userdata instead.
 ** e/E   - signed/unsigned eight-byte Integer (64bits, long long), to/from Int64/UInt64 object
@@ -89,7 +73,7 @@
 
   The Struct class offers basic facilities to convert Lua values to and from C-style structs
   in binary Lua strings.  This is based on Roberto Ierusalimschy's Lua struct library found
-  in [[http://www.inf.puc-rio.br/~roberto/struct/]], with some minor modifications as follows:
+  in http://www.inf.puc-rio.br/~roberto/struct/, with some minor modifications as follows:
     * Added support for `Int64`/`UInt64` being packed/unpacked, using 'e'/'E'.
     * Can handle 'long long' integers (i8 / I8); though they're converted to doubles.
     * Can insert/specify padding anywhere in a struct. ('X' eg. when a string is following a union).
@@ -98,7 +82,7 @@
       pascal-style strings using '`(`' & '`)`'.
 
   All but the first of those changes are based on an email from Flemming Madsen, on the lua-users
-  mailing list, which can be found [[http://lua-users.org/lists/lua-l/2009-10/msg00572.html|here]].
+  mailing list, which can be found http://lua-users.org/lists/lua-l/2009-10/msg00572.html[here].
 
   The main functions are `Struct.pack`, which packs multiple Lua values into a struct-like
   Lua binary string; and `Struct.unpack`, which unpacks multiple Lua values from a given
@@ -147,12 +131,15 @@
     * `++(++' to stop assigning items, and `++)++' start assigning (padding when packing).
     * `++=++' to return the current position / offset.
 
-  @note Using `i`, `I`, `h`, `H`, `l`, `L`, `f`, and `T` is strongly discouraged, as those sizes
+  [NOTE]
+  ====
+  Using `i`, `I`, `h`, `H`, `l`, `L`, `f`, and `T` is strongly discouraged, as those sizes
     are system-dependent. Use the explicitly sized variants instead, such as `i4` or `E`.
 
-  @note Unpacking of `i`/`I` is done to a Lua number, a double-precision floating point,
+  Unpacking of `i`/`I` is done to a Lua number, a double-precision floating point,
     so unpacking a 64-bit field (`i8`/`I8`) will lose precision.
     Use `e`/`E` to unpack into a Wireshark `Int64`/`UInt64` object instead.
+  ====
 
   @since 1.11.3
  */

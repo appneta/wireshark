@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "conversation_dialog.h"
 
@@ -30,8 +17,8 @@
 
 #include "wsutil/str_util.h"
 
-#include "qt_ui_utils.h"
-#include "timeline_delegate.h"
+#include <ui/qt/utils/qt_ui_utils.h>
+#include <ui/qt/models/timeline_delegate.h>
 #include "wireshark_application.h"
 
 #include <QCheckBox>
@@ -211,26 +198,20 @@ void ConversationDialog::followStream()
         return;
     }
 
-    QString filter;
-    follow_type_t ftype = FOLLOW_TCP;
-    switch (conv_item->ptype) {
-    case PT_TCP:
-        filter = QString("tcp.stream eq %1").arg(conv_item->conv_id);
+    follow_type_t ftype;
+    switch (conv_item->etype) {
+    case ENDPOINT_TCP:
+        ftype = FOLLOW_TCP;
         break;
-    case PT_UDP:
-        filter = QString("udp.stream eq %1").arg(conv_item->conv_id);
+    case ENDPOINT_UDP:
         ftype = FOLLOW_UDP;
         break;
     default:
-        break;
-    }
-
-    if (filter.length() < 1) {
         return;
     }
 
-    emit filterAction(filter, FilterAction::ActionApply, FilterAction::ActionTypePlain);
-    emit openFollowStreamDialog(ftype);
+    // Will set the display filter too.
+    emit openFollowStreamDialog(ftype, (int)conv_item->conv_id);
 }
 
 void ConversationDialog::graphTcp()
@@ -247,7 +228,7 @@ void ConversationDialog::graphTcp()
     // XXX The GTK+ code opens the TCP Stream dialog. We might want
     // to open the IO Graph dialog instead.
     QString filter;
-    if (conv_item->ptype == PT_TCP) {
+    if (conv_item->etype == ENDPOINT_TCP) {
         filter = QString("tcp.stream eq %1").arg(conv_item->conv_id);
     } else {
         return;
@@ -275,11 +256,11 @@ void ConversationDialog::conversationSelectionChanged()
     conv_item_t *conv_item = currentConversation();
 
     if (!file_closed_ && conv_item) {
-        switch (conv_item->ptype) {
-        case PT_TCP:
+        switch (conv_item->etype) {
+        case ENDPOINT_TCP:
             graph_enable = true;
             // Fall through
-        case PT_UDP:
+        case ENDPOINT_UDP:
             follow_enable = true;
             break;
         default:
@@ -438,7 +419,7 @@ public:
             if (column == CONV_COLUMN_DURATION) {
                 span_px.start -= start_px;
             }
-            return qVariantFromValue(span_px);
+            return QVariant::fromValue(span_px);
 
             break;
         }
@@ -470,7 +451,7 @@ public:
             }
         case CONV_COLUMN_SRC_PORT:
             if (resolve_names) {
-                char* port_str = get_conversation_port(NULL, conv_item->src_port, conv_item->ptype, resolve_names);
+                char* port_str = get_conversation_port(NULL, conv_item->src_port, conv_item->etype, resolve_names);
                 QString q_port_str(port_str);
                 wmem_free(NULL, port_str);
                 return q_port_str;
@@ -486,7 +467,7 @@ public:
             }
         case CONV_COLUMN_DST_PORT:
             if (resolve_names) {
-                char* port_str = get_conversation_port(NULL, conv_item->dst_port, conv_item->ptype, resolve_names);
+                char* port_str = get_conversation_port(NULL, conv_item->dst_port, conv_item->etype, resolve_names);
                 QString q_port_str(port_str);
                 wmem_free(NULL, port_str);
                 return q_port_str;
@@ -576,7 +557,7 @@ conv_item_t *ConversationDialog::currentConversation()
     }
 
     ConversationTreeWidgetItem *ctwi = dynamic_cast<ConversationTreeWidgetItem *>(cur_tree->selectedItems()[0]);
-    return ctwi->convItem();
+    return (ctwi ? ctwi->convItem() : NULL);
 }
 
 // ConversationTreeWidget
@@ -782,14 +763,16 @@ void ConversationTreeWidget::updateItems() {
     for (int i = 0; i < topLevelItemCount(); i++) {
         ConversationTreeWidgetItem *ctwi = dynamic_cast<ConversationTreeWidgetItem *>(topLevelItem(i));
 
-        double item_rel_start = nstime_to_sec(&(ctwi->convItem()->start_time));
-        if (item_rel_start < min_rel_start_time_) {
-            min_rel_start_time_ = item_rel_start;
-        }
+        if (ctwi) {
+            double item_rel_start = nstime_to_sec(&(ctwi->convItem()->start_time));
+            if (item_rel_start < min_rel_start_time_) {
+                min_rel_start_time_ = item_rel_start;
+            }
 
-        double item_rel_stop = nstime_to_sec(&(ctwi->convItem()->stop_time));
-        if (item_rel_stop > max_rel_stop_time_) {
-            max_rel_stop_time_ = item_rel_stop;
+            double item_rel_stop = nstime_to_sec(&(ctwi->convItem()->stop_time));
+            if (item_rel_stop > max_rel_stop_time_) {
+                max_rel_stop_time_ = item_rel_stop;
+            }
         }
     }
 

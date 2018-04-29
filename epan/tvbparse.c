@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -79,6 +67,8 @@
 /*
 #define TVBPARSE_DEBUG (TVBPARSE_DEBUG_SOME)
 */
+
+#define TVBPARSE_MAX_RECURSION_DEPTH 100 // Arbitrary. Matches DAAP and PNIO.
 
 static tvbparse_elem_t* new_tok(tvbparse_t* tt,
                                 int id,
@@ -410,6 +400,9 @@ static int cond_one_of(tvbparse_t* tt, const int offset, const tvbparse_wanted_t
     if ( offset > tt->end_offset )
         return -1;
 
+    if (++tt->recursion_depth > TVBPARSE_MAX_RECURSION_DEPTH)
+        return -1;
+
     for(i=0; i < wanted->control.elems->len; i++) {
         tvbparse_wanted_t* w = (tvbparse_wanted_t *)g_ptr_array_index(wanted->control.elems,i);
         tvbparse_elem_t* new_elem = NULL;
@@ -426,10 +419,12 @@ static int cond_one_of(tvbparse_t* tt, const int offset, const tvbparse_wanted_t
 #ifdef TVBPARSE_DEBUG
             if (TVBPARSE_DEBUG & TVBPARSE_DEBUG_ONEOF) ws_g_warning("cond_one_of: GOT len=%i",curr_len);
 #endif
+            tt->recursion_depth--;
             return curr_len;
         }
     }
 
+    tt->recursion_depth--;
     return -1;
 }
 
@@ -486,10 +481,15 @@ static int cond_hash(tvbparse_t* tt, const int offset, const tvbparse_wanted_t* 
     if ( offset > tt->end_offset )
         return -1;
 
+    if (++tt->recursion_depth > TVBPARSE_MAX_RECURSION_DEPTH)
+        return -1;
+
     key_len = wanted->control.hash.key->condition(tt, offset, wanted->control.hash.key,  &key_elem);
 
-    if (key_len < 0)
+    if (key_len < 0) {
+        tt->recursion_depth--;
         return -1;
+    }
 
     key = tvb_get_string_enc(wmem_packet_scope(),key_elem->tvb,key_elem->offset,key_elem->len, ENC_ASCII);
 #ifdef TVBPARSE_DEBUG
@@ -500,11 +500,16 @@ static int cond_hash(tvbparse_t* tt, const int offset, const tvbparse_wanted_t* 
         value_len = value_wanted->condition(tt, offset + key_len, value_wanted,  &value_elem);
     } else if (wanted->control.hash.other) {
         value_len = wanted->control.hash.other->condition(tt, offset+key_len, wanted->control.hash.other,  &value_elem);
-        if (value_len < 0)
+        if (value_len < 0) {
+            tt->recursion_depth--;
             return -1;
+        }
     } else {
+        tt->recursion_depth--;
         return -1;
     }
+
+    tt->recursion_depth--;
 
     tot_len = key_len + value_len;
 
@@ -574,19 +579,24 @@ static int cond_seq(tvbparse_t* tt, int offset, const tvbparse_wanted_t * wanted
     int start = offset;
     tvbparse_elem_t* ret_tok = NULL;
 
-    if ( offset > tt->end_offset )
-        return -1;
 #ifdef TVBPARSE_DEBUG
     if (TVBPARSE_DEBUG & TVBPARSE_DEBUG_SEQ) ws_g_warning("cond_seq: START");
 #endif
+
+    if ( offset > tt->end_offset )
+        return -1;
+
+    if (++tt->recursion_depth > TVBPARSE_MAX_RECURSION_DEPTH)
+        return -1;
 
     for(i=0; i < wanted->control.elems->len; i++) {
         tvbparse_wanted_t* w = (tvbparse_wanted_t *)g_ptr_array_index(wanted->control.elems,i);
         tvbparse_elem_t* new_elem = NULL;
 
-        if ( offset + w->len > tt->end_offset )
+        if ( offset + w->len > tt->end_offset ) {
+            tt->recursion_depth--;
             return -1;
-
+        }
 
         len = w->condition(tt, offset, w, &new_elem);
 
@@ -602,12 +612,15 @@ static int cond_seq(tvbparse_t* tt, int offset, const tvbparse_wanted_t * wanted
                 new_elem->last = new_elem;
             }
         } else {
+            tt->recursion_depth--;
             return -1;
         }
 
         offset += len;
         offset += ignore_fcn(tt,offset);
     }
+
+    tt->recursion_depth--;
 
     *tok = ret_tok;
 
@@ -657,6 +670,9 @@ static int cond_some(tvbparse_t* tt, int offset, const tvbparse_wanted_t * wante
     if ( offset > tt->end_offset )
         return -1;
 
+    if (++tt->recursion_depth > TVBPARSE_MAX_RECURSION_DEPTH)
+        return -1;
+
     if ( wanted->min == 0 ) {
         ret_tok = new_tok(tt,wanted->id,offset,0,wanted);
     }
@@ -665,8 +681,10 @@ static int cond_some(tvbparse_t* tt, int offset, const tvbparse_wanted_t * wante
         tvbparse_elem_t* new_elem = NULL;
         int consumed;
 
-        if ( offset > tt->end_offset )
+        if ( offset > tt->end_offset ) {
+            tt->recursion_depth--;
             return -1;
+        }
 
         consumed = wanted->control.subelem->condition(tt, offset, wanted->control.subelem, &new_elem);
 
@@ -692,6 +710,8 @@ static int cond_some(tvbparse_t* tt, int offset, const tvbparse_wanted_t * wante
         offset += consumed;
         got_so_far++;
     }
+
+    tt->recursion_depth--;
 
 #ifdef TVBPARSE_DEBUG
     if (TVBPARSE_DEBUG & TVBPARSE_DEBUG_SOME) ws_g_warning("cond_some: got num=%u",got_so_far);
@@ -744,9 +764,14 @@ static int cond_until(tvbparse_t* tt, const int offset, const tvbparse_wanted_t 
     if ( offset + wanted->control.until.subelem->len > tt->end_offset )
         return -1;
 
+    if (++tt->recursion_depth > TVBPARSE_MAX_RECURSION_DEPTH)
+        return -1;
+
     do {
         len = wanted->control.until.subelem->condition(tt, target_offset++, wanted->control.until.subelem,  &new_elem);
     } while(len < 0  && target_offset+1 < tt->end_offset);
+
+    tt->recursion_depth--;
 
     if (len >= 0) {
 
@@ -874,7 +899,7 @@ static int cond_ft(tvbparse_t* tt, int offset, const tvbparse_wanted_t * wanted,
     }
 }
 
-gint ft_lens[] = {-1,-1,-1, 1, 2, 3, 4, 8, 1, 2, 3, 4, 8, 4, 8,-1,-1,-1, 0, -1, 6, -1, -1, 4, sizeof(struct e_in6_addr), -1, -1, -1, -1 };
+gint ft_lens[] = {-1,-1,-1, 1, 2, 3, 4, 8, 1, 2, 3, 4, 8, 4, 8,-1,-1,-1, 0, -1, 6, -1, -1, 4, sizeof(ws_in6_addr), -1, -1, -1, -1 };
 
 tvbparse_wanted_t* tvbparse_ft(int id,
                                const void* data,
@@ -1202,6 +1227,7 @@ tvbparse_t* tvbparse_init(tvbuff_t* tvb,
     tt->end_offset = offset + len;
     tt->data = data;
     tt->ignore = ignore;
+    tt->recursion_depth = 0;
     return tt;
 }
 

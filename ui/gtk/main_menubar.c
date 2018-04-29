@@ -103,18 +103,10 @@
 
 #include "ui/gtk/packet_list.h"
 #include "ui/gtk/lbm_stream_dlg.h"
-#include "ui/gtk/lbm_uimflow_dlg.h"
 
 #ifdef HAVE_LIBPCAP
 #include "capture_opts.h"
 #include "ui/capture_globals.h"
-#endif
-#ifdef HAVE_IGE_MAC_INTEGRATION
-#include <ige-mac-menu.h>
-#endif
-
-#ifdef HAVE_GTKOSXAPPLICATION
-#include <gtkmacintegration/gtkosxapplication.h>
 #endif
 
 static int initialize = TRUE;
@@ -149,7 +141,7 @@ static void colorize_cb(GtkWidget *w, gpointer d);
 static void rebuild_protocol_prefs_menu (module_t *prefs_module_p, gboolean preferences,
         GtkUIManager *ui_menu, const char *path);
 
-static void plugin_if_menubar_preference(gconstpointer user_data);
+static void plugin_if_menubar_preference(GHashTable *dataSet);
 
 
 /*  As a general GUI guideline, we try to follow the Gnome Human Interface Guidelines, which can be found at:
@@ -178,14 +170,6 @@ new_window_cb_ref(GtkWidget *widget)
 {
     new_packet_window(widget, TRUE, FALSE);
 }
-
-#ifdef WANT_PACKET_EDITOR
-static void
-edit_window_cb(GtkWidget *widget _U_)
-{
-    new_packet_window(widget, FALSE, TRUE);
-}
-#endif
 
 static void
 colorize_conversation_cb(conversation_filter_t* color_filter, int action_num)
@@ -824,9 +808,6 @@ static const char *ui_desc_menubar =
 "        <separator/>\n"
 "        <menuitem name='TimeShift' action='/Edit/TimeShift'/>\n"
 "        <separator/>\n"
-#ifdef WANT_PACKET_EDITOR
-"        <menuitem name='EditPacket' action='/Edit/EditPacket'/>\n"
-#endif
 "        <menuitem name='AddEditPktComment' action='/Edit/AddEditPktComment'/>\n"
 "        <menuitem name='AddEditCaptureComment' action='/Edit/AddEditCaptureComment'/>\n"
 "        <separator/>\n"
@@ -1009,7 +990,6 @@ static const char *ui_desc_menubar =
 "        </menu>\n"
 "        <menu name= '29WestUIMMenu' action='/Statistics/29West/UIM'>\n"
 "          <menuitem name='29WestUIMStreams' action='/Statistics/29West/UIM/Streams' />\n"
-"          <menuitem name='29WestUIMStreamFlowGraph' action='/Statistics/29West/UIM/StreamFlowGraph' />\n"
 "        </menu>\n"
 "      </menu>\n"
 "      <menuitem name='ANCP' action='/Statistics/ancp'/>\n"
@@ -1335,9 +1315,6 @@ static const GtkActionEntry main_menu_bar_entries[] = {
 
    { "/Edit/ConfigurationProfiles", NULL,                   "_Configuration Profiles...",           "<shift><control>A",        NULL,           G_CALLBACK(profile_dialog_cb) },
    { "/Edit/Preferences",           GTK_STOCK_PREFERENCES,  "_Preferences...",                      "<shift><control>P",        NULL,           G_CALLBACK(menus_prefs_cb) },
-#ifdef WANT_PACKET_EDITOR
-   { "/Edit/EditPacket",                NULL,               "_Edit Packet",                          NULL,                      NULL,           G_CALLBACK(edit_window_cb) },
-#endif
    { "/Edit/AddEditPktComment",         WIRESHARK_STOCK_EDIT,   "Packet Comment...",                "<alt><control>C",          NULL,           G_CALLBACK(edit_packet_comment_dlg) },
    { "/Edit/AddEditCaptureComment",     NULL,                   "Capture Comment...",               "<shift><alt><control>C",   NULL,           G_CALLBACK(edit_capture_comment_dlg_launch) },
 
@@ -1431,7 +1408,6 @@ static const GtkActionEntry main_menu_bar_entries[] = {
    { "/Statistics/29West/Queues/lbmr_queue_queries_receiver",         NULL,                       "Queries by Receiver",          NULL, NULL, G_CALLBACK(gtk_stats_tree_cb) },
    { "/Statistics/29West/UIM",                                        NULL,                       "UIM",                          NULL, NULL, NULL },
    { "/Statistics/29West/UIM/Streams",                                NULL,                       "Streams",                      NULL, NULL, G_CALLBACK(lbmc_stream_dlg_stream_menu_cb) },
-   { "/Statistics/29West/UIM/StreamFlowGraph",                        WIRESHARK_STOCK_FLOW_GRAPH, "Stream Flow Graph",            NULL, NULL, G_CALLBACK(lbmc_uim_flow_menu_cb) },
 
    { "/Statistics/ancp",                            NULL,       "ANCP",                             NULL, NULL, G_CALLBACK(gtk_stats_tree_cb) },
    { "/Statistics/BACnet",                          NULL,       "BACnet",                           NULL, NULL, NULL },
@@ -2132,9 +2108,6 @@ static const char *ui_desc_packet_list_menu_popup =
 "     <menuitem name='IgnorePacket' action='/IgnorePacket'/>\n"
 "     <menuitem name='SetTimeReference' action='/Set Time Reference'/>\n"
 "     <menuitem name='TimeShift' action='/TimeShift'/>\n"
-#ifdef WANT_PACKET_EDITOR
-"     <menuitem name='EditPacket' action='/Edit/EditPacket'/>\n"
-#endif
 "     <menuitem name='AddEditPktComment' action='/Edit/AddEditPktComment'/>\n"
 "     <separator/>\n"
 "     <menuitem name='ManuallyResolveAddress' action='/ManuallyResolveAddress'/>\n"
@@ -2217,9 +2190,6 @@ static const GtkActionEntry packet_list_menu_popup_action_entries[] = {
   { "/Set Time Reference",              WIRESHARK_STOCK_TIME,   "Set Time Reference (toggle)",  NULL,                   NULL,           G_CALLBACK(packet_list_menu_set_ref_time_cb) },
   { "/TimeShift",                       WIRESHARK_STOCK_TIME,   "Time Shift...",                NULL,                   NULL,           G_CALLBACK(time_shift_cb) },
   { "/ManuallyResolveAddress",          NULL,                   "Manually Resolve Address",     NULL,                   NULL,           G_CALLBACK(manual_addr_resolv_dlg) },
-#ifdef WANT_PACKET_EDITOR
-   { "/Edit/EditPacket",                NULL,                   "_Edit Packet",                 NULL,                   NULL,           G_CALLBACK(edit_window_cb) },
-#endif
   { "/Edit/AddEditPktComment",          WIRESHARK_STOCK_EDIT,   "Packet Comment...",            NULL,                   NULL,           G_CALLBACK(edit_packet_comment_dlg) },
 
   { "/Conversation Filter",             NULL, "Conversation Filter",    NULL, NULL, NULL },
@@ -2317,9 +2287,6 @@ static const char *ui_desc_tree_view_menu_popup =
 "        </menu>\n"
 "     </menu>\n"
 "     <menuitem name='ExportSelectedPacketBytes' action='/ExportSelectedPacketBytes'/>\n"
-#ifdef WANT_PACKET_EDITOR
-"     <menuitem name='EditPacket' action='/Edit/EditPacket'/>\n"
-#endif
 "     <separator/>\n"
 "     <menuitem name='WikiProtocolPage' action='/WikiProtocolPage'/>\n"
 "     <menuitem name='FilterFieldReference' action='/FilterFieldReference'/>\n"
@@ -2375,9 +2342,6 @@ static const GtkActionEntry tree_view_menu_popup_action_entries[] = {
   { "/Copy/Bytes/BinaryStream",                     NULL,       "Binary Stream",                        NULL, NULL, G_CALLBACK(packet_list_menu_copy_bytes_bin_strm_cb) },
 
   { "/ExportSelectedPacketBytes",                   NULL,       "Export Selected Packet Bytes...",      NULL, NULL, G_CALLBACK(savehex_cb) },
-#ifdef WANT_PACKET_EDITOR
-  { "/Edit/EditPacket",                NULL,               "_Edit Packet",                         NULL,                       NULL,           G_CALLBACK(edit_window_cb) },
-#endif
   { "/WikiProtocolPage",            WIRESHARK_STOCK_WIKI,       "Wiki Protocol Page",                   NULL, NULL, G_CALLBACK(selected_ptree_info_cb) },
   { "/FilterFieldReference",    WIRESHARK_STOCK_INTERNET,       "Filter Field Reference",               NULL, NULL, G_CALLBACK(selected_ptree_ref_cb) },
   { "/ProtocolHelp",                                NULL,       "Protocol Help",                        NULL, NULL, NULL },
@@ -2432,15 +2396,6 @@ GtkWidget *
 main_menu_new(GtkAccelGroup ** table)
 {
     GtkWidget *menubar;
-#ifdef HAVE_IGE_MAC_INTEGRATION
-    GtkWidget *quit_item, *about_item, *preferences_item;
-    IgeMacMenuGroup *group;
-#endif
-#ifdef HAVE_GTKOSXAPPLICATION
-    GtkosxApplication *theApp;
-    GtkWidget * item;
-    GtkWidget * dock_menu;
-#endif
 
     grp = gtk_accel_group_new();
 
@@ -2448,83 +2403,6 @@ main_menu_new(GtkAccelGroup ** table)
         menus_init();
 
     menubar = gtk_ui_manager_get_widget(ui_manager_main_menubar, "/Menubar");
-#ifdef HAVE_IGE_MAC_INTEGRATION
-    if(prefs.gui_macosx_style) {
-        ige_mac_menu_set_menu_bar(GTK_MENU_SHELL(menubar));
-        ige_mac_menu_set_global_key_handler_enabled(TRUE);
-
-        /* Create menu items to populate the application menu with.  We have to
-         * do this because we are still using the old GtkItemFactory API for
-         * the main menu. */
-        group = ige_mac_menu_add_app_menu_group();
-        about_item = gtk_menu_item_new_with_label("About");
-        g_signal_connect(about_item, "activate", G_CALLBACK(about_wireshark_cb),
-                         NULL);
-        ige_mac_menu_add_app_menu_item(group, GTK_MENU_ITEM(about_item), NULL);
-
-        group = ige_mac_menu_add_app_menu_group();
-        preferences_item = gtk_menu_item_new_with_label("Preferences");
-        g_signal_connect(preferences_item, "activate", G_CALLBACK(prefs_cb),
-                         NULL);
-        ige_mac_menu_add_app_menu_item(group, GTK_MENU_ITEM(preferences_item),
-                                       NULL);
-    }
-
-    /* The quit item in the application menu shows up whenever ige mac
-     * integration is enabled, even if the macOS UI style in Wireshark isn't
-     * turned on. */
-    quit_item = gtk_menu_item_new_with_label("Quit");
-    g_signal_connect(quit_item, "activate", G_CALLBACK(file_quit_cmd_cb), NULL);
-    ige_mac_menu_set_quit_menu_item(GTK_MENU_ITEM(quit_item));
-#endif
-
-#ifdef HAVE_GTKOSXAPPLICATION
-    theApp = (GtkosxApplication *)g_object_new(GTKOSX_TYPE_APPLICATION, NULL);
-
-    if(prefs.gui_macosx_style) {
-        gtk_widget_hide(menubar);
-
-        gtkosx_application_set_menu_bar(theApp, GTK_MENU_SHELL(menubar));
-        gtkosx_application_set_use_quartz_accelerators(theApp, TRUE);
-
-        /* Construct a conventional looking OSX App menu */
-
-        item = gtk_ui_manager_get_widget(ui_manager_main_menubar, "/Menubar/HelpMenu/AboutWireshark");
-        gtkosx_application_insert_app_menu_item(theApp, item, 0);
-
-        gtkosx_application_insert_app_menu_item(theApp, gtk_separator_menu_item_new(), 1);
-
-        item = gtk_ui_manager_get_widget(ui_manager_main_menubar, "/Menubar/EditMenu/Preferences");
-        gtkosx_application_insert_app_menu_item(theApp, item, 2);
-
-        /* Set OSX help menu */
-
-        item = gtk_ui_manager_get_widget(ui_manager_main_menubar, "/Menubar/HelpMenu");
-        gtkosx_application_set_help_menu(theApp,GTK_MENU_ITEM(item));
-
-        /* Hide the File menu Quit item (a Quit item is automagically placed within the OSX App menu) */
-
-        item = gtk_ui_manager_get_widget(ui_manager_main_menubar, "/Menubar/FileMenu/Quit");
-        gtk_widget_hide(item);
-    }
-
-    /* generate dock menu */
-    dock_menu = gtk_menu_new();
-
-    item = gtk_menu_item_new_with_label("Start");
-    g_signal_connect(item, "activate", G_CALLBACK (capture_start_cb), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(dock_menu), item);
-
-    item = gtk_menu_item_new_with_label("Stop");
-    g_signal_connect(item, "activate", G_CALLBACK (capture_stop_cb), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(dock_menu), item);
-
-    item = gtk_menu_item_new_with_label("Restart");
-    g_signal_connect(item, "activate", G_CALLBACK (capture_restart_cb), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(dock_menu), item);
-
-    gtkosx_application_set_dock_menu(theApp, GTK_MENU_SHELL(dock_menu));
-#endif
 
     if (table)
         *table = grp;
@@ -2539,7 +2417,7 @@ menu_dissector_filter_cb(GtkAction *action _U_,  gpointer callback_data)
 {
     conversation_filter_t  *filter_entry = (conversation_filter_t *)callback_data;
     GtkWidget               *filter_te;
-    const char              *buf;
+    char                    *buf;
 
     filter_te = gtk_bin_get_child(GTK_BIN(g_object_get_data(G_OBJECT(top_level), E_DFILTER_CM_KEY)));
 
@@ -3042,7 +2920,7 @@ menus_init(void)
             popup_menu_object);                                                    /* data to pass to the action callbacks */
 
         gtk_action_group_add_toggle_actions(packet_list_heading_action_group,                     /* the action group */
-                                    (GtkToggleActionEntry *)packet_list_heading_menu_toggle_action_entries,     /* an array of action descriptions */
+                                    (const GtkToggleActionEntry *)packet_list_heading_menu_toggle_action_entries,     /* an array of action descriptions */
                                     G_N_ELEMENTS(packet_list_heading_menu_toggle_action_entries), /* the number of entries */
                                     NULL);                                                        /* data to pass to the action callbacks */
 
@@ -3069,13 +2947,13 @@ menus_init(void)
         packet_list_action_group = gtk_action_group_new ("PacketListPopUpMenuActionGroup");
 
         gtk_action_group_add_actions (packet_list_action_group,                    /* the action group */
-            (GtkActionEntry *)packet_list_menu_popup_action_entries,                       /* an array of action descriptions */
+            (const GtkActionEntry *)packet_list_menu_popup_action_entries,                       /* an array of action descriptions */
             G_N_ELEMENTS(packet_list_menu_popup_action_entries),                   /* the number of entries */
             popup_menu_object);                                                    /* data to pass to the action callbacks */
 
         /* Add the filter menu items */
         gtk_action_group_add_actions (packet_list_action_group,                    /* the action group */
-            (GtkActionEntry *)apply_prepare_filter_action_entries,                         /* an array of action descriptions */
+            (const GtkActionEntry *)apply_prepare_filter_action_entries,                         /* an array of action descriptions */
             G_N_ELEMENTS(apply_prepare_filter_action_entries),                     /* the number of entries */
             popup_menu_object);                                                    /* data to pass to the action callbacks */
 
@@ -3105,13 +2983,13 @@ menus_init(void)
         packet_list_details_action_group = gtk_action_group_new ("PacketListDetailsMenuPopUpActionGroup");
 
         gtk_action_group_add_actions (packet_list_details_action_group,            /* the action group */
-            (GtkActionEntry *)tree_view_menu_popup_action_entries,                 /* an array of action descriptions */
+            (const GtkActionEntry *)tree_view_menu_popup_action_entries,                 /* an array of action descriptions */
             G_N_ELEMENTS(tree_view_menu_popup_action_entries),                     /* the number of entries */
             popup_menu_object);                                                    /* data to pass to the action callbacks */
 
         /* Add the filter menu items */
         gtk_action_group_add_actions (packet_list_details_action_group,            /* the action group */
-            (GtkActionEntry *)apply_prepare_filter_action_entries,                 /* an array of action descriptions */
+            (const GtkActionEntry *)apply_prepare_filter_action_entries,                 /* an array of action descriptions */
             G_N_ELEMENTS(apply_prepare_filter_action_entries),                     /* the number of entries */
             popup_menu_object);                                                    /* data to pass to the action callbacks */
 
@@ -3150,7 +3028,7 @@ menus_init(void)
 
 
         gtk_action_group_add_radio_actions  (packet_list_byte_menu_action_group,            /* the action group */
-                                    (GtkRadioActionEntry *)bytes_menu_radio_action_entries, /* an array of radio action descriptions  */
+                                    (const GtkRadioActionEntry *)bytes_menu_radio_action_entries, /* an array of radio action descriptions  */
                                     G_N_ELEMENTS(bytes_menu_radio_action_entries),          /* the number of entries */
                                     recent.gui_bytes_view,                                  /* the value of the action to activate initially, or -1 if no action should be activated  */
                                     G_CALLBACK(select_bytes_view_cb),                       /* the callback to connect to the changed signal  */
@@ -3259,7 +3137,7 @@ menus_init(void)
         statusbar_profiles_action_group = gtk_action_group_new ("StatusBarProfilesPopUpMenuActionGroup");
 
         gtk_action_group_add_actions (statusbar_profiles_action_group,   /* the action group */
-            (GtkActionEntry *)statusbar_profiles_menu_action_entries,    /* an array of action descriptions */
+            (const GtkActionEntry *)statusbar_profiles_menu_action_entries,    /* an array of action descriptions */
             G_N_ELEMENTS(statusbar_profiles_menu_action_entries),        /* the number of entries */
             popup_menu_object);                                          /* data to pass to the action callbacks */
 
@@ -3359,8 +3237,8 @@ typedef struct _menu_item {
 static gint
 insert_sorted_by_label(gconstpointer aparam, gconstpointer bparam)
 {
-    const menu_item_t *a = (menu_item_t *)aparam;
-    const menu_item_t *b = (menu_item_t *)bparam;
+    const menu_item_t *a = (const menu_item_t *)aparam;
+    const menu_item_t *b = (const menu_item_t *)bparam;
 
     return g_ascii_strcasecmp(a->label, b->label);
 }
@@ -4646,12 +4524,6 @@ set_menus_for_selected_packet(capture_file *cf)
 
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/EditMenu/IgnorePacket",
                          frame_selected);
-#ifdef WANT_PACKET_EDITOR
-    set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/EditMenu/EditPacket",
-                         prefs.gui_packet_editor ? frame_selected : FALSE);
-    set_menu_sensitivity(ui_manager_packet_list_menu, "/PacketListMenuPopup/EditPacket",
-                         prefs.gui_packet_editor ? frame_selected : FALSE);
-#endif /* WANT_PACKET_EDITOR */
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/EditMenu/AddEditPktComment",
                          frame_selected && wtap_dump_can_write(cf->linktypes, WTAP_COMMENT_PER_PACKET));
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/EditMenu/AddEditCaptureComment",
@@ -4798,7 +4670,7 @@ menu_prefs_toggle_bool (GtkWidget *w, gpointer data)
     pref_t *pref = (pref_t*)data;
     module_t *module = (module_t *)g_object_get_data (G_OBJECT(w), "module");
 
-    module->prefs_changed = TRUE;
+    module->prefs_changed_flags |= prefs_get_effect_flags(pref);
     prefs_invert_bool_value(pref, pref_current);
 
     prefs_apply (module);
@@ -4820,7 +4692,7 @@ menu_prefs_change_enum (GtkWidget *w, gpointer data)
         return;
 
     if (prefs_set_enum_value(pref, new_value, pref_current)) {
-        module->prefs_changed = TRUE;
+        module->prefs_changed_flags |= prefs_get_effect_flags(pref);
 
         prefs_apply (module);
         if (!prefs.gui_use_pref_save) {
@@ -4857,13 +4729,13 @@ menu_prefs_change_ok (GtkWidget *w, gpointer parent_w)
                           new_value);
             return;
         }
-        module->prefs_changed |= prefs_set_uint_value(pref, uval, pref_current);
+        module->prefs_changed_flags |= prefs_set_uint_value(pref, uval, pref_current);
         break;
     case PREF_STRING:
-        module->prefs_changed |= prefs_set_string_value(pref, new_value, pref_current);
+        module->prefs_changed_flags |= prefs_set_string_value(pref, new_value, pref_current);
         break;
     case PREF_RANGE:
-        if (!prefs_set_range_value_work(pref, new_value, TRUE, &module->prefs_changed)) {
+        if (!prefs_set_range_value_work(pref, new_value, TRUE, &module->prefs_changed_flags)) {
             simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                           "The value \"%s\" isn't a valid range.",
                           new_value);
@@ -4875,7 +4747,7 @@ menu_prefs_change_ok (GtkWidget *w, gpointer parent_w)
         break;
     }
 
-    if (module->prefs_changed) {
+    if (module->prefs_changed_flags) {
         /* Ensure we reload the sub menu */
         menu_prefs_reset();
         prefs_apply (module);
@@ -5243,7 +5115,7 @@ set_menus_for_selected_tree_row(capture_file *cf)
 
         if (hfinfo->parent == -1) {
             abbrev = hfinfo->abbrev;
-            id = (hfinfo->type == FT_PROTOCOL) ? proto_get_id((protocol_t *)hfinfo->strings) : -1;
+            id = (hfinfo->type == FT_PROTOCOL) ? proto_get_id((const protocol_t *)hfinfo->strings) : -1;
         } else {
             abbrev = proto_registrar_get_abbrev(hfinfo->parent);
             id = hfinfo->parent;
@@ -5273,10 +5145,6 @@ set_menus_for_selected_tree_row(capture_file *cf)
                              cf->finfo_selected->tree_type != -1);
         set_menu_sensitivity(ui_manager_tree_view_menu, "/TreeViewPopup/CollapseSubtrees",
                              cf->finfo_selected->tree_type != -1);
-#ifdef WANT_PACKET_EDITOR
-        set_menu_sensitivity(ui_manager_tree_view_menu, "/TreeViewPopup/EditPacket",
-                             prefs.gui_packet_editor ? TRUE : FALSE);
-#endif
         set_menu_sensitivity(ui_manager_tree_view_menu, "/TreeViewPopup/WikiProtocolPage",
                              (id == -1) ? FALSE : TRUE);
         set_menu_sensitivity(ui_manager_tree_view_menu, "/TreeViewPopup/FilterFieldReference",
@@ -5536,11 +5404,10 @@ ws_menubar_external_menus(void)
     }
 }
 
-void plugin_if_menubar_preference(gconstpointer user_data)
+void plugin_if_menubar_preference(GHashTable *dataSet)
 {
-    if ( user_data != NULL )
+    if ( dataSet != NULL )
     {
-        GHashTable * dataSet = (GHashTable *) user_data;
         const char * module_name;
         const char * pref_name;
         const char * pref_value;
@@ -5548,7 +5415,8 @@ void plugin_if_menubar_preference(gconstpointer user_data)
                 g_hash_table_lookup_extended(dataSet, "pref_key", NULL, (void**)&pref_name ) &&
                 g_hash_table_lookup_extended(dataSet, "pref_value", NULL, (void**)&pref_value ) )
         {
-            if ( prefs_store_ext(module_name, pref_name, pref_value) )
+            unsigned int changed_flags = prefs_store_ext(module_name, pref_name, pref_value);
+            if ( changed_flags )
             {
                 redissect_packets();
                 redissect_all_packet_windows();

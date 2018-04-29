@@ -4,19 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2001 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 
@@ -71,7 +59,7 @@ static gboolean fvt_cache_cb(proto_node * node, gpointer data _U_) {
 				break;
 		}
 		e = g_new(fvt_cache_entry_t,1);
-		e->name = finfo->hfinfo->abbrev,
+		e->name = finfo->hfinfo->abbrev;
 		e->repr = fvalue_to_string_repr(NULL, &(finfo->value), FTREPR_DFILTER, finfo->hfinfo->display);
 		e->usable = TRUE;
 		g_hash_table_insert(fvt_cache,(void*)finfo->hfinfo->abbrev,e);
@@ -184,7 +172,7 @@ static gchar* dfilter_macro_apply_recurse(const gchar* text, guint depth, gchar*
 		FGS(name); \
 		FGS(arg); \
 		if (args) { \
-			while(args->len) { void* p = g_ptr_array_remove_index_fast(args,0); if (p) g_free(p); } \
+			while(args->len) { void* p = g_ptr_array_remove_index_fast(args,0); g_free(p); } \
 			g_ptr_array_free(args,TRUE); \
 			args = NULL; \
 		} \

@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*  This dissector is called RTMPT to avoid a conflict with
@@ -530,6 +518,7 @@ static void rtmpt_debug(const char *fmt, ...)
         va_list args;
         va_start(args, fmt);
         vprintf(fmt, args);
+        va_end(args);
 }
 #define RTMPT_DEBUG rtmpt_debug
 #else
@@ -2304,10 +2293,10 @@ dissect_rtmpt_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
                 rconv = rtmpt_init_rconv(conv);
         }
 
-        cdir = (addresses_equal(&conv->key_ptr->addr1, &pinfo->src) &&
-                addresses_equal(&conv->key_ptr->addr2, &pinfo->dst) &&
-                conv->key_ptr->port1 == pinfo->srcport &&
-                conv->key_ptr->port2 == pinfo->destport) ? 0 : 1;
+        cdir = (addresses_equal(conversation_key_addr1(conv->key_ptr), &pinfo->src) &&
+                addresses_equal(conversation_key_addr2(conv->key_ptr), &pinfo->dst) &&
+                conversation_key_port1(conv->key_ptr) == pinfo->srcport &&
+                conversation_key_port2(conv->key_ptr) == pinfo->destport) ? 0 : 1;
 
         dissect_rtmpt_common(tvb, pinfo, tree, rconv, cdir, tcpinfo->seq, tcpinfo->lastackseq);
         return tvb_reported_length(tvb);
@@ -2364,16 +2353,16 @@ dissect_rtmpt_http(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
         cdir = pinfo->srcport == pinfo->match_uint;
 
         if (cdir) {
-                conv = find_conversation(pinfo->num, &pinfo->dst, &pinfo->src, pinfo->ptype, 0, pinfo->srcport, 0);
+                conv = find_conversation(pinfo->num, &pinfo->dst, &pinfo->src, conversation_pt_to_endpoint_type(pinfo->ptype), 0, pinfo->srcport, 0);
                 if (!conv) {
                         RTMPT_DEBUG("RTMPT new conversation\n");
-                        conv = conversation_new(pinfo->num, &pinfo->dst, &pinfo->src, pinfo->ptype, 0, pinfo->srcport, 0);
+                        conv = conversation_new(pinfo->num, &pinfo->dst, &pinfo->src, conversation_pt_to_endpoint_type(pinfo->ptype), 0, pinfo->srcport, 0);
                 }
         } else {
-                conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, pinfo->ptype, 0, pinfo->destport, 0);
+                conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, conversation_pt_to_endpoint_type(pinfo->ptype), 0, pinfo->destport, 0);
                 if (!conv) {
                         RTMPT_DEBUG("RTMPT new conversation\n");
-                        conv = conversation_new(pinfo->num, &pinfo->src, &pinfo->dst, pinfo->ptype, 0, pinfo->destport, 0);
+                        conv = conversation_new(pinfo->num, &pinfo->src, &pinfo->dst, conversation_pt_to_endpoint_type(pinfo->ptype), 0, pinfo->destport, 0);
                 }
         }
 

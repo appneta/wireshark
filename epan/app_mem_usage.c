@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #if defined(__linux__)
@@ -48,6 +36,7 @@
 #define MAX_COMPONENTS 16
 
 #if defined(_WIN32)
+
 static gsize
 win32_get_total_mem_used_by_app(void)
 {
@@ -70,11 +59,15 @@ win32_get_total_mem_used_by_app(void)
 	}
 }
 
-#define get_total_mem_used_by_app win32_get_total_mem_used_by_app
+static const ws_mem_usage_t total_usage = { "Total", win32_get_total_mem_used_by_app, NULL };
 
-#endif /* (_WIN32) */
+static const ws_mem_usage_t *memory_components[MAX_COMPONENTS] = {
+	&total_usage,
+};
 
-#if defined(__linux__)
+static guint memory_register_num = 1;
+
+#elif defined(__linux__)
 
 static gboolean
 linux_get_memory(gsize *ptotal, gsize *prss)
@@ -144,39 +137,32 @@ linux_get_rss_mem_used_by_app(void)
 	return rss;
 }
 
-#define get_total_mem_used_by_app linux_get_total_mem_used_by_app
-
-#define get_rss_mem_used_by_app linux_get_rss_mem_used_by_app
-
-#endif
-
-/* XXX, BSD 4.3: getrusage() -> ru_ixrss ? */
-
-#ifdef get_total_mem_used_by_app
-static const ws_mem_usage_t total_usage = { "Total", get_total_mem_used_by_app, NULL };
-#endif
-
-#ifdef get_rss_mem_used_by_app
-static const ws_mem_usage_t rss_usage = { "RSS", get_rss_mem_used_by_app, NULL };
-#endif
+static const ws_mem_usage_t total_usage = { "Total", linux_get_total_mem_used_by_app, NULL };
+static const ws_mem_usage_t rss_usage = { "RSS", linux_get_rss_mem_used_by_app, NULL };
 
 static const ws_mem_usage_t *memory_components[MAX_COMPONENTS] = {
-#ifdef get_total_mem_used_by_app
 	&total_usage,
-#endif
-#ifdef get_rss_mem_used_by_app
 	&rss_usage,
-#endif
 };
 
-static guint memory_register_num = 0
-#ifdef get_total_mem_used_by_app
-	+ 1
+static guint memory_register_num = 2;
+
+#else
+
+/*
+ * macOS: task_info()?
+ *
+ * *BSD: getrusage() -> ru_ixrss ?  Note that there are three
+ * current-RSS components in struct rusage, but those date
+ * back to the days when you had just text, data, and stack,
+ * and kernels might not even bother supplying them.
+ */
+
+static const ws_mem_usage_t *memory_components[MAX_COMPONENTS];
+
+static guint memory_register_num = 0;
+
 #endif
-#ifdef get_rss_mem_used_by_app
-	+ 1
-#endif
-	;
 
 /* public API */
 

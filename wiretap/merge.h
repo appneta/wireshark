@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __MERGE_H__
@@ -30,8 +18,8 @@ extern "C" {
 #endif /* __cplusplus */
 
 typedef enum {
-    PACKET_PRESENT,
-    PACKET_NOT_PRESENT,
+    RECORD_PRESENT,
+    RECORD_NOT_PRESENT,
     AT_EOF,
     GOT_ERROR
 } in_file_state_e;
@@ -42,7 +30,6 @@ typedef enum {
 typedef struct merge_in_file_s {
     const char     *filename;
     wtap           *wth;
-    gint64          data_offset;
     in_file_state_e state;
     guint32         packet_num;     /* current packet number */
     gint64          size;           /* file size */
@@ -69,7 +56,7 @@ typedef enum {
     MERGE_EVENT_INPUT_FILES_OPENED,
     MERGE_EVENT_FRAME_TYPE_SELECTED,
     MERGE_EVENT_READY_TO_MERGE,
-    MERGE_EVENT_PACKET_WAS_READ,
+    MERGE_EVENT_RECORD_WAS_READ,
     MERGE_EVENT_DONE
 } merge_event;
 

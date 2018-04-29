@@ -42,7 +42,7 @@
 #include <ui/simple_dialog.h>
 
 #include <wsutil/file_util.h>
-#include <ws_version_info.h>
+#include <version_info.h>
 
 #include "gtkglobals.h"
 #include "ui/gtk/keys.h"
@@ -62,6 +62,8 @@
 #include "wsutil/tempfile.h"
 #include "ui/win32/print_win32.h"
 #endif
+
+#include "globals.h"
 
 /* static variable declarations to speed up the performance
  * of follow_load_text and follow_add_to_gtk_text

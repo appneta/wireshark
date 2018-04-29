@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -156,18 +144,6 @@ static const fragment_items iso15765_frag_items = {
         NULL,
         "ISO15765 fragments"
 };
-
-static void
-iso15765_prompt(packet_info *pinfo _U_, gchar* result)
-{
-    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Next level protocol as");
-}
-
-static gpointer
-iso15765_value(packet_info *pinfo _U_)
-{
-    return 0;
-}
 
 static guint8
 masked_guint8_value(const guint8 value, const guint8 mask)
@@ -349,7 +325,7 @@ dissect_iso15765(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
                                                    &iso15765_frag_items, NULL, iso15765_tree);
 
                 if (frag_msg && frag_msg->reassembled_in != pinfo->num) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " [Reassembled in #%u]",
+                    col_append_frame_number(pinfo, COL_INFO, " [Reassembled in #%u]",
                                     frag_msg->reassembled_in);
                 }
 
@@ -367,9 +343,7 @@ dissect_iso15765(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
     }
 
     if (next_tvb) {
-        /* Functionality for choosing subdissector is controlled through Decode As as ISO15765 doesn't
-            have a unique identifier to determine subdissector */
-        if (!complete || !dissector_try_uint_new(subdissector_table, 0, next_tvb, pinfo, tree, TRUE, NULL)) {
+        if (!complete || !dissector_try_payload_new(subdissector_table, next_tvb, pinfo, tree, TRUE, NULL)) {
             call_data_dissector(next_tvb, pinfo, tree);
         }
     }
@@ -559,13 +533,6 @@ proto_register_iso15765(void)
     module_t *iso15765_module;
     expert_module_t* expert_iso15765;
 
-    /* Decode As handling */
-    static build_valid_func iso15765_da_build_value[1] = {iso15765_value};
-    static decode_as_value_t iso15765_da_values = {iso15765_prompt, 1, iso15765_da_build_value};
-    static decode_as_t can_iso15765 = {"iso15765", "Transport", "iso15765.subdissector", 1, 0, &iso15765_da_values,
-                                       NULL, NULL, decode_as_default_populate_list, decode_as_default_reset,
-                                       decode_as_default_change, NULL};
-
     proto_iso15765 = proto_register_protocol (
             "ISO15765 Protocol", /* name       */
             "ISO 15765",          /* short name */
@@ -578,10 +545,6 @@ proto_register_iso15765(void)
     proto_register_subtree_array(ett, array_length(ett));
 
     expert_register_field_array(expert_iso15765, ei, array_length(ei));
-
-    subdissector_table = register_dissector_table("iso15765.subdissector",
-                                                  "ISO15765 next level dissector", proto_iso15765,
-                                                  FT_UINT32, BASE_HEX);
 
     iso15765_module = prefs_register_protocol(proto_iso15765, NULL);
 
@@ -596,12 +559,12 @@ proto_register_iso15765(void)
                                    "Window of ISO 15765 fragments",
                                    10, &window);
 
-    register_decode_as(&can_iso15765);
-
     iso15765_frame_table = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), g_direct_hash, g_direct_equal);
 
     reassembly_table_register(&iso15765_reassembly_table,
                           &addresses_reassembly_table_functions);
+
+    subdissector_table = register_decode_as_next_proto(proto_iso15765, "Transport", "iso15765.subdissector", "ISO15765 next level dissector", NULL);
 }
 
 void

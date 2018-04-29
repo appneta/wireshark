@@ -9,19 +9,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -215,7 +203,7 @@ static const kafka_api_info_t kafka_apis[] = {
       0, 0 },
     { KAFKA_JOIN_GROUP,          "JoinGroup",
       0, 1 },
-    { KAFKA_HEARTBEAT,           "Heatbeat",
+    { KAFKA_HEARTBEAT,           "Heartbeat",
       0, 0 },
     { KAFKA_LEAVE_GROUP,         "LeaveGroup",
       0, 0 },
@@ -695,7 +683,7 @@ dissect_kafka_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int s
 {
     proto_item *message_ti, *decrypt_item;
     proto_tree *subtree;
-    tvbuff_t   *raw, *payload;
+    tvbuff_t   *raw, *payload = NULL;
     int         offset = start_offset;
     gint8       magic_byte;
     guint8      codec;

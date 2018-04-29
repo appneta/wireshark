@@ -3,19 +3,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __WTAP_H__
@@ -25,8 +13,13 @@
 #include <time.h>
 #include <wsutil/buffer.h>
 #include <wsutil/nstime.h>
+#include <wsutil/inet_addr.h>
 #include "wtap_opttypes.h"
 #include "ws_symbol_export.h"
+#include "ws_attributes.h"
+#ifdef HAVE_PLUGINS
+#include "wsutil/plugins.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -270,7 +263,24 @@ extern "C" {
 #define WTAP_ENCAP_IP_OVER_IB_PCAP              180
 #define WTAP_ENCAP_JUNIPER_VN                   181
 #define WTAP_ENCAP_USB_DARWIN                   182
-#define WTAP_ENCAP_NORDIC_BLE                   183
+#define WTAP_ENCAP_LORATAP                      183
+#define WTAP_ENCAP_3MB_ETHERNET                 184
+#define WTAP_ENCAP_VSOCK                        185
+#define WTAP_ENCAP_NORDIC_BLE                   186
+#define WTAP_ENCAP_NETMON_NET_NETEVENT          187
+#define WTAP_ENCAP_NETMON_HEADER                188
+#define WTAP_ENCAP_NETMON_NET_FILTER            189
+#define WTAP_ENCAP_NETMON_NETWORK_INFO_EX       190
+#define WTAP_ENCAP_MA_WFP_CAPTURE_V4            191
+#define WTAP_ENCAP_MA_WFP_CAPTURE_V6            192
+#define WTAP_ENCAP_MA_WFP_CAPTURE_2V4           193
+#define WTAP_ENCAP_MA_WFP_CAPTURE_2V6           194
+#define WTAP_ENCAP_MA_WFP_CAPTURE_AUTH_V4       195
+#define WTAP_ENCAP_MA_WFP_CAPTURE_AUTH_V6       196
+#define WTAP_ENCAP_JUNIPER_ST                   197
+#define WTAP_ENCAP_ETHERNET_MPACKET             198
+#define WTAP_ENCAP_DOCSIS31_XRA31               199
+
 /* After adding new item here, please also add new item to encap_table_base array */
 
 #define WTAP_NUM_ENCAP_TYPES                    wtap_get_num_encap_types()
@@ -1129,23 +1139,19 @@ struct logcat_phdr {
     gint version;
 };
 
-/* Packet "pseudo-header" information for Sysdig events. */
+/* Packet "pseudo-header" information for header data from NetMon files. */
 
-struct sysdig_event_phdr {
-    guint record_type;    /* XXX match ft_specific_record_phdr so that we chain off of packet-pcapng_block for now. */
-    int byte_order;
-    guint16 cpu_id;
-    /* guint32 sentinel; */
-    guint64 timestamp; /* ns since epoch */
-    guint64 thread_id;
-    guint32 event_len; /* XXX dup of wtap_pkthdr.len */
-    guint16 event_type;
-    /* ... Event ... */
-};
-
-/* Pseudo-header for file-type-specific records */
-struct ft_specific_record_phdr {
-    guint record_type;    /* the type of record this is */
+struct netmon_phdr {
+    guint32 titleLength;    /* Number of bytes in the comment title */
+    guint8* title;          /* Comment title */
+    guint32 descLength;     /* Number of bytes in the comment description */
+    guint8* description;    /* Comment description */
+    guint sub_encap;        /* "Real" encap value for the record that will be used once pseudo header data is display */
+    union sub_wtap_pseudo_header {
+        struct eth_phdr     eth;
+        struct atm_phdr     atm;
+        struct ieee_802_11_phdr ieee_802_11;
+    } subheader;
 };
 
 union wtap_pseudo_header {
@@ -1174,8 +1180,7 @@ union wtap_pseudo_header {
     struct nokia_phdr   nokia;
     struct llcp_phdr    llcp;
     struct logcat_phdr  logcat;
-    struct sysdig_event_phdr sysdig_event;
-    struct ft_specific_record_phdr ftsrec;
+    struct netmon_phdr  netmon;
 };
 
 /*
@@ -1186,7 +1191,7 @@ union wtap_pseudo_header {
  *
  * For file-type-specific records, the "ftsrec" field of the pseudo-header
  * contains a file-type-specific subtype value, such as a block type for
- * a pcap-ng file.
+ * a pcapng file.
  *
  * An "event" is an indication that something happened during the capture
  * process, such as a status transition of some sort on the network.
@@ -1197,7 +1202,7 @@ union wtap_pseudo_header {
  * packets are.
  *
  * A "report" supplies information not corresponding to an event;
- * for example, a pcap-ng Interface Statistics Block would be a report,
+ * for example, a pcapng Interface Statistics Block would be a report,
  * as it doesn't correspond to something happening on the network.
  * They may have a time stamp, and should be dissected and displayed
  * just as packets are.
@@ -1213,33 +1218,81 @@ union wtap_pseudo_header {
  * information in them stored somewhere, and used somewhere, whether
  * it's just used when saving the file in its native format or also
  * used to parse *other* file-type-specific records.
+ *
+ * These would be similar to, for example, pcapng Interface Description
+ * Blocks, for which the position within the file is significant only
+ * in that an IDB for an interface must appear before any packets from
+ * the interface; the fact that an IDB appears at some point doesn't
+ * necessarily mean something happened in the capture at that point.
+ * Name Resolution Blocks are another example of such a record.
+ *
+ * (XXX - if you want to have a record that says "this interface first
+ * showed up at this time", that needs to be a separate record type
+ * from the IDB.  We *could* add a "New Interface Description Block",
+ * with a time stamp, for that purpose, but we'd *still* have to
+ * provide IDBs for those interfaces, for compatibility with programs
+ * that don't know about the NIDB.  An ISB with only an isb_starttime
+ * option would suffice for this purpose, so nothing needs to be
+ * added to pcapng for this.)
  */
 #define REC_TYPE_PACKET               0    /**< packet */
 #define REC_TYPE_FT_SPECIFIC_EVENT    1    /**< file-type-specific event */
 #define REC_TYPE_FT_SPECIFIC_REPORT   2    /**< file-type-specific report */
 #define REC_TYPE_SYSCALL              3    /**< system call */
 
-struct wtap_pkthdr {
-    guint     rec_type;         /* what type of record is this? */
-    guint32   presence_flags;   /* what stuff do we have? */
-    nstime_t  ts;               /* time stamp */
+typedef struct {
     guint32   caplen;           /* data length in the file */
     guint32   len;              /* data length on the wire */
     int       pkt_encap;        /* WTAP_ENCAP_ value for this packet */
-    int       pkt_tsprec;       /* WTAP_TSPREC_ value for this packet */
                                 /* pcapng variables */
     guint32   interface_id;     /* identifier of the interface. */
                                 /* options */
-    gchar     *opt_comment;     /* NULL if not available */
-    gboolean  has_comment_changed; /* TRUE if the comment has been changed. Currently only valid while dumping. */
-
     guint64   drop_count;       /* number of packets lost (by the interface and the
                                    operating system) between this packet and the preceding one. */
     guint32   pack_flags;       /* XXX - 0 for now (any value for "we don't have it"?) */
-    Buffer    ft_specific_data; /* file-type specific data */
 
     union wtap_pseudo_header  pseudo_header;
-};
+} wtap_packet_header;
+
+typedef struct {
+    guint     record_type;      /* the type of record this is - file type-specific value */
+} wtap_ft_specific_header;
+
+typedef struct {
+    guint     record_type;      /* XXX match ft_specific_record_phdr so that we chain off of packet-pcapng_block for now. */
+    int       byte_order;
+    /* guint32 sentinel; */
+    guint64   timestamp;        /* ns since epoch - XXX dup of ts */
+    guint64   thread_id;
+    guint32   event_len;        /* length of the event */
+    guint32   event_filelen;    /* event data length in the file */
+    guint16   event_type;
+    guint16   cpu_id;
+    /* ... Event ... */
+} wtap_syscall_header;
+
+typedef struct {
+    guint     rec_type;         /* what type of record is this? */
+    guint32   presence_flags;   /* what stuff do we have? */
+    nstime_t  ts;               /* time stamp */
+    int       tsprec;           /* WTAP_TSPREC_ value for this record */
+    union {
+        wtap_packet_header packet_header;
+        wtap_ft_specific_header ft_specific_header;
+        wtap_syscall_header syscall_header;
+    } rec_header;
+    /*
+     * XXX - this should become a full set of options.
+     */
+    gchar     *opt_comment;     /* NULL if not available */
+    gboolean  has_comment_changed; /* TRUE if the comment has been changed. Currently only valid while dumping. */
+
+    /*
+     * We use a Buffer so that we don't have to allocate and free
+     * a buffer for the options for each record.
+     */
+    Buffer    options_buf;      /* file-type specific data */
+} wtap_rec;
 
 /*
  * Bits in presence_flags, indicating which of the fields we have.
@@ -1260,6 +1313,8 @@ struct wtap_pkthdr {
  * There could be a presence flag for the packet encapsulation - if it's
  * absent, use the file encapsulation - but it's not clear that's useful;
  * we currently do that in the module for the file format.
+ *
+ * Only WTAP_HAS_TS applies to all record types.
  */
 #define WTAP_HAS_TS            0x00000001  /**< time stamp */
 #define WTAP_HAS_CAP_LEN       0x00000002  /**< captured length separate from on-the-network length */
@@ -1315,7 +1370,7 @@ typedef struct wtapng_if_descr_filter_s {
 } wtapng_if_descr_filter_t;
 
 /**
- * Holds the required data for pcap-ng Interface Statistics Block (ISB).
+ * Holds the required data for pcapng Interface Statistics Block (ISB).
  */
 typedef struct wtapng_if_stats_mandatory_s {
     guint32  interface_id;
@@ -1330,14 +1385,14 @@ typedef struct wtapng_if_stats_mandatory_s {
 typedef struct hashipv4 {
     guint             addr;
     guint8            flags;          /* B0 dummy_entry, B1 resolve, B2 If the address is used in the trace */
-    gchar             ip[16];
+    gchar             ip[WS_INET_ADDRSTRLEN];
     gchar             name[MAXNAMELEN];
 } hashipv4_t;
 
 typedef struct hashipv6 {
     guint8            addr[16];
     guint8            flags;          /* B0 dummy_entry, B1 resolve, B2 If the address is used in the trace */
-    gchar             ip6[46];
+    gchar             ip6[WS_INET6_ADDRSTRLEN];
     gchar             name[MAXNAMELEN];
 } hashipv6_t;
 
@@ -1439,7 +1494,7 @@ typedef wtap_open_return_val (*wtap_open_routine_t)(struct wtap*, int *,
 /*
  * Some file formats have defined magic numbers at fixed offsets from
  * the beginning of the file; those routines should return 1 if and
- * only if the file has the magic number at that offset.  (pcap-ng
+ * only if the file has the magic number at that offset.  (pcapng
  * is a bit of a special case, as it has both the Section Header Block
  * type field and its byte-order magic field; it checks for both.)
  * Those file formats do not require a file name extension in order
@@ -1525,9 +1580,13 @@ struct file_type_subtype_info {
 
 #define WTAP_TYPE_AUTO 0
 
-/** Initialize the Wiretap library. */
+/**
+ * @brief Initialize the Wiretap library.
+ *
+ * @param load_wiretap_plugins Load Wiretap plugins when initializing library.
+*/
 WS_DLL_PUBLIC
-void wtap_init(void);
+void wtap_init(gboolean load_wiretap_plugins);
 
 /** On failure, "wtap_open_offline()" returns NULL, and puts into the
  * "int" pointed to by its second argument:
@@ -1573,22 +1632,23 @@ gboolean wtap_read(wtap *wth, int *err, gchar **err_info,
     gint64 *data_offset);
 
 WS_DLL_PUBLIC
-gboolean wtap_seek_read (wtap *wth, gint64 seek_off,
-        struct wtap_pkthdr *phdr, Buffer *buf, int *err, gchar **err_info);
+gboolean wtap_seek_read(wtap *wth, gint64 seek_off, wtap_rec *rec,
+    Buffer *buf, int *err, gchar **err_info);
 
-/*** get various information snippets about the current packet ***/
+/*** get various information snippets about the current record ***/
 WS_DLL_PUBLIC
-struct wtap_pkthdr *wtap_phdr(wtap *wth);
-WS_DLL_PUBLIC
-guint8 *wtap_buf_ptr(wtap *wth);
+wtap_rec *wtap_get_rec(wtap *wth);
 
-/*** initialize a wtap_pkthdr structure ***/
 WS_DLL_PUBLIC
-void wtap_phdr_init(struct wtap_pkthdr *phdr);
+guint8 *wtap_get_buf_ptr(wtap *wth);
 
-/*** clean up a wtap_pkthdr structure, freeing what wtap_phdr_init() allocated */
+/*** initialize a wtap_rec structure ***/
 WS_DLL_PUBLIC
-void wtap_phdr_cleanup(struct wtap_pkthdr *phdr);
+void wtap_rec_init(wtap_rec *rec);
+
+/*** clean up a wtap_rec structure, freeing what wtap_rec_init() allocated */
+WS_DLL_PUBLIC
+void wtap_rec_cleanup(wtap_rec *rec);
 
 /*** get various information snippets about the current file ***/
 
@@ -1885,7 +1945,7 @@ wtap_dumper* wtap_dump_open_stdout_ng(int file_type_subtype, int encap, int snap
                 GArray* nrb_hdrs, int *err);
 
 WS_DLL_PUBLIC
-gboolean wtap_dump(wtap_dumper *, const struct wtap_pkthdr *, const guint8 *,
+gboolean wtap_dump(wtap_dumper *, const wtap_rec *, const guint8 *,
      int *err, gchar **err_info);
 WS_DLL_PUBLIC
 void wtap_dump_flush(wtap_dumper *);
@@ -1894,6 +1954,8 @@ gint64 wtap_get_bytes_dumped(wtap_dumper *);
 WS_DLL_PUBLIC
 void wtap_set_bytes_dumped(wtap_dumper *wdh, gint64 bytes_dumped);
 struct addrinfo;
+WS_DLL_PUBLIC
+gboolean wtap_addrinfo_list_empty(addrinfo_lists_t *addrinfo_lists);
 WS_DLL_PUBLIC
 gboolean wtap_dump_set_addrinfo_list(wtap_dumper *wdh, addrinfo_lists_t *addrinfo_lists);
 WS_DLL_PUBLIC
@@ -1969,9 +2031,16 @@ GSList *wtap_get_file_extension_type_extensions(guint extension_type);
 
 /*** dynamically register new file types and encapsulations ***/
 WS_DLL_PUBLIC
-void register_all_wiretap_modules(void);
-WS_DLL_PUBLIC
 void wtap_register_file_type_extension(const struct file_extension_info *ei);
+
+#ifdef HAVE_PLUGINS
+typedef struct {
+	void (*register_wtap_module)(void);  /* routine to call to register a wiretap module */
+} wtap_plugin;
+
+WS_DLL_PUBLIC
+void wtap_register_plugin(const wtap_plugin *plug);
+#endif
 
 WS_DLL_PUBLIC
 void wtap_register_open_info(struct open_info *oi, const gboolean first_routine);
@@ -2075,6 +2144,9 @@ void wtap_cleanup(void);
 
 #define WTAP_ERR_UNWRITABLE_REC_DATA          -25
     /** Something in the record data can't be written to that file type */
+
+#define WTAP_ERR_DECOMPRESSION_NOT_SUPPORTED  -26
+    /** We don't support decompressing that type of compressed file */
 
 #ifdef __cplusplus
 }

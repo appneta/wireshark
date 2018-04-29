@@ -3,19 +3,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -273,7 +261,7 @@ typedef struct {
 static gboolean lanalyzer_read(wtap *wth, int *err, gchar **err_info,
     gint64 *data_offset);
 static gboolean lanalyzer_seek_read(wtap *wth, gint64 seek_off,
-    struct wtap_pkthdr *phdr, Buffer *buf, int *err, gchar **err_info);
+    wtap_rec *rec, Buffer *buf, int *err, gchar **err_info);
 static gboolean lanalyzer_dump_finish(wtap_dumper *wdh, int *err);
 
 wtap_open_return_val lanalyzer_open(wtap *wth, int *err, gchar **err_info)
@@ -436,7 +424,7 @@ wtap_open_return_val lanalyzer_open(wtap *wth, int *err, gchar **err_info)
 #define DESCRIPTOR_LEN  32
 
 static gboolean lanalyzer_read_trace_record(wtap *wth, FILE_T fh,
-                                            struct wtap_pkthdr *phdr, Buffer *buf, int *err, gchar **err_info)
+                                            wtap_rec *rec, Buffer *buf, int *err, gchar **err_info)
 {
       char         LE_record_type[2];
       char         LE_record_length[2];
@@ -505,8 +493,8 @@ static gboolean lanalyzer_read_trace_record(wtap *wth, FILE_T fh,
             return FALSE;
       }
 
-      phdr->rec_type = REC_TYPE_PACKET;
-      phdr->presence_flags = WTAP_HAS_TS|WTAP_HAS_CAP_LEN;
+      rec->rec_type = REC_TYPE_PACKET;
+      rec->presence_flags = WTAP_HAS_TS|WTAP_HAS_CAP_LEN;
 
       time_low = pletoh16(&descriptor[8]);
       time_med = pletoh16(&descriptor[10]);
@@ -515,8 +503,8 @@ static gboolean lanalyzer_read_trace_record(wtap *wth, FILE_T fh,
             (((guint64)time_high) << 32);
       tsecs = (time_t) (t/2000000);
       lanalyzer = (lanalyzer_t *)wth->priv;
-      phdr->ts.secs = tsecs + lanalyzer->start;
-      phdr->ts.nsecs = ((guint32) (t - tsecs*2000000)) * 500;
+      rec->ts.secs = tsecs + lanalyzer->start;
+      rec->ts.nsecs = ((guint32) (t - tsecs*2000000)) * 500;
 
       if (true_size - 4 >= packet_size) {
             /*
@@ -527,14 +515,14 @@ static gboolean lanalyzer_read_trace_record(wtap *wth, FILE_T fh,
              */
             true_size -= 4;
       }
-      phdr->len = true_size;
-      phdr->caplen = packet_size;
+      rec->rec_header.packet_header.len = true_size;
+      rec->rec_header.packet_header.caplen = packet_size;
 
       switch (wth->file_encap) {
 
       case WTAP_ENCAP_ETHERNET:
             /* We assume there's no FCS in this frame. */
-            phdr->pseudo_header.eth.fcs_len = 0;
+            rec->rec_header.packet_header.pseudo_header.eth.fcs_len = 0;
             break;
       }
 
@@ -549,18 +537,18 @@ static gboolean lanalyzer_read(wtap *wth, int *err, gchar **err_info,
       *data_offset = file_tell(wth->fh);
 
       /* Read the record  */
-      return lanalyzer_read_trace_record(wth, wth->fh, &wth->phdr,
-                                         wth->frame_buffer, err, err_info);
+      return lanalyzer_read_trace_record(wth, wth->fh, &wth->rec,
+                                         wth->rec_data, err, err_info);
 }
 
 static gboolean lanalyzer_seek_read(wtap *wth, gint64 seek_off,
-                                    struct wtap_pkthdr *phdr, Buffer *buf, int *err, gchar **err_info)
+                                    wtap_rec *rec, Buffer *buf, int *err, gchar **err_info)
 {
       if (file_seek(wth->random_fh, seek_off, SEEK_SET, err) == -1)
             return FALSE;
 
       /* Read the record  */
-      if (!lanalyzer_read_trace_record(wth, wth->random_fh, phdr, buf,
+      if (!lanalyzer_read_trace_record(wth, wth->random_fh, rec, buf,
                                        err, err_info)) {
             if (*err == 0)
                   *err = WTAP_ERR_SHORT_READ;
@@ -619,7 +607,7 @@ static gboolean s32write(wtap_dumper *wdh, const guint32 s32, int *err)
  *---------------------------------------------------*/
 static gboolean s48write(wtap_dumper *wdh, const guint64 s48, int *err)
 {
-#ifdef WORDS_BIGENDIAN
+#if G_BYTE_ORDER == G_BIG_ENDIAN
       guint16 s48_upper_le = GUINT16_SWAP_LE_BE((guint16) (s48 >> 32));
       guint32 s48_lower_le = GUINT32_SWAP_LE_BE((guint32) (s48 & 0xFFFFFFFF));
 #else
@@ -634,7 +622,7 @@ static gboolean s48write(wtap_dumper *wdh, const guint64 s48, int *err)
  * Returns TRUE on success, FALSE on failure.
  *---------------------------------------------------*/
 static gboolean lanalyzer_dump(wtap_dumper *wdh,
-        const struct wtap_pkthdr *phdr,
+        const wtap_rec *rec,
         const guint8 *pd, int *err, gchar **err_info _U_)
 {
       guint64 x;
@@ -642,10 +630,10 @@ static gboolean lanalyzer_dump(wtap_dumper *wdh,
 
       LA_TmpInfo *itmp = (LA_TmpInfo*)(wdh->priv);
       nstime_t td;
-      int    thisSize = phdr->caplen + LA_PacketRecordSize + LA_RecordHeaderSize;
+      int    thisSize = rec->rec_header.packet_header.caplen + LA_PacketRecordSize + LA_RecordHeaderSize;
 
       /* We can only write packet records. */
-      if (phdr->rec_type != REC_TYPE_PACKET) {
+      if (rec->rec_type != REC_TYPE_PACKET) {
             *err = WTAP_ERR_UNWRITABLE_REC_TYPE;
             return FALSE;
             }
@@ -656,7 +644,7 @@ static gboolean lanalyzer_dump(wtap_dumper *wdh,
             return FALSE; /* and don't forget the header */
             }
 
-      len = phdr->caplen + (phdr->caplen ? LA_PacketRecordSize : 0);
+      len = rec->rec_header.packet_header.caplen + (rec->rec_header.packet_header.caplen ? LA_PacketRecordSize : 0);
 
       /* len goes into a 16-bit field, so there's a hard limit of 65535. */
       if (len > 65535) {
@@ -673,7 +661,7 @@ static gboolean lanalyzer_dump(wtap_dumper *wdh,
             /* collect some information for the
              * finally written header
              */
-            itmp->start   = phdr->ts;
+            itmp->start   = rec->ts;
             itmp->pkts    = 0;
             itmp->init    = TRUE;
             itmp->encap   = wdh->encap;
@@ -684,12 +672,12 @@ static gboolean lanalyzer_dump(wtap_dumper *wdh,
             return FALSE;
       if (!s16write(wdh, 0x0008, err))                    /* pr.rx_errors   */
             return FALSE;
-      if (!s16write(wdh, (guint16) (phdr->len + 4), err)) /* pr.rx_frm_len  */
+      if (!s16write(wdh, (guint16) (rec->rec_header.packet_header.len + 4), err)) /* pr.rx_frm_len  */
             return FALSE;
-      if (!s16write(wdh, (guint16) phdr->caplen, err))    /* pr.rx_frm_sln  */
+      if (!s16write(wdh, (guint16) rec->rec_header.packet_header.caplen, err))    /* pr.rx_frm_sln  */
             return FALSE;
 
-      nstime_delta(&td, &phdr->ts, &itmp->start);
+      nstime_delta(&td, &rec->ts, &itmp->start);
 
       /* Convert to half-microseconds, rounded up. */
       x = (td.nsecs + 250) / 500;  /* nanoseconds -> half-microseconds, rounded */
@@ -707,7 +695,7 @@ static gboolean lanalyzer_dump(wtap_dumper *wdh,
       if (!s0write(wdh, 12, err))
             return FALSE;
 
-      if (!wtap_dump_file_write(wdh, pd, phdr->caplen, err))
+      if (!wtap_dump_file_write(wdh, pd, rec->rec_header.packet_header.caplen, err))
             return FALSE;
 
       wdh->bytes_dumped += thisSize;

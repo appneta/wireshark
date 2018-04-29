@@ -1,4 +1,4 @@
-= Wireshark User's Guide
+= Wireshark User’s Guide
 //v1.0, February 2014: Finished conversion from DocBook to AsciiDoc
 :doctype: book
 include::attributes.asciidoc[]
@@ -8,6 +8,8 @@ include::attributes.asciidoc[]
 == Preface
 
 include::wsug_src/WSUG_preface.asciidoc[]
+
+include::common_src/typographic_conventions.asciidoc[]
 
 // Chapters
 include::wsug_src/WSUG_chapter_introduction.asciidoc[]
@@ -32,4 +34,4 @@ include::wsug_src/WSUG_app_protocols.asciidoc[]
 include::wsug_src/WSUG_app_tools.asciidoc[]
 
 // License
-include::GPL_appendix.asciidoc[]
+include::common_src/GPL_appendix.asciidoc[]

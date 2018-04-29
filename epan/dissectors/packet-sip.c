@@ -9,26 +9,14 @@
  * Copyright 2001, Jean-Francois Mule <jfm@cablelabs.com>
  * Copyright 2004, Anders Broman <anders.broman@ericsson.com>
  * Copyright 2011, Anders Broman <anders.broman@ericsson.com>, Johan Wahl <johan.wahl@ericsson.com>
+ * Copyright 2018, Anders Broman <anders.broman@ericsson.com>
  *
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * Copied from packet-cops.c
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include "config.h"
@@ -196,9 +184,11 @@ static gint hf_sip_via_ttl                = -1;
 static gint hf_sip_via_comp               = -1;
 static gint hf_sip_via_sigcomp_id         = -1;
 static gint hf_sip_via_oc                 = -1;
+static gint hf_sip_via_oc_val             = -1;
 static gint hf_sip_via_oc_algo            = -1;
 static gint hf_sip_via_oc_validity        = -1;
 static gint hf_sip_via_oc_seq             = -1;
+static gint hf_sip_oc_seq_timestamp       = -1;
 
 static gint hf_sip_rack_rseq_no           = -1;
 static gint hf_sip_rack_cseq_no           = -1;
@@ -232,6 +222,8 @@ static gint hf_sip_p_acc_net_i_acc_type   = -1;
 static gint hf_sip_p_acc_net_i_ucid_3gpp  = -1;
 
 static gint hf_sip_service_priority = -1;
+static gint hf_sip_icid_value = -1;
+static gint hf_sip_icid_gen_addr = -1;
 
 /* Initialize the subtree pointers */
 static gint ett_sip                       = -1;
@@ -265,6 +257,7 @@ static gint ett_sip_ppi_uri               = -1;
 static gint ett_sip_tc_uri                = -1;
 static gint ett_sip_session_id            = -1;
 static gint ett_sip_p_access_net_info     = -1;
+static gint ett_sip_p_charging_vector      = -1;
 static gint ett_sip_feature_caps          = -1;
 
 static expert_field ei_sip_unrecognized_header = EI_INIT;
@@ -954,17 +947,8 @@ header_fields_copy_cb(void* n, const void* o, size_t siz _U_)
     header_field_t* new_rec = (header_field_t*)n;
     const header_field_t* old_rec = (const header_field_t*)o;
 
-    if (old_rec->header_name) {
-        new_rec->header_name = g_strdup(old_rec->header_name);
-    } else {
-        new_rec->header_name = NULL;
-    }
-
-    if (old_rec->header_desc) {
-        new_rec->header_desc = g_strdup(old_rec->header_desc);
-    } else {
-        new_rec->header_desc = NULL;
-    }
+    new_rec->header_name = g_strdup(old_rec->header_name);
+    new_rec->header_desc = g_strdup(old_rec->header_desc);
 
     return new_rec;
 }
@@ -1078,23 +1062,9 @@ authorization_users_copy_cb(void* n, const void* o, size_t siz _U_)
     authorization_user_t* new_rec = (authorization_user_t*)n;
     const authorization_user_t* old_rec = (const authorization_user_t*)o;
 
-    if (old_rec->username) {
-        new_rec->username = g_strdup(old_rec->username);
-    } else {
-        new_rec->username = NULL;
-    }
-
-    if (old_rec->realm) {
-        new_rec->realm = g_strdup(old_rec->realm);
-    } else {
-        new_rec->realm = NULL;
-    }
-
-    if (old_rec->password) {
-        new_rec->password = g_strdup(old_rec->password);
-    } else {
-        new_rec->password = NULL;
-    }
+    new_rec->username = g_strdup(old_rec->username);
+    new_rec->realm = g_strdup(old_rec->realm);
+    new_rec->password = g_strdup(old_rec->password);
 
     return new_rec;
 }
@@ -1318,9 +1288,18 @@ export_sip_pdu(packet_info *pinfo, tvbuff_t *tvb)
 
 }
 
+typedef enum
+{
+    SIP_URI_TYPE_ABSOLUTE_URI,
+    SIP_URI_TYPE_SIP,
+    SIP_URI_TYPE_TEL
+
+} sip_uri_type_enum_t;
+
 /* Structure to collect info about a sip uri */
 typedef struct _uri_offset_info
 {
+    sip_uri_type_enum_t uri_type;
     gint display_name_start;
     gint display_name_end;
     gint uri_start;
@@ -1341,6 +1320,7 @@ static void
 sip_uri_offset_init(uri_offset_info *uri_offsets){
 
     /* Initialize the uri_offsets */
+    uri_offsets->uri_type = SIP_URI_TYPE_ABSOLUTE_URI;
     uri_offsets->display_name_start = -1;
     uri_offsets->display_name_end = -1;
     uri_offsets->uri_start = -1;
@@ -1382,8 +1362,15 @@ dissect_sip_uri(tvbuff_t *tvb, packet_info *pinfo _U_, gint start_offset,
     uri_offsets->uri_start = current_offset;
 
     /* Check if it's really a sip uri ( it might be a tel uri, parse that?) */
-    if (tvb_strneql(tvb, current_offset, "sip", 3) != 0)
+    if (tvb_strneql(tvb, current_offset, "sip", 3) != 0){
+        if (uri_offsets->uri_end != -1) {
+            /* We know where the URI ends, set the offsets*/
+            return uri_offsets->name_addr_end;
+        }
         return -1;
+    }
+
+    uri_offsets->uri_type = SIP_URI_TYPE_SIP;
 
     if(uri_offsets->uri_end == -1)
     {
@@ -1713,6 +1700,7 @@ dissect_sip_p_charging_func_addresses(tvbuff_t *tvb, proto_tree* tree, packet_in
  *  name-addr     =  [ display-name ] LAQUOT addr-spec RAQUOT
  *  addr-spec     =  SIP-URI / SIPS-URI / absoluteURI
  *  display-name  =  *(token LWS)/ quoted-string
+ *  absoluteURI    =  scheme ":" ( hier-part / opaque-part )
  */
 
 static gint
@@ -1865,6 +1853,10 @@ display_sip_uri (tvbuff_t *tvb, proto_tree *sip_element_tree, packet_info *pinfo
     ti = proto_tree_add_item(sip_element_tree, *(uri->hf_sip_addr),
                              tvb, uri_offsets->uri_start, uri_offsets->uri_end - uri_offsets->uri_start + 1, ENC_UTF_8|ENC_NA);
     uri_item_tree = proto_item_add_subtree(ti, *(uri->ett_uri));
+
+    if (uri_offsets->uri_type != SIP_URI_TYPE_SIP) {
+        return ti;
+    }
 
     if(uri_offsets->uri_user_end > uri_offsets->uri_user_start) {
         proto_tree_add_item(uri_item_tree, *(uri->hf_sip_user), tvb, uri_offsets->uri_user_start,
@@ -2776,15 +2768,42 @@ static void dissect_sip_via_header(tvbuff_t *tvb, proto_tree *tree, gint start_o
                     if (equals_found)
                     {
                         proto_tree_add_item(tree, *(via_parameter->hf_item), tvb,
-                                            parameter_name_end+1, current_offset-parameter_name_end-1,
-                                            ENC_UTF_8|ENC_NA);
+                            parameter_name_end + 1, current_offset - parameter_name_end - 1,
+                            ENC_UTF_8 | ENC_NA);
 
-                        if (sip_via_branch_handle && g_ascii_strcasecmp (param_name, "branch") == 0)
+                        if (sip_via_branch_handle && g_ascii_strcasecmp(param_name, "branch") == 0)
                         {
                             tvbuff_t *next_tvb;
                             next_tvb = tvb_new_subset_length_caplen(tvb, parameter_name_end + 1, current_offset - parameter_name_end - 1, current_offset - parameter_name_end - 1);
 
-                            call_dissector (sip_via_branch_handle, next_tvb, pinfo, tree);
+                            call_dissector(sip_via_branch_handle, next_tvb, pinfo, tree);
+                        }
+                        else if (g_ascii_strcasecmp(param_name, "oc") == 0) {
+                            proto_item *ti;
+                            char *value = tvb_get_string_enc(wmem_packet_scope(), tvb, parameter_name_end + 1,
+                                current_offset - parameter_name_end - 1, ENC_UTF_8 | ENC_NA);
+                            ti = proto_tree_add_uint(tree, hf_sip_via_oc_val, tvb,
+                                parameter_name_end + 1, current_offset - parameter_name_end - 1,
+                                (guint32)strtoul(value, NULL, 10));
+                            PROTO_ITEM_SET_GENERATED(ti);
+                        }
+                        else if (g_ascii_strcasecmp(param_name, "oc-seq") == 0) {
+                            proto_item *ti;
+                            nstime_t ts;
+                            int dec_p_off = tvb_find_guint8(tvb, parameter_name_end + 1, - 1, '.');
+                            char *value;
+
+                            if(dec_p_off > 0){
+                                value = tvb_get_string_enc(wmem_packet_scope(), tvb,
+                                    parameter_name_end + 1, dec_p_off - parameter_name_end, ENC_UTF_8 | ENC_NA);
+                                ts.secs = (guint32)strtoul(value, NULL, 10);
+                                value = tvb_get_string_enc(wmem_packet_scope(), tvb,
+                                    dec_p_off + 1, current_offset - parameter_name_end - 1, ENC_UTF_8 | ENC_NA);
+                                ts.nsecs = (guint32)strtoul(value, NULL, 10) * 1000;
+                                ti = proto_tree_add_time(tree, hf_sip_oc_seq_timestamp, tvb,
+                                    parameter_name_end + 1, current_offset - parameter_name_end - 1, &ts);
+                                PROTO_ITEM_SET_GENERATED(ti);
+                            }
                         }
                     }
                     else
@@ -3000,6 +3019,112 @@ static void dissect_sip_p_access_network_info_header(tvbuff_t *tvb, proto_tree *
 
         current_offset = semi_colon_offset + 1;
     }
+}
+
+/*
+The syntax for the P-Charging-Vector header field is described as
+follows:
+
+    P-Charging-Vector  = "P-Charging-Vector" HCOLON icid-value
+    *(SEMI charge-params)
+    charge-params      = icid-gen-addr / orig-ioi / term-ioi /
+    transit-ioi / related-icid /
+    related-icid-gen-addr / generic-param
+    icid-value                = "icid-value" EQUAL gen-value
+    icid-gen-addr             = "icid-generated-at" EQUAL host
+    orig-ioi                  = "orig-ioi" EQUAL gen-value
+    term-ioi                  = "term-ioi" EQUAL gen-value
+    transit-ioi               = "transit-ioi" EQUAL transit-ioi-list
+    transit-ioi-list          = DQUOTE transit-ioi-param
+    *(COMMA transit-ioi-param) DQUOTE
+    transit-ioi-param         = transit-ioi-indexed-value /
+    transit-ioi-void-value
+    transit-ioi-indexed-value = transit-ioi-name "."
+    transit-ioi-index
+    transit-ioi-name          = ALPHA *(ALPHA / DIGIT)
+    transit-ioi-index         = 1*DIGIT
+    transit-ioi-void-value    = "void"
+    related-icid              = "related-icid" EQUAL gen-value
+    related-icid-gen-addr     = "related-icid-generated-at" EQUAL host
+*/
+static void
+dissect_sip_p_charging_vector_header(tvbuff_t *tvb, proto_tree *tree, gint start_offset, gint line_end_offset)
+{
+
+    gint  current_offset, semi_colon_offset, length, equals_offset;
+
+    /* skip Spaces and Tabs */
+    start_offset = tvb_skip_wsp(tvb, start_offset, line_end_offset - start_offset);
+
+    if (start_offset >= line_end_offset)
+    {
+        /* Nothing to parse */
+        return;
+    }
+
+    /* icid-value                = "icid-value" EQUAL gen-value */
+    current_offset = start_offset;
+    semi_colon_offset = tvb_find_guint8(tvb, current_offset, line_end_offset - current_offset, ';');
+
+    if (semi_colon_offset == -1) {
+        /* No parameters, is that allowed?*/
+        semi_colon_offset = line_end_offset;
+    }
+
+    length = semi_colon_offset - current_offset;
+
+    /* Parse parameter and value */
+    equals_offset = tvb_find_guint8(tvb, current_offset + 1, length, '=');
+    if (equals_offset == -1) {
+        /* Does not conform to ABNF */
+        return;
+    }
+
+    /* Get the icid-value */
+    proto_tree_add_item(tree, hf_sip_icid_value, tvb,
+        equals_offset + 1, semi_colon_offset - equals_offset - 1, ENC_UTF_8 | ENC_NA);
+
+    current_offset = semi_colon_offset + 1;
+
+    /* Add the rest of the parameters to the tree */
+    while (current_offset < line_end_offset) {
+        gchar *param_name = NULL;
+        gint par_name_end_offset;
+        /* skip Spaces and Tabs */
+        current_offset = tvb_skip_wsp(tvb, current_offset, line_end_offset - current_offset);
+
+        semi_colon_offset = tvb_find_guint8(tvb, current_offset, line_end_offset - current_offset, ';');
+
+        if (semi_colon_offset == -1) {
+            semi_colon_offset = line_end_offset;
+        }
+
+        length = semi_colon_offset - current_offset;
+
+        /* Parse parameter and value */
+        equals_offset = tvb_find_guint8(tvb, current_offset + 1, length, '=');
+        if (equals_offset != -1) {
+            /* Has value part */
+            par_name_end_offset = equals_offset;
+            /* Extract the parameter name */
+            param_name = tvb_get_string_enc(wmem_packet_scope(), tvb, current_offset, par_name_end_offset - current_offset, ENC_UTF_8 | ENC_NA);
+            /* charge-params */
+            if ((param_name != NULL) && (g_ascii_strcasecmp(param_name, "icid-gen-addr") == 0)) {
+                proto_tree_add_item(tree, hf_sip_icid_gen_addr, tvb,
+                    equals_offset + 1, semi_colon_offset - equals_offset - 1, ENC_UTF_8 | ENC_NA);
+            }
+            else {
+                proto_tree_add_format_text(tree, tvb, current_offset, length);
+            }
+        }
+        else {
+            proto_tree_add_format_text(tree, tvb, current_offset, length);
+        }
+
+        current_offset = semi_colon_offset + 1;
+    }
+
+
 }
 
 /*
@@ -3502,7 +3627,7 @@ dissect_sip_common(tvbuff_t *tvb, int offset, int remaining_length, packet_info 
                                 display_sip_uri(tvb, sip_element_tree, pinfo, &uri_offsets, &sip_to_uri);
                                 if((uri_offsets.name_addr_start != -1) && (uri_offsets.name_addr_end != -1)){
                                     stat_info->tap_to_addr=tvb_get_string_enc(wmem_packet_scope(), tvb, uri_offsets.name_addr_start,
-                                        uri_offsets.name_addr_end - uri_offsets.name_addr_start, ENC_UTF_8|ENC_NA);
+                                        uri_offsets.name_addr_end - uri_offsets.name_addr_start + 1, ENC_UTF_8|ENC_NA);
                                 }
                                 offset = uri_offsets.name_addr_end +1;
                             }
@@ -3565,7 +3690,7 @@ dissect_sip_common(tvbuff_t *tvb, int offset, int remaining_length, packet_info 
                                 display_sip_uri(tvb, sip_element_tree, pinfo, &uri_offsets, &sip_from_uri);
                                 if((uri_offsets.name_addr_start != -1) && (uri_offsets.name_addr_end != -1)){
                                     stat_info->tap_from_addr=tvb_get_string_enc(wmem_packet_scope(), tvb, uri_offsets.name_addr_start,
-                                        uri_offsets.name_addr_end - uri_offsets.name_addr_start, ENC_UTF_8|ENC_NA);
+                                        uri_offsets.name_addr_end - uri_offsets.name_addr_start + 1, ENC_UTF_8|ENC_NA);
                                 }
                                 offset = uri_offsets.name_addr_end +1;
                             }
@@ -4342,6 +4467,19 @@ dissect_sip_common(tvbuff_t *tvb, int offset, int remaining_length, packet_info 
                             dissect_sip_p_access_network_info_header(tvb, p_access_net_info_tree, value_offset, line_end_offset);
                         }
                         break;
+                    case POS_P_CHARGING_VECTOR:
+                        if (hdr_tree) {
+                            proto_tree *p_charging_vector_tree;
+
+                            sip_element_item = sip_proto_tree_add_string(hdr_tree,
+                                hf_header_array[hf_index], tvb,
+                                offset, next_offset - offset,
+                                value_offset, value_len);
+                            sip_proto_set_format_text(hdr_tree, sip_element_item, tvb, offset, linelen);
+                            p_charging_vector_tree = proto_item_add_subtree(sip_element_item, ett_sip_p_charging_vector);
+                            dissect_sip_p_charging_vector_header(tvb, p_charging_vector_tree, value_offset, line_end_offset);
+                        }
+                        break;
                     case POS_FEATURE_CAPS:
                         if (hdr_tree) {
                             proto_tree *feature_caps_tree;
@@ -4466,13 +4604,6 @@ dissect_sip_common(tvbuff_t *tvb, int offset, int remaining_length, packet_info 
         stat_info->setup_time = response_time;
     }
 
-    /* Check if this packet is a resend. */
-    resend_for_packet = sip_is_packet_resend(pinfo, cseq_method, call_id,
-                                             cseq_number_set, cseq_number,
-                                             line_type);
-    /* Mark whether this is a resend for the tap */
-    stat_info->resend = (resend_for_packet > 0);
-
     /* For responses, try to link back to request frame */
     if (line_type == STATUS_LINE)
     {
@@ -4480,6 +4611,13 @@ dissect_sip_common(tvbuff_t *tvb, int offset, int remaining_length, packet_info 
                                                 cseq_number_set, cseq_number,
                                                 &response_time);
     }
+
+    /* Check if this packet is a resend. */
+    resend_for_packet = sip_is_packet_resend(pinfo, cseq_method, call_id,
+                                             cseq_number_set, cseq_number,
+                                             line_type);
+    /* Mark whether this is a resend for the tap */
+    stat_info->resend = (resend_for_packet > 0);
 
     /* Report this packet to the tap */
     if (!pinfo->flags.in_error_pkt)
@@ -4659,7 +4797,7 @@ dissect_sip_common(tvbuff_t *tvb, int offset, int remaining_length, packet_info 
 static void
 dfilter_sip_request_line(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gint offset, guint meth_len, gint linelen)
 {
-    char    *value;
+    const guint8    *value;
     guint   parameter_len = meth_len;
     uri_offset_info uri_offsets;
 
@@ -4672,14 +4810,13 @@ dfilter_sip_request_line(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gi
      */
 
     /* get method string*/
-    value = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, parameter_len, ENC_UTF_8|ENC_NA);
+    proto_tree_add_item_ret_string(tree, hf_sip_Method, tvb, offset, parameter_len, ENC_ASCII | ENC_NA,
+        wmem_packet_scope(), &value);
 
     /* Copy request method for telling tap */
     stat_info->request_method = value;
 
     if (tree) {
-        proto_tree_add_string(tree, hf_sip_Method, tvb, offset, parameter_len, value);
-
         /* build Request-URI tree*/
         offset=offset + parameter_len+1;
         sip_uri_offset_init(&uri_offsets);
@@ -5102,6 +5239,7 @@ guint sip_is_packet_resend(packet_info *pinfo,
             {
                 /* This frame is the original request */
                 p_val->frame_number = pinfo->num;
+                p_val->request_time = pinfo->abs_ts;
             }
             break;
         case STATUS_LINE:
@@ -5515,6 +5653,7 @@ static const value_string response_code_vals[] = {
     { 603, "Decline"},
     { 604, "Does Not Exist Anywhere"},
     { 606, "Not Acceptable"},
+    { 607, "Unwanted"},
     { 699, "Global Failure - Others"},
 
     { 0, NULL}
@@ -5541,18 +5680,20 @@ static stat_tap_table_item sip_stat_fields[] = {
     {TABLE_ITEM_FLOAT, TAP_ALIGN_RIGHT, "Max Setup (s)", "%8.2f"},
 };
 
-static void sip_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb gui_callback, void* gui_data)
+static void sip_stat_init(stat_tap_table_ui* new_stat, stat_tap_gui_init_cb gui_callback, void* gui_data)
 {
     /* XXX Should we have a single request + response table instead? */
     int num_fields = sizeof(sip_stat_fields)/sizeof(stat_tap_table_item);
-    stat_tap_table *req_table = new_stat_tap_init_table("SIP Requests", num_fields, 0, NULL, gui_callback, gui_data);
-    stat_tap_table *resp_table = new_stat_tap_init_table("SIP Responses", num_fields, 0, NULL, gui_callback, gui_data);
+    stat_tap_table *req_table = stat_tap_init_table("SIP Requests", num_fields, 0, NULL, gui_callback, gui_data);
+    stat_tap_table *resp_table = stat_tap_init_table("SIP Responses", num_fields, 0, NULL, gui_callback, gui_data);
     stat_tap_table_item_type items[sizeof(sip_stat_fields)/sizeof(stat_tap_table_item)];
     guint i;
 
-    new_stat_tap_add_table(new_stat, req_table);
-    new_stat_tap_add_table(new_stat, resp_table);
+    stat_tap_add_table(new_stat, resp_table);
+    stat_tap_add_table(new_stat, req_table);
 
+
+    // These values are fixed for all entries.
     items[REQ_RESP_METHOD_COLUMN].type = TABLE_ITEM_STRING;
     items[COUNT_COLUMN].type = TABLE_ITEM_UINT;
     items[COUNT_COLUMN].value.uint_value = 0;
@@ -5565,37 +5706,39 @@ static void sip_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb 
     items[MAX_SETUP_COLUMN].type = TABLE_ITEM_FLOAT;
     items[MAX_SETUP_COLUMN].value.float_value = 0.0f;
 
-    for (i = 0; i < array_length(sip_methods); i++) {
+    // For req_table, first column value is method.
+    for (i = 1; i < array_length(sip_methods); i++) {
         items[REQ_RESP_METHOD_COLUMN].value.string_value = g_strdup(sip_methods[i]);
-        new_stat_tap_init_table_row(req_table, i, num_fields, items);
+        stat_tap_init_table_row(req_table, i-1, num_fields, items);
     }
 
-    for (i = 0; response_code_vals[i].strptr; i++) {
+    // For responses entries, first column gets code and description.
+    for (i = 1; response_code_vals[i].strptr; i++) {
         unsigned response_code = response_code_vals[i].value;
         items[REQ_RESP_METHOD_COLUMN].value.string_value =
                 g_strdup_printf("%u %s", response_code, response_code_vals[i].strptr);
         items[REQ_RESP_METHOD_COLUMN].user_data.uint_value = response_code;
-        new_stat_tap_init_table_row(resp_table, i, num_fields, items);
+        stat_tap_init_table_row(resp_table, i-1, num_fields, items);
     }
 }
 
 static gboolean
 sip_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const void *siv_ptr)
 {
-    new_stat_data_t* stat_data = (new_stat_data_t*) tapdata;
+    stat_data_t* stat_data = (stat_data_t*) tapdata;
     const sip_info_value_t *info_value = (const sip_info_value_t *) siv_ptr;
     stat_tap_table *cur_table = NULL;
     guint cur_row = 0;  /* 0 = Unknown for both tables */
 
     if (info_value->request_method && info_value->response_code < 1) {
         /* Request table */
-        stat_tap_table *req_table = g_array_index(stat_data->stat_tap_data->tables, stat_tap_table*, 0);
+        stat_tap_table *req_table = g_array_index(stat_data->stat_tap_data->tables, stat_tap_table*, 1);
         stat_tap_table_item_type *item_data;
         guint element;
 
         cur_table = req_table;
         for (element = 0; element < req_table->num_elements; element++) {
-            item_data = new_stat_tap_get_field_data(req_table, element, REQ_RESP_METHOD_COLUMN);
+            item_data = stat_tap_get_field_data(req_table, element, REQ_RESP_METHOD_COLUMN);
             if (g_ascii_strcasecmp(info_value->request_method, item_data->value.string_value) == 0) {
                 cur_row = element;
                 break;
@@ -5604,7 +5747,7 @@ sip_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, 
 
     } else if (info_value->response_code > 0) {
         /* Response table */
-        stat_tap_table *resp_table = g_array_index(stat_data->stat_tap_data->tables, stat_tap_table*, 1);
+        stat_tap_table *resp_table = g_array_index(stat_data->stat_tap_data->tables, stat_tap_table*, 0);
         guint response_code = info_value->response_code;
         stat_tap_table_item_type *item_data;
         guint element;
@@ -5617,7 +5760,7 @@ sip_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, 
         }
 
         for (element = 0; element < resp_table->num_elements; element++) {
-            item_data = new_stat_tap_get_field_data(resp_table, element, REQ_RESP_METHOD_COLUMN);
+            item_data = stat_tap_get_field_data(resp_table, element, REQ_RESP_METHOD_COLUMN);
             if (item_data->user_data.uint_value == response_code) {
                 cur_row = element;
                 break;
@@ -5631,20 +5774,20 @@ sip_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, 
     if (cur_table) {
         stat_tap_table_item_type *item_data;
 
-        item_data = new_stat_tap_get_field_data(cur_table, cur_row, COUNT_COLUMN);
+        item_data = stat_tap_get_field_data(cur_table, cur_row, COUNT_COLUMN);
         item_data->value.uint_value++;
-        new_stat_tap_set_field_data(cur_table, cur_row, COUNT_COLUMN, item_data);
+        stat_tap_set_field_data(cur_table, cur_row, COUNT_COLUMN, item_data);
 
         if (info_value->resend) {
-            item_data = new_stat_tap_get_field_data(cur_table, cur_row, RESENT_COLUMN);
+            item_data = stat_tap_get_field_data(cur_table, cur_row, RESENT_COLUMN);
             item_data->value.uint_value++;
-            new_stat_tap_set_field_data(cur_table, cur_row, RESENT_COLUMN, item_data);
+            stat_tap_set_field_data(cur_table, cur_row, RESENT_COLUMN, item_data);
         }
 
         if (info_value->setup_time > 0) {
-            stat_tap_table_item_type *min_item_data = new_stat_tap_get_field_data(cur_table, cur_row, MIN_SETUP_COLUMN);
-            stat_tap_table_item_type *avg_item_data = new_stat_tap_get_field_data(cur_table, cur_row, AVG_SETUP_COLUMN);
-            stat_tap_table_item_type *max_item_data = new_stat_tap_get_field_data(cur_table, cur_row, MAX_SETUP_COLUMN);
+            stat_tap_table_item_type *min_item_data = stat_tap_get_field_data(cur_table, cur_row, MIN_SETUP_COLUMN);
+            stat_tap_table_item_type *avg_item_data = stat_tap_get_field_data(cur_table, cur_row, AVG_SETUP_COLUMN);
+            stat_tap_table_item_type *max_item_data = stat_tap_get_field_data(cur_table, cur_row, MAX_SETUP_COLUMN);
             double setup_time = (double) info_value->setup_time / 1000;
             unsigned count;
 
@@ -5666,9 +5809,9 @@ sip_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, 
                 }
             }
 
-            new_stat_tap_set_field_data(cur_table, cur_row, MIN_SETUP_COLUMN, min_item_data);
-            new_stat_tap_set_field_data(cur_table, cur_row, AVG_SETUP_COLUMN, avg_item_data);
-            new_stat_tap_set_field_data(cur_table, cur_row, MAX_SETUP_COLUMN, max_item_data);
+            stat_tap_set_field_data(cur_table, cur_row, MIN_SETUP_COLUMN, min_item_data);
+            stat_tap_set_field_data(cur_table, cur_row, AVG_SETUP_COLUMN, avg_item_data);
+            stat_tap_set_field_data(cur_table, cur_row, MAX_SETUP_COLUMN, max_item_data);
         }
     }
 
@@ -5683,31 +5826,31 @@ sip_stat_reset(stat_tap_table* table)
 
     for (element = 0; element < table->num_elements; element++)
     {
-        item_data = new_stat_tap_get_field_data(table, element, COUNT_COLUMN);
+        item_data = stat_tap_get_field_data(table, element, COUNT_COLUMN);
         item_data->value.uint_value = 0;
-        new_stat_tap_set_field_data(table, element, COUNT_COLUMN, item_data);
+        stat_tap_set_field_data(table, element, COUNT_COLUMN, item_data);
 
-        item_data = new_stat_tap_get_field_data(table, element, RESENT_COLUMN);
+        item_data = stat_tap_get_field_data(table, element, RESENT_COLUMN);
         item_data->value.uint_value = 0;
-        new_stat_tap_set_field_data(table, element, RESENT_COLUMN, item_data);
+        stat_tap_set_field_data(table, element, RESENT_COLUMN, item_data);
 
-        item_data = new_stat_tap_get_field_data(table, element, RESENT_COLUMN);
+        item_data = stat_tap_get_field_data(table, element, RESENT_COLUMN);
         item_data->value.uint_value = 0;
-        new_stat_tap_set_field_data(table, element, RESENT_COLUMN, item_data);
+        stat_tap_set_field_data(table, element, RESENT_COLUMN, item_data);
 
-        item_data = new_stat_tap_get_field_data(table, element, MIN_SETUP_COLUMN);
+        item_data = stat_tap_get_field_data(table, element, MIN_SETUP_COLUMN);
         item_data->user_data.uint_value = 0;
         item_data->value.float_value = 0.0f;
-        new_stat_tap_set_field_data(table, element, MIN_SETUP_COLUMN, item_data);
+        stat_tap_set_field_data(table, element, MIN_SETUP_COLUMN, item_data);
 
-        item_data = new_stat_tap_get_field_data(table, element, AVG_SETUP_COLUMN);
+        item_data = stat_tap_get_field_data(table, element, AVG_SETUP_COLUMN);
         item_data->user_data.float_value = 0;
         item_data->value.float_value = 0.0f;
-        new_stat_tap_set_field_data(table, element, AVG_SETUP_COLUMN, item_data);
+        stat_tap_set_field_data(table, element, AVG_SETUP_COLUMN, item_data);
 
-        item_data = new_stat_tap_get_field_data(table, element, MAX_SETUP_COLUMN);
+        item_data = stat_tap_get_field_data(table, element, MAX_SETUP_COLUMN);
         item_data->value.float_value = 0.0f;
-        new_stat_tap_set_field_data(table, element, MAX_SETUP_COLUMN, item_data);
+        stat_tap_set_field_data(table, element, MAX_SETUP_COLUMN, item_data);
     }
 }
 
@@ -6666,7 +6809,7 @@ void proto_register_sip(void)
         },
         { &hf_sip_original_frame,
           { "Suspected resend of frame",  "sip.resend-original",
-            FT_FRAMENUM, BASE_NONE, NULL, 0x0,
+            FT_FRAMENUM, BASE_NONE, FRAMENUM_TYPE(FT_FRAMENUM_RETRANS_PREV), 0x0,
             "Original transmission of frame", HFILL}
         },
         { &hf_sip_matching_request_frame,
@@ -6844,6 +6987,11 @@ void proto_register_sip(void)
             FT_STRING, BASE_NONE, NULL, 0x0,
             NULL, HFILL }
         },
+        { &hf_sip_via_oc_val,
+        { "Overload Control Value",  "sip.Via.oc_val",
+            FT_UINT32, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
         { &hf_sip_via_oc_validity,
         { "Overload Control Validity",  "sip.Via.oc_validity",
             FT_STRING, BASE_NONE, NULL, 0x0,
@@ -6852,6 +7000,12 @@ void proto_register_sip(void)
         { &hf_sip_via_oc_seq,
         { "Overload Control Sequence",  "sip.Via.oc_seq",
             FT_STRING, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_sip_oc_seq_timestamp,
+        { "Overload Control Sequence Time Stamp",
+            "sip.Via.oc_seq.ts",
+            FT_ABSOLUTE_TIME, ABSOLUTE_TIME_UTC, NULL, 0x0,
             NULL, HFILL }
         },
         { &hf_sip_via_oc_algo,
@@ -6998,6 +7152,16 @@ void proto_register_sip(void)
           { "Service Priority",  "sip.service_priority",
             FT_STRING, BASE_NONE, NULL, 0x0,
             NULL, HFILL }
+        },
+        { &hf_sip_icid_value,
+        { "icid-value",  "sip.icid_value",
+            FT_STRING, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_sip_icid_gen_addr,
+        { "icid-gen-addr",  "sip.icid_gen_addr",
+            FT_STRING, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
         }
     };
 
@@ -7042,6 +7206,7 @@ void proto_register_sip(void)
         &ett_sip_curi,
         &ett_sip_session_id,
         &ett_sip_p_access_net_info,
+        &ett_sip_p_charging_vector,
         &ett_sip_feature_caps
     };
     static gint *ett_raw[] = {

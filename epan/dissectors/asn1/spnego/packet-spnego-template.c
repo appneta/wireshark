@@ -11,19 +11,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 /* The heimdal code for decryption of GSSAPI wrappers using heimdal comes from
    Heimdal 1.6 and has been modified for wireshark's requirements.
@@ -1283,9 +1271,7 @@ dissect_spnego(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void*
        * If we have a conversation, try to get the handle,
        * and if we get one, attach it to the frame.
        */
-      conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                       pinfo->ptype, pinfo->srcport,
-                                       pinfo->destport, 0);
+      conversation = find_conversation_pinfo(pinfo, 0);
 
       if (conversation) {
         next_level_value = (gssapi_oid_value *)conversation_get_proto_data(conversation, proto_spnego);

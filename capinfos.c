@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -75,7 +63,7 @@
 #include <wsutil/crash_info.h>
 #include <wsutil/filesystem.h>
 #include <wsutil/privileges.h>
-#include <ws_version_info.h>
+#include <version_info.h>
 #include <wiretap/wtap_opttypes.h>
 
 #ifdef HAVE_PLUGINS
@@ -159,17 +147,18 @@ static gboolean cap_order          = TRUE;  /* Report if packets are in chronolo
 
 static gboolean cap_file_hashes    = TRUE;  /* Calculate file hashes */
 
-#define HASH_SIZE_SHA1   20
+// Strongest to weakest
+#define HASH_SIZE_SHA256 32
 #define HASH_SIZE_RMD160 20
-#define HASH_SIZE_MD5    16
+#define HASH_SIZE_SHA1   20
 
-#define HASH_STR_SIZE (41) /* Max hash size * 2 + '\0' */
+#define HASH_STR_SIZE (65) /* Max hash size * 2 + '\0' */
 #define HASH_BUF_SIZE (1024 * 1024)
 
 
-static gchar file_sha1[HASH_STR_SIZE];
+static gchar file_sha256[HASH_STR_SIZE];
 static gchar file_rmd160[HASH_STR_SIZE];
-static gchar file_md5[HASH_STR_SIZE];
+static gchar file_sha1[HASH_STR_SIZE];
 
 /*
  * If we have at least two packets with time stamps, and they're not in
@@ -698,9 +687,9 @@ print_stats(const gchar *filename, capture_info *cf_info)
     }
   }
   if (cap_file_hashes) {
-    printf     ("SHA1:                %s\n", file_sha1);
+    printf     ("SHA256:              %s\n", file_sha256);
     printf     ("RIPEMD160:           %s\n", file_rmd160);
-    printf     ("MD5:                 %s\n", file_md5);
+    printf     ("SHA1:                %s\n", file_sha1);
   }
   if (cap_order)          printf     ("Strict time order:   %s\n", order_string(cf_info->order));
 
@@ -786,9 +775,9 @@ print_stats_table_header(void)
   if (cap_packet_size)    print_stats_table_header_label("Average packet size (bytes)");
   if (cap_packet_rate)    print_stats_table_header_label("Average packet rate (packets/sec)");
   if (cap_file_hashes) {
-    print_stats_table_header_label("SHA1");
+    print_stats_table_header_label("SHA256");
     print_stats_table_header_label("RIPEMD160");
-    print_stats_table_header_label("MD5");
+    print_stats_table_header_label("SHA1");
   }
   if (cap_order)          print_stats_table_header_label("Strict time order");
   if (cap_file_more_info) {
@@ -954,7 +943,7 @@ print_stats_table(const gchar *filename, capture_info *cf_info)
   if (cap_file_hashes) {
     putsep();
     putquote();
-    printf("%s", file_sha1);
+    printf("%s", file_sha256);
     putquote();
 
     putsep();
@@ -964,7 +953,7 @@ print_stats_table(const gchar *filename, capture_info *cf_info)
 
     putsep();
     putquote();
-    printf("%s", file_md5);
+    printf("%s", file_sha1);
     putquote();
   }
 
@@ -1072,7 +1061,7 @@ process_cap_file(wtap *wth, const char *filename)
   gint64                bytes  = 0;
   guint32               snaplen_min_inferred = 0xffffffff;
   guint32               snaplen_max_inferred =          0;
-  const struct wtap_pkthdr *phdr;
+  wtap_rec             *rec;
   capture_info          cf_info;
   gboolean              have_times = TRUE;
   nstime_t              start_time;
@@ -1114,27 +1103,27 @@ process_cap_file(wtap *wth, const char *filename)
 
   /* Tally up data that we need to parse through the file to find */
   while (wtap_read(wth, &err, &err_info, &data_offset))  {
-    phdr = wtap_phdr(wth);
-    if (phdr->presence_flags & WTAP_HAS_TS) {
+    rec = wtap_get_rec(wth);
+    if (rec->presence_flags & WTAP_HAS_TS) {
       prev_time = cur_time;
-      cur_time = phdr->ts;
+      cur_time = rec->ts;
       if (packet == 0) {
-        start_time = phdr->ts;
-        start_time_tsprec = phdr->pkt_tsprec;
-        stop_time  = phdr->ts;
-        stop_time_tsprec = phdr->pkt_tsprec;
-        prev_time  = phdr->ts;
+        start_time = rec->ts;
+        start_time_tsprec = rec->tsprec;
+        stop_time  = rec->ts;
+        stop_time_tsprec = rec->tsprec;
+        prev_time  = rec->ts;
       }
       if (nstime_cmp(&cur_time, &prev_time) < 0) {
         order = NOT_IN_ORDER;
       }
       if (nstime_cmp(&cur_time, &start_time) < 0) {
         start_time = cur_time;
-        start_time_tsprec = phdr->pkt_tsprec;
+        start_time_tsprec = rec->tsprec;
       }
       if (nstime_cmp(&cur_time, &stop_time) > 0) {
         stop_time = cur_time;
-        stop_time_tsprec = phdr->pkt_tsprec;
+        stop_time_tsprec = rec->tsprec;
       }
     } else {
       have_times = FALSE; /* at least one packet has no time stamp */
@@ -1142,32 +1131,33 @@ process_cap_file(wtap *wth, const char *filename)
         order = ORDER_UNKNOWN;
     }
 
-    if (phdr->rec_type == REC_TYPE_PACKET) {
-      bytes+=phdr->len;
+    if (rec->rec_type == REC_TYPE_PACKET) {
+      bytes += rec->rec_header.packet_header.len;
       packet++;
 
       /* If caplen < len for a rcd, then presumably           */
       /* 'Limit packet capture length' was done for this rcd. */
       /* Keep track as to the min/max actual snapshot lengths */
       /*  seen for this file.                                 */
-      if (phdr->caplen < phdr->len) {
-        if (phdr->caplen < snaplen_min_inferred)
-          snaplen_min_inferred = phdr->caplen;
-        if (phdr->caplen > snaplen_max_inferred)
-          snaplen_max_inferred = phdr->caplen;
+      if (rec->rec_header.packet_header.caplen < rec->rec_header.packet_header.len) {
+        if (rec->rec_header.packet_header.caplen < snaplen_min_inferred)
+          snaplen_min_inferred = rec->rec_header.packet_header.caplen;
+        if (rec->rec_header.packet_header.caplen > snaplen_max_inferred)
+          snaplen_max_inferred = rec->rec_header.packet_header.caplen;
       }
 
-      if ((phdr->pkt_encap > 0) && (phdr->pkt_encap < WTAP_NUM_ENCAP_TYPES)) {
-        cf_info.encap_counts[phdr->pkt_encap] += 1;
+      if ((rec->rec_header.packet_header.pkt_encap > 0) &&
+          (rec->rec_header.packet_header.pkt_encap < WTAP_NUM_ENCAP_TYPES)) {
+        cf_info.encap_counts[rec->rec_header.packet_header.pkt_encap] += 1;
       } else {
         fprintf(stderr, "capinfos: Unknown packet encapsulation %d in frame %u of file \"%s\"\n",
-                phdr->pkt_encap, packet, filename);
+                rec->rec_header.packet_header.pkt_encap, packet, filename);
       }
 
       /* Packet interface_id info */
-      if (phdr->presence_flags & WTAP_HAS_INTERFACE_ID) {
+      if (rec->presence_flags & WTAP_HAS_INTERFACE_ID) {
         /* cf_info.num_interfaces is size, not index, so it's one more than max index */
-        if (phdr->interface_id >= cf_info.num_interfaces) {
+        if (rec->rec_header.packet_header.interface_id >= cf_info.num_interfaces) {
           /*
            * OK, re-fetch the number of interfaces, as there might have
            * been an interface that was in the middle of packets, and
@@ -1182,8 +1172,9 @@ process_cap_file(wtap *wth, const char *filename)
           g_free(idb_info);
           idb_info = NULL;
         }
-        if (phdr->interface_id < cf_info.num_interfaces) {
-          g_array_index(cf_info.interface_packet_counts, guint32, phdr->interface_id) += 1;
+        if (rec->rec_header.packet_header.interface_id < cf_info.num_interfaces) {
+          g_array_index(cf_info.interface_packet_counts, guint32,
+                        rec->rec_header.packet_header.interface_id) += 1;
         }
         else {
           cf_info.pkt_interface_id_unknown += 1;
@@ -1323,7 +1314,7 @@ print_usage(FILE *output)
   fprintf(output, "  -E display the capture file encapsulation\n");
   fprintf(output, "  -I display the capture file interface information\n");
   fprintf(output, "  -F display additional capture file information\n");
-  fprintf(output, "  -H display the SHA1, RMD160, and MD5 hashes of the file\n");
+  fprintf(output, "  -H display the SHA256, RMD160, and SHA1 hashes of the file\n");
   fprintf(output, "  -k display the capture comment\n");
   fprintf(output, "\n");
   fprintf(output, "Size infos:\n");
@@ -1475,23 +1466,10 @@ main(int argc, char *argv[])
     g_free(init_progfile_dir_error);
   }
 
-  wtap_init();
-
-#ifdef HAVE_PLUGINS
   init_report_message(failure_warning_message, failure_warning_message,
                       NULL, NULL, NULL);
 
-  /* Scan for plugins.  This does *not* call their registration routines;
-     that's done later.
-
-     Don't report failures to load plugins because most (non-wiretap)
-     plugins *should* fail to load (because we're not linked against
-     libwireshark and dissector plugins need libwireshark). */
-  scan_plugins(DONT_REPORT_LOAD_FAILURE);
-
-  /* Register all libwiretap plugin modules. */
-  register_all_wiretap_modules();
-#endif
+  wtap_init(TRUE);
 
   /* Process the options */
   while ((opt = getopt_long(argc, argv, "abcdehiklmoqrstuvxyzABCEFHIKLMNQRST", long_options, NULL)) !=-1) {
@@ -1686,10 +1664,10 @@ main(int argc, char *argv[])
 
   if (cap_file_hashes) {
     gcry_check_version(NULL);
-    gcry_md_open(&hd, GCRY_MD_SHA1, 0);
+    gcry_md_open(&hd, GCRY_MD_SHA256, 0);
     if (hd) {
       gcry_md_enable(hd, GCRY_MD_RMD160);
-      gcry_md_enable(hd, GCRY_MD_MD5);
+      gcry_md_enable(hd, GCRY_MD_SHA1);
     }
     hash_buf = (char *)g_malloc(HASH_BUF_SIZE);
   }
@@ -1698,9 +1676,9 @@ main(int argc, char *argv[])
 
   for (opt = optind; opt < argc; opt++) {
 
-    g_strlcpy(file_sha1, "<unknown>", HASH_STR_SIZE);
+    g_strlcpy(file_sha256, "<unknown>", HASH_STR_SIZE);
     g_strlcpy(file_rmd160, "<unknown>", HASH_STR_SIZE);
-    g_strlcpy(file_md5, "<unknown>", HASH_STR_SIZE);
+    g_strlcpy(file_sha1, "<unknown>", HASH_STR_SIZE);
 
     if (cap_file_hashes) {
       fh = ws_fopen(argv[opt], "rb");
@@ -1709,9 +1687,9 @@ main(int argc, char *argv[])
           gcry_md_write(hd, hash_buf, hash_bytes);
         }
         gcry_md_final(hd);
-        hash_to_str(gcry_md_read(hd, GCRY_MD_SHA1), HASH_SIZE_SHA1, file_sha1);
+        hash_to_str(gcry_md_read(hd, GCRY_MD_SHA256), HASH_SIZE_SHA256, file_sha256);
         hash_to_str(gcry_md_read(hd, GCRY_MD_RMD160), HASH_SIZE_RMD160, file_rmd160);
-        hash_to_str(gcry_md_read(hd, GCRY_MD_MD5), HASH_SIZE_MD5, file_md5);
+        hash_to_str(gcry_md_read(hd, GCRY_MD_SHA1), HASH_SIZE_SHA1, file_sha1);
       }
       if (fh) fclose(fh);
       if (hd) gcry_md_reset(hd);
@@ -1741,11 +1719,9 @@ main(int argc, char *argv[])
 
 exit:
   g_free(hash_buf);
+  gcry_md_close(hd);
   wtap_cleanup();
   free_progdirs();
-#ifdef HAVE_PLUGINS
-  plugins_cleanup();
-#endif
   return overall_error_status;
 }
 

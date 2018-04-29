@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -45,7 +33,7 @@
 #include <wsutil/file_util.h>
 #include <wsutil/filesystem.h>
 #include <wsutil/privileges.h>
-#include <ws_version_info.h>
+#include <version_info.h>
 
 #ifdef HAVE_PLUGINS
 #include <wsutil/plugins.h>
@@ -154,23 +142,10 @@ main(int argc, char *argv[])
     g_free(init_progfile_dir_error);
   }
 
-  wtap_init();
-
-#ifdef HAVE_PLUGINS
   init_report_message(failure_warning_message, failure_warning_message,
                       NULL, NULL, NULL);
 
-  /* Scan for plugins.  This does *not* call their registration routines;
-     that's done later.
-
-     Don't report failures to load plugins because most (non-wiretap)
-     plugins *should* fail to load (because we're not linked against
-     libwireshark and dissector plugins need libwireshark). */
-  scan_plugins(DONT_REPORT_LOAD_FAILURE);
-
-  /* Register all libwiretap plugin modules. */
-  register_all_wiretap_modules();
-#endif
+  wtap_init(TRUE);
 
   /* Process the options */
   while ((opt = getopt_long(argc, argv, "hv", long_options, NULL)) !=-1) {
@@ -228,9 +203,6 @@ main(int argc, char *argv[])
 
   wtap_cleanup();
   free_progdirs();
-#ifdef HAVE_PLUGINS
-  plugins_cleanup();
-#endif
   return overall_error_status;
 }
 

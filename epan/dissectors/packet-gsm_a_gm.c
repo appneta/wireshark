@@ -59,23 +59,23 @@
  *   Stage 3
  *   (3GPP TS 24.008 version 13.8.0 Release 13)
  *
+ *   Reference [14]
+ *   Mobile radio interface Layer 3 specification;
+ *   Core network protocols;
+ *   Stage 3
+ *   (3GPP TS 24.008 version 14.6.0 Release 14)
+ *
+ *   Reference [15]
+ *   Mobile radio interface Layer 3 specification;
+ *   Core network protocols;
+ *   Stage 3
+ *   (3GPP TS 24.008 version 15.2.0 Release 15)
+ *
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -201,13 +201,18 @@ static const value_string gsm_gm_elem_strings[] = {
 	{ DE_EXT_DRX_PARAMS,		 "Extended DRX Parameters" },
 	{ DE_MAC,			 "Message Authentication Code" },
 	{ DE_UP_INTEG_IND,		 "User Plane Integrity Indicator" },
+	{ DE_DCN_ID, 			 "DCN-ID"},
+	{ DE_PLMN_ID_CN_OPERATOR,	 "PLMN identity of the CN operator"},
+	{ DE_NON_3GPP_NW_PROV_POL, 	 "Non-3GPP NW provided policies"},
 	/* Session Management Information Elements 10.5.6 */
 	{ DE_ACC_POINT_NAME,		 "Access Point Name" },
 	{ DE_NET_SAPI,			 "Network Service Access Point Identifier" },
 	{ DE_PRO_CONF_OPT,		 "Protocol Configuration Options" },
+	{ DE_EXT_PRO_CONF_OPT,		 "Extended Protocol Configuration Options" },
 	{ DE_PD_PRO_ADDR,		 "Packet Data Protocol Address" },
 	{ DE_QOS,			 "Quality Of Service" },
-	{ DE_RE_ATTEMPT_IND,	 "Re-attempt Indicator" },
+	{ DE_RE_ATTEMPT_IND,		 "Re-attempt Indicator" },
+	{ DE_EXT_QOS,			 "Extended Quality Of Service" },
 	{ DE_SM_CAUSE,			 "SM Cause" },
 	{ DE_SM_CAUSE_2,		 "SM Cause 2" },
 	{ DE_LINKED_TI,			 "Linked TI" },
@@ -342,16 +347,22 @@ static int hf_gsm_a_gm_pco_pid = -1;
 static int hf_gsm_a_gm_pco_app_spec_info = -1;
 static int hf_gsm_a_gm_type_of_identity = -1;
 int hf_gsm_a_gm_rac = -1;
+static int hf_gsm_a_gm_mta_e = -1;
+static int hf_gsm_a_gm_mta_r = -1;
 static int hf_gsm_a_gm_apc = -1;
 static int hf_gsm_a_gm_otd_a = -1;
 static int hf_gsm_a_gm_otd_b = -1;
 static int hf_gsm_a_gm_gps_a = -1;
 static int hf_gsm_a_gm_gps_b = -1;
 static int hf_gsm_a_gm_gps_c = -1;
+static int hf_gsm_a_gm_motd = -1;
+static int hf_gsm_a_gm_mta_a = -1;
 static int hf_gsm_a_gm_lcs_molr = -1;
 static int hf_gsm_a_gm_mbms = -1;
 static int hf_gsm_a_gm_ims_vops = -1;
 static int hf_gsm_a_gm_emc_bs = -1;
+static int hf_gsm_a_gm_epco = -1;
+static int hf_gsm_a_gm_restrict_ec = -1;
 static int hf_gsm_a_gm_gprs_sms = -1;
 static int hf_gsm_a_gm_req_ms_info_irat = -1;
 static int hf_gsm_a_gm_req_ms_info_irat2 = -1;
@@ -363,6 +374,8 @@ static int hf_gsm_a_gm_paging_time_window = -1;
 static int hf_gsm_a_gm_edrx_value = -1;
 static int hf_gsm_a_gm_mac = -1;
 static int hf_gsm_a_gm_up_integ_ind = -1;
+static int hf_gsm_a_gm_dcn_id = -1;
+static int hf_gsm_a_gm_n3en_ind = -1;
 static int hf_gsm_a_sm_pdp_type_org = -1;
 static int hf_gsm_a_sm_qos_mean_thr = -1;
 static int hf_gsm_a_sm_qos_peak_thr = -1;
@@ -468,7 +481,9 @@ static int hf_gsm_a_gm_rac_dlmc_max_nb_dl_ts = -1;
 static int hf_gsm_a_gm_rac_dlmc_max_nb_dl_carriers = -1;
 static int hf_gsm_a_gm_rac_ext_tsc_set_cap_support = -1;
 static int hf_gsm_a_gm_rac_ext_earfcn_value_range = -1;
-static int hf_gsm_a_gm_rac_ext_ec_pch_mon_support = -1;
+static int hf_gsm_a_gm_rac_ec_pch_mon_support = -1;
+static int hf_gsm_a_gm_rac_ms_sync_accuracy = -1;
+static int hf_gsm_a_gm_rac_ext_ec_ul_cov_enh_support = -1;
 static int hf_gsm_a_sm_ti_flag = -1;
 static int hf_gsm_a_sm_ext = -1;
 
@@ -501,6 +516,9 @@ static int hf_gsm_a_gmm_net_cap_up_gia4 = -1;
 static int hf_gsm_a_gmm_net_cap_up_gia5 = -1;
 static int hf_gsm_a_gmm_net_cap_up_gia6 = -1;
 static int hf_gsm_a_gmm_net_cap_up_gia7 = -1;
+static int hf_gsm_a_gmm_net_cap_epco_ie_ind = -1;
+static int hf_gsm_a_gmm_net_cap_restrict_use_enh_cov = -1;
+static int hf_gsm_a_gmm_net_cap_dc_eutra_nr_cap = -1;
 
 /* Generated from convert_proto_tree_add_text.pl */
 static int hf_gsm_a_gm_presence = -1;
@@ -533,7 +551,12 @@ static int hf_gsm_a_gm_sm_pco_non_ip_link_mtu_size = -1;
 static int hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_aer = -1;
 static int hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_ul_time_unit = -1;
 static int hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_max_ul_rate = -1;
+static int hf_gsm_a_gm_sm_pco_3gpp_data_off_ue_status = -1;
 static int hf_gsm_a_gm_sm_pco_sel_bearer_ctrl_mode = -1;
+static int hf_gsm_a_gm_sm_pco_add_apn_rate_ctrl_params_ul_time_unit = -1;
+static int hf_gsm_a_gm_sm_pco_add_apn_rate_ctrl_params_max_ul_rate = -1;
+static int hf_gsm_a_gm_sm_pco_pdu_session_id = -1;
+static int hf_gsm_a_gm_sm_pco_pdu_session_address_lifetime = -1;
 static int hf_gsm_a_sm_pdp_type_number = -1;
 static int hf_gsm_a_sm_pdp_address = -1;
 static int hf_gsm_a_gm_ti_value = -1;
@@ -552,6 +575,7 @@ static expert_field ei_gsm_a_gm_extraneous_data = EI_INIT;
 static expert_field ei_gsm_a_gm_not_enough_data = EI_INIT;
 static expert_field ei_gsm_a_gm_undecoded = EI_INIT;
 static expert_field ei_gsm_a_gm_apn_too_long = EI_INIT;
+static expert_field ei_gsm_a_gm_missing_mandatory_element = EI_INIT;
 
 static dissector_handle_t rrc_irat_ho_info_handle;
 static dissector_handle_t lte_rrc_ue_eutra_cap_handle;
@@ -1181,6 +1205,21 @@ static const true_false_string gsm_a_gmm_net_cap_gia_vals = {
 	"Integrity algorithm not available"
 };
 
+static const true_false_string gsm_a_gmm_net_cap_epco_ie_ind_vals = {
+	"Used by a mobile station supporting extended protocol configuration options IE",
+	"Used by a mobile station not supporting extended protocol configuration options IE"
+};
+
+static const true_false_string gsm_a_gmm_net_cap_restrict_use_enh_cov_vals = {
+	"Mobile station supports restriction on use of enhanced coverage",
+	"Mobile station does not support restriction on use of enhanced coverage"
+};
+
+static const true_false_string gsm_a_gmm_net_cap_dc_eutra_nr_cap_vals = {
+	"Mobile station supports dual connectivity of E-UTRA with NR",
+	"Mobile station does not support dual connectivity of E-UTRA with NR"
+};
+
 guint16
 de_gmm_ms_net_cap(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string _U_, int string_len _U_)
 {
@@ -1274,6 +1313,15 @@ de_gmm_ms_net_cap(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 o
 
 	/* bit 4: GIA/7 */
 	proto_tree_add_item(tree, hf_gsm_a_gmm_net_cap_up_gia7, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+
+	/* bit 3: ePCO IE indicator */
+	proto_tree_add_item(tree, hf_gsm_a_gmm_net_cap_epco_ie_ind, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+
+	/* bit 2: Restriction on use of enhanced coverage capability */
+	proto_tree_add_item(tree, hf_gsm_a_gmm_net_cap_restrict_use_enh_cov, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+
+	/* bit 1: Dual connectivity of E-UTRA with NR capability */
+	proto_tree_add_item(tree, hf_gsm_a_gmm_net_cap_dc_eutra_nr_cap, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 
 	curr_offset++;
 	EXTRANEOUS_DATA_CHECK(len, curr_offset - offset, pinfo, &ei_gsm_a_gm_extraneous_data);
@@ -3220,7 +3268,45 @@ de_gmm_ms_radio_acc_cap(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 		 */
 		bits_needed = 2;
 		GET_DATA;
-		proto_tree_add_bits_item(tf_tree, hf_gsm_a_gm_rac_ext_ec_pch_mon_support, tvb, bit_offset, 2, ENC_BIG_ENDIAN);
+		proto_tree_add_bits_item(tf_tree, hf_gsm_a_gm_rac_ec_pch_mon_support, tvb, bit_offset, 2, ENC_BIG_ENDIAN);
+		bit_offset += bits_needed;
+		curr_bits_length -= bits_needed;
+		oct <<= bits_needed;
+		bits_in_oct -= bits_needed;
+
+		/*
+		 * Release 14
+		 */
+
+		/*
+		 * MS Sync Accuracy
+		 */
+		bits_needed = 1;
+		GET_DATA;
+		if ((oct>>(32-bits_needed)) == 0)
+		{
+			bit_offset += bits_needed;
+			curr_bits_length -= bits_needed;
+			oct <<= bits_needed;
+			bits_in_oct -= bits_needed;
+		}
+		else
+		{
+			bits_needed = 4;
+			GET_DATA;
+			proto_tree_add_bits_item(tf_tree, hf_gsm_a_gm_rac_ms_sync_accuracy, tvb, bit_offset, 4, ENC_BIG_ENDIAN);
+			bit_offset += bits_needed;
+			curr_bits_length -= bits_needed;
+			oct <<= bits_needed;
+			bits_in_oct -= bits_needed;
+		}
+
+		/*
+		 * EC uplink coverage enhancement support
+		 */
+		bits_needed = 1;
+		GET_DATA;
+		proto_tree_add_bits_item(tf_tree, hf_gsm_a_gm_rac_ext_ec_ul_cov_enh_support, tvb, bit_offset, 1, ENC_BIG_ENDIAN);
 		bit_offset += bits_needed;
 		curr_bits_length -= bits_needed;
 		oct <<= bits_needed;
@@ -3501,6 +3587,16 @@ de_gmm_service_type(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, gui
 /*
  * [9] 10.5.5.22 PS LCS Capability
  */
+static const true_false_string gsm_a_gm_mta_e_vals = {
+	"Multilateration Timing Advance using Extended Access Burst method supported",
+	"Multilateration Timing Advance using Extended Access Burst method not supported"
+};
+
+static const true_false_string gsm_a_gm_mta_r_vals = {
+	"Multilateration Timing Advance using RLC data block method supported",
+	"Multilateration Timing Advance using RLC data block method not supported"
+};
+
 static const true_false_string gsm_a_gm_apc_vals = {
 	"Additional Positioning Capabilities which can be retrieved by RRLP are supported",
 	"Additional Positioning Capabilities which can be retrieved by RRLP are not supported"
@@ -3531,13 +3627,24 @@ static const true_false_string gsm_a_gm_gps_c_vals = {
 	"Conventional GPS not supported"
 };
 
+static const true_false_string gsm_a_gm_motd_vals = {
+	"Multilateration Observed Time Difference supported",
+	"Multilateration Observed Time Difference not supported"
+};
+
+static const true_false_string gsm_a_gm_mta_a_vals = {
+	"Multilateration Timing Advance using Access Burst method supported",
+	"Multilateration Timing Advance using Access Burst method not supported"
+};
+
 static guint16
 de_gmm_ps_lcs_cap(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len _U_, gchar *add_string _U_, int string_len _U_)
 {
 	guint32	curr_offset;
 
 	curr_offset = offset;
-	proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, curr_offset << 3, 2, ENC_BIG_ENDIAN);
+	proto_tree_add_item(tree, hf_gsm_a_gm_mta_e, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+	proto_tree_add_item(tree, hf_gsm_a_gm_mta_r, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 	proto_tree_add_item(tree, hf_gsm_a_gm_apc, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 	proto_tree_add_item(tree, hf_gsm_a_gm_otd_a, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 	proto_tree_add_item(tree, hf_gsm_a_gm_otd_b, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
@@ -3546,6 +3653,12 @@ de_gmm_ps_lcs_cap(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 o
 	proto_tree_add_item(tree, hf_gsm_a_gm_gps_c, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 
 	curr_offset++;
+
+	if (len > 2) {
+		proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, curr_offset << 3, 6, ENC_BIG_ENDIAN);
+		proto_tree_add_item(tree, hf_gsm_a_gm_motd, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+		proto_tree_add_item(tree, hf_gsm_a_gm_mta_a, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+	}
 
 	EXTRANEOUS_DATA_CHECK(len, curr_offset - offset, pinfo, &ei_gsm_a_gm_extraneous_data);
 
@@ -3586,6 +3699,14 @@ de_gmm_net_feat_supp(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, gu
 /*
  * [7] 10.5.5.23a Additional network feature support
  */
+static const true_false_string gsm_a_gm_epco_value = {
+	"Extended protocol configuration options IE supported",
+	"Extended protocol configuration options IE not supported"
+};
+static const true_false_string gsm_a_gm_restrict_ec_value = {
+	"Enhanced coverage restricted",
+	"Enhanced coverage not restricted"
+};
 static const true_false_string gsm_a_gm_gprs_sms_value = {
 	"SMS via GPRS not supported",
 	"SMS via GPRS supported"
@@ -3597,7 +3718,9 @@ de_gmm_add_net_feat_supp(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_
 
 	curr_offset = offset;
 
-	proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, curr_offset << 3, 7, ENC_BIG_ENDIAN);
+	proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, curr_offset << 3, 5, ENC_BIG_ENDIAN);
+	proto_tree_add_item(tree, hf_gsm_a_gm_epco, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+	proto_tree_add_item(tree, hf_gsm_a_gm_restrict_ec, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 	proto_tree_add_item(tree, hf_gsm_a_gm_gprs_sms, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 	curr_offset++;
 
@@ -3834,6 +3957,40 @@ de_gmm_up_integ_ind(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, gui
 {
 	proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, (offset << 3) + 4, 3, ENC_BIG_ENDIAN);
 	proto_tree_add_item(tree, hf_gsm_a_gm_up_integ_ind, tvb, offset, 1, ENC_BIG_ENDIAN);
+
+	/* no length check possible */
+	return (1);
+}
+
+/* [14] 10.5.5.35 DCN-ID */
+static guint16
+de_gmm_dcn_id(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, guint32 offset, guint len _U_, gchar *add_string _U_, int string_len _U_)
+{
+	proto_tree_add_item(tree, hf_gsm_a_gm_dcn_id, tvb, offset, 2, ENC_BIG_ENDIAN);
+
+	return 2;
+}
+
+/* [14] 10.5.5.36 PLMN identity of the CN operator */
+static guint16
+de_gmm_plmn_id_cn_operator(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len _U_, gchar *add_string _U_, int string_len _U_)
+{
+	dissect_e212_mcc_mnc(tvb, pinfo, tree, offset, E212_NONE, TRUE);
+
+	return 3;
+}
+
+/* [14] 10.5.5.37 Non-3GPP NW provided policies */
+const true_false_string gsm_a_gm_n3en_ind_value = {
+	"Use of non-3GPP emergency numbers permitted",
+	"Use of non-3GPP emergency numbers not permitted"
+};
+
+static guint16
+de_gmm_non_3gpp_nw_prov_pol(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, guint32 offset, guint len _U_, gchar *add_string _U_, int string_len _U_)
+{
+	proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, (offset << 3) + 4, 3, ENC_BIG_ENDIAN);
+	proto_tree_add_item(tree, hf_gsm_a_gm_n3en_ind, tvb, offset, 1, ENC_BIG_ENDIAN);
 
 	/* no length check possible */
 	return (1);
@@ -4253,6 +4410,10 @@ static const range_string gsm_a_sm_pco_ms2net_prot_vals[] = {
 	{ 0x0014, 0x0014, "NBIFOM mode" },
 	{ 0x0015, 0x0015, "Non-IP Link MTU Request" },
 	{ 0x0016, 0x0016, "APN rate control support indicator" },
+	{ 0x0017, 0x0017, "3GPP PS data off UE status" },
+	{ 0x0018, 0x0018, "Reliable Data Service request indicator" },
+	{ 0x0019, 0x0019, "Additional APN rate control for exception data support indicator" },
+	{ 0x001a, 0x001a, "PDU session ID" },
 	{ 0xff00, 0xffff, "Operator Specific Use" },
 	{ 0, 0, NULL }
 };
@@ -4279,6 +4440,14 @@ static const range_string gsm_a_sm_pco_net2ms_prot_vals[] = {
 	{ 0x0014, 0x0014, "NBIFOM mode" },
 	{ 0x0015, 0x0015, "Non-IP Link MTU" },
 	{ 0x0016, 0x0016, "APN rate control parameters" },
+	{ 0x0017, 0x0017, "3GPP PS data off support indication" },
+	{ 0x0018, 0x0018, "Reliable Data Service accepted indicator" },
+	{ 0x0019, 0x0019, "Additional APN rate control for exception data parameters" },
+	{ 0x001a, 0x001a, "Reserved" },
+	{ 0x001b, 0x001b, "S-NSSAI" },
+	{ 0x001c, 0x001c, "QoS rules" },
+	{ 0x001d, 0x001d, "Session-AMBR" },
+	{ 0x001e, 0x001e, "PDU session address lifetime" },
 	{ 0xff00, 0xffff, "Operator Specific Use" },
 	{ 0, 0, NULL }
 };
@@ -4316,18 +4485,24 @@ static const value_string gsm_a_gm_apn_rate_ctrl_ul_time_unit_vals[] = {
 	{ 0, NULL }
 };
 
+static const value_string gsm_a_gm_sm_pco_3gpp_data_off_ue_status_vals[] = {
+	{ 1, "Deactivated"},
+	{ 2, "Activated"},
+	{ 0, NULL}
+};
+
 guint16
 de_sm_pco(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string _U_, int string_len _U_)
 {
 	proto_item        *generated_item;
 	guint32            curr_offset;
-	guint              curr_len;
+	gint               curr_len;
 	guchar             oct;
 	int                link_dir;
 	proto_item        *pco_item;
 	proto_tree        *pco_tree;
 
-	curr_len    = len;
+	curr_len    = (gint)len; /* length field is only 1 or 2 bytes long */
 	curr_offset = offset;
 
 	oct = tvb_get_guint8(tvb, curr_offset);
@@ -4351,7 +4526,7 @@ de_sm_pco(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, g
 	curr_len--;
 	curr_offset++;
 
-	while (curr_len > 0)
+	while (curr_len >= 3) /* 2 bytes protocol/container ID + 1 byte length */
 	{
 		guchar e_len;
 		guint16 prot;
@@ -4404,6 +4579,7 @@ de_sm_pco(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, g
 			case 0x0011:
 			case 0x0012:
 			case 0x0013:
+			case 0x0018:
 				break;
 			case 0x0004:
 				if ((link_dir == P2P_DIR_DL) && (e_len == 1)) {
@@ -4458,12 +4634,57 @@ de_sm_pco(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, g
 				break;
 			case 0x0016:
 				if (link_dir == P2P_DIR_DL) {
-					proto_tree_add_bits_item(tree, hf_gsm_a_spare_bits, tvb, (curr_offset << 3), 4, ENC_BIG_ENDIAN);
-					proto_tree_add_item(tree, hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_aer, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
-					proto_tree_add_item(tree, hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_ul_time_unit, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+					proto_tree_add_bits_item(pco_tree, hf_gsm_a_spare_bits, tvb, (curr_offset << 3), 4, ENC_BIG_ENDIAN);
+					proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_aer, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+					proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_ul_time_unit, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
 					if (e_len >= 4) {
-						proto_tree_add_item(tree, hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_max_ul_rate, tvb, curr_offset+1, 3, ENC_BIG_ENDIAN);
+						proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_max_ul_rate, tvb, curr_offset+1, 3, ENC_BIG_ENDIAN);
 					}
+				}
+				break;
+			case 0x0017:
+				if (link_dir == P2P_DIR_UL && e_len >= 1) {
+					proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_3gpp_data_off_ue_status, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+				}
+				break;
+			case 0x0019:
+				if (link_dir == P2P_DIR_DL) {
+					proto_tree_add_bits_item(pco_tree, hf_gsm_a_spare_bits, tvb, (curr_offset << 3), 5, ENC_BIG_ENDIAN);
+					proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_add_apn_rate_ctrl_params_ul_time_unit, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+					if (e_len >= 3) {
+						proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_add_apn_rate_ctrl_params_max_ul_rate, tvb, curr_offset+1, 2, ENC_BIG_ENDIAN);
+					}
+				}
+				break;
+			case 0x001a:
+				if (link_dir == P2P_DIR_UL) {
+					proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_pdu_session_id, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
+				}
+				break;
+			case 0x001b:
+				if (link_dir == P2P_DIR_DL && e_len >= 4) {
+					de_nas_5gs_mm_s_nssai(tvb, pco_tree, pinfo, curr_offset, e_len - 3, NULL, 0);
+					dissect_e212_mcc_mnc(tvb, pinfo, pco_tree, curr_offset + e_len - 3, E212_NONE, TRUE);
+				}
+				break;
+			case 0x001c:
+				if (link_dir == P2P_DIR_DL) {
+					de_nas_5gs_sm_qos_rules(tvb, pco_tree, pinfo, curr_offset, e_len, NULL, 0);
+				}
+				break;
+			case 0x001d:
+				if (link_dir == P2P_DIR_DL) {
+					de_nas_5gs_sm_qos_rules(tvb, pco_tree, pinfo, curr_offset, e_len, NULL, 0);
+				}
+				break;
+			case 0x001e:
+				if (link_dir == P2P_DIR_DL) {
+					de_nas_5gs_sm_session_ambr(tvb, pco_tree, pinfo, curr_offset, e_len, NULL, 0);
+				}
+				break;
+			case 0x001f:
+				if (link_dir == P2P_DIR_DL && e_len == 2) {
+					proto_tree_add_item(pco_tree, hf_gsm_a_gm_sm_pco_pdu_session_address_lifetime, tvb, curr_offset, 2, ENC_BIG_ENDIAN);
 				}
 				break;
 			default:
@@ -4499,15 +4720,17 @@ de_sm_pco(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, g
 				}
 			}
 		}
-
 		curr_len    -= e_len;
 		curr_offset += e_len;
 	}
-	curr_offset += curr_len;
 
-	EXTRANEOUS_DATA_CHECK(len, curr_offset - offset, pinfo, &ei_gsm_a_gm_extraneous_data);
+	if (curr_len < 0) {
+		proto_tree_add_expert(tree, pinfo, &ei_gsm_a_gm_not_enough_data, tvb, offset, len);
+	} else {
+		EXTRANEOUS_DATA_CHECK(len, curr_offset - offset, pinfo, &ei_gsm_a_gm_extraneous_data);
+	}
 
-	return (curr_offset - offset);
+	return len;
 }
 
 /*
@@ -4520,7 +4743,7 @@ static const value_string gsm_a_sm_pdp_type_org_vals[] = {
 	{ 0, NULL }
 };
 
-static guint16
+guint16
 de_sm_pdp_addr(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string _U_, int string_len _U_)
 {
 	guint32      curr_offset;
@@ -4543,6 +4766,7 @@ de_sm_pdp_addr(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offs
 		{
 			case 0x00: str = "Reserved, used in earlier version of this protocol"; break;
 			case 0x01: str = "PDP-type PPP"; break;
+			case 0x02: str = "non IP"; break;
 			default:   str = "reserved";
 		}
 	}
@@ -5139,6 +5363,21 @@ de_sm_re_attempt_ind(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 }
 
 /*
+ * [15] 10.5.6.5b Extended quality of service
+ */
+static guint16
+de_sm_ext_qos(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string _U_, int string_len _U_)
+{
+	guint32 curr_offset;
+
+	curr_offset = offset;
+
+	EXTRANEOUS_DATA_CHECK(len, curr_offset - offset, pinfo, &ei_gsm_a_gm_extraneous_data);
+
+	return len;
+}
+
+/*
  * [9] 10.5.6.6 SM cause
  */
 static const value_string gsm_a_sm_cause_vals[] = {
@@ -5172,6 +5411,8 @@ static const value_string gsm_a_sm_cause_vals[] = {
 	{ 0x33, "PDP type IPv6 only allowed" },
 	{ 0x34, "Single address bearers only allowed" },
 	{ 0x38, "Collision with network initiated request" },
+	{ 0x39, "PDP type IPv4v6 only allowed" },
+	{ 0x3a, "PDP type non IP only allowed" },
 	{ 0x3c, "Bearer handling not supported" },
 	{ 0x41, "Maximum number of PDP contexts reached" },
 	{ 0x42, "Requested APN not supported in current RAT and PLMN combination" },
@@ -5811,6 +6052,7 @@ static const value_string gsm_a_sm_req_type_vals[] = {
 	{ 0x02, "Handover" },
 	{ 0x03, "Unused. If received, the network shall interpret this as \"Initial request\"." },
 	{ 0x04, "Emergency" },
+	{ 0x06, "Handover of emergency bearer services" },
 	{ 0, NULL }
 };
 
@@ -5945,13 +6187,18 @@ guint16 (*gm_elem_fcn[])(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_
 	de_gmm_ext_drx_params,             /* Extended DRX parameters */
 	de_gmm_mac,                        /* Message authentication code */
 	de_gmm_up_integ_ind,               /* User Plane integrity indicator */
+	de_gmm_dcn_id,                     /* DCN-ID */
+	de_gmm_plmn_id_cn_operator,        /* PLMN identity of the CN operator */
+	de_gmm_non_3gpp_nw_prov_pol,       /* Non-3GPP NW provided policies */
 	/* Session Management Information Elements 10.5.6 */
 	de_sm_apn,                         /* Access Point Name */
 	de_sm_nsapi,                       /* Network Service Access Point Identifier */
 	de_sm_pco,                         /* Protocol Configuration Options */
+	de_sm_pco,                         /* Extended Protocol Configuration Options */
 	de_sm_pdp_addr,                    /* Packet Data Protocol Address */
 	de_sm_qos,                         /* Quality Of Service */
 	de_sm_re_attempt_ind,              /* Re-attempt indicator */
+	de_sm_ext_qos,                     /* Extended quality of service */
 	de_sm_cause,                       /* SM Cause */
 	de_sm_cause_2,                     /* SM Cause 2 */
 	de_sm_linked_ti,                   /* Linked TI */
@@ -5998,17 +6245,17 @@ dtap_gmm_attach_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MS_NET_CAP, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MS_NET_CAP, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_ATTACH_TYPE, GSM_A_PDU_TYPE_COMMON, DE_CIPH_KEY_SEQ_NUM);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_ATTACH_TYPE, GSM_A_PDU_TYPE_COMMON, DE_CIPH_KEY_SEQ_NUM, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_DRX_PARAM, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_DRX_PARAM, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, " - Old routing area identification");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, " - Old routing area identification", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MS_RAD_ACC_CAP, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MS_RAD_ACC_CAP, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV( 0x19, GSM_A_PDU_TYPE_GM, DE_P_TMSI_SIG, " - Old P-TMSI Signature");
 
@@ -6068,17 +6315,17 @@ dtap_gmm_attach_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_ATTACH_RES, GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND_H);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_ATTACH_RES, GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND_H, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO_2, " - Radio priority for TOM8");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO_2, " - Radio priority for TOM8", ei_gsm_a_gm_missing_mandatory_element);
 	curr_len++;
 	curr_offset--;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, " - Radio priority for SMS");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, " - Radio priority for SMS", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV( 0x19, GSM_A_PDU_TYPE_GM, DE_P_TMSI_SIG, NULL);
 
@@ -6119,6 +6366,12 @@ dtap_gmm_attach_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	ELEM_OPT_TLV(0x31, GSM_A_PDU_TYPE_GM, DE_MS_NET_CAP, " - Replayed MS network capability");
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_MS_RAD_ACC_CAP, " - Replayed MS Radio Access capability");
+
+	ELEM_OPT_TLV(0x65, GSM_A_PDU_TYPE_GM, DE_DCN_ID, NULL);
+
+	ELEM_OPT_TLV(0x63, GSM_A_PDU_TYPE_GM, DE_PLMN_ID_CN_OPERATOR, NULL);
+
+	ELEM_OPT_TV_SHORT(0xD0, GSM_A_PDU_TYPE_GM, DE_NON_3GPP_NW_PROV_POL, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6161,7 +6414,7 @@ dtap_gmm_attach_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x2A, GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER_2, " - T3302 value" );
 
@@ -6185,7 +6438,7 @@ dtap_gmm_detach_req_MT(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guin
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_DETACH_TYPE, GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND_H);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_DETACH_TYPE, GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND_H, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV( 0x25, GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL);
 
@@ -6204,7 +6457,7 @@ dtap_gmm_detach_req_MO(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guin
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_DETACH_TYPE, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_DETACH_TYPE, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x18, GSM_A_PDU_TYPE_COMMON, DE_MID, NULL);
 
@@ -6250,7 +6503,7 @@ dtap_gmm_detach_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 		return;
 	}
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE, ei_gsm_a_gm_missing_mandatory_element);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6270,13 +6523,15 @@ dtap_gmm_ptmsi_realloc_cmd(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, 
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, " - Allocated P-TMSI" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, " - Allocated P-TMSI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV( 0x19, GSM_A_PDU_TYPE_GM, DE_P_TMSI_SIG, " - P-TMSI Signature" );
+
+	ELEM_OPT_TLV(0x65, GSM_A_PDU_TYPE_GM, DE_DCN_ID, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6314,9 +6569,9 @@ dtap_gmm_auth_ciph_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guin
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_CIPH_ALG, GSM_A_PDU_TYPE_GM, DE_IMEISV_REQ);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_CIPH_ALG, GSM_A_PDU_TYPE_GM, DE_IMEISV_REQ, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_GM, DE_AC_REF_NUM_H);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_GM, DE_AC_REF_NUM_H, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV(0x21, GSM_A_PDU_TYPE_DTAP, DE_AUTH_PARAM_RAND, NULL);
 
@@ -6350,7 +6605,7 @@ dtap_gmm_auth_ciph_resp(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_AC_REF_NUM, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_AC_REF_NUM, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV(0x22, GSM_A_PDU_TYPE_DTAP, DE_AUTH_RESP_PARAM, NULL);
 
@@ -6395,7 +6650,7 @@ dtap_gmm_auth_ciph_fail(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x30, GSM_A_PDU_TYPE_DTAP, DE_AUTH_FAIL_PARAM, NULL);
 
@@ -6416,7 +6671,7 @@ dtap_gmm_ident_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_ID_TYPE_2, GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND_H);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_ID_TYPE_2, GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND_H, ei_gsm_a_gm_missing_mandatory_element);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6436,7 +6691,7 @@ dtap_gmm_ident_res(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6456,11 +6711,11 @@ dtap_gmm_rau_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 of
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_UPD_TYPE, GSM_A_PDU_TYPE_COMMON, DE_CIPH_KEY_SEQ_NUM);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_UPD_TYPE, GSM_A_PDU_TYPE_COMMON, DE_CIPH_KEY_SEQ_NUM, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, " - Old routing area identification");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, " - Old routing area identification", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MS_RAD_ACC_CAP, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MS_RAD_ACC_CAP, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV( 0x19, GSM_A_PDU_TYPE_GM, DE_P_TMSI_SIG, " - Old P-TMSI Signature" );
 
@@ -6530,11 +6785,11 @@ dtap_gmm_rau_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 of
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_GM, DE_UPD_RES);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_GM, DE_UPD_RES, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER, " - Periodic RA update timer");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER, " - Periodic RA update timer", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAI, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV( 0x19, GSM_A_PDU_TYPE_GM, DE_P_TMSI_SIG, NULL);
 
@@ -6582,6 +6837,12 @@ dtap_gmm_rau_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 of
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_MS_RAD_ACC_CAP, " - Replayed MS Radio Access capability");
 
+	ELEM_OPT_TLV(0x65, GSM_A_PDU_TYPE_GM, DE_DCN_ID, NULL);
+
+	ELEM_OPT_TLV(0x63, GSM_A_PDU_TYPE_GM, DE_PLMN_ID_CN_OPERATOR, NULL);
+
+	ELEM_OPT_TV_SHORT(0xD0, GSM_A_PDU_TYPE_GM, DE_NON_3GPP_NW_PROV_POL, NULL);
+
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
 
@@ -6624,9 +6885,9 @@ dtap_gmm_rau_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 of
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_GM, DE_FORCE_TO_STAND, GSM_A_PDU_TYPE_COMMON, DE_SPARE_NIBBLE, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV(0x2A, GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER_2, " - T3302 value");
 
@@ -6650,7 +6911,7 @@ dtap_gmm_status(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 off
 
 	pinfo->p2p_dir = P2P_DIR_UNKNOWN;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6700,10 +6961,10 @@ dtap_gmm_service_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_COMMON, DE_CIPH_KEY_SEQ_NUM, GSM_A_PDU_TYPE_GM, DE_SRVC_TYPE);
+	ELEM_MAND_VV_SHORT(GSM_A_PDU_TYPE_COMMON, DE_CIPH_KEY_SEQ_NUM, GSM_A_PDU_TYPE_GM, DE_SRVC_TYPE, ei_gsm_a_gm_missing_mandatory_element);
 
 	/* P-TMSI Mobile station identity 10.5.1.4 M LV 6 */
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_COMMON, DE_MID, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x32, GSM_A_PDU_TYPE_GM, DE_PDP_CONTEXT_STAT, NULL);
 
@@ -6755,7 +7016,7 @@ dtap_gmm_service_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_GMM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV(0x3A, GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER_2, " - T3346 value");
 
@@ -6780,13 +7041,13 @@ dtap_sm_act_pdp_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	/* MS to network */
 	pinfo->link_dir = P2P_DIR_UL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_NET_SAPI, " - Requested NSAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_NET_SAPI, " - Requested NSAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Requested QoS" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Requested QoS", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Requested PDP address" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Requested PDP address", ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x28, GSM_A_PDU_TYPE_GM, DE_ACC_POINT_NAME, NULL);
 
@@ -6797,6 +7058,10 @@ dtap_sm_act_pdp_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	ELEM_OPT_TV_SHORT(0xC0, GSM_A_PDU_TYPE_GM, DE_DEVICE_PROPERTIES, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6819,18 +7084,18 @@ dtap_sm_act_pdp_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	/* Network to MS*/
 	pinfo->link_dir = P2P_DIR_DL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Negotiated LLC SAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Negotiated LLC SAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Negotiated QoS" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Negotiated QoS", ei_gsm_a_gm_missing_mandatory_element);
 
 #if 0
 	/* This is done automatically */
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SPARE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SPARE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 	curr_offset--;
 	curr_len++;
 #endif
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x2B, GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - PDP address");
 
@@ -6845,6 +7110,10 @@ dtap_sm_act_pdp_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	ELEM_OPT_TV_SHORT(0xC0 , GSM_A_PDU_TYPE_GM, DE_SM_WLAN_OFFLOAD_ACCEPT, " - WLAN offload indication");
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6867,7 +7136,7 @@ dtap_sm_act_pdp_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	/* Network to MS*/
 	pinfo->link_dir = P2P_DIR_DL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x27, GSM_A_PDU_TYPE_GM, DE_PRO_CONF_OPT, NULL);
 
@@ -6876,6 +7145,8 @@ dtap_sm_act_pdp_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	ELEM_OPT_TLV(0x6B, GSM_A_PDU_TYPE_GM, DE_RE_ATTEMPT_IND, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6898,13 +7169,13 @@ dtap_sm_act_sec_pdp_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	/* MS to Network */
 	pinfo->link_dir = P2P_DIR_UL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_NET_SAPI, " - Requested NSAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_NET_SAPI, " - Requested NSAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Requested QoS" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Requested QoS", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_LINKED_TI, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_LINKED_TI, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	/* 3GPP TS 24.008 version 6.8.0 Release 6, 36 TFT Traffic Flow Template 10.5.6.12 O TLV 3-257 */
 	ELEM_OPT_TLV( 0x36, GSM_A_PDU_TYPE_GM, DE_TRAFFIC_FLOW_TEMPLATE, NULL);
@@ -6914,6 +7185,10 @@ dtap_sm_act_sec_pdp_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	ELEM_OPT_TV_SHORT(0xC0, GSM_A_PDU_TYPE_GM, DE_DEVICE_PROPERTIES, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6936,15 +7211,15 @@ dtap_sm_act_sec_pdp_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	/* Network to MS*/
 	pinfo->link_dir = P2P_DIR_DL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Negotiated LLC SAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Negotiated LLC SAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Negotiated QoS" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Negotiated QoS", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 #if 0
 	/* This is done automatically */
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SPARE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SPARE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 	curr_offset--;
 	curr_len++;
 #endif
@@ -6956,6 +7231,10 @@ dtap_sm_act_sec_pdp_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	ELEM_OPT_TV_SHORT(0xC0 , GSM_A_PDU_TYPE_GM, DE_SM_WLAN_OFFLOAD_ACCEPT, " - WLAN offload indication");
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -6978,7 +7257,7 @@ dtap_sm_act_sec_pdp_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	/* Network to MS*/
 	pinfo->link_dir = P2P_DIR_DL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x27, GSM_A_PDU_TYPE_GM, DE_PRO_CONF_OPT, NULL);
 
@@ -6987,6 +7266,8 @@ dtap_sm_act_sec_pdp_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	ELEM_OPT_TLV(0x6B, GSM_A_PDU_TYPE_GM, DE_RE_ATTEMPT_IND, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7009,13 +7290,15 @@ dtap_sm_req_pdp_act(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	/* Network to MS*/
 	pinfo->link_dir = P2P_DIR_DL;
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Offered PDP address" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Offered PDP address", ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x28, GSM_A_PDU_TYPE_GM, DE_ACC_POINT_NAME, NULL);
 
 	ELEM_OPT_TLV( 0x27, GSM_A_PDU_TYPE_GM, DE_PRO_CONF_OPT, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7038,11 +7321,13 @@ dtap_sm_req_pdp_act_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	/* MS to  Network */
 	pinfo->link_dir = P2P_DIR_UL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x27, GSM_A_PDU_TYPE_GM, DE_PRO_CONF_OPT, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7065,17 +7350,17 @@ dtap_sm_mod_pdp_req_net(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	/* Network to MS */
 	pinfo->link_dir = P2P_DIR_DL;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_RAD_PRIO, NULL, ei_gsm_a_gm_missing_mandatory_element);
 #if 0
 	/* This is done automatically */
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SPARE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SPARE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 	curr_offset--;
 	curr_len++;
 #endif
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - New QoS" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - New QoS", ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x2B, GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - PDP address");
 
@@ -7088,6 +7373,10 @@ dtap_sm_mod_pdp_req_net(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	ELEM_OPT_TV_SHORT(0xC0 , GSM_A_PDU_TYPE_GM, DE_SM_WLAN_OFFLOAD_ACCEPT, " - WLAN offload indication");
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7122,6 +7411,10 @@ dtap_sm_mod_pdp_req_ms(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guin
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
 
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
+
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
 
@@ -7146,6 +7439,8 @@ dtap_sm_mod_pdp_acc_ms(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guin
 	ELEM_OPT_TLV( 0x27, GSM_A_PDU_TYPE_GM, DE_PRO_CONF_OPT, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7182,6 +7477,10 @@ dtap_sm_mod_pdp_acc_net(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
 
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
+
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
 
@@ -7204,7 +7503,7 @@ dtap_sm_mod_pdp_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	/* pinfo->link_dir = LINK_DIR_UNKNOWN; */
 
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x27, GSM_A_PDU_TYPE_GM, DE_PRO_CONF_OPT, NULL);
 
@@ -7213,6 +7512,8 @@ dtap_sm_mod_pdp_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32
 	ELEM_OPT_TLV(0x6B, GSM_A_PDU_TYPE_GM, DE_RE_ATTEMPT_IND, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7234,7 +7535,7 @@ dtap_sm_deact_pdp_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint
 	pinfo->p2p_dir = P2P_DIR_UNKNOWN;
 	pinfo->link_dir = LINK_DIR_UNKNOWN;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TV_SHORT( 0x90, GSM_A_PDU_TYPE_GM, DE_TEAR_DOWN_IND, NULL);
 
@@ -7245,6 +7546,8 @@ dtap_sm_deact_pdp_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint
 	ELEM_OPT_TLV(0x37, GSM_A_PDU_TYPE_GM, DE_GPRS_TIMER_3, " - T3396 value");
 
 	ELEM_OPT_TV_SHORT(0xC0 , GSM_A_PDU_TYPE_GM, DE_SM_WLAN_OFFLOAD_ACCEPT, " - WLAN offload indication");
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7270,6 +7573,8 @@ dtap_sm_deact_pdp_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint
 
 	ELEM_OPT_TLV( 0x35, GSM_A_PDU_TYPE_GM, DE_MBMS_PROT_CONF_OPT, NULL);
 
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
 
@@ -7291,10 +7596,10 @@ dtap_sm_req_sec_pdp_act(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	pinfo->link_dir = P2P_DIR_DL;
 
 	/* Required QoS Quality of service 10.5.6.5 M LV 13-17 */
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Required QoS");
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_QOS, " - Required QoS", ei_gsm_a_gm_missing_mandatory_element);
 
 	/* Linked TI Linked TI 10.5.6.7 M LV 2-3 */
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_LINKED_TI, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_LINKED_TI, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	/* 36 TFT Traffic Flow Template 10.5.6.12 O TLV 3-257 */
 	ELEM_OPT_TLV( 0x36, GSM_A_PDU_TYPE_GM, DE_TRAFFIC_FLOW_TEMPLATE, NULL);
@@ -7306,6 +7611,10 @@ dtap_sm_req_sec_pdp_act(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, gui
 	ELEM_OPT_TV_SHORT(0xC0 , GSM_A_PDU_TYPE_GM, DE_SM_WLAN_OFFLOAD_ACCEPT, " - WLAN offload indication");
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
+
+	ELEM_OPT_TLV(0x5C, GSM_A_PDU_TYPE_GM, DE_EXT_QOS, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7328,12 +7637,14 @@ dtap_sm_req_sec_pdp_act_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo,
 	pinfo->link_dir = P2P_DIR_UL;
 
 	/* SM cause SM cause 10.5.6.6 M V 1 */
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	/* 27 Protocol configuration options Protocol configuration options 10.5.6.3 O TLV 3 - 253 */
 	ELEM_OPT_TLV( 0x27, GSM_A_PDU_TYPE_GM, DE_PRO_CONF_OPT, NULL);
 
 	ELEM_OPT_TLV(0x33, GSM_A_PDU_TYPE_GM, DE_NBIFOM_CONT, NULL);
+
+	ELEM_OPT_TLV_E(0x7B, GSM_A_PDU_TYPE_GM, DE_EXT_PRO_CONF_OPT, NULL);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7355,7 +7666,7 @@ dtap_sm_notif(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offse
 	pinfo->p2p_dir = P2P_DIR_UNKNOWN;
 	pinfo->link_dir = P2P_DIR_DL;
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_SM_NOTIF_IND, NULL);
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_SM_NOTIF_IND, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7377,7 +7688,7 @@ dtap_sm_status(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offs
 	pinfo->p2p_dir = P2P_DIR_UNKNOWN;
 	pinfo->link_dir = LINK_DIR_UNKNOWN;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	EXTRANEOUS_DATA_CHECK(curr_len, 0, pinfo, &ei_gsm_a_gm_extraneous_data);
 }
@@ -7399,19 +7710,19 @@ dtap_sm_act_mbms_req(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
 	/* Requested MBMS NSAPI Enhanced Network service access point identifier 10.5.6.16 M V */
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_ENH_NSAPI, " - Requested MBMS NSAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_ENH_NSAPI, " - Requested MBMS NSAPI", ei_gsm_a_gm_missing_mandatory_element);
 
 	/* Requested LLC SAPI LLC service access point identifier 10.5.6.9 M V 1 */
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Requested LLC SAPI", ei_gsm_a_gm_missing_mandatory_element);
 
 	/* Supported MBMS bearer capabilities MBMS bearer capabilities 10.5.6.14 M LV 2 - 3 */
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MBMS_BEARER_CAP, NULL );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_MBMS_BEARER_CAP, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	/* Requested multicast address Packet data protocol address 10.5.6.4 M LV 3 - 19 */
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Requested multicast address" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Requested multicast address", ei_gsm_a_gm_missing_mandatory_element);
 
 	/* Access point name Access point name 10.5.6.1 M LV 2 - 101 */
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_ACC_POINT_NAME, NULL );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_ACC_POINT_NAME, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	/* 35 MBMS protocol configuration options MBMS protocol configuration options 10.5.6.15 O TLV 3 - 253 */
 	ELEM_OPT_TLV( 0x35, GSM_A_PDU_TYPE_GM, DE_MBMS_PROT_CONF_OPT, NULL);
@@ -7437,9 +7748,9 @@ dtap_sm_act_mbms_acc(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_LV(  GSM_A_PDU_TYPE_GM, DE_TMGI, NULL);
+	ELEM_MAND_LV(  GSM_A_PDU_TYPE_GM, DE_TMGI, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_V(  GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Negotiated LLC SAPI");
+	ELEM_MAND_V(  GSM_A_PDU_TYPE_GM, DE_LLC_SAPI, " - Negotiated LLC SAPI", ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x35, GSM_A_PDU_TYPE_GM, DE_MBMS_PROT_CONF_OPT, NULL);
 
@@ -7462,7 +7773,7 @@ dtap_sm_act_mbms_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x35, GSM_A_PDU_TYPE_GM, DE_MBMS_PROT_CONF_OPT, NULL);
 
@@ -7489,11 +7800,11 @@ dtap_sm_req_mbms_act(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 
 	pinfo->p2p_dir = P2P_DIR_SENT;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_NET_SAPI, " - Linked NSAPI");
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_NET_SAPI, " - Linked NSAPI", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Offered multicast address" );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_PD_PRO_ADDR, " - Offered multicast address", ei_gsm_a_gm_missing_mandatory_element);
 
-	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_ACC_POINT_NAME, NULL );
+	ELEM_MAND_LV( GSM_A_PDU_TYPE_GM, DE_ACC_POINT_NAME, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x35, GSM_A_PDU_TYPE_GM, DE_MBMS_PROT_CONF_OPT, NULL);
 
@@ -7516,7 +7827,7 @@ dtap_sm_req_mbms_rej(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint3
 
 	pinfo->p2p_dir = P2P_DIR_RECV;
 
-	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL);
+	ELEM_MAND_V( GSM_A_PDU_TYPE_GM, DE_SM_CAUSE, NULL, ei_gsm_a_gm_missing_mandatory_element);
 
 	ELEM_OPT_TLV( 0x35, GSM_A_PDU_TYPE_GM, DE_MBMS_PROT_CONF_OPT, NULL);
 
@@ -8052,6 +8363,16 @@ proto_register_gsm_a_gm(void)
 		    FT_UINT8, BASE_HEX_DEC, NULL, 0x00,
 		    NULL, HFILL }
 		},
+		{ &hf_gsm_a_gm_mta_e,
+		  { "MTA-E", "gsm_a.gm.gmm.mta_e",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_mta_e_vals), 0x80,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_mta_r,
+		  { "MTA-R", "gsm_a.gm.gmm.mta_r",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_mta_r_vals), 0x40,
+		    NULL, HFILL }
+		},
 		{ &hf_gsm_a_gm_apc,
 		  { "APC", "gsm_a.gm.gmm.apc",
 		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_apc_vals), 0x20,
@@ -8082,6 +8403,16 @@ proto_register_gsm_a_gm(void)
 		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_gps_c_vals), 0x01,
 		    NULL, HFILL }
 		},
+		{ &hf_gsm_a_gm_motd,
+		  { "MOTD", "gsm_a.gm.gmm.motd",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_motd_vals), 0x02,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_mta_a,
+		  { "MTA-A", "gsm_a.gm.gmm.mta_a",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_mta_a_vals), 0x01,
+		    NULL, HFILL }
+		},
 		{ &hf_gsm_a_gm_lcs_molr,
 		  { "LCS-MOLR", "gsm_a.gm.gmm.lcs_molr",
 		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_lcs_molr_value), 0x08,
@@ -8101,6 +8432,16 @@ proto_register_gsm_a_gm(void)
 		  { "EMC BS", "gsm_a.gm.gmm.emc_bs",
 		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_emc_bs_value), 0x01,
 		    "Emergency bearer services indicator", HFILL }
+		},
+		{ &hf_gsm_a_gm_epco,
+		  { "ePCO", "gsm_a.gm.gmm.epco",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_epco_value), 0x04,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_restrict_ec,
+		  { "RestrictEC", "gsm_a.gm.gmm.restrict_ec",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_restrict_ec_value), 0x02,
+		    NULL, HFILL }
 		},
 		{ &hf_gsm_a_gm_gprs_sms,
 		  { "GPRS-SMS", "gsm_a.gm.gmm.gprs_sms",
@@ -8154,7 +8495,17 @@ proto_register_gsm_a_gm(void)
 		},
 		{ &hf_gsm_a_gm_up_integ_ind,
 		  { "Integrity indicator", "gsm_a.gm.gmm.up_integ_ind",
-		    FT_BOOLEAN, BASE_NONE, TFS(&gsm_a_gm_up_integ_ind_value), 0x0,
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_up_integ_ind_value), 0x01,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_dcn_id,
+		  { "DCN-ID", "gsm_a.gm.gmm.dcn_id",
+		    FT_UINT16, BASE_HEX, NULL, 0x0,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_n3en_ind,
+		  { "N3EN indicator", "gsm_a.gm.gmm.n3en_ind",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gm_n3en_ind_value), 0x01,
 		    NULL, HFILL }
 		},
 		{ &hf_gsm_a_sm_pdp_type_org,
@@ -8430,6 +8781,21 @@ proto_register_gsm_a_gm(void)
 		{ &hf_gsm_a_gmm_net_cap_up_gia7,
 		  { "GIA/7", "gsm_a.gm.gmm.net_cap.gia7",
 		    FT_BOOLEAN, 8, TFS(&gsm_a_gmm_net_cap_gia_vals), 0x08,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gmm_net_cap_epco_ie_ind,
+		  { "ePCO IE indicator", "gsm_a.gm.gmm.net_cap.epco_ie_ind",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gmm_net_cap_epco_ie_ind_vals), 0x04,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gmm_net_cap_restrict_use_enh_cov,
+		  { "Restriction on use of enhanced coverage capability", "gsm_a.gm.gmm.net_cap.restrict_use_enh_cov",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gmm_net_cap_restrict_use_enh_cov_vals), 0x02,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gmm_net_cap_dc_eutra_nr_cap,
+		  { "Dual connectivity of E-UTRA with NR capability", "gsm_a.gm.gmm.net_cap.dc_eutra_nr_cap",
+		    FT_BOOLEAN, 8, TFS(&gsm_a_gmm_net_cap_dc_eutra_nr_cap_vals), 0x01,
 		    NULL, HFILL }
 		},
 		{ &hf_gsm_a_sm_tmgi,
@@ -8822,9 +9188,19 @@ proto_register_gsm_a_gm(void)
 		    FT_BOOLEAN, BASE_NONE, TFS(&tfs_supported_not_supported), 0x0,
 		    NULL, HFILL }
 		},
-		{ &hf_gsm_a_gm_rac_ext_ec_pch_mon_support,
+		{ &hf_gsm_a_gm_rac_ec_pch_mon_support,
 		  { "(EC-)PCH monitoring support", "gsm_a.gm.gmm.rac.ec_pch_mon_support",
-		    FT_UINT8, BASE_NONE, VALS(gsm_a_gm_ec_pch_mon_support_vals), 0x0,
+		    FT_UINT8, BASE_DEC, VALS(gsm_a_gm_ec_pch_mon_support_vals), 0x0,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_rac_ms_sync_accuracy,
+		  { "MS Sync Accuracy", "gsm_a.gm.gmm.rac.ms_sync_accuracy",
+		    FT_UINT8, BASE_DEC, NULL, 0x0,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_rac_ext_ec_ul_cov_enh_support,
+		  { "EC uplink coverage enhancement support", "gsm_a.gm.gmm.rac.ec_ul_cov_enh_support",
+		    FT_BOOLEAN, BASE_NONE, TFS(&tfs_supported_not_supported), 0x0,
 		    NULL, HFILL }
 		},
 		{ &hf_gsm_a_sm_ti_flag,
@@ -8850,6 +9226,31 @@ proto_register_gsm_a_gm(void)
 		{ &hf_gsm_a_gm_sm_pco_apn_rate_ctrl_params_max_ul_rate,
 		  { "Maximum uplink rate", "gsm_a.gm.sm.pco.apn_rate_ctrl_params.max_ul_rate",
 		    FT_UINT24, BASE_DEC|BASE_UNIT_STRING, &units_message_messages, 0x0,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_sm_pco_3gpp_data_off_ue_status,
+		  { "3GPP PS data off UE status", "gsm_a.gm.sm.pco.3gpp_data_off_ue_status",
+		    FT_UINT8, BASE_DEC, VALS(gsm_a_gm_sm_pco_3gpp_data_off_ue_status_vals), 0x0,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_sm_pco_add_apn_rate_ctrl_params_ul_time_unit,
+		  { "Uplink time unit", "gsm_a.gm.sm.pco.add_apn_rate_ctrl_params.ul_time_unit",
+		    FT_UINT8, BASE_DEC, VALS(gsm_a_gm_apn_rate_ctrl_ul_time_unit_vals), 0x07,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_sm_pco_add_apn_rate_ctrl_params_max_ul_rate,
+		  { "Additional uplink rate for exception data", "gsm_a.gm.sm.pco.add_apn_rate_ctrl_params.max_ul_rate",
+		    FT_UINT16, BASE_DEC|BASE_UNIT_STRING, &units_message_messages, 0x0,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_sm_pco_pdu_session_id,
+		  { "PDU session identity", "gsm_a.gm.sm.pco.pdu_session_id",
+		    FT_UINT8, BASE_DEC, VALS(nas_5gs_pdu_session_id_vals), 0x0,
+		    NULL, HFILL }
+		},
+		{ &hf_gsm_a_gm_sm_pco_pdu_session_address_lifetime,
+		  { "PDU session address lifetime", "gsm_a.gm.sm.pco.pdu_session_address_lifetime",
+		    FT_UINT8, BASE_DEC|BASE_UNIT_STRING, &units_second_seconds, 0x0,
 		    NULL, HFILL }
 		},
 		/* Generated from convert_proto_tree_add_text.pl */
@@ -8900,7 +9301,8 @@ proto_register_gsm_a_gm(void)
 		{ &ei_gsm_a_gm_extraneous_data, { "gsm_a.gm.extraneous_data", PI_PROTOCOL, PI_NOTE, "Extraneous Data, dissector bug or later version spec (report to wireshark.org)", EXPFILL }},
 		{ &ei_gsm_a_gm_not_enough_data, { "gsm_a.gm.not_enough_data", PI_PROTOCOL, PI_WARN, "Not enough data", EXPFILL }},
 		{ &ei_gsm_a_gm_undecoded, { "gsm_a.gm.undecoded", PI_UNDECODED, PI_WARN, "Not decoded", EXPFILL }},
-		{ &ei_gsm_a_gm_apn_too_long, { "gsm_a.gm.apn_to_long", PI_PROTOCOL, PI_ERROR, "APN encoding has more than 100 octets", EXPFILL }}
+		{ &ei_gsm_a_gm_apn_too_long, { "gsm_a.gm.apn_to_long", PI_PROTOCOL, PI_ERROR, "APN encoding has more than 100 octets", EXPFILL }},
+		{ &ei_gsm_a_gm_missing_mandatory_element, { "gsm_a.gm.missing_mandatory_element", PI_PROTOCOL, PI_ERROR, "Missing Mandatory element, rest of dissection is suspect", EXPFILL }},
 	};
 
 	expert_module_t* expert_gsm_a_gm;

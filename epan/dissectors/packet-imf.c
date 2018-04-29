@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1999 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -155,6 +143,14 @@ static dissector_handle_t imf_handle;
 
 static expert_field ei_imf_unknown_param = EI_INIT;
 
+/* Used for IMF Export Object feature */
+typedef struct _imf_eo_t {
+  gchar    *filename;
+  gchar    *sender_data;
+  gchar    *subject_data;
+  guint32  payload_len;
+  gchar    *payload_data;
+} imf_eo_t;
 
 static gboolean
 imf_eo_packet(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_, const void *data)
@@ -744,7 +740,11 @@ dissect_imf(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
     eo_info->subject_data = "";
   }
 
+  /* Want to preserve existing protocol name and show that it is carrying IMF */
+  col_append_str(pinfo->cinfo, COL_PROTOCOL, "|");
+  col_set_fence(pinfo->cinfo, COL_PROTOCOL);
   col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+
   col_clear(pinfo->cinfo, COL_INFO);
 
   item = proto_tree_add_item(tree, proto_imf, tvb, 0, -1, ENC_NA);

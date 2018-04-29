@@ -8,20 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "config.h"
 
@@ -78,7 +65,7 @@ static void packet_range_calc(packet_range_t *range) {
      * the capture_file structure, updating them whenever we
      * filter the display, etc..
      */
-    if (range->cf->frames != NULL) {
+    if (range->cf->provider.frames != NULL) {
         /* The next for-loop is used to obtain the amount of packets
          * to be processed and is used to present the information in
          * the Save/Print As widget.
@@ -89,7 +76,7 @@ static void packet_range_calc(packet_range_t *range) {
          */
 
         for(framenum = 1; framenum <= range->cf->count; framenum++) {
-            packet = frame_data_sequence_find(range->cf->frames, framenum);
+            packet = frame_data_sequence_find(range->cf->provider.frames, framenum);
 
             if (range->cf->current_frame == packet) {
                 range->selected_packet = framenum;
@@ -134,7 +121,7 @@ static void packet_range_calc(packet_range_t *range) {
         }
 
         for(framenum = 1; framenum <= range->cf->count; framenum++) {
-            packet = frame_data_sequence_find(range->cf->frames, framenum);
+            packet = frame_data_sequence_find(range->cf->provider.frames, framenum);
 
             if (framenum >= mark_low &&
                 framenum <= mark_high)
@@ -203,9 +190,9 @@ static void packet_range_calc_user(packet_range_t *range) {
      * help, but if the user specified about *half* the packets in
      * the range, that won't help, either.
      */
-    if (range->cf->frames != NULL) {
+    if (range->cf->provider.frames != NULL) {
         for(framenum = 1; framenum <= range->cf->count; framenum++) {
-            packet = frame_data_sequence_find(range->cf->frames, framenum);
+            packet = frame_data_sequence_find(range->cf->provider.frames, framenum);
 
             if (value_is_in_range(range->user_range, framenum)) {
                 range->user_range_cnt++;

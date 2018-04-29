@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -225,10 +213,6 @@ static int global_linktype = -1;
 /* Global variables */
 static int linktype = -1;
 static gboolean info_added = FALSE;
-
-static const true_false_string open_closed = {
-  "Open", "Closed"
-};
 
 static const value_string message_type[] = {
   { RPCAP_MSG_ERROR,              "Error"                       },
@@ -1242,7 +1226,7 @@ proto_register_rpcap (void)
         TFS(&tfs_yes_no), FLAG_DGRAM, NULL, HFILL } },
     { &hf_flags_serveropen,
       { "Server open", "rpcap.flags.serveropen", FT_BOOLEAN, 16,
-        TFS(&open_closed), FLAG_SERVEROPEN, NULL, HFILL } },
+        TFS(&tfs_open_closed), FLAG_SERVEROPEN, NULL, HFILL } },
     { &hf_flags_inbound,
       { "Inbound", "rpcap.flags.inbound", FT_BOOLEAN, 16,
         TFS(&tfs_yes_no), FLAG_INBOUND, NULL, HFILL } },

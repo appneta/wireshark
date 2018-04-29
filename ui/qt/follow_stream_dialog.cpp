@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "follow_stream_dialog.h"
 #include <ui_follow_stream_dialog.h>
@@ -40,14 +27,14 @@
 
 #include "wsutil/file_util.h"
 #include "wsutil/str_util.h"
-#include "ws_version_info.h"
+#include "version_info.h"
 
 #include "ws_symbol_export.h"
 
-#include "color_utils.h"
+#include <ui/qt/utils/color_utils.h>
 
 #include "progress_frame.h"
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 
 #include <QElapsedTimer>
 #include <QKeyEvent>
@@ -83,7 +70,8 @@ FollowStreamDialog::FollowStreamDialog(QWidget &parent, CaptureFile &cf, follow_
     last_from_server_(0),
     turns_(0),
     save_as_(false),
-    use_regex_find_(false)
+    use_regex_find_(false),
+    terminating_(false)
 {
     ui->setupUi(this);
     loadGeometry(parent.width() * 2 / 3, parent.height());
@@ -144,7 +132,8 @@ FollowStreamDialog::FollowStreamDialog(QWidget &parent, CaptureFile &cf, follow_
             this, SLOT(fillHintLabel(int)));
     connect(ui->teStreamContent, SIGNAL(mouseClickedOnTextCursorPosition(int)),
             this, SLOT(goToPacketForTextPos(int)));
-    connect(&cap_file_, SIGNAL(captureFileClosing()), this, SLOT(captureFileClosing()));
+    connect(&cap_file_, SIGNAL(captureEvent(CaptureEvent)),
+            this, SLOT(captureEvent(CaptureEvent)));
 
     fillHintLabel(-1);
 }
@@ -241,9 +230,9 @@ void FollowStreamDialog::useRegexFind(bool use_regex)
 {
     use_regex_find_ = use_regex;
     if (use_regex_find_)
-        ui->lFind->setText("Regex Find:");
+        ui->lFind->setText(tr("Regex Find:"));
     else
-        ui->lFind->setText("Find:");
+        ui->lFind->setText(tr("Find:"));
 }
 
 void FollowStreamDialog::findText(bool go_back)
@@ -304,6 +293,9 @@ void FollowStreamDialog::helpButton()
 
 void FollowStreamDialog::backButton()
 {
+    if (terminating_)
+        return;
+
     output_filter_ = previous_filter_;
 
     close();
@@ -311,6 +303,9 @@ void FollowStreamDialog::backButton()
 
 void FollowStreamDialog::filterOut()
 {
+    if (terminating_)
+        return;
+
     output_filter_ = filter_out_filter_;
 
     close();
@@ -318,6 +313,8 @@ void FollowStreamDialog::filterOut()
 
 void FollowStreamDialog::close()
 {
+    terminating_ = true;
+
     // Update filter - Use:
     //     previous_filter if 'Close' (passed in follow() method)
     //     filter_out_filter_ if 'Filter Out This Stream' (built by appending !current_stream to previous_filter)
@@ -373,9 +370,12 @@ void FollowStreamDialog::on_streamNumberSpinBox_valueChanged(int stream_num)
     }
 }
 
-// Not sure why we have to do this manually.
 void FollowStreamDialog::on_buttonBox_rejected()
 {
+    // Ignore the close button if FollowStreamDialog::close() is running.
+    if (terminating_)
+        return;
+
     WiresharkDialog::reject();
 }
 
@@ -530,7 +530,7 @@ void FollowStreamDialog::addText(QString text, gboolean is_from_server, guint32 
         tcf = ui->teStreamContent->currentCharFormat();
         tcf.setBackground(palette().window().color());
         tcf.setForeground(palette().windowText().color());
-        ui->teStreamContent->insertPlainText(tr("\n[Stream output truncated]"));
+        ui->teStreamContent->insertPlainText("\n" + tr("[Stream output truncated]"));
         ui->teStreamContent->moveCursor(QTextCursor::End);
     } else {
         ui->teStreamContent->verticalScrollBar()->setValue(cur_pos);
@@ -931,7 +931,7 @@ bool FollowStreamDialog::follow(QString previous_filter, bool use_stream_index, 
     wmem_free(NULL, port0);
     wmem_free(NULL, port1);
 
-    both_directions_string = QString("Entire conversation (%1)")
+    both_directions_string = tr("Entire conversation (%1)")
             .arg(gchar_free_to_qstring(format_size(
                                             follow_info_.bytes_written[0] + follow_info_.bytes_written[1],
                     format_size_unit_bytes|format_size_prefix_si)));
@@ -950,15 +950,23 @@ bool FollowStreamDialog::follow(QString previous_filter, bool use_stream_index, 
 
     updateWidgets(false);
     endRetapPackets();
+
+    if (prefs.restore_filter_after_following_stream) {
+        emit updateFilter(previous_filter_, TRUE);
+    }
+
     return true;
 }
 
-void FollowStreamDialog::captureFileClosing()
+void FollowStreamDialog::captureEvent(CaptureEvent e)
 {
-    QString tooltip = tr("File closed.");
-    ui->streamNumberSpinBox->setToolTip(tooltip);
-    ui->streamNumberLabel->setToolTip(tooltip);
-    WiresharkDialog::captureFileClosing();
+    if ((e.captureContext() == CaptureEvent::File) &&
+            (e.eventType() == CaptureEvent::Closing)) {
+            QString tooltip = tr("File closed.");
+            ui->streamNumberSpinBox->setToolTip(tooltip);
+            ui->streamNumberLabel->setToolTip(tooltip);
+            WiresharkDialog::captureFileClosing();
+    }
 }
 
 /*

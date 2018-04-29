@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -32,7 +20,6 @@
 #include <epan/wmem/wmem.h>
 #include <epan/expert.h>
 #include <epan/range.h>
-#include <epan/oui.h>
 #include <epan/prefs.h>
 #include <epan/strutil.h>
 #include <epan/to_str.h>
@@ -45,7 +32,6 @@
 
 /* Forward declarations */
 void proto_register_thread_coap(void);
-void proto_reg_handoff_thread_coap(void);
 
 void proto_register_thread_address(void);
 void proto_reg_handoff_thread_address(void);
@@ -780,7 +766,7 @@ static void create_thread_temp_keys(GByteArray *seq_ctr_bytes, guint16 src_pan, 
 }
 
 /* Set MAC key for Thread hash */
-static gboolean set_thread_mac_key(ieee802154_packet * packet, unsigned char* key, unsigned char* alt_key, ieee802154_key_t* uat_key)
+static guint set_thread_mac_key(ieee802154_packet *packet, unsigned char *key, unsigned char *alt_key, ieee802154_key_t *uat_key)
 {
     GByteArray *seq_ctr_bytes = NULL;
 
@@ -792,7 +778,7 @@ static gboolean set_thread_mac_key(ieee802154_packet * packet, unsigned char* ke
     {
         /* This is the well-known Thread key. No need for an alternative key */
         memcpy(key, thread_well_known_key, IEEE802154_CIPHER_SIZE);
-        return TRUE;
+        return 1;
     }
     if (seq_ctr_bytes != NULL) {
         create_thread_temp_keys(seq_ctr_bytes, packet->src_pan, uat_key, key, NULL);
@@ -800,14 +786,14 @@ static gboolean set_thread_mac_key(ieee802154_packet * packet, unsigned char* ke
         seq_ctr_bytes->data[3] ^= 0x80;
         create_thread_temp_keys(seq_ctr_bytes, packet->src_pan, uat_key, alt_key, NULL);
         g_byte_array_free(seq_ctr_bytes, TRUE);
-        return TRUE;
+        return 2;
     }
 
-    return FALSE;
+    return 0;
 }
 
 /* Set MLE key for Thread hash */
-static gboolean set_thread_mle_key(ieee802154_packet * packet, unsigned char* key, unsigned char* alt_key, ieee802154_key_t* uat_key)
+static guint set_thread_mle_key(ieee802154_packet *packet, unsigned char *key, unsigned char *alt_key, ieee802154_key_t *uat_key)
 {
     GByteArray *seq_ctr_bytes = NULL;
     if (packet->key_id_mode == KEY_ID_MODE_KEY_INDEX) {
@@ -833,10 +819,10 @@ static gboolean set_thread_mle_key(ieee802154_packet * packet, unsigned char* ke
         seq_ctr_bytes->data[3] ^= 0x80;
         create_thread_temp_keys(seq_ctr_bytes, packet->src_pan, uat_key, NULL, alt_key);
         g_byte_array_free(seq_ctr_bytes, TRUE);
-        return TRUE;
+        return 2;
     }
 
-    return FALSE;
+    return 0;
 }
 
 static guint
@@ -899,8 +885,8 @@ get_chancount(tvbuff_t *tvb)
                     int i, j;
                     guint8 entries = 0;
                     gint32 check_len = tlv_len;
-                    guint8 check_offset = offset + 1; /* Channel page first */
-                    guint8 masklen;
+                    gint check_offset = offset + 1; /* Channel page first */
+                    guint16 masklen;
 
                     /* Check consistency of entries */
                     while (check_len > 0) {
@@ -1386,7 +1372,7 @@ dissect_thread_mc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
                         expert_add_info(pinfo, proto_root, &ei_thread_mc_len_size_mismatch);
                         proto_tree_add_item(tlv_tree, hf_thread_mc_tlv_unknown, tvb, offset, tlv_len, ENC_NA);
                     } else {
-                        struct e_in6_addr prefix;
+                        ws_in6_addr prefix;
 
                         memset(&prefix, 0, sizeof(prefix));
                         tvb_memcpy(tvb, (guint8 *)&prefix.bytes, offset, tlv_len);
@@ -1679,8 +1665,6 @@ dissect_thread_mc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
                     tvbuff_t *sub_tvb;
                     guint16 src_port;
                     guint16 dst_port;
-                    udp_hdr_t *udp_hdr;
-                    guint8 *buffer;
 
                     src_port = tvb_get_ntohs(tvb, offset);
                     proto_tree_add_item(tlv_tree, hf_thread_mc_tlv_udp_encap_src_port, tvb, offset, 2, ENC_BIG_ENDIAN);
@@ -1692,10 +1676,9 @@ dissect_thread_mc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
                     if (tlv_len >= 4)
                     {
                         /* Allocate a buffer for the fake UDP datagram and create the fake header. */
-                        buffer = (guint8 *)wmem_alloc(pinfo->pool, sizeof(udp_hdr_t) + (tlv_len - 4));
+                        udp_hdr_t* udp_hdr = (udp_hdr_t *)wmem_alloc(pinfo->pool, sizeof(udp_hdr_t) + (tlv_len - 4));
 
                         /* Create pseudo UDP header */
-                        udp_hdr = (udp_hdr_t *)buffer;
                         udp_hdr->src_port = g_htons(src_port);
                         udp_hdr->dst_port = g_htons(dst_port);
                         udp_hdr->length = g_htons(tlv_len + 4); /* Includes UDP header length */
@@ -1703,7 +1686,7 @@ dissect_thread_mc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
                         /* Copy UDP payload in */
                         tvb_memcpy(tvb, udp_hdr + 1, offset, tlv_len - 4);
                         /* Create child tvb */
-                        sub_tvb = tvb_new_child_real_data(tvb, buffer, tlv_len + 4, tvb_reported_length(tvb) + 4);
+                        sub_tvb = tvb_new_child_real_data(tvb, (guint8 *)udp_hdr, tlv_len + 4, tvb_reported_length(tvb) + 4);
                         call_dissector(thread_udp_handle, sub_tvb, pinfo, tree);
                     }
                     offset += (tlv_len-4);
@@ -1743,8 +1726,8 @@ dissect_thread_mc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
                     int i;
                     guint8 entries = 0;
                     gint32 check_len = tlv_len;
-                    guint8 check_offset = offset + 1; /* Channel page first */
-                    guint8 masklen;
+                    gint check_offset = offset + 1; /* Channel page first */
+                    guint16 masklen;
 
                     /* Check consistency of entries */
                     while (check_len > 0) {
@@ -1948,7 +1931,7 @@ dissect_thread_nwd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *da
                 {
                     guint8 prefix_len;
                     guint8 prefix_byte_len;
-                    struct e_in6_addr prefix;
+                    ws_in6_addr prefix;
                     address prefix_addr;
 
                     /* Domain ID */
@@ -2117,19 +2100,18 @@ static int
 dissect_thread_coap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
     coap_info           *coinfo;
-    gchar               *uri;
+    const gchar         *uri;
     gchar               **tokens;
 
     /* Obtain the CoAP info */
     coinfo = (coap_info *)p_get_proto_data(wmem_file_scope(), pinfo, proto_coap, 0);
-    uri = (gchar *)wmem_strbuf_get_str(coinfo->uri_str_strbuf);
+    uri = wmem_strbuf_get_str(coinfo->uri_str_strbuf);
 
-    tokens = g_strsplit(uri, "/", 3);
+    tokens = wmem_strsplit(wmem_packet_scope(), uri, "/", 3);
     if ((tokens[0] != NULL) && (tokens[1] != NULL)) {
         /* No need to create a subset as we are dissecting the tvb as it is */
         dissector_try_string(thread_coap_namespace, tokens[1], tvb, pinfo, tree, NULL);
     }
-    g_strfreev(tokens);
 
     return tvb_captured_length(tvb);
 }
@@ -2787,7 +2769,7 @@ proto_register_thread_mc(void)
         { &hf_thread_mc_tlv_vendor_stack_ver_oui,
             { "OUI",
             "thread_meshcop.tlv.vendor_stack_ver_oui",
-            FT_UINT24, BASE_HEX, VALS(oui_vals), 0x0,
+            FT_UINT24, BASE_OUI, NULL, 0x0,
             NULL,
             HFILL }
         },

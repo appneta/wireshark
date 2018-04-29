@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __PRINT_H__
@@ -71,6 +59,8 @@ typedef enum {
 struct _output_fields;
 typedef struct _output_fields output_fields_t;
 
+typedef GSList* (*proto_node_children_grouper_func)(proto_node *node);
+
 WS_DLL_PUBLIC output_fields_t* output_fields_new(void);
 WS_DLL_PUBLIC void output_fields_free(output_fields_t* info);
 WS_DLL_PUBLIC void output_fields_add(output_fields_t* info, const gchar* field);
@@ -92,8 +82,14 @@ WS_DLL_PUBLIC gboolean proto_tree_print(print_dissections_e print_dissections,
 WS_DLL_PUBLIC gboolean print_hex_data(print_stream_t *stream, epan_dissect_t *edt);
 
 WS_DLL_PUBLIC void write_pdml_preamble(FILE *fh, const gchar* filename);
-WS_DLL_PUBLIC void write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, pf_flags protocolfilter_flags, epan_dissect_t *edt, FILE *fh);
+WS_DLL_PUBLIC void write_pdml_proto_tree(output_fields_t* fields, gchar **protocolfilter, pf_flags protocolfilter_flags, epan_dissect_t *edt, column_info *cinfo, FILE *fh, gboolean use_color);
 WS_DLL_PUBLIC void write_pdml_finale(FILE *fh);
+
+// Implementations of proto_node_children_grouper_func
+// Groups each child separately
+WS_DLL_PUBLIC GSList *proto_node_group_children_by_unique(proto_node *node);
+// Groups children by json key (children with the same json key get put in the same group
+WS_DLL_PUBLIC GSList *proto_node_group_children_by_json_key(proto_node *node);
 
 WS_DLL_PUBLIC void write_json_preamble(FILE *fh);
 WS_DLL_PUBLIC void write_json_proto_tree(output_fields_t* fields,
@@ -101,17 +97,22 @@ WS_DLL_PUBLIC void write_json_proto_tree(output_fields_t* fields,
                                          gboolean print_hex_data,
                                          gchar **protocolfilter,
                                          pf_flags protocolfilter_flags,
-                                         epan_dissect_t *edt, FILE *fh);
+                                         epan_dissect_t *edt,
+                                         column_info *cinfo,
+                                         proto_node_children_grouper_func node_children_grouper,
+                                         FILE *fh);
 WS_DLL_PUBLIC void write_json_finale(FILE *fh);
 
 WS_DLL_PUBLIC void write_ek_proto_tree(output_fields_t* fields,
+                                       gboolean print_summary,
                                        gboolean print_hex_data,
                                        gchar **protocolfilter,
                                        pf_flags protocolfilter_flags,
-                                       epan_dissect_t *edt, FILE *fh);
+                                       epan_dissect_t *edt,
+                                       column_info *cinfo, FILE *fh);
 
 WS_DLL_PUBLIC void write_psml_preamble(column_info *cinfo, FILE *fh);
-WS_DLL_PUBLIC void write_psml_columns(epan_dissect_t *edt, FILE *fh);
+WS_DLL_PUBLIC void write_psml_columns(epan_dissect_t *edt, FILE *fh, gboolean use_color);
 WS_DLL_PUBLIC void write_psml_finale(FILE *fh);
 
 WS_DLL_PUBLIC void write_csv_column_titles(column_info *cinfo, FILE *fh);

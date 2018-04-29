@@ -13,19 +13,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * References:
  * RFC 3775, Mobility Support in IPv6
@@ -57,6 +45,7 @@
 #include <epan/expert.h>
 #include <epan/ip_opts.h>
 #include <epan/sminmpec.h>
+#include <epan/addr_resolv.h>
 
 #include <wsutil/str_util.h>
 
@@ -65,7 +54,7 @@
 #include "packet-e164.h"
 #include "packet-e212.h"
 #include "packet-gsm_a_common.h"
-#include "packet-ipv6.h"
+#include "packet-ip.h"
 
 void proto_register_mip6(void);
 void proto_reg_handoff_mip6(void);
@@ -2510,7 +2499,7 @@ dissect_mip6_opt_vsm(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
 
     proto_tree_add_item_ret_uint(opt_tree, hf_mip6_vsm_vid, tvb,
             offset, MIP6_VSM_VID_LEN, ENC_BIG_ENDIAN, &vendorid);
-    proto_item_append_text(ti, ": %s", val_to_str_ext_const(vendorid, &sminmpec_values_ext, "<unknown>"));
+    proto_item_append_text(ti, ": %s", enterprises_lookup(vendorid, "<unknown>"));
     offset += 4;
 
     next_tvb = tvb_new_subset_remaining(tvb, offset);
@@ -2798,7 +2787,6 @@ dissect_pmip6_opt_ipv4ha(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
     field_tree = mip6_fixed_option_header(tree, pinfo, tvb, proto_mip6_option_ipv4ha, ett_mip6_opt_ipv4ha, &ti, option_len, MIP6_IPV4HA_LEN);
 
     proto_tree_add_item(field_tree, hf_mip6_ipv4ha_preflen, tvb, offset, 1, ENC_BIG_ENDIAN);
-    offset++;
     proto_tree_add_item(field_tree, hf_mip6_ipv4ha_p_flag, tvb, offset, 2, ENC_BIG_ENDIAN);
     offset += 2;
 
@@ -3808,16 +3796,8 @@ dissect_mip6(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     len = (tvb_get_guint8(tvb, MIP6_HLEN_OFF) + 1) * 8;
     pproto = tvb_get_guint8(tvb, MIP6_PROTO_OFF);
 
-    root_tree = tree;
-    if (pinfo->dst.type == AT_IPv6) {
-        ipv6_pinfo_t *ipv6_pinfo = p_get_ipv6_pinfo(pinfo);
-
-        ipv6_pinfo->frag_plen -= len;
-        if (ipv6_pinfo->ipv6_tree != NULL) {
-            root_tree = ipv6_pinfo->ipv6_tree;
-            ipv6_pinfo->ipv6_item_len += len;
-        }
-    }
+    root_tree = p_ipv6_pinfo_select_root(pinfo, tree);
+    p_ipv6_pinfo_add_len(pinfo, len);
 
     ti = proto_tree_add_item(root_tree, proto_mip6, tvb, 0, len, ENC_NA);
     mip6_tree = proto_item_add_subtree(ti, ett_mip6);
@@ -3951,13 +3931,13 @@ dissect_mip6(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     if ((type == MIP6_FNA) && (pproto == IP_PROTO_IPV6)) {
         col_set_str(pinfo->cinfo, COL_INFO, "Fast Neighbor Advertisement[Fast Binding Update]");
         next_tvb = tvb_new_subset_remaining(tvb, len + 8);
-        ipv6_dissect_next(pproto, next_tvb, pinfo, tree, (ws_ip *)data);
+        ipv6_dissect_next(pproto, next_tvb, pinfo, tree, (ws_ip6 *)data);
     }
 
     if ((type == MIP6_FBACK) && (pproto == IP_PROTO_AH)) {
         col_set_str(pinfo->cinfo, COL_INFO, "Fast Binding Acknowledgment");
         next_tvb = tvb_new_subset_remaining(tvb, len + offset);
-        ipv6_dissect_next(pproto, next_tvb, pinfo, tree, (ws_ip *)data);
+        ipv6_dissect_next(pproto, next_tvb, pinfo, tree, (ws_ip6 *)data);
     }
 
     return tvb_captured_length(tvb);
@@ -4479,7 +4459,7 @@ proto_register_mip6(void)
     },
     { &hf_mip6_vsm_vid,
       { "Vendor Id", "mip6.vsm.vendorId",
-        FT_UINT32, BASE_DEC|BASE_EXT_STRING, &sminmpec_values_ext, 0x0,
+        FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
         NULL, HFILL }
     },
     { &hf_mip6_vsm_subtype,

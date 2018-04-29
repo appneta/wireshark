@@ -19,19 +19,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -43,7 +31,7 @@
 #include <epan/expert.h>
 #include <epan/prefs.h>
 #include <epan/wmem/wmem.h>
-#include "oui.h"
+#include <epan/oui.h>
 
 
 #define DEFAULT_COLUMN_INFO            1
@@ -168,6 +156,10 @@ static int hf_ieee_802_1_vlan_name_length = -1;
 static int hf_ieee_802_1_vlan_name = -1;
 static int hf_ieee_802_1_proto_id_length = -1;
 static int hf_ieee_802_1_proto_id = -1;
+static int hf_ieee_802_1_aggregation_status = -1;
+static int hf_ieee_802_1_aggregation_status_cap = -1;
+static int hf_ieee_802_1_aggregation_status_enabled = -1;
+static int hf_ieee_802_1_aggregated_port_id = -1;
 static int hf_ieee_8021qau_cnpv_prio0 = -1;
 static int hf_ieee_8021qau_cnpv_prio1 = -1;
 static int hf_ieee_8021qau_cnpv_prio2 = -1;
@@ -276,6 +268,12 @@ static int hf_ieee_802_1qbg_evb_configure_caps_vdp = -1;
 static int hf_ieee_802_1qbg_evb_supported_vsi = -1;
 static int hf_ieee_802_1qbg_evb_configured_vsi = -1;
 static int hf_ieee_802_1qbg_evb_retrans_timer = -1;
+static int hf_ieee_802_3br_aec = -1;
+static int hf_ieee_802_3br_aec_support = -1;
+static int hf_ieee_802_3br_aec_enable = -1;
+static int hf_ieee_802_3br_aec_active = -1;
+static int hf_ieee_802_3br_aec_addfragsize = -1;
+static int hf_ieee_802_3br_aec_reserved = -1;
 static int hf_media_tlv_subtype = -1;
 static int hf_media_tlv_subtype_caps = -1;
 static int hf_media_tlv_subtype_caps_llpd = -1;
@@ -388,6 +386,8 @@ static int hf_avaya_ipphone_mask = -1;
 static int hf_avaya_ipphone_gateway = -1;
 static int hf_unknown_subtype = -1;
 static int hf_unknown_subtype_content = -1;
+static int hf_iana_subtype = -1;
+static int hf_iana_mudurl = -1;
 
 /* Initialize the subtree pointers */
 static gint ett_lldp = -1;
@@ -428,6 +428,7 @@ static gint ett_org_spc_ieee_802_3_2 = -1;
 static gint ett_org_spc_ieee_802_3_3 = -1;
 static gint ett_org_spc_ieee_802_3_4 = -1;
 static gint ett_org_spc_ieee_802_3_5 = -1;
+static gint ett_org_spc_ieee_802_3_7 = -1;
 
 static gint ett_org_spc_media_1 = -1;
 static gint ett_org_spc_media_2 = -1;
@@ -453,7 +454,9 @@ static gint ett_802_3_flags = -1;
 static gint ett_802_3_autoneg_advertised = -1;
 static gint ett_802_3_power = -1;
 static gint ett_802_3_aggregation = -1;
+static gint ett_802_1_aggregation = -1;
 static gint ett_802_1qbg_capabilities_flags = -1;
+static gint ett_802_3br_capabilities_flags = -1;
 static gint ett_media_capabilities = -1;
 static gint ett_profinet_period = -1;
 static gint ett_cisco_fourwire_tlv = -1;
@@ -466,6 +469,7 @@ static gint ett_org_spc_hytec_trace_reply = -1;
 static expert_field ei_lldp_bad_length = EI_INIT;
 static expert_field ei_lldp_bad_length_excess = EI_INIT;
 static expert_field ei_lldp_bad_type = EI_INIT;
+static expert_field ei_lldp_tlv_deprecated = EI_INIT;
 
 /* TLV Types */
 #define END_OF_LLDPDU_TLV_TYPE		0x00	/* Mandatory */
@@ -486,15 +490,15 @@ static expert_field ei_lldp_bad_type = EI_INIT;
 #define TLV_INFO_LEN(value)	((value) & TLV_INFO_LEN_MASK)
 
 static const value_string tlv_types[] = {
-	{ END_OF_LLDPDU_TLV_TYPE,			"End of LLDPDU"},
-	{ CHASSIS_ID_TLV_TYPE,				"Chassis Id"},
-	{ PORT_ID_TLV_TYPE,					"Port Id"},
-	{ TIME_TO_LIVE_TLV_TYPE,			"Time to Live"},
+	{ END_OF_LLDPDU_TLV_TYPE,		"End of LLDPDU"},
+	{ CHASSIS_ID_TLV_TYPE,			"Chassis Id"},
+	{ PORT_ID_TLV_TYPE,			"Port Id"},
+	{ TIME_TO_LIVE_TLV_TYPE,		"Time to Live"},
 	{ PORT_DESCRIPTION_TLV_TYPE,		"Port Description"},
-	{ SYSTEM_NAME_TLV_TYPE,				"System Name"},
+	{ SYSTEM_NAME_TLV_TYPE,			"System Name"},
 	{ SYSTEM_DESCRIPTION_TLV_TYPE,		"System Description"},
 	{ SYSTEM_CAPABILITIES_TLV_TYPE,		"System Capabilities"},
-	{ MANAGEMENT_ADDR_TLV_TYPE,			"Management Address"},
+	{ MANAGEMENT_ADDR_TLV_TYPE,		"Management Address"},
 	{ ORGANIZATION_SPECIFIC_TLV_TYPE,	"Organization Specific"},
 	{ 0, NULL}
 };
@@ -570,6 +574,7 @@ static const value_string ieee_802_1_subtypes[] = {
 	{ 0x02, "Port and Protocol VLAN ID" },
 	{ 0x03, "VLAN Name" },
 	{ 0x04, "Protocol Identity" },
+	{ 0x07,	"Link Aggregation" },
 	{ 0x08,	"Congestion Notification" },
 	{ 0x09, "ETS Configuration" },
 	{ 0x0A, "ETS Recommendation" },
@@ -606,6 +611,7 @@ static const value_string ieee_802_3_subtypes[] = {
 	{ 0x03,	"Link Aggregation" },
 	{ 0x04,	"Maximum Frame Size" },
 	{ 0x05,	"EEE (Energy-Efficient Ethernet)" },
+	{ 0x07,	"IEEE 802.3br Additional Ethernet capabilities" },
 	{ 0, NULL }
 };
 
@@ -683,6 +689,14 @@ static const value_string avaya_dot1q_subtypes[] = {
 	{ 2, "No Tagging" },
 	{ 0, NULL }
 };
+
+/* IANA Subtypes */
+static const value_string iana_subtypes[] = {
+	{  1, "Manufacturer Usage Description URL" },
+	{  0, NULL }
+};
+
+
 
 /* 802.3 Power Class */
 static const value_string power_class_802_3[] = {
@@ -795,10 +809,13 @@ static const value_string civic_address_type_values[] = {
  * Operational MAU Type field.
  *
  * These values are taken from the DESCRIPTION field of the dot3MauType
- * objects defined in RFC 3636 (or subsequent revisions).
+ * objects defined in RFC 4836
  */
 
+/* from rfc 4836 dot3MauType */
 static const value_string operational_mau_type_values[] = {
+	{ 0,	"other or unknown" },
+	/* rfc 1515 values */
 	{ 1,	"AUI - no internal MAU, view from AUI" },
 	{ 2,	"10Base5 - thick coax MAU" },
 	{ 3,	"Foirl - FOIRL MAU" },
@@ -808,6 +825,7 @@ static const value_string operational_mau_type_values[] = {
 	{ 7,	"10BaseFB - sync fiber MAU" },
 	{ 8,	"10BaseFL - async fiber MAU" },
 	{ 9,	"10Broad36 - broadband DTE MAU" },
+	/* rfc 2239 updates */
 	{ 10,	"10BaseTHD - UTP MAU, half duplex mode" },
 	{ 11,	"10BaseTFD - UTP MAU, full duplex mode" },
 	{ 12,	"10BaseFLHD - async fiber MAU, half duplex mode" },
@@ -819,6 +837,7 @@ static const value_string operational_mau_type_values[] = {
 	{ 18,	"100BaseFXFD - X fiber over PMT, full duplex mode" },
 	{ 19,	"100BaseT2HD - 2 pair category 3 UTP, half duplex mode" },
 	{ 20,	"100BaseT2DF - 2 pair category 3 UTP, full duplex mode" },
+	/* rfc 2668 updates */
 	{ 21,	"1000BaseXHD - PCS/PMA, unknown PMD, half duplex mode" },
 	{ 22,	"1000BaseXFD - PCS/PMA, unknown PMD, full duplex mode" },
 	{ 23,	"1000BaseLXHD - Fiber over long-wavelength laser, half duplex mode" },
@@ -829,6 +848,7 @@ static const value_string operational_mau_type_values[] = {
 	{ 28,	"1000BaseCXFD - Copper over 150-Ohm balanced cable, full duplex mode" },
 	{ 29,	"1000BaseTHD - Four-pair Category 5 UTP, half duplex mode" },
 	{ 30,	"1000BaseTFD - Four-pair Category 5 UTP, full duplex mode" },
+	/* rfc 3636 updates */
 	{ 31,	"10GigBaseX - X PCS/PMA, unknown PMD." },
 	{ 32,	"10GigBaseLX4 - X fiber over WWDM optics" },
 	{ 33,	"10GigBaseR - R PCS/PMA, unknown PMD." },
@@ -839,6 +859,20 @@ static const value_string operational_mau_type_values[] = {
 	{ 38,	"10GigBaseEW - W fiber over 1550 nm optics" },
 	{ 39,	"10GigBaseLW - W fiber over 1310 nm optics" },
 	{ 40,	"10GigBaseSW - W fiber over 850 nm optics" },
+	/* rfc 4836 updates */
+	{ 41,	"10GBASE-CX4 - X copper over 8 pair 100-Ohm balanced cable" },
+	{ 42,	"2BASE-TL - Voice grade UTP copper, up to 2700m, optional PAF" },
+	{ 43,	"10PASS-TS - Voice grade UTP copper, up to 750m, optional PAF" },
+	{ 44,	"100BASE-BX10D - One single-mode fiber OLT, long wavelength, 10km" },
+	{ 45,	"100BASE-BX10U - One single-mode fiber ONU, long wavelength, 10km" },
+	{ 46,	"100BASE-LX10 - One single-mode fiber ONU, long wavelength, 10km" },
+	{ 47,	"1000BASE-BX10D - One single-mode fiber OLT, long wavelength, 10km" },
+	{ 48,	"1000BASE-BX10U - One single-mode fiber ONU, long wavelength, 10km" },
+	{ 49,	"1000BASE-LX10 - Two sigle-mode fiber, long wavelength, 10km" },
+	{ 50,	"1000BASE-PX10D - One single-mode fiber EPON OLT, 10km" },
+	{ 51,	"1000BASE-PX10U - One single-mode fiber EPON ONU, 10km" },
+	{ 52,	"1000BASE-PX20D - One single-mode fiber EPON OLT, 20km" },
+	{ 53,	"1000BASE-PX20U - One single-mode fiber EPON ONU, 20km" },
 	{ 0, NULL }
 };
 
@@ -1034,6 +1068,13 @@ static const value_string hytec_mc[] = {
 #define EVB_CAPA_RTE		0x0004
 #define EVB_CAPA_ECP		0x0002
 #define EVB_CAPA_VDP		0x0001
+
+/* IEEE 802.3br Additional Ethernet Capabilities flags */
+#define IEEE_802_3BR_AEC_SUPPORT		0x0001
+#define IEEE_802_3BR_AEC_ENABLE			0x0002
+#define IEEE_802_3BR_AEC_ACTIVE			0x0004
+#define IEEE_802_3BR_AEC_ADDFRAGSIZE		0x0018
+#define IEEE_802_3BR_AEC_RESERVED		0xFFE0
 
 #define MAX_MAC_LEN	6
 
@@ -1992,6 +2033,7 @@ dissect_ieee_802_1_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, 
 	guint16 dcbApp, appCount;
 
 	proto_tree	*vlan_flags_tree = NULL;
+	proto_tree	*mac_phy_flags = NULL;
 	proto_tree	*apptlv_tree = NULL;
 	proto_item	*tf = NULL;
 
@@ -2065,6 +2107,22 @@ dissect_ieee_802_1_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, 
 			offset += tempByte;
 		}
 
+		break;
+	}
+	case 0x07:	/* Link Aggregation */
+	{
+		/* Get protocol id length */
+		tf = proto_tree_add_item(tree, hf_ieee_802_1_aggregation_status, tvb, offset, 1, ENC_BIG_ENDIAN);
+		mac_phy_flags = proto_item_add_subtree(tf, ett_802_1_aggregation);
+		proto_tree_add_item(mac_phy_flags, hf_ieee_802_1_aggregation_status_cap, tvb, offset, 1, ENC_BIG_ENDIAN);
+		proto_tree_add_item(mac_phy_flags, hf_ieee_802_1_aggregation_status_enabled, tvb, offset, 1, ENC_BIG_ENDIAN);
+
+		offset++;
+
+		/* Get aggregated port id */
+		proto_tree_add_item(tree, hf_ieee_802_1_aggregated_port_id, tvb, offset, 4, ENC_BIG_ENDIAN);
+
+		offset+=4;
 		break;
 	}
 	case 0x8:	/* Congestion Notification */
@@ -2405,12 +2463,12 @@ dissect_ieee_802_3_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, 
 	proto_tree	*mac_phy_flags = NULL;
 	proto_tree	*autoneg_advertised_subtree = NULL;
 
-	proto_item	*tf = NULL;
+	proto_item	*tf = NULL, *subitem;
 
 	/* Get subtype */
 	subType = tvb_get_guint8(tvb, offset);
 
-	proto_tree_add_item(tree, hf_ieee_802_3_subtype, tvb, offset, 1, ENC_BIG_ENDIAN);
+	subitem = proto_tree_add_item(tree, hf_ieee_802_3_subtype, tvb, offset, 1, ENC_BIG_ENDIAN);
 
 	offset++;
 
@@ -2557,6 +2615,7 @@ dissect_ieee_802_3_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, 
 	case 0x03:	/* Link Aggregation */
 	{
 		/* Get aggregation status */
+		expert_add_info(pinfo, subitem, &ei_lldp_tlv_deprecated);
 		tf = proto_tree_add_item(tree, hf_ieee_802_3_aggregation_status, tvb, offset, 1, ENC_BIG_ENDIAN);
 		mac_phy_flags = proto_item_add_subtree(tf, ett_802_3_aggregation);
 		proto_tree_add_item(mac_phy_flags, hf_ieee_802_3_aggregation_status_cap, tvb, offset, 1, ENC_BIG_ENDIAN);
@@ -2595,6 +2654,21 @@ dissect_ieee_802_3_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, 
 		proto_tree_add_item(tree, hf_ieee_802_3_eee_echo_receive, tvb, offset, 2, ENC_BIG_ENDIAN);
 		offset+=2;
 
+		break;
+	}
+	case 0x07:	/* IEEE 802.3br Frame Preemption Protocol */
+	{
+		static const int * preemption_capabilities[] = {
+			&hf_ieee_802_3br_aec_support,
+			&hf_ieee_802_3br_aec_enable,
+			&hf_ieee_802_3br_aec_active,
+			&hf_ieee_802_3br_aec_addfragsize,
+			&hf_ieee_802_3br_aec_reserved,
+			NULL
+		};
+
+		/* Get Additional Ethernet Capabilities */
+		proto_tree_add_bitmask(tree, tvb, offset, hf_ieee_802_3br_aec, ett_802_3br_capabilities_flags, preemption_capabilities, ENC_BIG_ENDIAN);
 		break;
 	}
 	}
@@ -3593,6 +3667,34 @@ dissect_avaya_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint
 	}
 }
 
+/* Dissect IANA OUI TLVs */
+static void
+dissect_iana_tlv(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint32 offset)
+{
+	guint16 msg_len;
+	guint8  subType;
+
+	/* Get subtype */
+	subType = tvb_get_guint8(tvb, offset);
+
+	proto_tree_add_item(tree, hf_iana_subtype, tvb, offset, 1, ENC_BIG_ENDIAN);
+	offset++;
+
+	msg_len=tvb_reported_length_remaining(tvb, offset);
+	switch (subType)
+	{
+	case 0x01: /* MUDURL */
+		if ( msg_len > 0 )
+			proto_tree_add_item(tree, hf_iana_mudurl, tvb, offset, msg_len, ENC_ASCII|ENC_NA);
+		break;
+
+	default:
+		proto_tree_add_item(tree, hf_unknown_subtype_content, tvb, offset, -1, ENC_NA);
+		break;
+	}
+}
+
+
 /* Dissect Organizational Specific TLV */
 static gint32
 dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 offset, profinet_lldp_column_info *pn_lldp_column_info)
@@ -3620,12 +3722,9 @@ dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tre
 	if( dissector_try_uint(oui_unique_code_table, oui, tvb, pinfo, tree) ) {
 		return tLength;
 	}
-	/* maintain previous OUI names.  If not included, look in manuf database for OUI */
-	ouiStr = val_to_str_const(oui, oui_vals, "Unknown");
-	if (strcmp(ouiStr, "Unknown")==0) {
-		ouiStr = uint_get_manuf_name_if_known(oui);
-		if(ouiStr==NULL) ouiStr="Unknown";
-	}
+	/* Look in manuf database for OUI */
+	ouiStr = uint_get_manuf_name_if_known(oui);
+	if(ouiStr==NULL) ouiStr="Unknown";
 
 	/* Set a default value */
 	tempTree = ett_org_spc_ProfinetSubTypes_1;
@@ -3678,6 +3777,8 @@ dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tre
 		case 4:	tempTree = ett_org_spc_ieee_802_3_4;
 			break;
 		case 5:	tempTree = ett_org_spc_ieee_802_3_5;
+			break;
+		case 7:	tempTree = ett_org_spc_ieee_802_3_7;
 			break;
 		}
 		break;
@@ -3746,6 +3847,9 @@ dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tre
 	case OUI_AVAYA:
 		subTypeStr = val_to_str(subType, avaya_subtypes, "Unknown subtype (0x%x)");
 		break;
+	case OUI_IANA:
+		subTypeStr = val_to_str(subType, iana_subtypes, "Unknown subtype (0x%x)");
+		break;
 	default:
 		subTypeStr = wmem_strdup_printf(wmem_packet_scope(), "Unknown (%d)",subType);
 		break;
@@ -3794,6 +3898,10 @@ dissect_organizational_specific_tlv(tvbuff_t *tvb, packet_info *pinfo, proto_tre
 	case OUI_AVAYA:
 		dissect_avaya_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
 		break;
+	case OUI_IANA:
+		dissect_iana_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
+		break;
+
 	default:
 		dissect_oui_default_tlv(tvb, pinfo, org_tlv_tree, (offset + 5));
 	}
@@ -4145,8 +4253,8 @@ proto_register_lldp(void)
 			NULL, 0, NULL, HFILL }
 		},
 		{ &hf_org_spc_oui,
-			{ "Organization Unique Code", "lldp.orgtlv.oui", FT_UINT24, BASE_HEX,
-			VALS(oui_vals), 0x0, NULL, HFILL }
+			{ "Organization Unique Code", "lldp.orgtlv.oui", FT_UINT24, BASE_OUI,
+			NULL, 0x0, NULL, HFILL }
 		},
 		{ &hf_dcbx_type,
 			{ "DCBx Protocol", "lldp.dcbx.proto", FT_UINT8, BASE_HEX,
@@ -4363,6 +4471,22 @@ proto_register_lldp(void)
 		{ &hf_ieee_802_1_proto_id,
 			{ "Protocol Identity", "lldp.ieee.802_1.proto.id", FT_STRINGZ, BASE_NONE,
 			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_ieee_802_1_aggregation_status,
+			{ "Aggregation Status", "lldp.ieee.802_1.aggregation_status", FT_UINT8, BASE_HEX,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_ieee_802_1_aggregation_status_cap,
+			{ "Aggregation Capability", "lldp.ieee.802_1.aggregation_status.cap", FT_BOOLEAN, 8,
+			TFS(&tfs_yes_no), 0x01, NULL, HFILL }
+		},
+		{ &hf_ieee_802_1_aggregation_status_enabled,
+			{ "Aggregation Status", "lldp.ieee.802_1.aggregation_status.enabled", FT_BOOLEAN, 8,
+			TFS(&tfs_enabled_disabled), 0x02, NULL, HFILL }
+		},
+		{ &hf_ieee_802_1_aggregated_port_id,
+			{ "Aggregated Port Id", "lldp.ieee.802_1.aggregated_port_id", FT_UINT32, BASE_DEC,
+			NULL, 0, NULL, HFILL }
 		},
 		{ &hf_ieee_8021qau_cnpv_prio0,
 			{ "Priority 0 CNPV Capability", "lldp.ieee.802_1qau.cnpv.prio0", FT_BOOLEAN, 8,
@@ -4795,6 +4919,30 @@ proto_register_lldp(void)
 		{ &hf_ieee_802_1qbg_evb_retrans_timer,
 			{ "Retransmission timer exponent", "lldp.ieee.802_1qbg.evb_retrans_timer", FT_UINT8, BASE_DEC,
 			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_ieee_802_3br_aec,
+			{ "Additional Ethernet Capabilities", "lldp.ieee.802_3br.eac", FT_UINT16, BASE_HEX,
+			NULL, 0x0, NULL, HFILL }
+		},
+		{ &hf_ieee_802_3br_aec_support,
+			{ "Preemption capabilities support", "lldp.ieee.802_3br.aec.support", FT_BOOLEAN, 16,
+			TFS(&tfs_supported_not_supported), IEEE_802_3BR_AEC_SUPPORT, NULL, HFILL }
+		},
+		{ &hf_ieee_802_3br_aec_enable,
+			{ "Preemption capabilities enable", "lldp.ieee.802_3br.aec.enable", FT_BOOLEAN, 16,
+			TFS(&tfs_enabled_disabled), IEEE_802_3BR_AEC_ENABLE, NULL, HFILL }
+		},
+		{ &hf_ieee_802_3br_aec_active,
+			{ "Preemption capabilities active", "lldp.ieee.802_3br.aec.active", FT_BOOLEAN, 16,
+			TFS(&tfs_active_inactive), IEEE_802_3BR_AEC_ACTIVE, NULL, HFILL }
+		},
+		{ &hf_ieee_802_3br_aec_addfragsize,
+			{ "Additional Fragment Size", "lldp.ieee.802_3br.aec.addfragsize", FT_UINT16, BASE_DEC,
+			NULL, IEEE_802_3BR_AEC_ADDFRAGSIZE, NULL, HFILL }
+		},
+		{ &hf_ieee_802_3br_aec_reserved,
+			{ "Reserved", "lldp.ieee.802_3br.aec.reserved", FT_UINT16, BASE_HEX,
+			NULL, IEEE_802_3BR_AEC_RESERVED, NULL, HFILL }
 		},
 		{ &hf_media_tlv_subtype,
 			{ "Media Subtype",	"lldp.media.subtype", FT_UINT8, BASE_HEX,
@@ -5237,6 +5385,14 @@ proto_register_lldp(void)
 			{ "Gateway IP", "lldp.avaya.ipphone.gateway", FT_IPv4, BASE_NONE,
 			NULL, 0x0, NULL, HFILL }
 		},
+		{ &hf_iana_subtype,
+			{ "IANA Subtype", "lldp.iana.subtype", FT_UINT8, BASE_HEX,
+			  VALS(iana_subtypes), 0x0, NULL, HFILL }
+		},
+		{ &hf_iana_mudurl,
+			{ "Manufacturer Usage Description URL", "lldp.iana.mudurl", FT_STRING, BASE_NONE,
+			NULL, 0x0, NULL, HFILL }
+		},
 		{ &hf_unknown_subtype,
 			{ "Unknown Subtype","lldp.unknown_subtype", FT_UINT8, BASE_DEC,
 			NULL, 0x0, NULL, HFILL }
@@ -5287,6 +5443,7 @@ proto_register_lldp(void)
 		&ett_org_spc_ieee_802_3_3,
 		&ett_org_spc_ieee_802_3_4,
 		&ett_org_spc_ieee_802_3_5,
+		&ett_org_spc_ieee_802_3_7,
 		&ett_org_spc_media_1,
 		&ett_org_spc_media_2,
 		&ett_org_spc_media_3,
@@ -5309,7 +5466,9 @@ proto_register_lldp(void)
 		&ett_802_3_autoneg_advertised,
 		&ett_802_3_power,
 		&ett_802_3_aggregation,
+		&ett_802_1_aggregation,
 		&ett_802_1qbg_capabilities_flags,
+		&ett_802_3br_capabilities_flags,
 		&ett_media_capabilities,
 		&ett_profinet_period,
 		&ett_cisco_fourwire_tlv,
@@ -5324,6 +5483,7 @@ proto_register_lldp(void)
 		{ &ei_lldp_bad_length, { "lldp.incorrect_length", PI_MALFORMED, PI_WARN, "Invalid length, too short", EXPFILL }},
 		{ &ei_lldp_bad_length_excess, { "lldp.excess_length", PI_MALFORMED, PI_WARN, "Invalid length, greater than expected", EXPFILL }},
 		{ &ei_lldp_bad_type, { "lldp.bad_type", PI_MALFORMED, PI_WARN, "Incorrect type", EXPFILL }},
+		{ &ei_lldp_tlv_deprecated, { "lldp.tlv_deprecated", PI_PROTOCOL, PI_WARN, "TLV has been deprecated", EXPFILL }},
 	};
 
 	static const enum_val_t column_info_options[] = {

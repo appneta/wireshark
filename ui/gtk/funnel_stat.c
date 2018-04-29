@@ -56,6 +56,8 @@
 #include "ui/gtk/gtkglobals.h"
 #include "ui/gtk/old-gtk-compat.h"
 
+#include "globals.h"
+
 void register_tap_listener_gtkfunnel(void);
 
 struct _funnel_text_window_t {
@@ -516,7 +518,7 @@ static gboolean funnel_open_file(funnel_ops_id_t *ops_id _U_, const char* fname,
     /* This closes the current file if it succeeds. */
     if (cf_open(&cfile, fname, WTAP_TYPE_AUTO, FALSE, &err) != CF_OK) {
         *err_str = g_strdup(g_strerror(err));
-        if (rfcode != NULL) dfilter_free(rfcode);
+        dfilter_free(rfcode);
         return FALSE;
     }
 

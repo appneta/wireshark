@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -30,6 +18,10 @@
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <stdlib.h>
+
+#ifdef HAVE_SYS_TIME_H
+	#include <sys/time.h>
+#endif
 
 #ifdef HAVE_SYS_SOCKET_H
 	#include <sys/socket.h>
@@ -112,6 +104,8 @@ static int list_config(char *interface)
 	printf("arg {number=%u}{call=--payload}{display=Payload type}"
 		"{type=string}{default=data}{tooltip=The type used to describe the payload in the exported pdu format}\n",
 		inc++);
+
+	extcap_config_debug(&inc);
 
 	return EXIT_SUCCESS;
 }
@@ -277,7 +271,7 @@ static int dump_packet(const char* proto_name, const guint16 listenport, const c
 
 	add_proto_name(mbuf, &offset, proto_name);
 	add_ip_source_address(mbuf, &offset, clientaddr.sin_addr.s_addr);
-	add_ip_dest_address(mbuf, &offset, inet_addr("127.0.0.1"));
+	add_ip_dest_address(mbuf, &offset, WS_IN4_LOOPBACK);
 	add_udp_source_port(mbuf, &offset, clientaddr.sin_port);
 	add_udp_dst_port(mbuf, &offset, listenport);
 	add_end_options(mbuf, &offset);
@@ -377,7 +371,7 @@ int main(int argc, char *argv[])
 #endif  /* _WIN32 */
 
 	help_url = data_file_url("udpdump.html");
-	extcap_base_set_util_info(extcap_conf, argv[0], UDPDUMP_VERSION_MAJOR, UDPDUMP_VERSION_MINOR,UDPDUMP_VERSION_RELEASE,
+	extcap_base_set_util_info(extcap_conf, argv[0], UDPDUMP_VERSION_MAJOR, UDPDUMP_VERSION_MINOR, UDPDUMP_VERSION_RELEASE,
 		help_url);
 	g_free(help_url);
 	extcap_base_register_interface(extcap_conf, UDPDUMP_EXTCAP_INTERFACE, "UDP Listener remote capture", 252, "Exported PDUs");
@@ -440,6 +434,8 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
+
+	extcap_cmdline_debug(argv, argc);
 
 	if (optind != argc) {
 		g_warning("Unexpected extra option: %s", argv[optind]);

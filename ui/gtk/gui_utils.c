@@ -1,7 +1,7 @@
 /* gui_utils.c
  * UI utility routines, some GTK+-specific (declared in gtk/gui_utils.h)
  * and some with GUI-independent APIs, with this file containing the GTK+
- * implementations of them (declared in ui_util.h)
+ * implementations of them (declared in ws_ui_util.h)
  *
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
@@ -42,7 +42,7 @@
 #include "../../globals.h"
 
 #include "ui/recent.h"
-#include "ui/ui_util.h"
+#include "ui/ws_ui_util.h"
 
 #include <wsutil/file_util.h>
 
@@ -588,6 +588,11 @@ main_window_update(void)
 {
     while (gtk_events_pending())
         gtk_main_iteration();
+}
+
+void exit_application(int status)
+{
+    exit(status);
 }
 
 #ifdef HAVE_LIBPCAP

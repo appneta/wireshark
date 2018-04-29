@@ -10,19 +10,7 @@
  *
  * Copied from README.developer
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1052,17 +1040,9 @@ dissect_wlan_radio_phdr (tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree,
         assumed_no_stbc = TRUE;
       }
 
-      if (info_n->has_ness) {
-        ness = info_n->ness;
-      } else {
-        ness = 0;
+      if (!info_n->has_ness) {
         assumed_no_extension_streams = TRUE;
       }
-
-      /* calculate number of HT-LTF training symbols.
-       * see ieee80211n-2009 20.3.9.4.6 table 20-11 */
-      Nsts = ieee80211_ht_streams[info_n->mcs_index] + stbc_streams;
-      preamble += 4 * (Nhtdltf[Nsts-1] + Nhteltf[ness]);
 
       if (!info_n->has_fec) {
         assumed_bcc_fec = TRUE;

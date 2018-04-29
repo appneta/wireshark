@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -34,7 +22,6 @@
 #include "packet-t30.h"
 
 void proto_register_t30(void);
-void proto_reg_handoff_t30(void);
 
 /* T30 */
 static int proto_t30 = -1;
@@ -1000,7 +987,12 @@ dissect_t30_hdlc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
             break;
         case T30_FC_CIG:
         case T30_FC_PWD:
+        case T30_FC_SEP:
+        case T30_FC_PSA:
             dissect_t30_numbers(tvb, offset, pinfo, frag_len, tr_fif, t38);
+            break;
+        case T30_FC_NSC:
+            dissect_t30_non_standard_cap(tvb, offset, pinfo, frag_len, tr_fif);
             break;
         default:
             switch (octet & 0x7F) {
@@ -1012,14 +1004,11 @@ dissect_t30_hdlc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
                 break;
             case T30_FC_CSI:
             case T30_FC_TSI:
-            case T30_FC_SEP:
             case T30_FC_SUB:
             case T30_FC_SID:
-            case T30_FC_PSA:
                 dissect_t30_numbers(tvb, offset, pinfo, frag_len, tr_fif, t38);
                 break;
             case T30_FC_NSF:
-            case T30_FC_NSC:
             case T30_FC_NSS:
                 dissect_t30_non_standard_cap(tvb, offset, pinfo, frag_len, tr_fif);
                 break;

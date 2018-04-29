@@ -6,25 +6,22 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+/*
+ * ASTERIX (All-purpose structured EUROCONTROL surveillances
+ * information exchange) is a protocol related to air traffic control.
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * The specifications can be downloaded from
+ * http://www.eurocontrol.int/services/asterix
  */
 
 #include <config.h>
 
 #include <epan/packet.h>
 #include <epan/prefs.h>
+#include <epan/proto_data.h>
 
 void proto_register_asterix(void);
 void proto_reg_handoff_asterix(void);
@@ -2752,11 +2749,11 @@ struct AsterixField_s {
 };
 DIAG_ON(pedantic)
 
-static void dissect_asterix_packet (tvbuff_t *, proto_tree *);
-static void dissect_asterix_data_block (tvbuff_t *tvb, guint, proto_tree *, guint8, gint);
-static gint dissect_asterix_fields (tvbuff_t *, guint, proto_tree *, guint8, const AsterixField *[]);
+static void dissect_asterix_packet (tvbuff_t *, packet_info *pinfo, proto_tree *);
+static void dissect_asterix_data_block (tvbuff_t *tvb, packet_info *pinfo, guint, proto_tree *, guint8, gint);
+static gint dissect_asterix_fields (tvbuff_t *, packet_info *pinfo, guint, proto_tree *, guint8, const AsterixField *[]);
 
-static void asterix_build_subtree (tvbuff_t *, guint, proto_tree *, const AsterixField *);
+static void asterix_build_subtree (tvbuff_t *, packet_info *pinfo, guint, proto_tree *, const AsterixField *);
 static void twos_complement (gint64 *, guint8);
 static guint8 byte_length (guint8);
 static guint8 asterix_bit (guint8, guint8);
@@ -8417,13 +8414,13 @@ static int dissect_asterix (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     col_clear (pinfo->cinfo, COL_INFO);
 
     if (tree) { /* we are being asked for details */
-        dissect_asterix_packet (tvb, tree);
+        dissect_asterix_packet (tvb, pinfo, tree);
     }
 
     return tvb_captured_length(tvb);
 }
 
-static void dissect_asterix_packet (tvbuff_t *tvb, proto_tree *tree)
+static void dissect_asterix_packet (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
     guint i;
     guint8 category;
@@ -8441,11 +8438,11 @@ static void dissect_asterix_packet (tvbuff_t *tvb, proto_tree *tree)
         proto_tree_add_item (asterix_packet_tree, hf_asterix_category, tvb, i, 1, ENC_BIG_ENDIAN);
         proto_tree_add_item (asterix_packet_tree, hf_asterix_length, tvb, i + 1, 2, ENC_BIG_ENDIAN);
 
-        dissect_asterix_data_block (tvb, i + 3, asterix_packet_tree, category, length);
+        dissect_asterix_data_block (tvb, pinfo, i + 3, asterix_packet_tree, category, length);
     }
 }
 
-static void dissect_asterix_data_block (tvbuff_t *tvb, guint offset, proto_tree *tree, guint8 category, gint length)
+static void dissect_asterix_data_block (tvbuff_t *tvb, packet_info *pinfo, guint offset, proto_tree *tree, guint8 category, gint length)
 {
     guint8 active_uap;
     int fspec_len, inner_offset, size, counter;
@@ -8463,7 +8460,7 @@ static void dissect_asterix_data_block (tvbuff_t *tvb, guint offset, proto_tree 
             /*show_fspec (tvb, asterix_message_tree, offset + inner_offset, fspec_len);*/
             proto_tree_add_item (asterix_message_tree, hf_asterix_fspec, tvb, offset + inner_offset, fspec_len, ENC_NA);
 
-            size = dissect_asterix_fields (tvb, offset + inner_offset, asterix_message_tree, category, categories[category][global_categories_version[category]][active_uap]);
+            size = dissect_asterix_fields (tvb, pinfo, offset + inner_offset, asterix_message_tree, category, categories[category][global_categories_version[category]][active_uap]);
 
             inner_offset += size + fspec_len;
         }
@@ -8473,7 +8470,7 @@ static void dissect_asterix_data_block (tvbuff_t *tvb, guint offset, proto_tree 
     }
 }
 
-static gint dissect_asterix_fields (tvbuff_t *tvb, guint offset, proto_tree *tree, guint8 category, const AsterixField *current_uap[])
+static gint dissect_asterix_fields (tvbuff_t *tvb, packet_info *pinfo, guint offset, proto_tree *tree, guint8 category, const AsterixField *current_uap[])
 {
     guint i, j, size, start, len, inner_offset, fspec_len;
     guint64 counter;
@@ -8495,7 +8492,7 @@ static gint dissect_asterix_fields (tvbuff_t *tvb, guint offset, proto_tree *tre
                 asterix_field_tree = proto_item_add_subtree (asterix_field_item, ett_asterix_subtree);
                 fspec_len = asterix_fspec_len (tvb, offset + start);
                 proto_tree_add_item (asterix_field_tree, hf_asterix_fspec, tvb, offset + start, fspec_len, ENC_NA);
-                dissect_asterix_fields (tvb, offset + start, asterix_field_tree, category, (const AsterixField **)current_uap[i]->field);
+                dissect_asterix_fields (tvb, pinfo, offset + start, asterix_field_tree, category, (const AsterixField **)current_uap[i]->field);
             }
             else if (current_uap[i]->type & REPETITIVE) {
                 asterix_field_item = proto_tree_add_item (tree, *current_uap[i]->hf, tvb, offset + start, len, ENC_NA);
@@ -8507,7 +8504,7 @@ static gint dissect_asterix_fields (tvbuff_t *tvb, guint offset, proto_tree *tre
                 for (j = 0, inner_offset = 0; j < counter; j++, inner_offset += current_uap[i]->length) {
                     asterix_field_item2 = proto_tree_add_item (asterix_field_tree, *current_uap[i]->hf, tvb, offset + start + current_uap[i]->repetition_counter_size + inner_offset, current_uap[i]->length, ENC_NA);
                     asterix_field_tree2 = proto_item_add_subtree (asterix_field_item2, ett_asterix_subtree);
-                    asterix_build_subtree (tvb, offset + start + current_uap[i]->repetition_counter_size + inner_offset, asterix_field_tree2, current_uap[i]);
+                    asterix_build_subtree (tvb, pinfo, offset + start + current_uap[i]->repetition_counter_size + inner_offset, asterix_field_tree2, current_uap[i]);
                 }
             }
             else if (current_uap[i]->type & RE) {
@@ -8517,24 +8514,26 @@ static gint dissect_asterix_fields (tvbuff_t *tvb, guint offset, proto_tree *tre
                 start++;
                 fspec_len = asterix_fspec_len (tvb, offset + start);
                 proto_tree_add_item (asterix_field_tree, hf_asterix_fspec, tvb, offset + start, fspec_len, ENC_NA);
-                dissect_asterix_fields (tvb, offset + start, asterix_field_tree, category, (const AsterixField **)current_uap[i]->field);
+                dissect_asterix_fields (tvb, pinfo, offset + start, asterix_field_tree, category, (const AsterixField **)current_uap[i]->field);
             }
             else {
                 asterix_field_item = proto_tree_add_item (tree, *current_uap[i]->hf, tvb, offset + start, len, ENC_NA);
                 asterix_field_tree = proto_item_add_subtree (asterix_field_item, ett_asterix_subtree);
-                asterix_build_subtree (tvb, offset + start, asterix_field_tree, current_uap[i]);
+                asterix_build_subtree (tvb, pinfo, offset + start, asterix_field_tree, current_uap[i]);
             }
         }
     }
     return size;
 }
 
-static void asterix_build_subtree (tvbuff_t *tvb, guint offset, proto_tree *parent, const AsterixField *field)
+static void asterix_build_subtree (tvbuff_t *tvb, packet_info *pinfo, guint offset, proto_tree *parent, const AsterixField *field)
 {
     gint i, inner_offset;
     guint8 go_on;
     gint64 value;
     char *str_buffer = NULL;
+    double scaling_factor = 1.0;
+    guint8 *set_im_021_150, *get_im_021_150;
 
     if (field->part != NULL) {
         for (i = 0, inner_offset = 0, go_on = 1; go_on && field->part[i] != NULL; i++) {
@@ -8546,6 +8545,14 @@ static void asterix_build_subtree (tvbuff_t *tvb, guint offset, proto_tree *pare
                         /* Fall through */
                     case FIELD_PART_INT:
                     case FIELD_PART_UINT:
+                        /* special processing for I021/150 because ASPD depends on IM subfield */
+                        if (field->part[i] == &I021_150_IM) {
+                            set_im_021_150 = wmem_new (wmem_packet_scope (), guint8);
+                            *set_im_021_150 = (tvb_get_guint8 (tvb, offset + inner_offset / 8) & 0x80) >> 7;
+                            /* Save IAS info for the packet. Cat 21 and field number 150 used for key = 21150. */
+                            p_add_proto_data (pinfo->pool, pinfo, proto_asterix, 21150, set_im_021_150);
+                        }
+                        /* Fall through */
                     case FIELD_PART_HEX:
                     case FIELD_PART_ASCII:
                     case FIELD_PART_SQUAWK:
@@ -8555,10 +8562,21 @@ static void asterix_build_subtree (tvbuff_t *tvb, guint offset, proto_tree *pare
                         twos_complement (&value, field->part[i]->bit_length);
                         /* Fall through */
                     case FIELD_PART_UFLOAT:
-                        if (field->part[i]->format_string != NULL)
-                            proto_tree_add_double_format_value (parent, *field->part[i]->hf, tvb, offset + inner_offset / 8, byte_length (field->part[i]->bit_length), value * field->part[i]->scaling_factor, field->part[i]->format_string, value * field->part[i]->scaling_factor);
+                        /* Special processing for I021/150 depends on another field, which stores the value in static variable im_021_150 */
+                        if (field->part[i] == &I021_150_ASPD) {
+                            get_im_021_150 = (guint8 *)p_get_proto_data (pinfo->pool, pinfo, proto_asterix, 21150);
+                            if (*get_im_021_150 == 0)
+                                scaling_factor = 1.0/16384.0;
+                            else
+                                scaling_factor = 0.001;
+                        }
                         else
-                            proto_tree_add_double (parent, *field->part[i]->hf, tvb, offset + inner_offset / 8, byte_length (field->part[i]->bit_length), value * field->part[i]->scaling_factor);
+                            scaling_factor = field->part[i]->scaling_factor;
+
+                        if (field->part[i]->format_string != NULL)
+                            proto_tree_add_double_format_value (parent, *field->part[i]->hf, tvb, offset + inner_offset / 8, byte_length (field->part[i]->bit_length), value * scaling_factor, field->part[i]->format_string, value * scaling_factor);
+                        else
+                            proto_tree_add_double (parent, *field->part[i]->hf, tvb, offset + inner_offset / 8, byte_length (field->part[i]->bit_length), value * scaling_factor);
                         break;
                     case FIELD_PART_CALLSIGN:
                         str_buffer = (char *)wmem_alloc (wmem_packet_scope (), 9);
@@ -9041,9 +9059,9 @@ void proto_register_asterix (void)
         { &hf_009_060_STEP, { "Step number", "asterix.009_060_STEP", FT_UINT8, BASE_DEC, NULL, 0xfc, NULL, HFILL } },
         { &hf_009_070, { "070, Time of Day", "asterix.009_070", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_009_080, { "080, Processing Status", "asterix.009_080", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
-        { &hf_009_080_SCALE, { "Scaling factor", "asterix.009_080_SCALE", FT_UINT24, BASE_DEC, NULL, 0xf80000, NULL, HFILL } },
-        { &hf_009_080_R, { "R", "asterix.009_080_R", FT_UINT24, BASE_DEC, NULL, 0x070000, NULL, HFILL } },
-        { &hf_009_080_Q, { "Q", "asterix.009_080_Q", FT_UINT24, BASE_DEC, NULL, 0x00fffe, NULL, HFILL } },
+        { &hf_009_080_SCALE, { "Scaling factor", "asterix.009_080_SCALE", FT_UINT8, BASE_DEC, NULL, 0xf8, NULL, HFILL } },
+        { &hf_009_080_R, { "R", "asterix.009_080_R", FT_UINT8, BASE_DEC, NULL, 0x07, NULL, HFILL } },
+        { &hf_009_080_Q, { "Q", "asterix.009_080_Q", FT_UINT16, BASE_DEC, NULL, 0xfffe, NULL, HFILL } },
         { &hf_009_090, { "090, Radar Configuration and Status", "asterix.009_090", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_009_090_CP, { "CP", "asterix.009_090_CP", FT_UINT8, BASE_DEC, NULL, 0x10, NULL, HFILL } },
         { &hf_009_090_WO, { "WO", "asterix.009_090_WO", FT_UINT8, BASE_DEC, NULL, 0x08, NULL, HFILL } },
@@ -9147,7 +9165,7 @@ void proto_register_asterix (void)
         { &hf_021_148_ALT, { "Altitude [ft]", "asterix.021_148_ALT", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_021_150, { "150, Air Speed", "asterix.021_150", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_021_150_IM, { "IM", "asterix.021_150_IM", FT_UINT8, BASE_DEC, VALS (valstr_021_150_IM), 0x80, NULL, HFILL } },
-        { &hf_021_150_ASPD, { "ASPD [2^-14NM/s or 0.001Mach]", "asterix.021_150_ASPD", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_021_150_ASPD, { "ASPD [IAS (0) => NM/s or IAS (1) => Mach]", "asterix.021_150_ASPD", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_021_151, { "151 True Airspeed", "asterix.021_151", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_021_151_RE, { "RE", "asterix.021_151_RE", FT_UINT8, BASE_DEC, VALS (valstr_021_151_RE), 0x80, NULL, HFILL } },
         { &hf_021_151_TASPD, { "TASPD [knot]", "asterix.021_151_TASPD", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
@@ -9403,7 +9421,7 @@ void proto_register_asterix (void)
         { &hf_048_040_THETA, { "THETA[deg]", "asterix.048_040_THETA", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_048_042, { "042, Calculated Position in Cartesian Co-ordinates", "asterix.048_042", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_048_042_X, { "X[NM]", "asterix.048_042_X", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
-        { &hf_048_042_Y, { "Y[deg]", "asterix.048_042_Y", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_048_042_Y, { "Y[NM]", "asterix.048_042_Y", FT_DOUBLE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_048_050, { "050, Mode-2 Code in Octal Representation", "asterix.048_050", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL } },
         { &hf_048_050_V, { "V", "asterix.048_050_V", FT_UINT8, BASE_DEC, VALS (valstr_048_050_V), 0x80, NULL, HFILL } },
         { &hf_048_050_G, { "G", "asterix.048_050_G", FT_UINT8, BASE_DEC, VALS (valstr_048_050_G), 0x40, NULL, HFILL } },
@@ -11416,7 +11434,7 @@ void proto_register_asterix (void)
     asterix_prefs_module = prefs_register_protocol (proto_asterix, NULL);
 
     prefs_register_enum_preference (asterix_prefs_module, "i001_version", "I001 version", "Select the CAT001 version", &global_categories_version[1],  I001_versions, FALSE);
-    prefs_register_enum_preference (asterix_prefs_module, "i002_version", "I002 version", "Select the CAT001 version", &global_categories_version[2],  I002_versions, FALSE);
+    prefs_register_enum_preference (asterix_prefs_module, "i002_version", "I002 version", "Select the CAT002 version", &global_categories_version[2],  I002_versions, FALSE);
     prefs_register_enum_preference (asterix_prefs_module, "i004_version", "I004 version", "Select the CAT004 version", &global_categories_version[4],  I004_versions, FALSE);
     prefs_register_enum_preference (asterix_prefs_module, "i008_version", "I008 version", "Select the CAT008 version", &global_categories_version[8],  I008_versions, FALSE);
     prefs_register_enum_preference (asterix_prefs_module, "i009_version", "I009 version", "Select the CAT009 version", &global_categories_version[9],  I009_versions, FALSE);

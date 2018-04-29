@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * Ref https://www.opennetworking.org/sdn-resources/onf-specifications/openflow
  */
@@ -204,6 +192,33 @@ static int hf_openflow_v6_port_desc_prop_ethernet_peer_pause_asym = -1;
 static int hf_openflow_v6_port_desc_prop_ethernet_peer_reserved = -1;
 static int hf_openflow_v6_port_desc_prop_ethernet_curr_speed = -1;
 static int hf_openflow_v6_port_desc_prop_ethernet_max_speed = -1;
+static int hf_openflow_v6_port_stats_prop_type = -1;
+static int hf_openflow_v6_port_stats_prop_length = -1;
+static int hf_openflow_v6_port_stats_prop_ethernet_pad = -1;
+static int hf_openflow_v6_port_stats_prop_ethernet_rx_frame_err = -1;
+static int hf_openflow_v6_port_stats_prop_ethernet_rx_over_err = -1;
+static int hf_openflow_v6_port_stats_prop_ethernet_rx_crc_err = -1;
+static int hf_openflow_v6_port_stats_prop_ethernet_collisions = -1;
+static int hf_openflow_v6_port_stats_prop_optical_pad = -1;
+static int hf_openflow_v6_port_stats_prop_optical_flags = -1;
+static int hf_openflow_v6_port_stats_prop_optical_flags_rx_tune = -1;
+static int hf_openflow_v6_port_stats_prop_optical_flags_tx_tune = -1;
+static int hf_openflow_v6_port_stats_prop_optical_flags_tx_pwr = -1;
+static int hf_openflow_v6_port_stats_prop_optical_flags_rx_pwr = -1;
+static int hf_openflow_v6_port_stats_prop_optical_flags_tx_bias = -1;
+static int hf_openflow_v6_port_stats_prop_optical_flags_tx_temp = -1;
+static int hf_openflow_v6_port_stats_prop_optical_tx_freq_lmda = -1;
+static int hf_openflow_v6_port_stats_prop_optical_tx_offset = -1;
+static int hf_openflow_v6_port_stats_prop_optical_tx_grid_span = -1;
+static int hf_openflow_v6_port_stats_prop_optical_rx_freq_lmda = -1;
+static int hf_openflow_v6_port_stats_prop_optical_rx_offset = -1;
+static int hf_openflow_v6_port_stats_prop_optical_rx_grid_span = -1;
+static int hf_openflow_v6_port_stats_prop_optical_tx_pwr = -1;
+static int hf_openflow_v6_port_stats_prop_optical_rx_pwr = -1;
+static int hf_openflow_v6_port_stats_prop_optical_bias_current = -1;
+static int hf_openflow_v6_port_stats_prop_optical_temperature = -1;
+static int hf_openflow_v6_port_stats_prop_experimenter_experimenter = -1;
+static int hf_openflow_v6_port_stats_prop_experimenter_exp_type = -1;
 static int hf_openflow_v6_port_port_no = -1;
 static int hf_openflow_v6_port_length = -1;
 static int hf_openflow_v6_port_pad = -1;
@@ -480,8 +495,11 @@ static int hf_openflow_v6_table_stats_pad = -1;
 static int hf_openflow_v6_table_stats_active_count = -1;
 static int hf_openflow_v6_table_stats_lookup_count = -1;
 static int hf_openflow_v6_table_stats_match_count = -1;
-static int hf_openflow_v6_port_stats_port_no = -1;
+static int hf_openflow_v6_port_stats_length = -1;
 static int hf_openflow_v6_port_stats_pad = -1;
+static int hf_openflow_v6_port_stats_port_no = -1;
+static int hf_openflow_v6_port_stats_duration_sec = -1;
+static int hf_openflow_v6_port_stats_duration_nsec = -1;
 static int hf_openflow_v6_port_stats_rx_packets = -1;
 static int hf_openflow_v6_port_stats_tx_packets = -1;
 static int hf_openflow_v6_port_stats_rx_bytes = -1;
@@ -490,12 +508,6 @@ static int hf_openflow_v6_port_stats_rx_dropped = -1;
 static int hf_openflow_v6_port_stats_tx_dropped = -1;
 static int hf_openflow_v6_port_stats_rx_errors = -1;
 static int hf_openflow_v6_port_stats_tx_errors = -1;
-static int hf_openflow_v6_port_stats_rx_frame_error = -1;
-static int hf_openflow_v6_port_stats_rx_over_error = -1;
-static int hf_openflow_v6_port_stats_rx_crc_error = -1;
-static int hf_openflow_v6_port_stats_collisions = -1;
-static int hf_openflow_v6_port_stats_duration_sec = -1;
-static int hf_openflow_v6_port_stats_duration_nsec = -1;
 static int hf_openflow_v6_queue_stats_length = -1;
 static int hf_openflow_v6_queue_stats_pad = -1;
 static int hf_openflow_v6_queue_stats_port_no = -1;
@@ -757,6 +769,8 @@ static gint ett_openflow_v6_port_desc_prop_ethernet_advertised = -1;
 static gint ett_openflow_v6_port_desc_prop_ethernet_supported = -1;
 static gint ett_openflow_v6_port_desc_prop_ethernet_peer = -1;
 static gint ett_openflow_v6_port_desc_prop_optical_supported = -1;
+static gint ett_openflow_v6_port_stats_prop = -1;
+static gint ett_openflow_v6_port_stats_prop_optical_flags = -1;
 static gint ett_openflow_v6_port = -1;
 static gint ett_openflow_v6_port_config = -1;
 static gint ett_openflow_v6_port_state = -1;
@@ -829,6 +843,7 @@ static expert_field ei_openflow_v6_oxm_undecoded = EI_INIT;
 static expert_field ei_openflow_v6_action_undecoded = EI_INIT;
 static expert_field ei_openflow_v6_instruction_undecoded = EI_INIT;
 static expert_field ei_openflow_v6_port_desc_prop_undecoded = EI_INIT;
+static expert_field ei_openflow_v6_port_stats_prop_undecoded = EI_INIT;
 static expert_field ei_openflow_v6_meter_band_undecoded = EI_INIT;
 static expert_field ei_openflow_v6_hello_element_undecoded = EI_INIT;
 static expert_field ei_openflow_v6_error_undecoded = EI_INIT;
@@ -2597,12 +2612,12 @@ dissect_openflow_port_desc_prop_optical_v6(tvbuff_t *tvb, packet_info *pinfo _U_
     offset+=4;
 
     /* uint16_t tx_pwr_min; */
-    proto_tree_add_item(tree, hf_openflow_v6_port_desc_prop_optical_tx_pwr_min, tvb, offset, 4, ENC_BIG_ENDIAN);
-    offset+=4;
+    proto_tree_add_item(tree, hf_openflow_v6_port_desc_prop_optical_tx_pwr_min, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
 
     /* uint16_t tx_pwr_max; */
-    proto_tree_add_item(tree, hf_openflow_v6_port_desc_prop_optical_tx_pwr_max, tvb, offset, 4, ENC_BIG_ENDIAN);
-    offset+=4;
+    proto_tree_add_item(tree, hf_openflow_v6_port_desc_prop_optical_tx_pwr_max, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
 
     return offset;
 }
@@ -2623,6 +2638,7 @@ static int
 dissect_openflow_port_desc_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     proto_tree *prop_tree;
+    proto_item *prop_item;
     guint16 prop_type;
     guint16 prop_length;
 
@@ -2636,7 +2652,7 @@ dissect_openflow_port_desc_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
     offset+=2;
 
     /* uint16_t len; */
-    proto_tree_add_item(prop_tree, hf_openflow_v6_port_desc_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    prop_item = proto_tree_add_item(prop_tree, hf_openflow_v6_port_desc_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
     offset+=2;
 
     switch (prop_type) {
@@ -2649,6 +2665,11 @@ dissect_openflow_port_desc_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
         break;
 
     case OFPPDPT_EXPERIMENTER:
+        if (prop_length <= 12) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         /* uint32_t experimenter; */
         proto_tree_add_item(tree, hf_openflow_v6_port_desc_prop_experimenter_experimenter, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
@@ -2663,6 +2684,11 @@ dissect_openflow_port_desc_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
         break;
 
     default:
+        if (prop_length <= 4) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         proto_tree_add_expert_format(tree, pinfo, &ei_openflow_v6_port_desc_prop_undecoded,
                                      tvb, offset, prop_length - 4, "Unknown port desc. property.");
         offset += prop_length - 4;
@@ -3242,6 +3268,7 @@ static int
 dissect_openflow_portmod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     proto_tree *prop_tree;
+    proto_item *prop_item;
     guint16 prop_type;
     guint16 prop_length;
 
@@ -3255,7 +3282,7 @@ dissect_openflow_portmod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
     offset+=2;
 
     /* uint16_t len; */
-    proto_tree_add_item(prop_tree, hf_openflow_v6_portmod_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    prop_item = proto_tree_add_item(prop_tree, hf_openflow_v6_portmod_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
     offset+=2;
 
     switch (prop_type) {
@@ -3268,6 +3295,11 @@ dissect_openflow_portmod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
         break;
 
     case OFPPMPT_EXPERIMENTER:
+        if (prop_length <= 12) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         /* uint32_t experimenter; */
         proto_tree_add_item(tree, hf_openflow_v6_portmod_prop_experimenter_experimenter, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
@@ -3282,6 +3314,11 @@ dissect_openflow_portmod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tr
         break;
 
     default:
+        if (prop_length <= 4) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         proto_tree_add_expert_format(tree, pinfo, &ei_openflow_v6_portmod_prop_undecoded,
                                      tvb, offset, prop_length - 4, "Unknown port desc. property.");
         offset += prop_length - 4;
@@ -3358,7 +3395,7 @@ static const value_string openflow_v6_tablemod_prop_type_values[] = {
 static int
 dissect_openflow_tablemod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
-    proto_item *ti;
+    proto_item *ti, *prop_item;
     proto_tree *prop_tree, *flags_tree;
 
     guint16 prop_type;
@@ -3374,7 +3411,7 @@ dissect_openflow_tablemod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_t
     offset+=2;
 
     /* uint16_t len; */
-    proto_tree_add_item(prop_tree, hf_openflow_v6_tablemod_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    prop_item = proto_tree_add_item(prop_tree, hf_openflow_v6_tablemod_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
     offset+=2;
 
     switch (prop_type) {
@@ -3408,6 +3445,11 @@ dissect_openflow_tablemod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_t
         break;
 
     case OFPTMPT_EXPERIMENTER:
+        if (prop_length <= 12) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         /* uint32_t experimenter; */
         proto_tree_add_item(tree, hf_openflow_v6_tablemod_prop_experimenter_experimenter, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
@@ -3422,6 +3464,11 @@ dissect_openflow_tablemod_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_t
         break;
 
     default:
+        if (prop_length <= 4) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         proto_tree_add_expert_format(tree, pinfo, &ei_openflow_v6_tablemod_prop_undecoded,
                                      tvb, offset, prop_length - 4, "Unknown table mod. property.");
         offset += prop_length - 4;
@@ -4213,18 +4260,207 @@ dissect_openflow_table_stats_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
 
 
 static int
+dissect_openflow_port_stats_prop_ethernet_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
+{
+    /* uint8_t pad[4]; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_ethernet_pad, tvb, offset, 4, ENC_NA);
+    offset+=4;
+
+    /* uint64_t rx_frame_error; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_ethernet_rx_frame_err, tvb, offset, 8, ENC_BIG_ENDIAN);
+    offset+=8;
+
+    /* uint64_t rx_over_error; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_ethernet_rx_over_err, tvb, offset, 8, ENC_BIG_ENDIAN);
+    offset+=8;
+
+    /* uint64_t rx_crc_error; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_ethernet_rx_crc_err, tvb, offset, 8, ENC_BIG_ENDIAN);
+    offset+=8;
+
+    /* uint64_t collisions; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_ethernet_collisions, tvb, offset, 8, ENC_BIG_ENDIAN);
+    offset+=8;
+
+    return offset;
+}
+
+
+#define OFPOSF_RX_TUNE   1<<0
+#define OFPOSF_TX_TUNE   1<<1
+#define OFPOSF_TX_PWR    1<<2
+#define OFPOSF_RX_PWR    1<<4
+#define OFPOSF_TX_BIAS   1<<5
+#define OFPOSF_TX_TEMP   1<<6
+static int
+dissect_openflow_port_stats_prop_optical_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
+{
+    proto_item *ti;
+    proto_tree *flags_tree;
+
+    /* uint8_t pad[4]; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_pad, tvb, offset, 4, ENC_NA);
+    offset+=4;
+
+    /* uint32_t flags; */
+    ti = proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_flags, tvb, offset, 4, ENC_BIG_ENDIAN);
+    flags_tree = proto_item_add_subtree(ti, ett_openflow_v6_port_stats_prop_optical_flags);
+
+    proto_tree_add_item(flags_tree, hf_openflow_v6_port_stats_prop_optical_flags_rx_tune, tvb, offset, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(flags_tree, hf_openflow_v6_port_stats_prop_optical_flags_tx_tune, tvb, offset, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(flags_tree, hf_openflow_v6_port_stats_prop_optical_flags_tx_pwr, tvb, offset, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(flags_tree, hf_openflow_v6_port_stats_prop_optical_flags_rx_pwr, tvb, offset, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(flags_tree, hf_openflow_v6_port_stats_prop_optical_flags_tx_bias, tvb, offset, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(flags_tree, hf_openflow_v6_port_stats_prop_optical_flags_tx_temp, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint32_t tx_freq_lmda; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_tx_freq_lmda, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint32_t tx_offset; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_tx_offset, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint32_t tx_grid_span; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_tx_grid_span, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint32_t rx_freq_lmda; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_rx_freq_lmda, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint32_t rx_offset; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_rx_offset, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint32_t rx_grid_span; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_rx_grid_span, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint16_t tx_pwr; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_tx_pwr, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
+
+    /* uint16_t rx_pwr; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_rx_pwr, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
+
+    /* uint16_t bias_current; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_bias_current, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
+
+    /* uint16_t temperature; */
+    proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_optical_temperature, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
+
+    return offset;
+}
+
+
+
+#define OFPPSPT_ETHERNET      0
+#define OFPPSPT_OPTICAL       1
+#define OFPPSPT_EXPERIMENTER  0xFFFF
+static const value_string openflow_v6_port_stats_prop_type_values[] = {
+    { OFPPSPT_ETHERNET,     "OFPPSPT_ETHERNET" },
+    { OFPPSPT_OPTICAL,      "OFPPSPT_OPTICAL" },
+    { OFPPSPT_EXPERIMENTER, "OFPPSPT_EXPERIMENTER" },
+    { 0,                    NULL }
+};
+
+static int
+dissect_openflow_port_stats_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
+{
+    proto_tree *prop_tree;
+    proto_item *prop_item;
+    guint16 prop_type;
+    guint16 prop_length;
+
+    prop_type = tvb_get_ntohs(tvb, offset);
+    prop_length = tvb_get_ntohs(tvb, offset);
+
+    prop_tree = proto_tree_add_subtree(tree, tvb, offset, prop_length, ett_openflow_v6_port_stats_prop, NULL, "Port stats. property");
+
+    /* uint16_t type; */
+    proto_tree_add_item(prop_tree, hf_openflow_v6_port_stats_prop_type, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
+
+    /* uint16_t len; */
+    prop_item = proto_tree_add_item(prop_tree, hf_openflow_v6_port_stats_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
+
+    switch (prop_type) {
+    case OFPPSPT_ETHERNET:
+        offset = dissect_openflow_port_stats_prop_ethernet_v6(tvb, pinfo, prop_tree, offset, length);
+        break;
+
+    case OFPPSPT_OPTICAL:
+        offset = dissect_openflow_port_stats_prop_optical_v6(tvb, pinfo, prop_tree, offset, length);
+        break;
+
+    case OFPPSPT_EXPERIMENTER:
+        if (prop_length <= 12) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
+        /* uint32_t experimenter; */
+        proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_experimenter_experimenter, tvb, offset, 4, ENC_BIG_ENDIAN);
+        offset+=4;
+
+        /* uint32_t exp_type; */
+        proto_tree_add_item(tree, hf_openflow_v6_port_stats_prop_experimenter_exp_type, tvb, offset, 4, ENC_BIG_ENDIAN);
+        offset+=4;
+
+        proto_tree_add_expert_format(tree, pinfo, &ei_openflow_v6_port_stats_prop_undecoded,
+                                     tvb, offset, prop_length - 12, "Experimenter port stats. property.");
+        offset += prop_length - 12;
+        break;
+
+    default:
+        if (prop_length <= 4) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
+        proto_tree_add_expert_format(tree, pinfo, &ei_openflow_v6_port_stats_prop_undecoded,
+                                     tvb, offset, prop_length - 4, "Unknown port stats. property.");
+        offset += prop_length - 4;
+        break;
+    }
+
+    return offset;
+}
+
+
+static int
 dissect_openflow_port_stats_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     proto_tree *stats_tree;
+    guint16 stats_end;
 
     stats_tree = proto_tree_add_subtree(tree, tvb, offset, 112, ett_openflow_v6_port_stats, NULL, "Port stats");
+
+    /* uint16_t length; */
+    stats_end = tvb_get_ntohs(tvb, offset) + offset - 4;
+    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    offset+=2;
+
+    /* uint8_t pad[2]; */
+    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_pad, tvb, offset, 2, ENC_NA);
+    offset+=2;
 
     /* uint8_t port_no; */
     proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_port_no, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
-    /* uint8_t pad[4]; */
-    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_pad, tvb, offset, 4, ENC_NA);
+    /* uint32_t duration_sec; */
+    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_duration_sec, tvb, offset, 4, ENC_BIG_ENDIAN);
+    offset+=4;
+
+    /* uint32_t duration_nsec; */
+    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_duration_nsec, tvb, offset, 4, ENC_BIG_ENDIAN);
     offset+=4;
 
     /* uint64_t rx_packets; */
@@ -4259,29 +4495,10 @@ dissect_openflow_port_stats_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
     proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_tx_errors, tvb, offset, 8, ENC_BIG_ENDIAN);
     offset+=8;
 
-    /* uint64_t rx_frame_error; */
-    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_rx_frame_error, tvb, offset, 8, ENC_BIG_ENDIAN);
-    offset+=8;
-
-    /* uint64_t rx_over_error; */
-    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_rx_over_error, tvb, offset, 8, ENC_BIG_ENDIAN);
-    offset+=8;
-
-    /* uint64_t rx_crc_error; */
-    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_rx_crc_error, tvb, offset, 8, ENC_BIG_ENDIAN);
-    offset+=8;
-
-    /* uint64_t collisions; */
-    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_collisions, tvb, offset, 8, ENC_BIG_ENDIAN);
-    offset+=8;
-
-    /* uint32_t duration_sec; */
-    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_duration_sec, tvb, offset, 4, ENC_BIG_ENDIAN);
-    offset+=4;
-
-    /* uint32_t duration_nsec; */
-    proto_tree_add_item(stats_tree, hf_openflow_v6_port_stats_duration_nsec, tvb, offset, 4, ENC_BIG_ENDIAN);
-    offset+=4;
+    /* struct ofp_port_stats_prop_header properties[0]; */
+    while (offset < stats_end) {
+        offset = dissect_openflow_port_stats_prop_v6(tvb, pinfo, tree, offset, length);
+    }
 
     return offset;
 }
@@ -4341,6 +4558,7 @@ static int
 dissect_openflow_queue_stats_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
     proto_tree *prop_tree;
+    proto_item *prop_item;
     guint16 prop_type;
     guint16 prop_length;
 
@@ -4354,11 +4572,16 @@ dissect_openflow_queue_stats_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, prot
     offset+=2;
 
     /* uint16_t len; */
-    proto_tree_add_item(prop_tree, hf_openflow_v6_queue_stats_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    prop_item = proto_tree_add_item(prop_tree, hf_openflow_v6_queue_stats_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
     offset+=2;
 
     switch (prop_type) {
     case OFPMP_EXPERIMENTER:
+        if (prop_length <= 12) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         /* uint32_t experimenter; */
         proto_tree_add_item(tree, hf_openflow_v6_queue_stats_prop_experimenter_experimenter, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
@@ -4374,6 +4597,11 @@ dissect_openflow_queue_stats_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, prot
         break;
 
     default:
+        if (prop_length <= 4) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         proto_tree_add_expert_format(tree, pinfo, &ei_openflow_v6_queue_stats_prop_undecoded,
                                      tvb, offset, length - 4, "Unknown queue stats prop body.");
         offset += prop_length - 4;
@@ -5336,7 +5564,7 @@ static const value_string openflow_v6_async_config_prop_type_values[] = {
 static int
 dissect_openflow_async_config_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
 {
-    proto_item *ti;
+    proto_item *ti, *prop_item;
     proto_tree *prop_tree, *pi_tree, *ps_tree, *fr_tree, *rs_tree, *ts_tree, *rf_tree;
     guint16 prop_type;
     guint16 prop_len;
@@ -5351,7 +5579,7 @@ dissect_openflow_async_config_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, pro
     offset += 2;
 
     /* uint16_t length; */
-    proto_tree_add_item(prop_tree, hf_openflow_v6_async_config_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    prop_item = proto_tree_add_item(prop_tree, hf_openflow_v6_async_config_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
     offset += 2;
 
     switch (prop_type) {
@@ -5433,6 +5661,11 @@ dissect_openflow_async_config_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, pro
 
     case OFPACPT_EXPERIMENTER_SLAVE:
     case OFPACPT_EXPERIMENTER_MASTER:
+        if (prop_len <= 12) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         /* uint32_t experimenter; */
         proto_tree_add_item(prop_tree, hf_openflow_v6_async_config_prop_experimenter_experimenter, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
@@ -5448,6 +5681,11 @@ dissect_openflow_async_config_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, pro
         break;
 
     default:
+        if (prop_len <= 4) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         proto_tree_add_expert_format(prop_tree, pinfo, &ei_openflow_v6_async_config_prop_undecoded,
                                      tvb, offset, prop_len - 4, "Unknown async config prop body.");
         offset += prop_len - 4;
@@ -5585,9 +5823,10 @@ static const value_string openflow_v6_bundle_prop_type_values[] = {
 };
 
 static int
-dissect_openflow_bundle_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, int offset, guint16 length _U_)
+dissect_openflow_bundle_prop_v6(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset, guint16 length)
 {
     proto_tree *prop_tree;
+    proto_item *prop_item;
     guint16 prop_type;
     guint16 prop_len;
 
@@ -5600,10 +5839,15 @@ dissect_openflow_bundle_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
     proto_tree_add_item(prop_tree, hf_openflow_v6_bundle_prop_type, tvb, offset, 2, ENC_BIG_ENDIAN);
 
     /* uint16_t length; */
-    proto_tree_add_item(prop_tree, hf_openflow_v6_bundle_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+    prop_item = proto_tree_add_item(prop_tree, hf_openflow_v6_bundle_prop_length, tvb, offset, 2, ENC_BIG_ENDIAN);
 
     switch (prop_type) {
     case OFPBPT_EXPERIMENTER:
+        if (prop_len <= 12) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         /* uint32_t experimenter; */
         proto_tree_add_item(tree, hf_openflow_v6_bundle_prop_experimenter_experimenter, tvb, offset, 4, ENC_BIG_ENDIAN);
         offset+=4;
@@ -5619,6 +5863,11 @@ dissect_openflow_bundle_prop_v6(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tre
         break;
 
     default:
+        if (prop_len <= 4) {
+            expert_add_info(pinfo, prop_item, &ei_openflow_v6_length_too_short);
+            offset = length;
+            break;
+        }
         proto_tree_add_expert_format(tree, pinfo, &ei_openflow_v6_bundle_prop_undecoded,
                                      tvb, offset, prop_len - 4, "Unknown bundle prop body.");
         offset += prop_len - 4;
@@ -6694,6 +6943,141 @@ proto_register_openflow_v6(void)
                FT_UINT32, BASE_DEC, NULL, 0x0,
                NULL, HFILL }
         },
+        { &hf_openflow_v6_port_stats_prop_type,
+            { "Type", "openflow_v6.port.stats_prop.type",
+               FT_UINT16, BASE_DEC, VALS(openflow_v6_port_stats_prop_type_values), 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_length,
+            { "Length", "openflow_v6.port.stats_prop.length",
+               FT_UINT16, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_ethernet_pad,
+            { "Pad", "openflow_v6.port.stats_prop.ethernet.pad",
+               FT_BYTES, BASE_NONE, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_ethernet_rx_frame_err,
+            { "Rx. Frame Error", "openflow_v6.port.stats_prop.ethernet.rx_frame_err",
+               FT_UINT64, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_ethernet_rx_over_err,
+            { "Rx. Over Error", "openflow_v6.port.stats_prop.ethernet.rx_over_err",
+               FT_UINT64, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_ethernet_rx_crc_err,
+            { "Rx. CRC Error", "openflow_v6.port.stats_prop.ethernet.rx_crc_err",
+               FT_UINT64, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_ethernet_collisions,
+            { "Collisions", "openflow_v6.port.stats_prop.ethernet.collisions",
+               FT_UINT64, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_pad,
+            { "Pad", "openflow_v6.port.stats_prop.optical.pad",
+               FT_BYTES, BASE_NONE, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_flags,
+            { "Flags", "openflow_v6.port.desc_prop.optical.supported",
+               FT_UINT32, BASE_HEX, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_flags_rx_tune,
+            { "OFPOSF_RX_TUNE", "openflow_v6.port.stats_prop.optical.flags.rx_tune",
+               FT_UINT32, BASE_HEX, NULL, OFPOSF_RX_TUNE,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_flags_tx_tune,
+            { "OFPOSF_TX_TUNE", "openflow_v6.port.stats_prop.optical.flags.tx_tune",
+               FT_UINT32, BASE_HEX, NULL, OFPOSF_TX_TUNE,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_flags_tx_pwr,
+            { "OFPOSF_TX_PWR", "openflow_v6.port.stats_prop.optical.flags.tx_pwr",
+               FT_UINT32, BASE_HEX, NULL, OFPOSF_TX_PWR,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_flags_rx_pwr,
+            { "OFPOSF_RX_PWR", "openflow_v6.port.stats_prop.optical.flags.rx_pwr",
+               FT_UINT32, BASE_HEX, NULL, OFPOSF_RX_PWR,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_flags_tx_bias,
+            { "OFPOSF_TX_BIAS", "openflow_v6.port.stats_prop.optical.flags.tx_bias",
+               FT_UINT32, BASE_HEX, NULL, OFPOSF_TX_BIAS,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_flags_tx_temp,
+            { "OFPOSF_TX_TEMP", "openflow_v6.port.stats_prop.optical.flags.tx_temp",
+               FT_UINT32, BASE_HEX, NULL, OFPOSF_TX_TEMP,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_tx_freq_lmda,
+            { "Tx. Freq. Lambda", "openflow_v6.port.stats_prop.optical.tx_freq_lmda",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_tx_offset,
+            { "Tx. Offset", "openflow_v6.port.stats_prop.optical.tx_offset",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_tx_grid_span,
+            { "Tx. Grid Spacing", "openflow_v6.port.stats_prop.optical.tx_grid_span",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_rx_freq_lmda,
+            { "Rx. Freq. Lambda", "openflow_v6.port.stats_prop.optical.rx_freq_lmda",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_rx_offset,
+            { "Rx. Offset", "openflow_v6.port.stats_prop.optical.rx_offset",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_rx_grid_span,
+            { "Rx. Grid Spacing", "openflow_v6.port.stats_prop.optical.rx_grid_span",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_tx_pwr,
+            { "Tx. Power", "openflow_v6.port.stats_prop.optical.tx_pwr",
+               FT_UINT16, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_rx_pwr,
+            { "Rx. Power", "openflow_v6.port.stats_prop.optical.rx_pwr",
+               FT_UINT16, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_bias_current,
+            { "Tx. Bias Current", "openflow_v6.port.stats_prop.optical.bias_current",
+               FT_UINT16, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_optical_temperature,
+            { "Tx. Laser Temperature", "openflow_v6.port.stats_prop.optical.temperature",
+               FT_UINT16, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_experimenter_experimenter,
+            { "Experimenter", "openflow_v6.port_stats_prop.experimenter.experimenter",
+               FT_UINT32, BASE_HEX, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_prop_experimenter_exp_type,
+            { "Exp. type", "openflow_v6.port_stats_prop.experimenter.exp_type",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
         { &hf_openflow_v6_port_port_no,
             { "Port no", "openflow_v6.port.port_no",
                FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v6_port_reserved_values), 0x0,
@@ -6705,7 +7089,7 @@ proto_register_openflow_v6(void)
                NULL, HFILL }
         },
         { &hf_openflow_v6_port_length,
-            { "Pad", "openflow_v6.port.length",
+            { "Length", "openflow_v6.port.length",
                FT_UINT16, BASE_DEC, NULL, 0x0,
                NULL, HFILL }
         },
@@ -6715,7 +7099,7 @@ proto_register_openflow_v6(void)
                NULL, HFILL }
         },
         { &hf_openflow_v6_port_pad2,
-            { "Pad", "openflow_v6.port.pad2",
+            { "Pad2", "openflow_v6.port.pad2",
                FT_BYTES, BASE_NONE, NULL, 0x0,
                NULL, HFILL }
         },
@@ -8074,14 +8458,29 @@ proto_register_openflow_v6(void)
                FT_UINT64, BASE_DEC, NULL, 0x0,
                NULL, HFILL }
         },
-        { &hf_openflow_v6_port_stats_port_no,
-            { "Port number", "openflow_v6.port_stats.port_no",
-               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v6_port_reserved_values), 0x0,
+        { &hf_openflow_v6_port_stats_length,
+            { "Length", "openflow_v6.port_stats.length",
+               FT_UINT16, BASE_DEC, NULL, 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v6_port_stats_pad,
             { "Pad", "openflow_v6.port_stats.pad",
                FT_BYTES, BASE_NONE, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_port_no,
+            { "Port number", "openflow_v6.port_stats.port_no",
+               FT_UINT32, BASE_DEC|BASE_SPECIAL_VALS, VALS(openflow_v6_port_reserved_values), 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_duration_sec,
+            { "Duration sec", "openflow_v6.port_stats.duration_sec",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
+               NULL, HFILL }
+        },
+        { &hf_openflow_v6_port_stats_duration_nsec,
+            { "Duration nsec", "openflow_v6.port_stats.duration_nsec",
+               FT_UINT32, BASE_DEC, NULL, 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v6_port_stats_rx_packets,
@@ -8122,36 +8521,6 @@ proto_register_openflow_v6(void)
         { &hf_openflow_v6_port_stats_tx_errors,
             { "Tx errors", "openflow_v6.port_stats.tx_errors",
                FT_UINT64, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v6_port_stats_rx_frame_error,
-            { "Rx frame errors", "openflow_v6.port_stats.rx_frame_error",
-               FT_UINT64, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v6_port_stats_rx_over_error,
-            { "Rx overrun errors", "openflow_v6.port_stats.rx_over_error",
-               FT_UINT64, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v6_port_stats_rx_crc_error,
-            { "Rx CRC errors", "openflow_v6.port_stats.rx_crc_error",
-               FT_UINT64, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v6_port_stats_collisions,
-            { "Collisions", "openflow_v6.port_stats.collisions",
-               FT_UINT64, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v6_port_stats_duration_sec,
-            { "Duration sec", "openflow_v6.port_stats.duration_sec",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
-               NULL, HFILL }
-        },
-        { &hf_openflow_v6_port_stats_duration_nsec,
-            { "Duration nsec", "openflow_v6.port_stats.duration_nsec",
-               FT_UINT32, BASE_DEC, NULL, 0x0,
                NULL, HFILL }
         },
         { &hf_openflow_v6_queue_stats_length,
@@ -9407,6 +9776,8 @@ proto_register_openflow_v6(void)
         &ett_openflow_v6_port_desc_prop_ethernet_supported,
         &ett_openflow_v6_port_desc_prop_ethernet_peer,
         &ett_openflow_v6_port_desc_prop_optical_supported,
+        &ett_openflow_v6_port_stats_prop,
+        &ett_openflow_v6_port_stats_prop_optical_flags,
         &ett_openflow_v6_port_config,
         &ett_openflow_v6_port_state,
         &ett_openflow_v6_meter_band,
@@ -9494,6 +9865,10 @@ proto_register_openflow_v6(void)
         { &ei_openflow_v6_port_desc_prop_undecoded,
             { "openflow_v6.port.desc_prop.undecoded", PI_UNDECODED, PI_NOTE,
               "Unknown port desc. property body.", EXPFILL }
+        },
+        { &ei_openflow_v6_port_stats_prop_undecoded,
+            { "openflow_v6.port.stats_prop.undecoded", PI_UNDECODED, PI_NOTE,
+              "Unknown port stats. property body.", EXPFILL }
         },
         { &ei_openflow_v6_meter_band_undecoded,
             { "openflow_v6.meter_band.undecoded", PI_UNDECODED, PI_NOTE,

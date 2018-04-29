@@ -4,19 +4,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  */
 #include "config.h"
@@ -783,32 +771,32 @@ static guint8       get_cck_rate(const guint8 *plcp);
 static void         setup_defaults(vwr_t *, guint16);
 
 static gboolean     vwr_read(wtap *, int *, gchar **, gint64 *);
-static gboolean     vwr_seek_read(wtap *, gint64, struct wtap_pkthdr *phdr,
+static gboolean     vwr_seek_read(wtap *, gint64, wtap_rec *rec,
                                   Buffer *, int *, gchar **);
 
 static gboolean     vwr_read_rec_header(vwr_t *, FILE_T, int *, int *, int *, int *, gchar **);
 static gboolean     vwr_process_rec_data(FILE_T fh, int rec_size,
-                                         struct wtap_pkthdr *phdr, Buffer *buf,
+                                         wtap_rec *rec, Buffer *buf,
                                          vwr_t *vwr, int IS_TX, int log_mode, int *err,
                                          gchar **err_info);
 
 static int          vwr_get_fpga_version(wtap *, int *, gchar **);
 
-static gboolean     vwr_read_s1_W_rec(vwr_t *, struct wtap_pkthdr *, Buffer *,
+static gboolean     vwr_read_s1_W_rec(vwr_t *, wtap_rec *, Buffer *,
                                       const guint8 *, int, int *, gchar **);
-static gboolean     vwr_read_s2_W_rec(vwr_t *, struct wtap_pkthdr *, Buffer *,
+static gboolean     vwr_read_s2_W_rec(vwr_t *, wtap_rec *, Buffer *,
                                       const guint8 *, int, int, int *,
                                       gchar **);
 /* For FPGA version >= 48 (OCTO Platform), following function will be used */
-static gboolean     vwr_read_s3_W_rec(vwr_t *, struct wtap_pkthdr *, Buffer *,
+static gboolean     vwr_read_s3_W_rec(vwr_t *, wtap_rec *, Buffer *,
                                       const guint8 *, int, int, int, int *,
                                       gchar **);
-static gboolean     vwr_read_rec_data_ethernet(vwr_t *, struct wtap_pkthdr *,
+static gboolean     vwr_read_rec_data_ethernet(vwr_t *, wtap_rec *,
                                                Buffer *, const guint8 *, int,
                                                int, int *, gchar **);
 
 static int          find_signature(const guint8 *, int, int, register guint32, register guint8);
-static guint64      get_signature_ts(const guint8 *, int);
+static guint64      get_signature_ts(const guint8 *, int, int);
 static float        get_legacy_rate(guint8);
 static float        get_ht_rate(guint8, guint16);
 static float        get_vht_rate(guint8, guint16, guint8);
@@ -879,8 +867,8 @@ static gboolean vwr_read(wtap *wth, int *err, gchar **err_info, gint64 *data_off
     *data_offset = (file_tell(wth->fh) - VW_RECORD_HEADER_LENGTH);
 
     /* got a frame record; read and process it */
-    if (!vwr_process_rec_data(wth->fh, rec_size, &wth->phdr,
-                              wth->frame_buffer, vwr, IS_TX, log_mode, err, err_info))
+    if (!vwr_process_rec_data(wth->fh, rec_size, &wth->rec,
+                              wth->rec_data, vwr, IS_TX, log_mode, err, err_info))
        return FALSE;
 
     /* If the per-file encapsulation isn't known, set it to this packet's encapsulation. */
@@ -888,9 +876,9 @@ static gboolean vwr_read(wtap *wth, int *err, gchar **err_info, gint64 *data_off
     /*  WTAP_ENCAP_PER_PACKET, as this file doesn't have a single encapsulation for all  */
     /*  packets in the file.                                                             */
     if (wth->file_encap == WTAP_ENCAP_UNKNOWN)
-        wth->file_encap = wth->phdr.pkt_encap;
+        wth->file_encap = wth->rec.rec_header.packet_header.pkt_encap;
     else {
-        if (wth->file_encap != wth->phdr.pkt_encap)
+        if (wth->file_encap != wth->rec.rec_header.packet_header.pkt_encap)
             wth->file_encap = WTAP_ENCAP_PER_PACKET;
     }
 
@@ -900,7 +888,7 @@ static gboolean vwr_read(wtap *wth, int *err, gchar **err_info, gint64 *data_off
 /* read a random record in the middle of a file; the start of the record is @ seek_off */
 
 static gboolean vwr_seek_read(wtap *wth, gint64 seek_off,
-    struct wtap_pkthdr *phdr, Buffer *buf, int *err, gchar **err_info)
+    wtap_rec *record, Buffer *buf, int *err, gchar **err_info)
 {
     vwr_t *vwr = (vwr_t *)wth->priv;
     int    rec_size, IS_TX, log_mode;
@@ -913,7 +901,7 @@ static gboolean vwr_seek_read(wtap *wth, gint64 seek_off,
     if (!vwr_read_rec_header(vwr, wth->random_fh, &rec_size, &IS_TX, &log_mode, err, err_info))
         return FALSE;                                  /* Read error or EOF */
 
-    return vwr_process_rec_data(wth->random_fh, rec_size, phdr, buf,
+    return vwr_process_rec_data(wth->random_fh, rec_size, record, buf,
                                 vwr, IS_TX, log_mode, err, err_info);
 }
 
@@ -978,7 +966,7 @@ static int vwr_get_fpga_version(wtap *wth, int *err, gchar **err_info)
     int      f_len, v_type;
     guint16  data_length  = 0;
     guint16  fpga_version;
-    int      valid_but_empty_file = -1;
+    gboolean valid_but_empty_file = FALSE;
 
     filePos = file_tell(wth->fh);
     if (filePos == -1) {
@@ -1010,10 +998,12 @@ static int vwr_get_fpga_version(wtap *wth, int *err, gchar **err_info)
             else if (v_type != VT_FRAME) {
                 if (!wtap_read_bytes(wth->fh, NULL, f_len, err, err_info)) {
                     g_free(rec);
+                    if (*err == WTAP_ERR_SHORT_READ)
+                        return UNKNOWN_FPGA; /* short read - not a vwr file */
                     return -1;
                 }
                 else if (v_type == VT_CPMSG)
-                    valid_but_empty_file = 1;
+                    valid_but_empty_file = TRUE;
             }
             else {
                 rec_size = f_len;
@@ -1112,7 +1102,7 @@ static int vwr_get_fpga_version(wtap *wth, int *err, gchar **err_info)
     }
 
     /* Is this a valid but empty file?  If so, claim it's the S3_W_FPGA FPGA. */
-    if (valid_but_empty_file > 0) {
+    if (valid_but_empty_file) {
         g_free(rec);
         return(S3_W_FPGA);
     }
@@ -1133,7 +1123,7 @@ static int vwr_get_fpga_version(wtap *wth, int *err, gchar **err_info)
 /* The packet is constructed as a 38-byte VeriWave metadata header plus the raw */
 /*  MAC octets. */
 
-static gboolean vwr_read_s1_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
+static gboolean vwr_read_s1_W_rec(vwr_t *vwr, wtap_rec *record,
                                   Buffer *buf, const guint8 *rec, int rec_size,
                                   int *err, gchar **err_info)
 {
@@ -1233,8 +1223,10 @@ static gboolean vwr_read_s1_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
      * The packet data does *not* include the FCS - it's just 4 bytes
      * of junk - so we have to remove it.
      *
-     * We'll be stripping off an FCS (?), so make sure we have at
-     * least 4 octets worth of FCS.
+     * We'll be stripping off that junk, so make sure we have at least
+     * 4 octets worth of packet data.
+     *
+     * There seems to be a special case of a length of 0.
      */
     if (actual_octets < 4) {
         if (actual_octets != 0) {
@@ -1266,8 +1258,8 @@ static gboolean vwr_read_s1_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
     /* extract the 32 LSBs of the signature timestamp field from the data block*/
     pay_off = 42;    /* 24 (MAC) + 8 (SNAP) + IP */
     sig_off = find_signature(m_ptr, rec_size - 6, pay_off, flow_id, flow_seq);
-    if ((m_ptr[sig_off] == 0xdd) && (sig_off + 15 <= (rec_size - v22_W_STATS_LEN)))
-        sig_ts = get_signature_ts(m_ptr, sig_off);
+    if (m_ptr[sig_off] == 0xdd)
+        sig_ts = get_signature_ts(m_ptr, sig_off, rec_size - v22_W_STATS_LEN);
     else
         sig_ts = 0;
 
@@ -1280,17 +1272,17 @@ static gboolean vwr_read_s1_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
      * adding the lengths of the metadata headers, is less than
      * WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't need to check it.
      */
-    phdr->len = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
-    phdr->caplen = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
+    record->rec_header.packet_header.len = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
+    record->rec_header.packet_header.caplen = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
 
-    phdr->ts.secs   = (time_t)s_sec;
-    phdr->ts.nsecs  = (int)(s_usec * 1000);
-    phdr->pkt_encap = WTAP_ENCAP_IXVERIWAVE;
+    record->ts.secs   = (time_t)s_sec;
+    record->ts.nsecs  = (int)(s_usec * 1000);
+    record->rec_header.packet_header.pkt_encap = WTAP_ENCAP_IXVERIWAVE;
 
-    phdr->rec_type = REC_TYPE_PACKET;
-    phdr->presence_flags = WTAP_HAS_TS;
+    record->rec_type = REC_TYPE_PACKET;
+    record->presence_flags = WTAP_HAS_TS;
 
-    ws_buffer_assure_space(buf, phdr->caplen);
+    ws_buffer_assure_space(buf, record->rec_header.packet_header.caplen);
     data_ptr = ws_buffer_start_ptr(buf);
 
     /*
@@ -1407,7 +1399,7 @@ static gboolean vwr_read_s1_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
 }
 
 
-static gboolean vwr_read_s2_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
+static gboolean vwr_read_s2_W_rec(vwr_t *vwr, wtap_rec *record,
                                   Buffer *buf, const guint8 *rec, int rec_size,
                                   int IS_TX, int *err, gchar **err_info)
 {
@@ -1631,8 +1623,10 @@ static gboolean vwr_read_s2_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
      * The packet data does *not* include the FCS - it's just 4 bytes
      * of junk - so we have to remove it.
      *
-     * We'll be stripping off an FCS (?), so make sure we have at
-     * least 4 octets worth of FCS.
+     * We'll be stripping off that junk, so make sure we have at least
+     * 4 octets worth of packet data.
+     *
+     * There seems to be a special case of a length of 0.
      */
     if (actual_octets < 4) {
         if (actual_octets != 0) {
@@ -1641,7 +1635,7 @@ static gboolean vwr_read_s2_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
             *err = WTAP_ERR_BAD_FILE;
             return FALSE;
         }
-    } else if (actual_octets > 4) {
+    } else {
         actual_octets -= 4;
     }
 
@@ -1665,8 +1659,8 @@ static gboolean vwr_read_s2_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
     m_ptr = &(rec[8+12]);
     pay_off = 42;         /* 24 (MAC) + 8 (SNAP) + IP */
     sig_off = find_signature(m_ptr, rec_size - 20, pay_off, flow_id, flow_seq);
-    if ((m_ptr[sig_off] == 0xdd) && (sig_off + 15 <= (rec_size - vVW510021_W_STATS_TRAILER_LEN)))
-        sig_ts = get_signature_ts(m_ptr, sig_off);
+    if (m_ptr[sig_off] == 0xdd)
+        sig_ts = get_signature_ts(m_ptr, sig_off, rec_size - vVW510021_W_STATS_TRAILER_LEN);
     else
         sig_ts = 0;
 
@@ -1694,17 +1688,17 @@ static gboolean vwr_read_s2_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
      * adding the lengths of the metadata headers, is less than
      * WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't need to check it.
      */
-    phdr->len = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
-    phdr->caplen = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
+    record->rec_header.packet_header.len = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
+    record->rec_header.packet_header.caplen = STATS_COMMON_FIELDS_LEN + EXT_WLAN_FIELDS_LEN + actual_octets;
 
-    phdr->ts.secs   = (time_t)s_sec;
-    phdr->ts.nsecs  = (int)(s_usec * 1000);
-    phdr->pkt_encap = WTAP_ENCAP_IXVERIWAVE;
+    record->ts.secs   = (time_t)s_sec;
+    record->ts.nsecs  = (int)(s_usec * 1000);
+    record->rec_header.packet_header.pkt_encap = WTAP_ENCAP_IXVERIWAVE;
 
-    phdr->rec_type = REC_TYPE_PACKET;
-    phdr->presence_flags = WTAP_HAS_TS;
+    record->rec_type = REC_TYPE_PACKET;
+    record->presence_flags = WTAP_HAS_TS;
 
-    ws_buffer_assure_space(buf, phdr->caplen);
+    ws_buffer_assure_space(buf, record->rec_header.packet_header.caplen);
     data_ptr = ws_buffer_start_ptr(buf);
 
     /*
@@ -1821,7 +1815,7 @@ static gboolean vwr_read_s2_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
     return TRUE;
 }
 
-static gboolean vwr_read_s3_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
+static gboolean vwr_read_s3_W_rec(vwr_t *vwr, wtap_rec *record,
                                   Buffer *buf, const guint8 *rec, int rec_size,
                                   int IS_TX, int log_mode, int *err,
                                   gchar **err_info)
@@ -1875,17 +1869,17 @@ static gboolean vwr_read_s3_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
          * OCTO_MODIFIED_RF_LEN + 1 is less than WTAP_MAX_PACKET_SIZE_STANDARD will
          * ever be, so we don't need to check it.
          */
-        phdr->len = OCTO_MODIFIED_RF_LEN + 1;       /* 1st octet is reserved for detecting type of frame while displaying in wireshark */
-        phdr->caplen = OCTO_MODIFIED_RF_LEN + 1;
+        record->rec_header.packet_header.len = OCTO_MODIFIED_RF_LEN + 1;       /* 1st octet is reserved for detecting type of frame while displaying in wireshark */
+        record->rec_header.packet_header.caplen = OCTO_MODIFIED_RF_LEN + 1;
 
-        phdr->ts.secs   = (time_t)s_sec;
-        phdr->ts.nsecs  = (int)(s_usec * 1000);
-        phdr->pkt_encap = WTAP_ENCAP_IXVERIWAVE;
+        record->ts.secs   = (time_t)s_sec;
+        record->ts.nsecs  = (int)(s_usec * 1000);
+        record->rec_header.packet_header.pkt_encap = WTAP_ENCAP_IXVERIWAVE;
 
-        phdr->rec_type = REC_TYPE_PACKET;
-        phdr->presence_flags = WTAP_HAS_TS;
+        record->rec_type = REC_TYPE_PACKET;
+        record->presence_flags = WTAP_HAS_TS;
 
-        ws_buffer_assure_space(buf, phdr->caplen);
+        ws_buffer_assure_space(buf, record->rec_header.packet_header.caplen);
         data_ptr = ws_buffer_start_ptr(buf);
 
         port_type = IS_TX << 4;
@@ -1983,11 +1977,16 @@ static gboolean vwr_read_s3_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
 
         /*** Add the PLCP length for S3_W_FPGA version VHT frames for Beamforming decode ***/
         if (log_mode == 3) {
-            frame_size = rec_size - 80 - stats_offset;
+            frame_size = rec_size - (stats_offset + vwr->MPDU_OFF + vVW510021_W_STATS_TRAILER_LEN);
             if (frame_size > ((int) msdu_length))
                 actual_octets = msdu_length;
-            else
+            else {
+                /*
+                 * XXX - does this mean "the packet was cut short during
+                 * capture" or "this is a malformed record"?
+                 */
                 actual_octets = frame_size;
+            }
         }
         else
         {
@@ -2108,27 +2107,32 @@ static gboolean vwr_read_s3_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
          * lsb nibble is set to 1 always as this function is applicable for only FPGA version >= 48
          */
         if (log_mode == 3) {
-            /*
-             * The MSDU length includes the FCS.
-             *
-             * The packet data does *not* include the FCS - it's just 4 bytes
-             * of junk - so we have to remove it.
-             *
-             * We'll be stripping off an FCS (?), so make sure we have at
-             * least 4 octets worth of FCS.
-             *
-             * XXX - is the FCS actually present here, as it appears to be
-             * if log_mode isn't 3?
-             */
-            if (actual_octets < 4) {
-                if (actual_octets != 0) {
-                    *err_info = g_strdup_printf("vwr: Invalid data length %u (too short to include 4 bytes of FCS)",
-                                                actual_octets);
-                    *err = WTAP_ERR_BAD_FILE;
-                    return FALSE;
+            if (frame_size >= (int) msdu_length) {
+                /*
+                 * The MSDU length includes the FCS.
+                 *
+                 * The packet data does *not* include the FCS - it's just 4
+                 * bytes of junk - so we have to remove it.
+                 *
+                 * We'll be stripping off that junk, so make sure we have at
+                 * least 4 octets worth of packet data.
+                 *
+                 * XXX - is the FCS actually present here, as it appears to be
+                 * if log_mode isn't 3?
+                 *
+                 * There seems to be a special case of a length of 0.
+                 */
+                if (actual_octets < 4) {
+                    if (actual_octets != 0) {
+                        *err_info = g_strdup_printf("vwr: Invalid data length %u (too short to include 4 bytes of FCS)",
+                                                    actual_octets);
+                        *err = WTAP_ERR_BAD_FILE;
+                        return FALSE;
+                    }
+                } else {
+                    actual_octets -= 4;
                 }
-            } else if (actual_octets > 4 && (frame_size >= (int) msdu_length))
-                actual_octets -=4;
+            }
             ver_fpga = 0x11;
         } else {
             ver_fpga = 0x01;
@@ -2154,8 +2158,8 @@ static gboolean vwr_read_s3_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
         m_ptr = &(rec[stats_offset+8+12]);
         pay_off = 42;         /* 24 (MAC) + 8 (SNAP) + IP */
         sig_off = find_signature(m_ptr, rec_size - 20, pay_off, flow_id, flow_seq);
-        if ((m_ptr[sig_off] == 0xdd) && (sig_off + 15 <= (rec_size - vVW510021_W_STATS_TRAILER_LEN)))
-            sig_ts = get_signature_ts(m_ptr, sig_off);
+        if (m_ptr[sig_off] == 0xdd)
+            sig_ts = get_signature_ts(m_ptr, sig_off, rec_size - vVW510021_W_STATS_TRAILER_LEN);
         else
             sig_ts = 0;
 
@@ -2182,32 +2186,32 @@ static gboolean vwr_read_s3_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
          * We include the length of the metadata headers in the packet lengths.
          */
         if (IS_TX == 4) {
-            phdr->len = OCTO_MODIFIED_RF_LEN + OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
-            phdr->caplen = OCTO_MODIFIED_RF_LEN + OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
+            record->rec_header.packet_header.len = OCTO_MODIFIED_RF_LEN + OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
+            record->rec_header.packet_header.caplen = OCTO_MODIFIED_RF_LEN + OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
         } else {
-            phdr->len = OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
-            phdr->caplen = OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
+            record->rec_header.packet_header.len = OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
+            record->rec_header.packet_header.caplen = OCTO_TIMESTAMP_FIELDS_LEN + OCTO_LAYER1TO4_LEN + actual_octets;
         }
-        if (phdr->caplen > WTAP_MAX_PACKET_SIZE_STANDARD) {
+        if (record->rec_header.packet_header.caplen > WTAP_MAX_PACKET_SIZE_STANDARD) {
             /*
              * Probably a corrupt capture file; return an error,
              * so that our caller doesn't blow up trying to allocate
              * space for an immensely-large packet.
              */
             *err_info = g_strdup_printf("vwr: File has %u-byte packet, bigger than maximum of %u",
-                                        phdr->caplen, WTAP_MAX_PACKET_SIZE_STANDARD);
+                                        record->rec_header.packet_header.caplen, WTAP_MAX_PACKET_SIZE_STANDARD);
             *err = WTAP_ERR_BAD_FILE;
             return FALSE;
         }
 
-        phdr->ts.secs   = (time_t)s_sec;
-        phdr->ts.nsecs  = (int)(s_usec * 1000);
-        phdr->pkt_encap = WTAP_ENCAP_IXVERIWAVE;
+        record->ts.secs   = (time_t)s_sec;
+        record->ts.nsecs  = (int)(s_usec * 1000);
+        record->rec_header.packet_header.pkt_encap = WTAP_ENCAP_IXVERIWAVE;
 
-        phdr->rec_type = REC_TYPE_PACKET;
-        phdr->presence_flags = WTAP_HAS_TS;
+        record->rec_type = REC_TYPE_PACKET;
+        record->presence_flags = WTAP_HAS_TS;
 
-        ws_buffer_assure_space(buf, phdr->caplen);
+        ws_buffer_assure_space(buf, record->rec_header.packet_header.caplen);
         data_ptr = ws_buffer_start_ptr(buf);
     }
 
@@ -2529,7 +2533,7 @@ static gboolean vwr_read_s3_W_rec(vwr_t *vwr, struct wtap_pkthdr *phdr,
 /* Copy the actual packet data from the capture file into the target data block.         */
 /* The packet is constructed as a 38-byte VeriWave-extended Radiotap header plus the raw */
 /*  MAC octets.                                                                          */
-static gboolean vwr_read_rec_data_ethernet(vwr_t *vwr, struct wtap_pkthdr *phdr,
+static gboolean vwr_read_rec_data_ethernet(vwr_t *vwr, wtap_rec *record,
                                            Buffer *buf, const guint8 *rec,
                                            int rec_size, int IS_TX, int *err,
                                            gchar **err_info)
@@ -2624,8 +2628,8 @@ static gboolean vwr_read_rec_data_ethernet(vwr_t *vwr, struct wtap_pkthdr *phdr,
      * The packet data does *not* include the FCS - it's just 4 bytes
      * of junk - so we have to remove it.
      *
-     * We'll be stripping off an FCS (?), so make sure we have at
-     * least 4 octets worth of FCS.
+     * We'll be stripping off that junk, so make sure we have at least
+     * 4 octets worth of packet data.
      *
      * There seems to be a special case of a length of 0.
      */
@@ -2678,8 +2682,8 @@ static gboolean vwr_read_rec_data_ethernet(vwr_t *vwr, struct wtap_pkthdr *phdr,
     }
 
     sig_off = find_signature(m_ptr, rec_size, pay_off, flow_id, flow_seq);
-    if ((m_ptr[sig_off] == 0xdd) && (sig_off + 15 <= msdu_length) && (f_flow != 0))
-        sig_ts = get_signature_ts(m_ptr, sig_off);
+    if ((m_ptr[sig_off] == 0xdd) && (f_flow != 0))
+        sig_ts = get_signature_ts(m_ptr, sig_off, msdu_length);
     else
         sig_ts = 0;
 
@@ -2707,19 +2711,19 @@ static gboolean vwr_read_rec_data_ethernet(vwr_t *vwr, struct wtap_pkthdr *phdr,
      * adding the lengths of the metadata headers, is less than
      * WTAP_MAX_PACKET_SIZE_STANDARD will ever be, so we don't need to check it.
      */
-    phdr->len = STATS_COMMON_FIELDS_LEN + EXT_ETHERNET_FIELDS_LEN + actual_octets;
-    phdr->caplen = STATS_COMMON_FIELDS_LEN + EXT_ETHERNET_FIELDS_LEN + actual_octets;
+    record->rec_header.packet_header.len = STATS_COMMON_FIELDS_LEN + EXT_ETHERNET_FIELDS_LEN + actual_octets;
+    record->rec_header.packet_header.caplen = STATS_COMMON_FIELDS_LEN + EXT_ETHERNET_FIELDS_LEN + actual_octets;
 
-    phdr->ts.secs   = (time_t)s_sec;
-    phdr->ts.nsecs  = (int)(s_usec * 1000);
-    phdr->pkt_encap = WTAP_ENCAP_IXVERIWAVE;
+    record->ts.secs   = (time_t)s_sec;
+    record->ts.nsecs  = (int)(s_usec * 1000);
+    record->rec_header.packet_header.pkt_encap = WTAP_ENCAP_IXVERIWAVE;
 
-    phdr->rec_type = REC_TYPE_PACKET;
-    phdr->presence_flags = WTAP_HAS_TS;
+    record->rec_type = REC_TYPE_PACKET;
+    record->presence_flags = WTAP_HAS_TS;
 
     /*etap_hdr.vw_ip_length = (guint16)ip_len;*/
 
-    ws_buffer_assure_space(buf, phdr->caplen);
+    ws_buffer_assure_space(buf, record->rec_header.packet_header.caplen);
     data_ptr = ws_buffer_start_ptr(buf);
 
     /*
@@ -3219,10 +3223,13 @@ int find_signature(const guint8 *m_ptr, int rec_size, int pay_off, guint32 flow_
 }
 
 /* utility routine: harvest the signature time stamp from the data frame */
-guint64 get_signature_ts(const guint8 *m_ptr,int sig_off)
+guint64 get_signature_ts(const guint8 *m_ptr,int sig_off, int sig_max)
 {
     int     ts_offset;
     guint64 sig_ts;
+
+    if (sig_off + 15 >= sig_max)
+        return 0;
 
     if (m_ptr[sig_off + 15] == 0xe2)
         ts_offset = 5;
@@ -3320,7 +3327,7 @@ get_vht_rate(guint8 mcs_index, guint16 rflags, guint8 nss)
 
 static gboolean
 vwr_process_rec_data(FILE_T fh, int rec_size,
-                     struct wtap_pkthdr *phdr, Buffer *buf, vwr_t *vwr,
+                     wtap_rec *record, Buffer *buf, vwr_t *vwr,
                      int IS_TX, int log_mode, int *err, gchar **err_info)
 {
     guint8*   rec;       /* local buffer (holds input record) */
@@ -3340,17 +3347,17 @@ vwr_process_rec_data(FILE_T fh, int rec_size,
     switch (vwr->FPGA_VERSION)
     {
         case S1_W_FPGA:
-            ret = vwr_read_s1_W_rec(vwr, phdr, buf, rec, rec_size, err, err_info);
+            ret = vwr_read_s1_W_rec(vwr, record, buf, rec, rec_size, err, err_info);
             break;
         case S2_W_FPGA:
-            ret = vwr_read_s2_W_rec(vwr, phdr, buf, rec, rec_size, IS_TX, err, err_info);
+            ret = vwr_read_s2_W_rec(vwr, record, buf, rec, rec_size, IS_TX, err, err_info);
             break;
         case S3_W_FPGA:
-            ret = vwr_read_s3_W_rec(vwr, phdr, buf, rec, rec_size, IS_TX, log_mode, err, err_info);
+            ret = vwr_read_s3_W_rec(vwr, record, buf, rec, rec_size, IS_TX, log_mode, err, err_info);
             break;
         case vVW510012_E_FPGA:
         case vVW510024_E_FPGA:
-            ret = vwr_read_rec_data_ethernet(vwr, phdr, buf, rec, rec_size, IS_TX, err, err_info);
+            ret = vwr_read_rec_data_ethernet(vwr, record, buf, rec, rec_size, IS_TX, err, err_info);
             break;
         default:
             g_free(rec);

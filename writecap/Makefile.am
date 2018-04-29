@@ -26,17 +26,10 @@ AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(GLIB_CFLAGS)
 noinst_LIBRARIES = libwritecap.a
 
 CLEANFILES = \
-	doxygen-writecap.tag	\
-	libwritecap.a		\
-	*~
-
-MAINTAINERCLEANFILES = \
-	$(GENERATED_FILES)	\
-	Makefile.in
+	doxygen-writecap.tag
 
 EXTRA_DIST = \
 	.editorconfig		\
-	$(GENERATOR_FILES)	\
 	CMakeLists.txt		\
 	doxygen.cfg.in
 
@@ -70,9 +63,9 @@ checkapi: checkapi-base checkapi-todo
 checkapi-base:
 	$(PERL) $(top_srcdir)/tools/checkAPIs.pl -g deprecated-gtk -build \
 	-sourcedir=$(srcdir) \
-	$(WRITECAP_SRC)
+	$(libwritecap_a_SOURCES)
 
 checkapi-todo:
 	$(PERL) $(top_srcdir)/tools/checkAPIs.pl -M -g deprecated-gtk-todo -build \
 	-sourcedir=$(srcdir) \
-	$(WRITECAP_SRC)
+	$(libwritecap_a_SOURCES)

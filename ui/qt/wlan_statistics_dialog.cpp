@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "wlan_statistics_dialog.h"
 
@@ -31,8 +18,8 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
-#include "percent_bar_delegate.h"
-#include "qt_ui_utils.h"
+#include <ui/qt/models/percent_bar_delegate.h>
+#include <ui/qt/utils/qt_ui_utils.h>
 #include "wireshark_application.h"
 
 // To do:
@@ -64,7 +51,7 @@ enum {
 class WlanStationTreeWidgetItem : public QTreeWidgetItem
 {
 public:
-    WlanStationTreeWidgetItem(address *addr) :
+    WlanStationTreeWidgetItem(const address *addr) :
         QTreeWidgetItem (wlan_station_row_type_),
         packets_(0),
         retry_(0),
@@ -79,10 +66,10 @@ public:
         copy_address(&addr_, addr);
         setText(col_bssid_, address_to_qstring(&addr_));
     }
-    bool isMatch(address *addr) {
+    bool isMatch(const address *addr) {
         return addresses_equal(&addr_, addr);
     }
-    void update(wlan_hdr_t *wlan_hdr) {
+    void update(const wlan_hdr_t *wlan_hdr) {
         bool is_sender = addresses_equal(&addr_, &wlan_hdr->src);
 
         if (wlan_hdr->stats.fc_retry != 0) {
@@ -212,7 +199,7 @@ private:
 class WlanNetworkTreeWidgetItem : public QTreeWidgetItem
 {
 public:
-    WlanNetworkTreeWidgetItem(QTreeWidget *parent, wlan_hdr_t *wlan_hdr) :
+    WlanNetworkTreeWidgetItem(QTreeWidget *parent, const wlan_hdr_t *wlan_hdr) :
         QTreeWidgetItem (parent, wlan_network_row_type_),
         beacon_(0),
         data_packet_(0),
@@ -242,7 +229,7 @@ public:
         setText(col_ssid_, ssid_text);
     }
 
-    bool isMatch(wlan_hdr_t *wlan_hdr) {
+    bool isMatch(const wlan_hdr_t *wlan_hdr) {
         bool is_bssid_match = false;
         bool is_ssid_match = false;
         bool update_bssid = false;
@@ -316,7 +303,7 @@ public:
         return is_bssid_match && is_ssid_match;
     }
 
-    void update(wlan_hdr_t *wlan_hdr) {
+    void update(const wlan_hdr_t *wlan_hdr) {
         if (channel_ == 0 && wlan_hdr->stats.channel != 0) {
             channel_ = wlan_hdr->stats.channel;
         }
@@ -481,7 +468,7 @@ private:
     // and add them all at once later.
     QList<QTreeWidgetItem *>stations_;
 
-    void updateBssid(wlan_hdr_t *wlan_hdr) {
+    void updateBssid(const wlan_hdr_t *wlan_hdr) {
         copy_address(&bssid_, &wlan_hdr->bssid);
         is_broadcast_ = is_broadcast_bssid(&bssid_);
         setText(col_bssid_, address_to_qstring(&bssid_));
@@ -550,6 +537,10 @@ WlanStatisticsDialog::WlanStatisticsDialog(QWidget &parent, CaptureFile &cf, con
 
     connect(statsTreeWidget(), SIGNAL(itemSelectionChanged()),
             this, SLOT(updateHeaderLabels()));
+
+    // Set handler for when display filter string is changed.
+    connect(this, SIGNAL(updateFilter(QString)),
+            this, SLOT(filterUpdated(QString)));
 }
 
 WlanStatisticsDialog::~WlanStatisticsDialog()
@@ -569,7 +560,7 @@ void WlanStatisticsDialog::tapReset(void *ws_dlg_ptr)
 gboolean WlanStatisticsDialog::tapPacket(void *ws_dlg_ptr, _packet_info *, epan_dissect *, const void *wlan_hdr_ptr)
 {
     WlanStatisticsDialog *ws_dlg = static_cast<WlanStatisticsDialog *>(ws_dlg_ptr);
-    wlan_hdr_t *wlan_hdr  = (wlan_hdr_t *)wlan_hdr_ptr;
+    const wlan_hdr_t *wlan_hdr  = (const wlan_hdr_t *)wlan_hdr_ptr;
     if (!ws_dlg || !wlan_hdr) return FALSE;
 
     guint16 frame_type = wlan_hdr->type & 0xff0;
@@ -641,7 +632,7 @@ void WlanStatisticsDialog::fillTree()
 {
     if (!registerTapListener("wlan",
                              this,
-                             NULL,
+                             displayFilter_.toLatin1().data(),
                              TL_REQUIRES_NOTHING,
                              tapReset,
                              tapPacket,
@@ -700,6 +691,26 @@ void WlanStatisticsDialog::captureFileClosing()
     updateWidgets();
 
     WiresharkDialog::captureFileClosing();
+}
+
+// Store filter from signal.
+void WlanStatisticsDialog::filterUpdated(QString filter)
+{
+    displayFilter_ = filter;
+}
+
+// This is how an item is represented for exporting.
+QList<QVariant> WlanStatisticsDialog::treeItemData(QTreeWidgetItem *it) const
+{
+    // Cast up to our type.
+    WlanNetworkTreeWidgetItem *nit = dynamic_cast<WlanNetworkTreeWidgetItem*>(it);
+    if (nit) {
+        return nit->rowData();
+    }
+    // TODO: not going to cast to WlanStationTreeWidgetItem* and do the same as
+    // some of the columns are different...
+
+    return QList<QVariant>();
 }
 
 // Stat command + args

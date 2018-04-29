@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -109,6 +97,69 @@ static const value_string exported_pdu_tag_vals[] = {
 
    { 0,        NULL   }
 };
+
+static const value_string exported_pdu_port_type_vals[] = {
+   { OLD_PT_NONE,     "NONE" },
+   { OLD_PT_SCTP,     "SCTP" },
+   { OLD_PT_TCP,      "TCP" },
+   { OLD_PT_UDP,      "UDP" },
+   { OLD_PT_DCCP,     "DCCP" },
+   { OLD_PT_IPX,      "IPX" },
+   { OLD_PT_NCP,      "NCP" },
+   { OLD_PT_EXCHG,    "FC EXCHG" },
+   { OLD_PT_DDP,      "DDP" },
+   { OLD_PT_SBCCS,    "FICON SBCCS" },
+   { OLD_PT_IDP,      "IDP" },
+   { OLD_PT_TIPC,     "TIPC" },
+   { OLD_PT_USB,      "USB" },
+   { OLD_PT_I2C,      "I2C" },
+   { OLD_PT_IBQP,     "IBQP" },
+   { OLD_PT_BLUETOOTH,"BLUETOOTH" },
+   { OLD_PT_TDMOP,    "TDMOP" },
+
+   { 0,        NULL   }
+};
+
+static port_type exp_pdu_old_to_new_port_type(guint type)
+{
+    switch (type)
+    {
+    case OLD_PT_NONE:
+        return PT_NONE;
+    case OLD_PT_SCTP:
+        return PT_SCTP;
+    case OLD_PT_TCP:
+        return PT_TCP;
+    case OLD_PT_UDP:
+        return PT_UDP;
+    case OLD_PT_DCCP:
+        return PT_DCCP;
+    case OLD_PT_IPX:
+        return PT_IPX;
+    case OLD_PT_DDP:
+        return PT_DDP;
+    case OLD_PT_IDP:
+        return PT_IDP;
+    case OLD_PT_USB:
+        return PT_USB;
+    case OLD_PT_I2C:
+        return PT_I2C;
+    case OLD_PT_IBQP:
+        return PT_IBQP;
+    case OLD_PT_BLUETOOTH:
+        return PT_BLUETOOTH;
+    case OLD_PT_EXCHG:
+    case OLD_PT_TIPC:
+    case OLD_PT_TDMOP:
+    case OLD_PT_NCP:
+    case OLD_PT_SBCCS:
+        //no longer supported
+        break;
+    }
+
+    DISSECTOR_ASSERT(FALSE);
+    return PT_NONE;
+}
 
 /* Code to actually dissect the packets */
 static int
@@ -201,9 +252,8 @@ dissect_exported_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                 copy_address_shallow(&pinfo->dst, &pinfo->net_dst);
                 break;
             case EXP_PDU_TAG_PORT_TYPE:
-                pinfo->ptype = (port_type)tvb_get_ntohl(tvb, offset);
-                proto_tree_add_uint_format_value(tag_tree, hf_exported_pdu_port_type, tvb, offset, 4, pinfo->ptype,
-                                                 "%s (%u)", port_type_to_str(pinfo->ptype), pinfo->ptype);
+                pinfo->ptype = exp_pdu_old_to_new_port_type(tvb_get_ntohl(tvb, offset));
+                proto_tree_add_item(tag_tree, hf_exported_pdu_port_type, tvb, offset, 4, ENC_BIG_ENDIAN);
                 break;
             case EXP_PDU_TAG_SRC_PORT:
                 proto_tree_add_item(tag_tree, hf_exported_pdu_src_port, tvb, offset, 4, ENC_BIG_ENDIAN);
@@ -283,7 +333,11 @@ dissect_exported_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
         case EXPORTED_PDU_NEXT_PROTO_STR:
             proto_handle = find_dissector(proto_name);
             if (proto_handle) {
-                col_clear(pinfo->cinfo, COL_PROTOCOL);
+                if (col_proto_str) {
+                    col_add_str(pinfo->cinfo, COL_PROTOCOL, col_proto_str);
+                } else {
+                    col_clear(pinfo->cinfo, COL_PROTOCOL);
+                }
                 call_dissector_with_data(proto_handle, payload_tvb, pinfo, tree, dissector_data);
             }
             break;
@@ -291,7 +345,11 @@ dissect_exported_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
         {
             heur_dtbl_entry_t *heur_diss = find_heur_dissector_by_unique_short_name(proto_name);
             if (heur_diss) {
-                col_clear(pinfo->cinfo, COL_PROTOCOL);
+                if (col_proto_str) {
+                    col_add_str(pinfo->cinfo, COL_PROTOCOL, col_proto_str);
+                } else {
+                    col_clear(pinfo->cinfo, COL_PROTOCOL);
+                }
                 call_heur_dissector_direct(heur_diss, payload_tvb, pinfo, tree, dissector_data);
             }
             break;
@@ -300,9 +358,10 @@ dissect_exported_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
         {
             dis_tbl = find_dissector_table(dissector_table);
             if (dis_tbl) {
-                col_clear(pinfo->cinfo, COL_PROTOCOL);
                 if (col_proto_str) {
-                    col_add_fstr(pinfo->cinfo, COL_PROTOCOL, "%s",col_proto_str);
+                    col_add_str(pinfo->cinfo, COL_PROTOCOL, col_proto_str);
+                } else {
+                    col_clear(pinfo->cinfo, COL_PROTOCOL);
                 }
                 dissector_try_uint_new(dis_tbl, dissector_table_val, payload_tvb, pinfo, tree, FALSE, dissector_data);
             }
@@ -380,7 +439,7 @@ proto_register_exported_pdu(void)
         },
         { &hf_exported_pdu_port_type,
             { "Port Type", "exported_pdu.port_type",
-               FT_UINT32, BASE_DEC, NULL, 0,
+               FT_UINT32, BASE_DEC, VALS(exported_pdu_port_type_vals), 0,
               NULL, HFILL }
         },
         { &hf_exported_pdu_src_port,

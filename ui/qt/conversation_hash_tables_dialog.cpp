@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "conversation_hash_tables_dialog.h"
 #include <ui_conversation_hash_tables_dialog.h>
@@ -29,7 +16,7 @@
 #include <epan/conversation.h>
 #include <epan/conversation_debug.h>
 
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 #include "wireshark_application.h"
 
 ConversationHashTablesDialog::ConversationHashTablesDialog(QWidget *parent) :
@@ -38,7 +25,7 @@ ConversationHashTablesDialog::ConversationHashTablesDialog(QWidget *parent) :
 {
     ui->setupUi(this);
     if (parent) loadGeometry(parent->width() * 3 / 4, parent->height() * 3 / 4);
-
+    setAttribute(Qt::WA_DeleteOnClose, true);
     setWindowTitle(wsApp->windowTitleString(tr("Dissector Tables")));
 
     QString html;
@@ -61,15 +48,13 @@ ConversationHashTablesDialog::~ConversationHashTablesDialog()
 static void
 populate_html_table(gpointer data, gpointer user_data)
 {
-    const conversation_key *conv_key = (const conversation_key *)data;
+    const conversation_key_t conv_key = (const conversation_key_t)data;
     QString* html_table = (QString*)user_data;
+    gchar* tmp = conversation_get_html_hash(conv_key);
 
     // XXX Add a column for the hash value.
-    (*html_table) += QString("<tr><td>%1</td><td>%2</td><td>%3</td><td>%4</td></tr>\n")
-                    .arg(address_to_qstring(&conv_key->addr1))
-                    .arg(conv_key->port1)
-                    .arg(address_to_qstring(&conv_key->addr2))
-                    .arg(conv_key->port2);
+    (*html_table) += QString(tmp);
+    wmem_free(NULL, tmp);
 }
 
 const QString ConversationHashTablesDialog::hashTableToHtmlTable(const QString table_name, wmem_map_t *hash_table)

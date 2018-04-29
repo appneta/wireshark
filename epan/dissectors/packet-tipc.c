@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  * Protocol ref:
  * http://tipc.sourceforge.net/
  */
@@ -2141,7 +2129,7 @@ dissect_tipc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 	proto_item *ti, *item;
 	proto_tree *tipc_tree, *tipc_data_tree;
 	int offset = 0;
-	guint32 dword;
+	guint32 srcport, destport = 0, dword;
 	guint8  version;
 	guint32 msg_size;
 	guint8  hdr_size;
@@ -2293,16 +2281,14 @@ dissect_tipc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 			break;
 	}
 
-	dword = tvb_get_ntohl(tipc_tvb, offset);
-	pinfo->ptype = PT_TIPC;
-	pinfo->srcport = dword;
-	proto_tree_add_item(tipc_tree, hf_tipc_org_port, tipc_tvb, offset, 4, ENC_BIG_ENDIAN);
+	proto_tree_add_item_ret_uint(tipc_tree, hf_tipc_org_port, tipc_tvb, offset, 4, ENC_BIG_ENDIAN, &srcport);
 	offset = offset + 4;
 	if (user != TIPC_NAME_DISTRIBUTOR) {
-		dword = tvb_get_ntohl(tipc_tvb, offset);
-		pinfo->destport = dword;
-		proto_tree_add_item(tipc_tree, hf_tipc_dst_port, tipc_tvb, offset, 4, ENC_BIG_ENDIAN);
+		proto_tree_add_item_ret_uint(tipc_tree, hf_tipc_dst_port, tipc_tvb, offset, 4, ENC_BIG_ENDIAN, &destport);
 	}
+
+	conversation_create_endpoint(pinfo, &pinfo->src, &pinfo->dst, ENDPOINT_TIPC, srcport, destport, 0);
+
 	offset = offset + 4;
 	/* 20 - 24 Bytes
 	   20 bytes: Used in subnetwork local, connection oriented messages, where error code, reroute

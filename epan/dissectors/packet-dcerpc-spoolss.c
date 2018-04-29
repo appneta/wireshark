@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* TODO list:
@@ -778,16 +766,14 @@ SpoolssGetPrinterData_q(tvbuff_t *tvb, int offset,
 		FALSE, FALSE);
 
 
-	value_name=NULL;
+	value_name = NULL;
  	offset = dissect_ndr_cvstring(
  		tvb, offset, pinfo, tree, di, drep, sizeof(guint16),
- 		hf_printerdata_value, TRUE, value_name ? NULL : &value_name);
+		hf_printerdata_value, TRUE, &value_name);
 	/* GetPrinterData() stores the printerdata in se_data */
 	if(!pinfo->fd->flags.visited){
-		if(!dcv->se_data){
-			if(value_name){
-				dcv->se_data = wmem_strdup(wmem_file_scope(), value_name);
-			}
+		if(!dcv->se_data && value_name){
+			dcv->se_data = wmem_strdup(wmem_file_scope(), value_name);
 		}
 	}
 

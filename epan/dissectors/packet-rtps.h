@@ -20,19 +20,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  *                  -------------------------------------
  *
@@ -283,12 +271,15 @@ typedef struct _rtps_dissector_data {
 #define PID_REACHABILITY_LEASE_DURATION         (0x8016)
 #define PID_VENDOR_BUILTIN_ENDPOINT_SET         (0x8017)
 #define PID_ENDPOINT_SECURITY_ATTRIBUTES        (0x8018)
+#define PID_SAMPLE_SIGNATURE                    (0x8019)/* inline QoS */
 #define PID_EXTENDED                            (0x3f01)
 #define PID_LIST_END                            (0x3f02)
 
 #define PID_IDENTITY_TOKEN                      (0x1001)
 #define PID_PERMISSIONS_TOKEN                   (0x1002)
 #define PID_DATA_TAGS                           (0x1003)
+#define PID_ENDPOINT_SECURITY_INFO              (0x1004)
+#define PID_PARTICIPANT_SECURITY_INFO           (0x1005)
 
 /* Vendor-specific: PT */
 #define PID_PRISMTECH_WRITER_INFO               (0x8001)
@@ -340,16 +331,18 @@ typedef struct _rtps_dissector_data {
 #define ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER (0x000200c7)
 
 /* Secure DDS */
-#define ENTITYID_SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER        (0xff0003c2)
-#define ENTITYID_SEDP_BUILTIN_PUBLICATIONS_SECURE_READER        (0xff0003c7)
-#define ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER       (0xff0004c2)
-#define ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER       (0xff0004c7)
-#define ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER  (0xff0200c2)
-#define ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER  (0xff0200c7)
-#define ENTITYID_P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER       (0x000201c3)
-#define ENTITYID_P2P_BUILTIN_PARTICIPANT_STATELESS_READER       (0x000201c4)
-#define ENTITYID_P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER (0xff0202c2)
-#define ENTITYID_P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER (0xff0202c7)
+#define ENTITYID_P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER          (0x000201c3)
+#define ENTITYID_P2P_BUILTIN_PARTICIPANT_STATELESS_READER          (0x000201c4)
+#define ENTITYID_SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER           (0xff0003c2)
+#define ENTITYID_SEDP_BUILTIN_PUBLICATIONS_SECURE_READER           (0xff0003c7)
+#define ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER          (0xff0004c2)
+#define ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER          (0xff0004c7)
+#define ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER     (0xff0200c2)
+#define ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER     (0xff0200c7)
+#define ENTITYID_P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER    (0xff0202c2)
+#define ENTITYID_P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER    (0xff0202c7)
+#define ENTITYID_SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER   (0xff0101c2)
+#define ENTITYID_SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER   (0xff0101c7)
 
 /* Vendor-specific: RTI */
 #define ENTITYID_RTI_BUILTIN_SERVICE_REQUEST_WRITER             (0x00020082)
@@ -418,11 +411,11 @@ typedef struct _rtps_dissector_data {
 #define SUBMESSAGE_APP_ACK                              (0x1c)
 #define SUBMESSAGE_APP_ACK_CONF                         (0x1d)
 #define SUBMESSAGE_HEARTBEAT_VIRTUAL                    (0x1e)
-#define SUBMESSAGE_SECURE_BODY                          (0x30)
-#define SUBMESSAGE_SECURE_PREFIX                        (0x31)
-#define SUBMESSAGE_SECURE_POSTFIX                       (0x32)
-#define SUBMESSAGE_SECURE_RTPS_PREFIX                   (0x33)
-#define SUBMESSAGE_SECURE_RTPS_POSTFIX                  (0x34)
+#define SUBMESSAGE_SEC_BODY                             (0x30)
+#define SUBMESSAGE_SEC_PREFIX                           (0x31)
+#define SUBMESSAGE_SEC_POSTFIX                          (0x32)
+#define SUBMESSAGE_SRTPS_PREFIX                         (0x33)
+#define SUBMESSAGE_SRTPS_POSTFIX                        (0x34)
 
 #define SUBMESSAGE_RTI_CRC                              (0x80)
 
@@ -507,6 +500,7 @@ typedef struct _rtps_dissector_data {
 #define LOCATOR_KIND_TLSV4_LAN          (10)
 #define LOCATOR_KIND_TLSV4_WAN          (11)
 #define LOCATOR_KIND_SHMEM              (0x01000000)
+#define LOCATOR_KIND_TUDPV4             (0x01001001)
 
 /* History Kind */
 #define HISTORY_KIND_KEEP_LAST          (0)
@@ -535,6 +529,12 @@ typedef struct _rtps_dissector_data {
 #define APPLICATION_ORDERED_ACKNOWLEDGMENT   (2)
 #define APPLICATION_EXPLICIT_ACKNOWLEDGMENT  (3)
 
+#define CRYPTO_TRANSFORMATION_KIND_NONE          (0)
+#define CRYPTO_TRANSFORMATION_KIND_AES128_GMAC   (1)
+#define CRYPTO_TRANSFORMATION_KIND_AES128_GCM    (2)
+#define CRYPTO_TRANSFORMATION_KIND_AES256_GMAC   (3)
+#define CRYPTO_TRANSFORMATION_KIND_AES256_GCM    (4)
+
 /* Vendor specific - rti */
 #define NDDS_TRANSPORT_CLASSID_ANY                  (0)
 #define NDDS_TRANSPORT_CLASSID_UDPv4                (1)
@@ -550,12 +550,14 @@ typedef struct _rtps_dissector_data {
 #define NDDS_TRANSPORT_CLASSID_ITP                  (13)
 #define NDDS_TRANSPORT_CLASSID_SHMEM                (0x01000000)
 
-#define TOPIC_INFO_ADD_GUID                      (1)
-#define TOPIC_INFO_ADD_TYPE_NAME                 (2)
-#define TOPIC_INFO_ADD_TOPIC_NAME                (4)
-#define TOPIC_INFO_ALL_SET                       (TOPIC_INFO_ADD_GUID | \
-                                                  TOPIC_INFO_ADD_TYPE_NAME | \
-                                                  TOPIC_INFO_ADD_TOPIC_NAME)
+#define TOPIC_INFO_ADD_GUID                      (0x01)
+#define TOPIC_INFO_ADD_TYPE_NAME                 (0x02)
+#define TOPIC_INFO_ADD_TOPIC_NAME                (0x04)
+#define TOPIC_INFO_ADD_RELIABILITY               (0x08)
+#define TOPIC_INFO_ADD_DURABILITY                (0x10)
+#define TOPIC_INFO_ADD_OWNERSHIP                 (0x20)
+#define TOPIC_INFO_ALL_SET                       (0x3f)
+
 /* Utilities to add elements to the protocol tree for packet-rtps.h and packet-rtps2.h */
 extern guint16 rtps_util_add_protocol_version(proto_tree *tree, tvbuff_t* tvb, gint offset);
 extern guint16 rtps_util_add_vendor_id(proto_tree *tree, tvbuff_t * tvb, gint offset);

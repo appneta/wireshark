@@ -18,19 +18,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1238,7 +1226,7 @@ tvb_get_ntohieee_double(tvbuff_t *tvb, const int offset)
 	} ieee_fp_union;
 #endif
 
-#ifdef WORDS_BIGENDIAN
+#if G_BYTE_ORDER == G_BIG_ENDIAN
 	ieee_fp_union.w[0] = tvb_get_ntohl(tvb, offset);
 	ieee_fp_union.w[1] = tvb_get_ntohl(tvb, offset+4);
 #else
@@ -1388,7 +1376,7 @@ tvb_get_letohieee_double(tvbuff_t *tvb, const int offset)
 	} ieee_fp_union;
 #endif
 
-#ifdef WORDS_BIGENDIAN
+#if G_BYTE_ORDER == G_BIG_ENDIAN
 	ieee_fp_union.w[0] = tvb_get_letohl(tvb, offset+4);
 	ieee_fp_union.w[1] = tvb_get_letohl(tvb, offset);
 #else
@@ -1664,7 +1652,7 @@ tvb_get_ipv4(tvbuff_t *tvb, const gint offset)
 
 /* Fetch an IPv6 address. */
 void
-tvb_get_ipv6(tvbuff_t *tvb, const gint offset, struct e_in6_addr *addr)
+tvb_get_ipv6(tvbuff_t *tvb, const gint offset, ws_in6_addr *addr)
 {
 	const guint8 *ptr;
 
@@ -3646,6 +3634,51 @@ struct tvbuff *
 tvb_get_ds_tvb(tvbuff_t *tvb)
 {
 	return(tvb->ds_tvb);
+}
+
+guint
+tvb_get_varint(tvbuff_t *tvb, guint offset, guint maxlen, guint64 *value, const guint encoding)
+{
+	*value = 0;
+
+	if (encoding & ENC_VARINT_PROTOBUF) {
+		guint i;
+		guint64 b; /* current byte */
+
+		for (i = 0; ((i < FT_VARINT_MAX_LEN) && (i < maxlen)); ++i) {
+			b = tvb_get_guint8(tvb, offset++);
+			*value |= ((b & 0x7F) << (i * 7)); /* add lower 7 bits to val */
+
+			if (b < 0x80) {
+				/* end successfully becauseof last byte's msb(most significant bit) is zero */
+				return i + 1;
+			}
+		}
+	} else if (encoding & ENC_VARINT_QUIC) {
+
+		/* calculate variable length */
+		*value = tvb_get_guint8(tvb, offset);
+		switch((*value) >> 6) {
+		case 0: /* 0b00 => 1 byte length (6 bits Usable) */
+			(*value) &= 0x3F;
+			return 1;
+		case 1: /* 0b01 => 2 bytes length (14 bits Usable) */
+			*value = tvb_get_ntohs(tvb, offset) & 0x3FFF;
+			return 2;
+		case 2: /* 0b10 => 4 bytes length (30 bits Usable) */
+			*value = tvb_get_ntohl(tvb, offset) & 0x3FFFFFFF;
+			return 4;
+		case 3: /* 0b11 => 8 bytes length (62 bits Usable) */
+			*value = tvb_get_ntoh64(tvb, offset) & G_GUINT64_CONSTANT(0x3FFFFFFFFFFFFFFF);
+			return 8;
+		default: /* No Possible */
+			g_assert_not_reached();
+			break;
+		}
+
+	}
+
+	return 0; /* 10 bytes scanned, but no bytes' msb is zero */
 }
 
 /*

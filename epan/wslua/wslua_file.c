@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "wslua_file_common.h"
@@ -67,11 +55,13 @@ WSLUA_CLASS_DEFINE(File,FAIL_ON_NULL_OR_EXPIRED("File"));
     `write_open()`, `write()`, and `write_close()`, then the File object's `read()` and `lines()`
     functions are not usable and will raise an error if used.
 
-    Note: a `File` object should never be stored/saved beyond the scope of the callback function
+    Note: A `File` object should never be stored/saved beyond the scope of the callback function
     it is passed in to.
 
     For example:
-    @code
+
+    [source,lua]
+    ----
     function myfilehandler.read_open(file, capture)
         local position = file:seek()
 
@@ -86,7 +76,7 @@ WSLUA_CLASS_DEFINE(File,FAIL_ON_NULL_OR_EXPIRED("File"));
         -- return false because it's not our file type
         return false
     end
-    @endcode
+    ----
 
    @since 1.11.3
  */
@@ -192,7 +182,7 @@ static int File_read_line(lua_State *L, FILE_T ft) {
     length = (gint)(file_tell(ft) - pos_before);
 
     /* ...but don't want to include newline in line length */
-    if (linebuff[length-1] == '\n') {
+    if (length > 0 && linebuff[length-1] == '\n') {
         length--;
         /* Nor do we want '\r' (as will be written when log is created on windows) */
         if (length > 0 && linebuff[length - 1] == '\r') {
@@ -474,8 +464,7 @@ WSLUA_METAMETHOD File__tostring(lua_State* L) {
 /* We free the struct we malloc'ed, but not the FILE_T/dumper in it of course */
 static int File__gc(lua_State* L) {
     File f = toFile(L,1);
-    if (f)
-        g_free(f);
+    g_free(f);
     return 0;
 }
 

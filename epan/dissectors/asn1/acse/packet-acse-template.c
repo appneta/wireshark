@@ -16,19 +16,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -80,8 +68,6 @@ static dissector_handle_t acse_handle = NULL;
 /* indirect_reference, used to pick up the signalling so we know what
    kind of data is transferred in SES_DATA_TRANSFER_PDUs */
 static guint32 indir_ref=0;
-
-static proto_tree *top_tree=NULL;
 
 #if NOT_NEEDED
 /* to keep track of presentation context identifiers and protocol-oids */
@@ -169,15 +155,14 @@ dissect_acse(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 	session = ( (struct SESSION_DATA_STRUCTURE*)data);
 	if (session->spdu_type == 0) {
 		if (parent_tree) {
-			REPORT_DISSECTOR_BUG(
-				wmem_strdup_printf(wmem_packet_scope(), "Wrong spdu type %x from session dissector.",session->spdu_type));
+			REPORT_DISSECTOR_BUG("Wrong spdu type %x from session dissector.",session->spdu_type);
 			return 0;
 		}
 	}
 
 	asn1_ctx.private_data = session;
 	/* save parent_tree so subdissectors can create new top nodes */
-	top_tree=parent_tree;
+	asn1_ctx.subtree.top_tree = parent_tree;
 
 	/*  ACSE has only AARQ,AARE,RLRQ,RLRE,ABRT type of pdu */
 	/*  reject everything else                              */
@@ -198,17 +183,15 @@ dissect_acse(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 				proto_tree_add_expert_format(parent_tree, pinfo, &ei_acse_invalid_oid, tvb, offset, -1,
 				    "Invalid OID: %s", ACSE_APDU_OID);
 			}
-         else {
-            call_ber_oid_callback(oid, tvb, offset, pinfo, parent_tree, NULL);
-         }
+		 else {
+			call_ber_oid_callback(oid, tvb, offset, pinfo, parent_tree, NULL);
+		 }
 		} else {
 			proto_tree_add_expert(parent_tree, pinfo, &ei_acse_dissector_not_available,
-                                    tvb, offset, -1);
+									tvb, offset, -1);
 		}
-		top_tree = NULL;
 		return 0;
 	default:
-		top_tree = NULL;
 		return 0;
 	}
 
@@ -239,7 +222,6 @@ dissect_acse(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 		}
 	}
 
-	top_tree = NULL;
 	return tvb_captured_length(tvb);
 }
 

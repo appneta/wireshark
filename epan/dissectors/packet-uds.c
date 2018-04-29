@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -379,6 +367,8 @@ static gint ett_uds_err = -1;
 static gint ett_uds_cdtcs = -1;
 
 static int proto_uds = -1;
+
+static dissector_handle_t uds_handle;
 
 static
 guint8 masked_guint8_value(const guint8 value, const guint8 mask)
@@ -1076,14 +1066,13 @@ proto_register_uds(void)
 
     proto_register_field_array(proto_uds, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
+
+    uds_handle = register_dissector("uds", dissect_uds, proto_uds);
 }
 
 void
 proto_reg_handoff_uds(void)
 {
-    static dissector_handle_t uds_handle;
-
-    uds_handle = create_dissector_handle(dissect_uds, proto_uds);
     dissector_add_for_decode_as("iso15765.subdissector", uds_handle);
 }
 

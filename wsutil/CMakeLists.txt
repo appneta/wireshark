@@ -4,26 +4,77 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
 include(UseABICheck)
 
+if(NOT WIN32)
+	add_definitions(-DPLUGIN_DIR=\"${CMAKE_INSTALL_FULL_LIBDIR}/wireshark/plugins\")
+endif()
+
+set(WSUTIL_PUBLIC_HEADERS
+	adler32.h
+	base32.h
+	base64.h
+	bits_count_ones.h
+	bits_ctz.h
+	bitswap.h
+	buffer.h
+	clopts_common.h
+	cmdarg_err.h
+	color.h
+	copyright_info.h
+	cpu_info.h
+	crash_info.h
+	crc6.h
+	crc7.h
+	crc8.h
+	crc10.h
+	crc11.h
+	crc16.h
+	crc16-plain.h
+	crc32.h
+	eax.h
+	filesystem.h
+	frequency-utils.h
+	g711.h
+	glib-compat.h
+	inet_addr.h
+	inet_ipv6.h
+	interface.h
+	jsmn.h
+	mpeg-audio.h
+	nstime.h
+	os_version_info.h
+	pint.h
+	plugins.h
+	pow2.h
+	privileges.h
+	processes.h
+	report_message.h
+	sign_ext.h
+	sober128.h
+	socket.h
+	str_util.h
+	strnatcmp.h
+	strtoi.h
+	tempfile.h
+	time_util.h
+	type_util.h
+	unicode-utils.h
+	utf8_entities.h
+	ws_cpuid.h
+	ws_mempbrk.h
+	ws_mempbrk_int.h
+	ws_pipe.h
+	ws_printf.h
+	wsjsmn.h
+	xtea.h
+)
+
 set(WSUTIL_COMMON_FILES
 	adler32.c
-	airpdcap_wep.c
 	base32.c
 	base64.c
 	bitswap.c
@@ -40,6 +91,7 @@ set(WSUTIL_COMMON_FILES
 	crc7.c
 	crc8.c
 	crc11.c
+	dot11decrypt_wep.c
 	eax.c
 	filesystem.c
 	frequency-utils.c
@@ -52,8 +104,8 @@ set(WSUTIL_COMMON_FILES
 	nstime.c
 	cpu_info.c
 	os_version_info.c
-	plugins.c
 	privileges.c
+	rsa.c
 	sober128.c
 	strnatcmp.c
 	str_util.c
@@ -64,19 +116,25 @@ set(WSUTIL_COMMON_FILES
 	type_util.c
 	unicode-utils.c
 	ws_mempbrk.c
+	ws_pipe.c
 	wsgcrypt.c
 	wsjsmn.c
+	xtea.c
 )
+
+if(ENABLE_PLUGINS)
+	list(APPEND WSUTIL_COMMON_FILES
+		plugins.c
+	)
+endif()
 
 set(WSUTIL_FILES ${WSUTIL_COMMON_FILES})
 if(WIN32)
 	list(APPEND WSUTIL_FILES
 		file_util.c
-		inet_ntop.c
-		inet_pton.c
 		win32-utils.c
 	)
-ENDIF(WIN32)
+endif(WIN32)
 
 
 if(HAVE_MACOS_FRAMEWORKS)
@@ -149,14 +207,6 @@ if(NOT HAVE_GETOPT_LONG)
 	list(APPEND WSUTIL_FILES getopt_long.c)
 endif()
 
-if(NOT HAVE_INET_ATON)
-	list(APPEND WSUTIL_FILES inet_aton.c)
-endif()
-
-if(NOT HAVE_POPCOUNT)
-	list(APPEND WSUTIL_FILES popcount.c)
-endif()
-
 if(NOT HAVE_STRPTIME)
 	list(APPEND WSUTIL_FILES strptime.c)
 endif()
@@ -177,17 +227,14 @@ set(wsutil_LIBS
 	${GCRYPT_LIBRARIES}
 	${ZLIB_LIBRARIES}
 	${WIN_WSOCK32_LIBRARY}
+	${GNUTLS_LIBRARIES}
 )
 IF(WIN32)
 	set(wsutil_LIBS ${wsutil_LIBS} "iphlpapi.lib" "ws2_32.lib")
 ENDIF(WIN32)
 
-set(CLEAN_FILES
-	${WSUTIL_FILES}
-)
-
 set_source_files_properties(
-	${CLEAN_FILES}
+	${WSUTIL_FILES}
 	PROPERTIES
 	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
 )
@@ -201,20 +248,20 @@ if (HAVE_SSE4_2)
 	)
 endif()
 
-add_library(wsutil ${LINK_MODE_LIB}
+add_library(wsutil
 	${WSUTIL_FILES}
 	${CMAKE_BINARY_DIR}/image/libwsutil.rc
 )
 
-set(FULL_SO_VERSION "8.0.0")
+set(FULL_SO_VERSION "9.0.0")
 
 set_target_properties(wsutil PROPERTIES
 	PREFIX "lib"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
-	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
-	VERSION ${FULL_SO_VERSION} SOVERSION 8
-	FOLDER "DLLs")
+	VERSION ${FULL_SO_VERSION} SOVERSION 0
+	FOLDER "DLLs"
+)
 
 if(ENABLE_APPLICATION_BUNDLE)
 	set_target_properties(wsutil PROPERTIES
@@ -236,11 +283,15 @@ add_custom_command(OUTPUT libwsutil.abi.tar.gz
 
 target_link_libraries(wsutil ${wsutil_LIBS})
 
-if(NOT ${ENABLE_STATIC})
-	install(TARGETS wsutil
-		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-		RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
-		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+install(TARGETS wsutil
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+if(NOT WIN32)
+	install(FILES ${WSUTIL_PUBLIC_HEADERS}
+		DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${CPACK_PACKAGE_NAME}/wsutil"
 	)
 endif()
 

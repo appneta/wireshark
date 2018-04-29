@@ -19,19 +19,7 @@ my $debug = 0;
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 #
 # Example:
@@ -348,6 +336,7 @@ sub is_proto_dup_whitelist {
 	if (($_[0] eq "fcs") && (index($_[1], "fcsmask") >= 0)) {return 1;}
 	if (($_[0] eq "fmp") && (index($_[1], "fmp") >= 0)) {return 1;}
 	if (($_[0] eq "fr") && (index($_[1], "frame_relay") >= 0)) {return 1;}
+	if (($_[0] eq "lustre") && (index($_[1], "lustre_") >= 0)) {return 1;}
 	if (($_[0] eq "mac") && (index($_[1], "macd") >= 0)) {return 1;}
 	if (($_[0] eq "mac") && (index($_[1], "macis") >= 0)) {return 1;}
 	if (($_[0] eq "mih") && (index($_[1], "mihf") >= 0)) {return 1;}
@@ -393,6 +382,7 @@ sub is_from_other_protocol_whitelist {
 	# XXX - may be faster to hash this (note 1-many relationship)?
 	if (($proto_filename eq "packet-bpdu.c") && (index($_[0], "mstp") >= 0)) {return 1;}
 	if (($proto_filename eq "packet-bssap.c") && (index($_[0], "bsap") >= 0)) {return 1;}
+	if (($proto_filename eq "packet-caneth.c") && (index($_[0], "can") >= 0)) {return 1;}
 	if (($proto_filename eq "packet-cimetrics.c") && (index($_[0], "llc") >= 0)) {return 1;}
 	if (($proto_filename eq "packet-cipsafety.c") && (index($_[0], "cip") >= 0)) {return 1;}
 	if (($proto_filename eq "packet-cipsafety.c") && (index($_[0], "enip") >= 0)) {return 1;}

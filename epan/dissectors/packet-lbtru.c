@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -57,7 +45,7 @@ static lbtru_transport_t * lbtru_transport_find(const address * source_address, 
     wmem_tree_t * session_tree = NULL;
     conversation_t * conv = NULL;
 
-    conv = find_conversation(frame, source_address, &lbtru_null_address, PT_UDP, source_port, 0, 0);
+    conv = find_conversation(frame, source_address, &lbtru_null_address, ENDPOINT_UDP, source_port, 0, 0);
     if (conv != NULL)
     {
         if (frame != 0)
@@ -86,10 +74,10 @@ lbtru_transport_t * lbtru_transport_add(const address * source_address, guint16 
     wmem_tree_t * session_tree = NULL;
     conversation_t * conv = NULL;
 
-    conv = find_conversation(frame, source_address, &lbtru_null_address, PT_UDP, source_port, 0, 0);
+    conv = find_conversation(frame, source_address, &lbtru_null_address, ENDPOINT_UDP, source_port, 0, 0);
     if (conv == NULL)
     {
-        conv = conversation_new(frame, source_address, &lbtru_null_address, PT_UDP, source_port, 0, 0);
+        conv = conversation_new(frame, source_address, &lbtru_null_address, ENDPOINT_UDP, source_port, 0, 0);
     }
     if (frame != 0)
     {
@@ -133,7 +121,7 @@ static lbtru_client_transport_t * lbtru_client_transport_find(lbtru_transport_t 
     {
         return (NULL);
     }
-    client_conv = find_conversation(frame, &(transport->source_address), receiver_address, PT_UDP, transport->source_port, receiver_port, 0);
+    client_conv = find_conversation(frame, &(transport->source_address), receiver_address, ENDPOINT_UDP, transport->source_port, receiver_port, 0);
     if (client_conv != NULL)
     {
         wmem_tree_t * session_tree = NULL;
@@ -182,10 +170,10 @@ static lbtru_client_transport_t * lbtru_client_transport_add(lbtru_transport_t *
     entry->sm_high_sqn = 0;
 
     /* See if a conversation for this address/port pair exists. */
-    client_conv = find_conversation(frame, &(transport->source_address), receiver_address, PT_UDP, transport->source_port, receiver_port, 0);
+    client_conv = find_conversation(frame, &(transport->source_address), receiver_address, ENDPOINT_UDP, transport->source_port, receiver_port, 0);
     if (client_conv == NULL)
     {
-        client_conv = conversation_new(frame, &(transport->source_address), receiver_address, PT_UDP, transport->source_port, receiver_port, 0);
+        client_conv = conversation_new(frame, &(transport->source_address), receiver_address, ENDPOINT_UDP, transport->source_port, receiver_port, 0);
         session_tree = wmem_tree_new(wmem_file_scope());
         conversation_add_proto_data(client_conv, proto_lbtru, (void *) session_tree);
     }

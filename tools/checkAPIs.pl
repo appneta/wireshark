@@ -16,23 +16,12 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
 use strict;
 use Getopt::Long;
+use Text::Balanced qw(extract_bracketed);
 
 my %APIs = (
         # API groups.
@@ -275,6 +264,7 @@ my %APIs = (
                 'G_WIN32_DLLMAIN_FOR_DLL_NAME',
                 'g_win32_get_package_installation_directory',
                 'g_win32_get_package_installation_subdirectory',
+                'qVariantFromValue'
                 ] },
 
         # APIs that make the program exit. Dissectors shouldn't call these
@@ -1858,8 +1848,8 @@ sub check_hf_entries($$)
                         print STDERR "Error: $hf is passing the address of a pointer to RVALS in $filename\n";
                         $errorCount++;
                 }
-                if ($convert !~ m/^((0[xX]0?)?0$|NULL$|VALS|VALS64|VALS_EXT_PTR|RVALS|TFS|CF_FUNC|FRAMENUM_TYPE|&)/ && $display !~ /BASE_CUSTOM/) {
-                        print STDERR "Error: non-null $hf 'convert' field missing 'VALS|VALS64|RVALS|TFS|CF_FUNC|FRAMENUM_TYPE|&' in $filename ?\n";
+                if ($convert !~ m/^((0[xX]0?)?0$|NULL$|VALS|VALS64|VALS_EXT_PTR|RVALS|TFS|CF_FUNC|FRAMENUM_TYPE|&|STRINGS_ENTERPRISES)/ && $display !~ /BASE_CUSTOM/) {
+                        print STDERR "Error: non-null $hf 'convert' field missing 'VALS|VALS64|RVALS|TFS|CF_FUNC|FRAMENUM_TYPE|&|STRINGS_ENTERPRISES' in $filename ?\n";
                         $errorCount++;
                 }
 ## Benign...
@@ -1874,6 +1864,47 @@ sub check_hf_entries($$)
         }
 
         return $errorCount;
+}
+
+sub check_pref_var_dupes($$)
+{
+        my ($filecontentsref, $filename) = @_;
+        my $errorcount = 0;
+
+        # Avoid flagging the actual prototypes
+        return 0 if $filename =~ /prefs\.[ch]$/;
+
+        # remove macro lines
+        my $filecontents = ${$filecontentsref};
+        $filecontents =~ s { ^\s*\#.*$} []xogm;
+
+        # At what position is the variable in the prefs_register_*_preference() call?
+        my %prefs_register_var_pos = (
+                static_text => undef, obsolete => undef, # ignore
+                decode_as_range => -2, range => -2, filename => -2, # second to last
+                enum => -3, # third to last
+                # everything else is the last argument
+        );
+
+        my @dupes;
+        my %count;
+        while ($filecontents =~ /prefs_register_(\w+?)_preference/gs) {
+                my ($args) = extract_bracketed(substr($filecontents, $+[0]), '()');
+                $args = substr($args, 1, -1); # strip parens
+
+                my $pos = $prefs_register_var_pos{$1};
+                next if exists $prefs_register_var_pos{$1} and not defined $pos;
+                $pos //= -1;
+                my $var = (split /\s*,\s*(?![^(]*\))/, $args)[$pos]; # only commas outside parens
+                push @dupes, $var if $count{$var}++ == 1;
+        }
+
+        if (@dupes) {
+                print STDERR "$filename: error: found these preference variables used in more than one prefs_register_*_preference:\n\t".join(', ', @dupes)."\n";
+                $errorcount++;
+        }
+
+        return $errorcount;
 }
 
 sub print_usage
@@ -2084,6 +2115,8 @@ if ("$filenamelist" ne "") {
         close(FC);
 }
 
+die "no files to process" unless (scalar @filelist);
+
 # Read through the files; do various checks
 while ($_ = pop @filelist)
 {
@@ -2182,6 +2215,7 @@ while ($_ = pop @filelist)
         $fileContents =~ s{ $DoubleQuotedStr | $SingleQuotedStr } []xog;
 
         #$errorCount += check_ett_registration(\$fileContents, $filename);
+        $errorCount += check_pref_var_dupes(\$fileContents, $filename);
 
         # Remove all blank lines
         $fileContents =~ s{ ^ \s* $ } []xog;

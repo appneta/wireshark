@@ -8,19 +8,7 @@
  * Richard Sharpe, 13-Feb-1999, added dispatch table support and
  *                              support for tftp.
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #define NEW_PROTO_TREE_API
@@ -330,7 +318,7 @@ udpip_conversation_packet(void *pct, packet_info *pinfo, epan_dissect_t *edt _U_
     conv_hash_t *hash = (conv_hash_t*) pct;
     const e_udphdr *udphdr=(const e_udphdr *)vip;
 
-    add_conversation_table_data_with_conv_id(hash, &udphdr->ip_src, &udphdr->ip_dst, udphdr->uh_sport, udphdr->uh_dport, (conv_id_t) udphdr->uh_stream, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &udp_ct_dissector_info, PT_UDP);
+    add_conversation_table_data_with_conv_id(hash, &udphdr->ip_src, &udphdr->ip_dst, udphdr->uh_sport, udphdr->uh_dport, (conv_id_t) udphdr->uh_stream, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &udp_ct_dissector_info, ENDPOINT_UDP);
 
     return 1;
 }
@@ -387,8 +375,8 @@ udpip_hostlist_packet(void *pit, packet_info *pinfo, epan_dissect_t *edt _U_, co
     /* Take two "add" passes per packet, adding for each direction, ensures that all
     packets are counted properly (even if address is sending to itself)
     XXX - this could probably be done more efficiently inside hostlist_table */
-    add_hostlist_table_data(hash, &udphdr->ip_src, udphdr->uh_sport, TRUE, 1, pinfo->fd->pkt_len, &udp_host_dissector_info, PT_UDP);
-    add_hostlist_table_data(hash, &udphdr->ip_dst, udphdr->uh_dport, FALSE, 1, pinfo->fd->pkt_len, &udp_host_dissector_info, PT_UDP);
+    add_hostlist_table_data(hash, &udphdr->ip_src, udphdr->uh_sport, TRUE, 1, pinfo->fd->pkt_len, &udp_host_dissector_info, ENDPOINT_UDP);
+    add_hostlist_table_data(hash, &udphdr->ip_dst, udphdr->uh_dport, FALSE, 1, pinfo->fd->pkt_len, &udp_host_dissector_info, ENDPOINT_UDP);
 
     return 1;
 }
@@ -428,8 +416,7 @@ static gchar* udp_follow_conv_filter(packet_info *pinfo, int* stream)
 
     if( ((pinfo->net_src.type == AT_IPv4 && pinfo->net_dst.type == AT_IPv4) ||
             (pinfo->net_src.type == AT_IPv6 && pinfo->net_dst.type == AT_IPv6))
-          && (conv=find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, pinfo->ptype,
-              pinfo->srcport, pinfo->destport, 0)) != NULL )
+          && (conv=find_conversation_pinfo(pinfo, 0)) != NULL )
     {
         /* UDP over IPv4/6 */
         udpd=get_udp_conversation_data(conv, pinfo);
@@ -451,8 +438,8 @@ static gchar* udp_follow_index_filter(int stream)
 static gchar* udp_follow_address_filter(address* src_addr, address* dst_addr, int src_port, int dst_port)
 {
     const gchar  *ip_version = src_addr->type == AT_IPv6 ? "v6" : "";
-    gchar         src_addr_str[MAX_IP6_STR_LEN];
-    gchar         dst_addr_str[MAX_IP6_STR_LEN];
+    gchar         src_addr_str[WS_INET6_ADDRSTRLEN];
+    gchar         dst_addr_str[WS_INET6_ADDRSTRLEN];
 
     address_to_str_buf(src_addr, src_addr_str, sizeof(src_addr_str));
     address_to_str_buf(dst_addr, dst_addr_str, sizeof(dst_addr_str));
@@ -481,7 +468,7 @@ add_udp_process_info(guint32 frame_num, address *local_addr, address *remote_add
     return;
   }
 
-  conv = find_conversation(frame_num, local_addr, remote_addr, PT_UDP, local_port, remote_port, 0);
+  conv = find_conversation(frame_num, local_addr, remote_addr, ENDPOINT_UDP, local_port, remote_port, 0);
   if (!conv) {
     return;
   }
@@ -491,9 +478,9 @@ add_udp_process_info(guint32 frame_num, address *local_addr, address *remote_add
     return;
   }
 
-  if ((cmp_address(local_addr, &conv->key_ptr->addr1) == 0) && (local_port == conv->key_ptr->port1)) {
+  if ((cmp_address(local_addr, conversation_key_addr1(conv->key_ptr)) == 0) && (local_port == conversation_key_port1(conv->key_ptr))) {
     flow = &udpd->flow1;
-  } else if ((cmp_address(remote_addr, &conv->key_ptr->addr1) == 0) && (remote_port == conv->key_ptr->port1)) {
+  } else if ((cmp_address(remote_addr, conversation_key_addr1(conv->key_ptr)) == 0) && (remote_port == conversation_key_port1(conv->key_ptr))) {
     flow = &udpd->flow2;
   }
   if (!flow || flow->command) {
@@ -570,7 +557,7 @@ static void
 handle_export_pdu_conversation(packet_info *pinfo, tvbuff_t *tvb, int uh_dport, int uh_sport)
 {
   if (have_tap_listener(exported_pdu_tap)) {
-    conversation_t *conversation = find_conversation(pinfo->num, &pinfo->dst, &pinfo->src, PT_UDP, uh_dport, uh_sport, 0);
+    conversation_t *conversation = find_conversation(pinfo->num, &pinfo->dst, &pinfo->src, ENDPOINT_UDP, uh_dport, uh_sport, 0);
     if (conversation != NULL)
     {
       dissector_handle_t handle = (dissector_handle_t)wmem_tree_lookup32_le(conversation->dissector_tree, pinfo->num);
@@ -632,8 +619,8 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
 
   /* determine if this packet is part of a conversation and call dissector */
 /* for the conversation if available */
-  if (try_conversation_dissector(&pinfo->dst, &pinfo->src, PT_UDP,
-                                 uh_dport, uh_sport, next_tvb, pinfo, tree, NULL)) {
+  if (try_conversation_dissector(&pinfo->dst, &pinfo->src, ENDPOINT_UDP,
+                                 uh_dport, uh_sport, next_tvb, pinfo, tree, NULL, NO_ADDR_B|NO_PORT_B)) {
     handle_export_pdu_conversation(pinfo, next_tvb, uh_dport, uh_sport);
     return;
   }

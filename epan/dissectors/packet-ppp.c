@@ -8,19 +8,7 @@
  * This file created and by Mike Hall <mlh@io.com>
  * Copyright 1998
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -43,7 +31,6 @@
 #include <epan/crc32-tvb.h>
 #include <epan/ipproto.h>
 #include <epan/addr_resolv.h>
-#include <epan/oui.h>
 #include <epan/reassemble.h>
 #include "packet-sll.h"
 #include "packet-juniper.h"
@@ -1825,8 +1812,6 @@ dissect_lcp_vendor_opt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 {
     proto_tree *field_tree;
     proto_item *ti;
-    guint32 oui;
-    const gchar *manuf;
     int offset = 0;
     int len = tvb_reported_length(tvb);
 
@@ -1834,13 +1819,7 @@ dissect_lcp_vendor_opt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
                              &field_tree, &ti))
         return tvb_captured_length(tvb);
 
-    oui = tvb_get_ntoh24(tvb, offset + 2);
-    ti = proto_tree_add_uint_format_value(field_tree, hf_lcp_opt_oui, tvb,
-        offset + 2, 3, oui, "%02x:%02x:%02x",
-        (oui >> 16) & 0xff, (oui >> 8) & 0xff, oui & 0xff);
-    manuf = uint_get_manuf_name_if_known(oui);
-    if (manuf)
-        proto_item_append_text(ti, "(%s)", manuf);
+    proto_tree_add_item(field_tree, hf_lcp_opt_oui, tvb, offset + 2, 3, ENC_BIG_ENDIAN);
 
     proto_tree_add_item(field_tree, hf_lcp_opt_kind, tvb, offset + 5, 1,
         ENC_BIG_ENDIAN);
@@ -3532,21 +3511,15 @@ dissect_ccp_var_opt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 static int dissect_ccp_oui_opt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
     proto_tree *field_tree;
-    proto_item *tf, *ti;
+    proto_item *tf;
     int offset = 0;
     int length = tvb_reported_length(tvb);
-    guint32 oui;
-    const gchar *manuf;
 
     if (!dissect_ccp_var_opt(tvb, pinfo, tree, proto_ccp_option_oui, ett_ccp_oui_opt, 6,
                                   &field_tree, &tf))
         return tvb_captured_length(tvb);
 
-    oui = tvb_get_ntoh24(tvb, offset + 2);
-    ti = proto_tree_add_item(field_tree, hf_ccp_opt_oui, tvb, offset + 2, 3, ENC_NA);
-    manuf = uint_get_manuf_name_if_known(oui);
-    if (manuf)
-        proto_item_append_text(ti, "(%s)", manuf);
+    proto_tree_add_item(field_tree, hf_ccp_opt_oui, tvb, offset + 2, 3, ENC_BIG_ENDIAN);
 
     proto_tree_add_item(field_tree, hf_ccp_opt_subtype, tvb, offset + 5, 1,
         ENC_BIG_ENDIAN);
@@ -4432,7 +4405,7 @@ dissect_vsncp_pdnaddress_opt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree
 
     case 2:
     {
-        struct e_in6_addr *ad = wmem_new0(wmem_packet_scope(),struct e_in6_addr);
+        ws_in6_addr *ad = wmem_new0(wmem_packet_scope(),ws_in6_addr);
         address addr;
 
         tvb_memcpy(tvb, &ad->bytes[8], offset + 3, 8);
@@ -4445,7 +4418,7 @@ dissect_vsncp_pdnaddress_opt(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree
 
     case 3:
     {
-        struct e_in6_addr *ad = wmem_new0(wmem_packet_scope(), struct e_in6_addr);
+        ws_in6_addr *ad = wmem_new0(wmem_packet_scope(), ws_in6_addr);
         address addr;
 
         tvb_memcpy(tvb, &ad->bytes[8], offset + 3, 8);
@@ -4657,12 +4630,6 @@ dissect_cp(tvbuff_t *tvb, int proto_id, int proto_subtree_index,
             manuf = uint_get_manuf_name_if_known(oui);
             if (manuf){
                 proto_item_append_text(ti, "(%s)", manuf);
-            }else{
-                /* check if we have the name in oui_vals */
-                manuf = try_val_to_str(oui,oui_vals);
-                if (manuf){
-                    proto_item_append_text(ti, "(%s)", manuf);
-                }
             }
             proto_tree_add_item(fh_tree, hf_ppp_kind, tvb, offset + 7, 1,
                 ENC_BIG_ENDIAN);
@@ -5889,8 +5856,9 @@ dissect_ppp_hdlc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
     }
 
     /*
-     * XXX - should we have an exported dissector that always dissects PPP,
-     * for use when we know the packets are PPP, not CHDLC?
+     * XXX - should we have an exported dissector that always dissects
+     * PPP-in-HDLC-like-framing, without checking for Cisco HDLC, for
+     * use when we know the packets are PPP, not Cisco HDLC?
      */
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "PPP");
     switch (pinfo->p2p_dir) {
@@ -6469,8 +6437,8 @@ proto_register_ppp(void)
             { "Magic Number", "ppp.magic_number", FT_UINT32, BASE_HEX,
                 NULL, 0x0, NULL, HFILL }},
         { &hf_ppp_oui,
-            { "OUI", "ppp.oui", FT_UINT24, BASE_HEX,
-                VALS(oui_vals), 0x0, NULL, HFILL }},
+            { "OUI", "ppp.oui", FT_UINT24, BASE_OUI,
+                NULL, 0x0, NULL, HFILL }},
         { &hf_ppp_kind,
             { "Kind", "ppp.kind", FT_UINT8, BASE_DEC_HEX,
                 NULL, 0x0, NULL, HFILL }},
@@ -6686,7 +6654,7 @@ proto_register_lcp(void)
             { "Length", "lcp.opt.length", FT_UINT8, BASE_DEC,
                 NULL, 0x0, NULL, HFILL }},
         { &hf_lcp_opt_oui,
-            { "OUI", "lcp.opt.oui", FT_UINT24, BASE_HEX,
+            { "OUI", "lcp.opt.oui", FT_UINT24, BASE_OUI,
                 NULL, 0x0, NULL, HFILL }},
         { &hf_lcp_opt_kind,
             { "Kind", "lcp.opt.kind", FT_UINT8, BASE_DEC_HEX,
@@ -7523,7 +7491,7 @@ proto_register_ccp(void)
             { "Length", "ccp.opt.length", FT_UINT8, BASE_DEC,
                 NULL, 0x0, NULL, HFILL }},
         { &hf_ccp_opt_oui,
-            { "OUI", "ccp.opt.oui", FT_BYTES, SEP_COLON,
+            { "OUI", "ccp.opt.oui", FT_UINT24, BASE_OUI,
                 NULL, 0x0, NULL, HFILL }},
         { &hf_ccp_opt_subtype,
             { "Subtype", "ccp.opt.subtype", FT_UINT8, BASE_DEC_HEX,

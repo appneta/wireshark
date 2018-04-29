@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __RANGE_H__
@@ -131,11 +119,13 @@ WS_DLL_PUBLIC gboolean range_remove_value(wmem_allocator_t *scope, range_t **ran
 WS_DLL_PUBLIC gboolean ranges_are_equal(range_t *a, range_t *b);
 
 /** This function calls the provided callback function for each value in
- * in the range.
+ * in the range. Takes a pointer argument, which is passed to the
+ * callback, along with the value in the range.
  * @param range the range
  * @param callback the callback function
+ * @param ptr pointer passed to the callback
  */
-WS_DLL_PUBLIC void range_foreach(range_t *range, void (*callback)(guint32 val));
+WS_DLL_PUBLIC void range_foreach(range_t *range, void (*callback)(guint32 val, gpointer ptr), gpointer ptr);
 
 /**
  * This function converts a range_t to a (wmem_alloc()-allocated) string.

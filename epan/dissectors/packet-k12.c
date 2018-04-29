@@ -7,19 +7,7 @@
 * By Gerald Combs <gerald@wireshark.org>
 * Copyright 1998
 *
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* as published by the Free Software Foundation; either version 2
-* of the License, or (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+* SPDX-License-Identifier: GPL-2.0-or-later
 */
 #include "config.h"
 
@@ -223,7 +211,7 @@ dissect_k12(tvbuff_t* tvb,packet_info* pinfo,proto_tree* tree, void* data _U_)
 			     * XXX: this is prone to collisions!
 			     * we need an uniform way to manage circuits between dissectors
 			     */
-		pinfo->circuit_id = g_str_hash(circuit_str);
+		conversation_create_endpoint_by_id(pinfo, ENDPOINT_NONE, g_str_hash(circuit_str), 0);
 
 		proto_tree_add_uint(k12_tree, hf_k12_atm_vp, tvb, 0, 0,
 				    pinfo->pseudo_header->k12.input_info.atm.vp);

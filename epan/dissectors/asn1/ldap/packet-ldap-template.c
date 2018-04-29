@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -515,8 +503,8 @@ attribute_types_free_cb(void*r)
 {
   attribute_type_t* rec = (attribute_type_t*)r;
 
-  if (rec->attribute_type) g_free(rec->attribute_type);
-  if (rec->attribute_desc) g_free(rec->attribute_desc);
+  g_free(rec->attribute_type);
+  g_free(rec->attribute_desc);
 }
 
 UAT_CSTRING_CB_DEF(attribute_types, attribute_type, attribute_type_t)
@@ -1764,8 +1752,7 @@ dissect_ldap_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
   /*
    * Do we have a conversation for this connection?
    */
-  conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                   pinfo->ptype, pinfo->srcport, pinfo->destport, 0);
+  conversation = find_conversation_pinfo(pinfo, 0);
   if(conversation){
     ldap_info = (ldap_conv_info_t *)conversation_get_proto_data(conversation, proto_ldap);
   }
@@ -2083,7 +2070,7 @@ void proto_register_ldap(void) {
         TFS(&tfs_ads_rodc), 0x00000800, "Is this an read only dc?", HFILL }},
 
     { &hf_mscldap_netlogon_flags_wdc,
-      { "WDC", "mscldap.netlogon.flags.writabledc.", FT_BOOLEAN, 32,
+      { "WDC", "mscldap.netlogon.flags.writabledc", FT_BOOLEAN, 32,
         TFS(&tfs_ads_wdc), 0x00001000, "Is this an writable dc (Windows 2008)?", HFILL }},
 
     { &hf_mscldap_netlogon_flags_dns,

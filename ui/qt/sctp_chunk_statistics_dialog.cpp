@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "sctp_chunk_statistics_dialog.h"
 #include <ui_sctp_chunk_statistics_dialog.h>
@@ -98,6 +85,10 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
     FILE* fp = NULL;
 
     pref_t *pref = prefs_find_preference(prefs_find_module("sctp"),"statistics_chunk_types");
+    if (!pref) {
+        g_log(NULL, G_LOG_LEVEL_ERROR, "Can't find preference sctp/statistics_chunk_types");
+        return;
+    }
     uat_t *uat = prefs_get_uat_value(pref);
     gchar* fname = uat_get_actual_filename(uat,TRUE);
     bool init = false;
@@ -107,8 +98,13 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
     } else {
         fp = ws_fopen(fname,"r");
 
-        if (!fp && errno == ENOENT) {
-            init = true;
+        if (!fp) {
+            if (errno == ENOENT) {
+                init = true;
+            } else {
+                g_log(NULL, G_LOG_LEVEL_ERROR, "Can't open %s: %s", fname, g_strerror(errno));
+                return;
+            }
         }
     }
     g_free (fname);
@@ -147,6 +143,8 @@ void SCTPChunkStatisticsDialog::fillTable(bool all)
             if (line[0] == '#')
                 continue;
             token = strtok(line, ",");
+            if (!token)
+                continue;
             /* Get rid of the quotation marks */
             QString ch = QString(token).mid(1, (int)strlen(token)-2);
             g_strlcpy(id, qPrintable(ch), sizeof id);
@@ -211,6 +209,10 @@ void SCTPChunkStatisticsDialog::on_pushButton_clicked()
     FILE* fp;
 
     pref_t *pref = prefs_find_preference(prefs_find_module("sctp"),"statistics_chunk_types");
+    if (!pref) {
+        g_log(NULL, G_LOG_LEVEL_ERROR, "Can't find preference sctp/statistics_chunk_types");
+        return;
+    }
 
     uat_t *uat = prefs_get_uat_value(pref);
 
@@ -284,12 +286,17 @@ void SCTPChunkStatisticsDialog::on_actionChunkTypePreferences_triggered()
     gchar* err = NULL;
 
     pref_t *pref = prefs_find_preference(prefs_find_module("sctp"),"statistics_chunk_types");
+    if (!pref) {
+        g_log(NULL, G_LOG_LEVEL_ERROR, "Can't find preference sctp/statistics_chunk_types");
+        return;
+    }
+
     uat_t *uat = prefs_get_uat_value(pref);
     uat_clear(uat);
 
     if (!uat_load(uat, &err)) {
         /* XXX - report this through the GUI */
-        printf("Error loading table '%s': %s", uat->name,err);
+        g_log(NULL, G_LOG_LEVEL_WARNING, "Error loading table '%s': %s", uat->name, err);
         g_free(err);
     }
 

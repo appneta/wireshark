@@ -4,24 +4,21 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
 include(UseABICheck)
 
-set(WIRETAP_FILES
+set(WIRETAP_PUBLIC_HEADERS
+	file_wrappers.h
+	merge.h
+	pcap-encap.h
+	pcapng_module.h
+	wtap.h
+	wtap_opttypes.h
+)
+
+set(WIRETAP_NONGENERATED_FILES
 	5views.c
 	aethra.c
 	ascendtext.c
@@ -81,22 +78,27 @@ set(WIRETAP_FILES
 	vwr.c
 	wtap.c
 	wtap_opttypes.c
-	${CMAKE_SOURCE_DIR}/ws_version_info.c
+	${CMAKE_SOURCE_DIR}/version_info.c
 )
 
-set_source_files_properties(
-	${WIRETAP_FILES}
-	PROPERTIES
-	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
-)
+set(WIRETAP_FILES ${WIRETAP_NONGENERATED_FILES})
 
-add_lex_files(LEX_FILES GENERATED_FILES
+add_lex_files(LEX_FILES WIRETAP_FILES
 	ascend_scanner.l
 	k12text.l
 )
 
-add_yacc_files(YACC_FILES GENERATED_FILES
+add_yacc_files(YACC_FILES WIRETAP_FILES
 	ascend.y
+)
+
+#
+# All files are warning-clean.  (Let's keep it that way.)
+#
+set_source_files_properties(
+	${WIRETAP_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
 )
 
 set(wiretap_LIBS
@@ -106,22 +108,20 @@ set(wiretap_LIBS
 	wsutil
 )
 
-add_library(wiretap ${LINK_MODE_LIB}
+add_library(wiretap
 	${WIRETAP_FILES}
-	${GENERATED_FILES}
 	${CMAKE_BINARY_DIR}/image/wiretap.rc
 )
 
 add_dependencies(wiretap version)
 
-set(FULL_SO_VERSION "7.0.3")
+set(FULL_SO_VERSION "8.0.0")
 
 set_target_properties(wiretap PROPERTIES
 	PREFIX "lib"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
-	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
-	VERSION ${FULL_SO_VERSION} SOVERSION 7
+	VERSION ${FULL_SO_VERSION} SOVERSION 0
 	FOLDER "DLLs"
 )
 
@@ -145,11 +145,15 @@ add_custom_command(OUTPUT libwiretap.abi.tar.gz
 
 target_link_libraries(wiretap ${wiretap_LIBS})
 
-if(NOT ${ENABLE_STATIC})
-	install(TARGETS wiretap
-		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-		RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
-		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+install(TARGETS wiretap
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+if(NOT WIN32)
+	install(FILES ${WIRETAP_PUBLIC_HEADERS}
+		DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${CPACK_PACKAGE_NAME}/wiretap"
 	)
 endif()
 
@@ -161,7 +165,7 @@ CHECKAPI(
 ##	  -g abort -g termoutput
 	  -g termoutput -build
 	SOURCES
-	  ${WIRETAP_FILES}
+	  ${WIRETAP_NONGENERATED_FILES}
 # LEX files commented out due to use of malloc, free etc.
 #	  ${LEX_FILES}
 	  ${YACC_FILES}

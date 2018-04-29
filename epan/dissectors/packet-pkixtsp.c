@@ -14,19 +14,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -87,7 +75,7 @@ static int hf_pkixtsp_PKIFailureInfo_addInfoNotAvailable = -1;
 static int hf_pkixtsp_PKIFailureInfo_systemFailure = -1;
 
 /*--- End of included file: packet-pkixtsp-hf.c ---*/
-#line 45 "./asn1/pkixtsp/packet-pkixtsp-template.c"
+#line 33 "./asn1/pkixtsp/packet-pkixtsp-template.c"
 
 /* Initialize the subtree pointers */
 static gint ett_pkixtsp = -1;
@@ -103,7 +91,7 @@ static gint ett_pkixtsp_TSTInfo = -1;
 static gint ett_pkixtsp_Accuracy = -1;
 
 /*--- End of included file: packet-pkixtsp-ett.c ---*/
-#line 49 "./asn1/pkixtsp/packet-pkixtsp-template.c"
+#line 37 "./asn1/pkixtsp/packet-pkixtsp-template.c"
 
 
 
@@ -378,7 +366,7 @@ static int dissect_SignatureTimeStampToken_PDU(tvbuff_t *tvb _U_, packet_info *p
 
 
 /*--- End of included file: packet-pkixtsp-fn.c ---*/
-#line 52 "./asn1/pkixtsp/packet-pkixtsp-template.c"
+#line 40 "./asn1/pkixtsp/packet-pkixtsp-template.c"
 
 
 static int
@@ -562,7 +550,7 @@ void proto_register_pkixtsp(void) {
         NULL, HFILL }},
 
 /*--- End of included file: packet-pkixtsp-hfarr.c ---*/
-#line 103 "./asn1/pkixtsp/packet-pkixtsp-template.c"
+#line 91 "./asn1/pkixtsp/packet-pkixtsp-template.c"
   };
 
   /* List of subtrees */
@@ -580,7 +568,7 @@ void proto_register_pkixtsp(void) {
     &ett_pkixtsp_Accuracy,
 
 /*--- End of included file: packet-pkixtsp-ettarr.c ---*/
-#line 109 "./asn1/pkixtsp/packet-pkixtsp-template.c"
+#line 97 "./asn1/pkixtsp/packet-pkixtsp-template.c"
   };
 
   /* Register protocol */
@@ -612,6 +600,6 @@ void proto_reg_handoff_pkixtsp(void) {
 
 
 /*--- End of included file: packet-pkixtsp-dis-tab.c ---*/
-#line 133 "./asn1/pkixtsp/packet-pkixtsp-template.c"
+#line 121 "./asn1/pkixtsp/packet-pkixtsp-template.c"
 }
 

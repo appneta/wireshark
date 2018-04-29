@@ -4,19 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * Mergecap written by Scott Renfro <scott@renfro.org> based on
  * editcap by Richard Sharpe and Guy Harris
@@ -49,7 +37,7 @@
 #include <wsutil/file_util.h>
 #include <wsutil/privileges.h>
 #include <wsutil/strnatcmp.h>
-#include <ws_version_info.h>
+#include <version_info.h>
 
 #ifdef HAVE_PLUGINS
 #include <wsutil/plugins.h>
@@ -129,7 +117,6 @@ string_elem_print(gpointer data, gpointer not_used _U_)
           ((struct string_elem *)data)->lstr);
 }
 
-#ifdef HAVE_PLUGINS
 /*
  * General errors and warnings are reported with an console message
  * in mergecap.
@@ -141,7 +128,6 @@ failure_warning_message(const char *msg_format, va_list ap)
   vfprintf(stderr, msg_format, ap);
   fprintf(stderr, "\n");
 }
-#endif
 
 static void
 list_capture_types(void) {
@@ -225,7 +211,7 @@ merge_callback(merge_event event, int num,
       fprintf(stderr, "mergecap: ready to merge records\n");
       break;
 
-    case MERGE_EVENT_PACKET_WAS_READ:
+    case MERGE_EVENT_RECORD_WAS_READ:
       /* for this event, num = count */
       fprintf(stderr, "Record: %d\n", num);
       break;
@@ -310,23 +296,10 @@ main(int argc, char *argv[])
     g_free(init_progfile_dir_error);
   }
 
-  wtap_init();
-
-#ifdef HAVE_PLUGINS
   init_report_message(failure_warning_message, failure_warning_message,
                       NULL, NULL, NULL);
 
-  /* Scan for plugins.  This does *not* call their registration routines;
-     that's done later.
-
-     Don't report failures to load plugins because most (non-wiretap)
-     plugins *should* fail to load (because we're not linked against
-     libwireshark and dissector plugins need libwireshark).*/
-  scan_plugins(DONT_REPORT_LOAD_FAILURE);
-
-  /* Register all libwiretap plugin modules. */
-  register_all_wiretap_modules();
-#endif
+  wtap_init(TRUE);
 
   /* Process the options first */
   while ((opt = getopt_long(argc, argv, "aF:hI:s:vVw:", long_options, NULL)) != -1) {
@@ -497,9 +470,6 @@ main(int argc, char *argv[])
 clean_exit:
   wtap_cleanup();
   free_progdirs();
-#ifdef HAVE_PLUGINS
-  plugins_cleanup();
-#endif
   return (status == MERGE_OK) ? 0 : 2;
 }
 

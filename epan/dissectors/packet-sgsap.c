@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * References: 3GPP TS 29.118 V10.2.0 (2010-12)
  */
@@ -29,6 +17,8 @@
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/expert.h>
+#include <epan/exceptions.h>
+#include <epan/show_exception.h>
 
 #include "packet-gsm_a_common.h"
 #include "packet-e212.h"
@@ -132,7 +122,7 @@ de_sgsap_eps_loc_upd_type(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U
  * See subclause 18.4.5 in 3GPP TS 29.018 [16].
  */
 static guint16
-de_sgsap_err_msg(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, guint32 offset, guint len _U_, gchar *add_string , int string_len)
+de_sgsap_err_msg(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, guint32 offset, guint len, gchar *add_string , int string_len)
 {
     const gchar     *msg_str;
     gint             ett_tree;
@@ -161,8 +151,13 @@ de_sgsap_err_msg(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo _U_, guint3
 
     }
     if (msg_fcn_p){
-        offset++;
-        (*msg_fcn_p)(tvb, tree, pinfo, offset, len - offset);
+        volatile guint32 curr_offset = offset + 1;
+        TRY {
+            /*let's try to decode erroneous message and catch exceptions as it could be malformed */
+            (*msg_fcn_p)(tvb, tree, pinfo, curr_offset, len - 1);
+        } CATCH_BOUNDS_ERRORS {
+            show_exception(tvb, pinfo, tree, EXCEPT_CODE, GET_MESSAGE);
+        } ENDTRY
     }
 
 

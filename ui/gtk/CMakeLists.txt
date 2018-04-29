@@ -44,6 +44,7 @@ set(WIRESHARK_GTK_SRC
 	export_object_dlg.c
 	export_pdu_dlg.c
 	export_sslkeys.c
+	extcap_gtk.c
 	filter_autocomplete.c
 	file_dlg.c
 	file_import_dlg.c
@@ -172,7 +173,8 @@ if(PORTAUDIO_FOUND)
 			PUBLIC "/w44305"
 		)
 
-		# Portaudio has some size_t > long warnings as a result of using strlen() on x64.
+		# Portaudio has some size_t > long warnings as a result of using strlen()
+		# and other warnings on x64.
 		if ("${WIRESHARK_TARGET_PLATFORM}" STREQUAL "win64")
 			#set_source_files_properties(${PORTAUDIO_SRC_DIR}/hostapi/wmme/pa_win_wmme.c
 			#	PROPERTIES
@@ -180,57 +182,40 @@ if(PORTAUDIO_FOUND)
 			#)
 			target_compile_options(portaudio
 				PUBLIC "/w44267"
+				PUBLIC "/w44311"
+				PUBLIC "/w44312"
 			)
 		endif()
 	endif()
 endif()
 
-if(ENABLE_EXTCAP)
-	set(WIRESHARK_GTK_SRC
-		${WIRESHARK_GTK_SRC}
-		extcap_gtk.c
-	)
-endif()
-
 set(WIRESHARK_TAP_SRC
-	compare_stat.c
-	dcerpc_stat.c
-	expert_comp_dlg.c
-	flow_graph.c
-	funnel_stat.c
-	gsm_map_summary.c
-	iax2_analysis.c
-	io_stat.c
-	lbm_stream_dlg.c
-	lbm_uimflow_dlg.c
-	mac_lte_stat_dlg.c
-	mcast_stream_dlg.c
-	mtp3_summary.c
-	rlc_lte_graph.c
-	rlc_lte_stat_dlg.c
-	rpc_stat.c
-	rtp_analysis.c
-	rtp_stream_dlg.c
-	sctp_assoc_analyse.c
-	sctp_chunk_stat.c
-	sctp_chunk_stat_dlg.c
-	sctp_stat_dlg.c
-	stats_tree_stat.c
-	tcp_graph.c
-	voip_calls_dlg.c
-	wlan_stat_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/compare_stat.c
+	${CMAKE_CURRENT_SOURCE_DIR}/dcerpc_stat.c
+	${CMAKE_CURRENT_SOURCE_DIR}/expert_comp_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/flow_graph.c
+	${CMAKE_CURRENT_SOURCE_DIR}/funnel_stat.c
+	${CMAKE_CURRENT_SOURCE_DIR}/gsm_map_summary.c
+	${CMAKE_CURRENT_SOURCE_DIR}/iax2_analysis.c
+	${CMAKE_CURRENT_SOURCE_DIR}/io_stat.c
+	${CMAKE_CURRENT_SOURCE_DIR}/lbm_stream_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/mac_lte_stat_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/mcast_stream_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/mtp3_summary.c
+	${CMAKE_CURRENT_SOURCE_DIR}/rlc_lte_graph.c
+	${CMAKE_CURRENT_SOURCE_DIR}/rlc_lte_stat_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/rpc_stat.c
+	${CMAKE_CURRENT_SOURCE_DIR}/rtp_analysis.c
+	${CMAKE_CURRENT_SOURCE_DIR}/rtp_stream_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/sctp_assoc_analyse.c
+	${CMAKE_CURRENT_SOURCE_DIR}/sctp_chunk_stat.c
+	${CMAKE_CURRENT_SOURCE_DIR}/sctp_chunk_stat_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/sctp_stat_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/stats_tree_stat.c
+	${CMAKE_CURRENT_SOURCE_DIR}/tcp_graph.c
+	${CMAKE_CURRENT_SOURCE_DIR}/voip_calls_dlg.c
+	${CMAKE_CURRENT_SOURCE_DIR}/wlan_stat_dlg.c
 	${WIRESHARK_CUSTOM_TAP_SRC}
-)
-
-set(CLEAN_FILES
-	${WIRESHARK_GTK_SRC}
-	${WIRESHARK_TAP_SRC}
-)
-
-set_source_files_properties(
-	${CLEAN_FILES}
-	PROPERTIES
-	COMPILE_FLAGS "${WERROR_COMMON_FLAGS} ${NO_ERROR_DEPRECATED_DECLARATIONS_COMPILE_FLAGS}"
 )
 
 if (ENABLE_GTK3)
@@ -263,8 +248,19 @@ if(WIN32)
 	)
 endif()
 
+set(GTKUI_FILES
+	${WIRESHARK_GTK_SRC}
+	${WIRESHARK_TAP_SRC}
+	${PLATFORM_UI_SRC}
+)
+
+set_source_files_properties(
+	${GTKUI_FILES}
+	PROPERTIES
+	COMPILE_FLAGS "${WERROR_COMMON_FLAGS} ${NO_ERROR_DEPRECATED_DECLARATIONS_COMPILE_FLAGS}"
+)
+
 register_tap_files(wireshark-tap-register.c
-	taps
 	${WIRESHARK_TAP_SRC}
 )
 
@@ -308,17 +304,15 @@ else()
 endif()
 
 add_library(gtkui STATIC
-	${WIRESHARK_GTK_SRC}
-	${WIRESHARK_TAP_SRC}
-	${PLATFORM_UI_SRC}
+	${GTKUI_FILES}
 	${PORTAUDIO_OBJ}
 	wireshark-tap-register.c
 	${PIXBUF_SRC}
 )
 set_target_properties(gtkui PROPERTIES
-	COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
-	FOLDER "UI")
+	FOLDER "UI"
+)
 
 CHECKAPI(
 	NAME

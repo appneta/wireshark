@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -33,7 +21,6 @@
 #include <epan/expert.h>
 #include <epan/uat.h>
 #include <epan/to_str.h>
-#include <wsutil/inet_aton.h>
 #include <wsutil/pint.h>
 #include "packet-lbm.h"
 #include "packet-lbtru.h"
@@ -6503,7 +6490,7 @@ void proto_register_lbmr(void)
         { &ei_lbmr_analysis_zero_len_option, { "lbmr.analysis.zero_len_option", PI_MALFORMED, PI_ERROR, "Zero-length LBMR option", EXPFILL } },
     };
     module_t * lbmr_module;
-    struct in_addr addr;
+    guint32 addr;
     uat_t * tag_uat;
     expert_module_t * expert_lbmr;
 
@@ -6522,8 +6509,8 @@ void proto_register_lbmr(void)
         "Set the UDP port for incoming multicast topic resolution (context resolver_multicast_incoming_port)",
         10,
         &global_lbmr_mc_incoming_udp_port);
-    inet_aton(LBMR_DEFAULT_MC_INCOMING_ADDRESS, &addr);
-    lbmr_mc_incoming_address_host = g_ntohl(addr.s_addr);
+    ws_inet_pton4(LBMR_DEFAULT_MC_INCOMING_ADDRESS, &addr);
+    lbmr_mc_incoming_address_host = g_ntohl(addr);
     prefs_register_string_preference(lbmr_module,
         "mc_incoming_address",
         "Incoming multicast address (default " LBMR_DEFAULT_MC_INCOMING_ADDRESS ")",
@@ -6535,8 +6522,8 @@ void proto_register_lbmr(void)
         "Set the UDP port for outgoing multicast topic resolution (context resolver_multicast_outgoing_port)",
         10,
         &global_lbmr_mc_outgoing_udp_port);
-    inet_aton(LBMR_DEFAULT_MC_OUTGOING_ADDRESS, &addr);
-    lbmr_mc_outgoing_address_host = g_ntohl(addr.s_addr);
+    ws_inet_pton4(LBMR_DEFAULT_MC_OUTGOING_ADDRESS, &addr);
+    lbmr_mc_outgoing_address_host = g_ntohl(addr);
     prefs_register_string_preference(lbmr_module,
         "mc_outgoing_address",
         "Outgoing multicast address (default " LBMR_DEFAULT_MC_OUTGOING_ADDRESS ")",
@@ -6560,8 +6547,8 @@ void proto_register_lbmr(void)
         "Set the destination port for unicast topic resolution (context resolver_unicast_destination_port)",
         10,
         &global_lbmr_uc_dest_port);
-    inet_aton(LBMR_DEFAULT_UC_ADDRESS, &addr);
-    lbmr_uc_address_host = g_ntohl(addr.s_addr);
+    ws_inet_pton4(LBMR_DEFAULT_UC_ADDRESS, &addr);
+    lbmr_uc_address_host = g_ntohl(addr);
     prefs_register_string_preference(lbmr_module,
         "uc_address",
         "Unicast resolver address (default " LBMR_DEFAULT_UC_ADDRESS ")",
@@ -6686,7 +6673,7 @@ void proto_register_lbmr(void)
 void proto_reg_handoff_lbmr(void)
 {
     static gboolean already_registered = FALSE;
-    struct in_addr addr;
+    guint32 addr;
 
     if (!already_registered)
     {
@@ -6697,11 +6684,11 @@ void proto_reg_handoff_lbmr(void)
 
     lbmr_mc_incoming_udp_port = global_lbmr_mc_incoming_udp_port;
     lbmr_mc_outgoing_udp_port = global_lbmr_mc_outgoing_udp_port;
-    inet_aton(global_lbmr_mc_incoming_address, &addr);
-    lbmr_mc_incoming_address_host = g_ntohl(addr.s_addr);
+    ws_inet_pton4(global_lbmr_mc_incoming_address, &addr);
+    lbmr_mc_incoming_address_host = g_ntohl(addr);
 
-    inet_aton(global_lbmr_mc_outgoing_address, &addr);
-    lbmr_mc_outgoing_address_host = g_ntohl(addr.s_addr);
+    ws_inet_pton4(global_lbmr_mc_outgoing_address, &addr);
+    lbmr_mc_outgoing_address_host = g_ntohl(addr);
 
     /* Make sure the low port is <= the high port. If not, don't change them. */
     if (global_lbmr_uc_port_low <= global_lbmr_uc_port_high)
@@ -6710,8 +6697,8 @@ void proto_reg_handoff_lbmr(void)
         lbmr_uc_port_low = global_lbmr_uc_port_low;
     }
     lbmr_uc_dest_port = global_lbmr_uc_dest_port;
-    inet_aton(global_lbmr_uc_address, &addr);
-    lbmr_uc_address_host = g_ntohl(addr.s_addr);
+    ws_inet_pton4(global_lbmr_uc_address, &addr);
+    lbmr_uc_address_host = g_ntohl(addr);
     lbmr_use_tag = global_lbmr_use_tag;
 
     already_registered = TRUE;

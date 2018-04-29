@@ -3,19 +3,7 @@
  *
  * (C) 2008-2016 Harald Welte <laforge@gnumonks.org>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef _PACKET_GSMTAP_H
@@ -46,7 +34,12 @@
 #define GSMTAP_TYPE_GMR1_UM		0x0a	/* GMR-1 L2 packets */
 #define GSMTAP_TYPE_UMTS_RLC_MAC	0x0b
 #define GSMTAP_TYPE_UMTS_RRC		0x0c
+#define GSMTAP_TYPE_LTE_RRC		0x0d	/* LTE interface */
+#define GSMTAP_TYPE_LTE_MAC		0x0e	/* LTE MAC interface */
+#define GSMTAP_TYPE_LTE_MAC_FRAMED	0x0f	/* LTE MAC with context hdr */
 #define GSMTAP_TYPE_OSMOCORE_LOG	0x10	/* libosmocore logging */
+#define GSMTAP_TYPE_QC_DIAG		0x11	/* Qualcomm DIAG frame */
+#define GSMTAP_TYPE_LTE_NAS		0x12	/* LTE Non-Access Stratum */
 
 /* ====== DO NOT MAKE UNAPPROVED MODIFICATIONS HERE ===== */
 #define GSMTAP_BURST_UNKNOWN		0x00
@@ -82,7 +75,7 @@
 #define GSMTAP_CHANNEL_TCH_H		0x0a
 #define GSMTAP_CHANNEL_PACCH		0x0b
 #define GSMTAP_CHANNEL_CBCH52		0x0c
-#define GSMTAP_CHANNEL_PDCH		0x0d
+#define GSMTAP_CHANNEL_PDTCH		0x0d
 #define GSMTAP_CHANNEL_PTCCH		0x0e
 #define GSMTAP_CHANNEL_CBCH51		0x0f
 

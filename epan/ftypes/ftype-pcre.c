@@ -3,19 +3,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2001 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* Perl-Compatible Regular Expression (PCRE) internal field type.
@@ -74,13 +62,13 @@ static gboolean
 val_from_string(fvalue_t *fv, const char *pattern, gchar **err_msg)
 {
     GError *regex_error = NULL;
-    GRegexCompileFlags cflags = G_REGEX_OPTIMIZE;
+    GRegexCompileFlags cflags = (GRegexCompileFlags)(G_REGEX_CASELESS | G_REGEX_OPTIMIZE);
 
     /* Set RAW flag only if pattern requires matching raw byte
        sequences. Otherwise, omit it so that GRegex treats its
        input as UTF8-encoded string. */
     if (raw_flag_needed(pattern)) {
-        cflags = (GRegexCompileFlags)(G_REGEX_OPTIMIZE | G_REGEX_RAW);
+        cflags = (GRegexCompileFlags)(cflags | G_REGEX_RAW);
     }
 
     /* Free up the old value, if we have one */

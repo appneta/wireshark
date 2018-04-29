@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -513,13 +501,8 @@ void
 ber_decode_as(const gchar *syntax)
 {
 
-    if (decode_as_syntax) {
-        g_free(decode_as_syntax);
-        decode_as_syntax = NULL;
-    }
-
-    if (syntax)
-        decode_as_syntax = g_strdup(syntax);
+    g_free(decode_as_syntax);
+    decode_as_syntax = g_strdup(syntax);
 }
 
 /* Get oid syntax from hash table to get translation in proto dissection(packet-per.c) */
@@ -722,6 +705,23 @@ ber_add_bad_length_error(packet_info *pinfo, proto_tree *tree,
 }
 
 /*
+ * Add an "exceeds tvb length" error.
+ */
+static void
+ber_add_large_length_error(packet_info *pinfo, proto_tree *tree, tvbuff_t *tvb,
+                         const gint offset, const guint32 length)
+{
+    proto_item *cause;
+
+    cause = proto_tree_add_string_format_value(
+        tree, hf_ber_error, tvb, offset, length, "illegal_length",
+        "length %u longer than tvb_reported_length_remaining: %d",
+        length,
+        tvb_reported_length_remaining(tvb, offset));
+    expert_add_info(pinfo, cause, &ei_ber_error_length);
+}
+
+/*
  * Like proto_tree_add_item(), but checks whether the length of the item
  * being added is appropriate for the type of the item being added, so
  * if it's not, we report an error rather than a dissector bug.
@@ -859,12 +859,7 @@ try_dissect_unknown_ber(packet_info *pinfo, tvbuff_t *tvb, volatile int offset, 
             offset = dissect_ber_identifier(pinfo, tree, tvb, start_offset, &ber_class, &pc, &tag);
             offset = dissect_ber_length(pinfo, tree, tvb, offset, &len, NULL);
         }
-        cause = proto_tree_add_string_format_value(
-            tree, hf_ber_error, tvb, offset, len, "illegal_length",
-            "length:%u longer than tvb_reported_length_remaining:%d",
-            len,
-            tvb_reported_length_remaining(tvb, offset));
-        expert_add_info(pinfo, cause, &ei_ber_error_length);
+        ber_add_large_length_error(pinfo, tree, tvb, offset, len);
         return tvb_reported_length(tvb);
     }
 /* we don't care about the class only on the constructor flag */
@@ -1606,12 +1601,7 @@ proto_tree_add_debug_text(tree, "OCTET STRING dissect_ber_octet_string(%s) enter
              * error - short frame, or this item runs past the
              * end of the item containing it
              */
-            cause = proto_tree_add_string_format_value(
-                tree, hf_ber_error, tvb, offset, len, "illegal_length",
-                "length:%u longer than tvb_reported_length_remaining:%d",
-                len,
-                len_remain);
-            expert_add_info(actx->pinfo, cause, &ei_ber_error_length);
+            ber_add_large_length_error(actx->pinfo, tree, tvb, offset, len);
             return end_offset;
         }
 
@@ -2070,12 +2060,7 @@ dissect_ber_real(gboolean implicit_tag, asn1_ctx_t *actx, proto_tree *tree, tvbu
         len_remain = (guint32)tvb_reported_length_remaining(tvb, offset);
         if (len_remain < val_length) {
             /* error - this item runs past the end of the item containing it */
-            cause = proto_tree_add_string_format_value(
-                tree, hf_ber_error, tvb, offset, val_length, "illegal_length",
-                "length:%u longer than tvb_reported_length_remaining:%d",
-                val_length,
-                len_remain);
-            expert_add_info(actx->pinfo, cause, &ei_ber_error_length);
+            ber_add_large_length_error(actx->pinfo, tree, tvb, offset, val_length);
             return end_offset;
         }
     }
@@ -2577,12 +2562,16 @@ proto_tree_add_debug_text(tree, "SET dissect_ber_set(%s) entered\n", name);
         offset  = get_ber_length(tvb, offset, &len, &ind_field);
         eoffset = offset + len;
 
+        if (len > (guint32)(end_offset - offset) || len > (guint32) tvb_reported_length_remaining(tvb, offset)) {
+            ber_add_large_length_error(actx->pinfo, tree, tvb, offset, len);
+            return end_offset;
+        }
+
         /* Look through the Set to see if this class/id exists and
          * hasn't been seen before
          * Skip check completely if ber_class == ANY
          * of if NOCHKTAG is set
          */
-
 
         for (first_pass = TRUE, cset = set, set_idx = 0; cset->func || first_pass; cset++, set_idx++) {
 
@@ -4181,6 +4170,8 @@ static const ber_choice_t T_encoding_choice[] = {
 
 static int
 dissect_ber_T_encoding(gboolean implicit_tag _U_, tvbuff_t *tvb, int offset, asn1_ctx_t *actx, proto_tree *tree, int hf_index) {
+    // This assertion is used to remove clang's warning.
+    DISSECTOR_ASSERT(actx);
     offset = dissect_ber_choice(actx, tree, tvb, offset,
                                 T_encoding_choice, hf_index, ett_ber_T_encoding,
                                 &actx->external.encoding);

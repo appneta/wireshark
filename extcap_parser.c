@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -33,6 +21,7 @@
 
 #include "extcap.h"
 #include "extcap_parser.h"
+#include "ws_attributes.h"
 
 void extcap_printf_complex(extcap_complex *comp) {
     gchar *ret = extcap_get_complex_as_string(comp);
@@ -282,6 +271,7 @@ static void extcap_free_toolbar_value(iface_toolbar_value *v) {
 
     g_free(v->value);
     g_free(v->display);
+    g_free(v);
 }
 
 static void extcap_free_toolbar_control(iface_toolbar_control *c) {
@@ -292,6 +282,7 @@ static void extcap_free_toolbar_control(iface_toolbar_control *c) {
     g_free(c->validation);
     g_free(c->tooltip);
     g_free(c->placeholder);
+    g_free(c);
 }
 
 void extcap_free_arg_list(GList *a) {
@@ -690,14 +681,10 @@ static iface_toolbar_control *extcap_parse_control_sentence(GList *control_items
         }
 
         param_value = (gchar *)g_hash_table_lookup(s->param_list, ENUM_KEY(EXTCAP_PARAM_TOOLTIP));
-        if (param_value != NULL) {
-            control->tooltip = g_strdup(param_value);
-        }
+        control->tooltip = g_strdup(param_value);
 
         param_value = (gchar *)g_hash_table_lookup(s->param_list, ENUM_KEY(EXTCAP_PARAM_PLACEHOLDER));
-        if (param_value != NULL) {
-            control->placeholder = g_strdup(param_value);
-        }
+        control->placeholder = g_strdup(param_value);
 
         param_value = (gchar *)g_hash_table_lookup(s->param_list, ENUM_KEY(EXTCAP_PARAM_TYPE));
         if (param_value == NULL) {

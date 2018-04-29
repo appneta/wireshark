@@ -5,25 +5,14 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef FILESYSTEM_H
 #define FILESYSTEM_H
 
 #include "ws_symbol_export.h"
+#include "ws_attributes.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,7 +41,22 @@ WS_DLL_PUBLIC const char *get_progfile_dir(void);
  * before init_progfile_dir() is called, as they might be stored in a
  * subdirectory of the program file directory.
  */
-WS_DLL_PUBLIC const char *get_plugin_dir(void);
+WS_DLL_PUBLIC const char *get_plugins_dir(void);
+
+/*
+ * Append VERSION_MAJOR.VERSION_MINOR to the plugin dir.
+ */
+WS_DLL_PUBLIC const char *get_plugins_dir_with_version(void);
+
+/*
+ * Get the personal plugin dir.
+ */
+WS_DLL_PUBLIC const char *get_plugins_pers_dir(void);
+
+/*
+ * Append VERSION_MAJOR.VERSION_MINOR to the plugin personal dir.
+ */
+WS_DLL_PUBLIC const char *get_plugins_pers_dir_with_version(void);
 
 /*
  * Get the directory in which extcap hooks are stored; this must not be called
@@ -81,12 +85,6 @@ WS_DLL_PUBLIC const char *get_datafile_dir(void);
  * caller is done with it.
  */
 WS_DLL_PUBLIC char *get_datafile_path(const char *filename);
-
-/*
- * Get the personal plugin dir.
- * Return value is malloced so the caller should g_free() it.
- */
-WS_DLL_PUBLIC char *get_plugins_pers_dir(void);
 
 /*
  * Get the directory in which files that, at least on UNIX, are

@@ -10,19 +10,7 @@
  ** By Gerald Combs <gerald@wireshark.org>
  ** Copyright 1998 Gerald Combs
  **
- ** This program is free software; you can redistribute it and/or
- ** modify it under the terms of the GNU General Public License
- ** as published by the Free Software Foundation; either version 2
- ** of the License, or (at your option) any later version.
- **
- ** This program is distributed in the hope that it will be useful,
- ** but WITHOUT ANY WARRANTY; without even the implied warranty of
- ** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- ** GNU General Public License for more details.
- **
- ** You should have received a copy of the GNU General Public License
- ** along with this program; if not, write to the Free Software
- ** Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ ** SPDX-License-Identifier: GPL-2.0-or-later
  *****************************************************************************
  **
  ** Previous NetFlow dissector written by Matthew Smart <smart@monkey.org>
@@ -122,12 +110,14 @@
  * March 2015: uhei:  Add Citrix Netscaler AppFlow extensions
  * used documentation found at:
  * https://raw.githubusercontent.com/splunk/ipfix/master/app/Splunk_TA_IPFIX/bin/IPFIX/information-elements/5951.xml
- */
-
-/*
+ *
  * December 2015: uhei:  Add Barracuda NGFirewall extensions
  * used documentation found at:
  * https://techlib.barracuda.com/NG61/ConfigAuditReportingIPFIX
+ *
+ * December 2017: uhei
+ * Updated IEs from https://www.iana.org/assignments/ipfix/ipfix.xhtml
+ * Includes updates for RFC8038, RFC8158
  */
 
 #include "config.h"
@@ -161,6 +151,7 @@ void proto_reg_handoff_netflow(void);
 #define IPFIX_UDP_PORTS   "4739"
 #define REVPEN            29305
 static dissector_handle_t netflow_handle;
+static dissector_handle_t netflow_tcp_handle;
 
 /* If you want sort of safely to send enterprise specific element IDs
    using v9 you need to stake a claim in the wilds with the high bit
@@ -176,6 +167,8 @@ static range_t *global_netflow_ports = NULL;
  *  global_ipfix_ports : holds the configured range of ports for IPFIX
  */
 static range_t *global_ipfix_ports = NULL;
+
+static gboolean netflow_preference_desegment = TRUE;
 
 /*
  * Flowset (template) ID's
@@ -728,6 +721,54 @@ static const value_string v9_v10_template_types[] = {
     { 431, "layer2FrameTotalCount" },
     { 432, "pseudoWireDestinationIPv4Address" },
     { 433, "ignoredLayer2FrameTotalCount" },
+    { 434, "mibObjectValueInteger" },
+    { 435, "mibObjectValueOctetString" },
+    { 436, "mibObjectValueOID" },
+    { 437, "mibObjectValueBits" },
+    { 438, "mibObjectValueIPAddress" },
+    { 439, "mibObjectValueCounter" },
+    { 440, "mibObjectValueGauge" },
+    { 441, "mibObjectValueTimeTicks" },
+    { 442, "mibObjectValueUnsigned" },
+    { 443, "mibObjectValueTable" },
+    { 444, "mibObjectValueRow" },
+    { 445, "mibObjectIdentifier" },
+    { 446, "mibSubIdentifier" },
+    { 447, "mibIndexIndicator" },
+    { 448, "mibCaptureTimeSemantics" },
+    { 449, "mibContextEngineID" },
+    { 450, "mibContextName" },
+    { 451, "mibObjectName" },
+    { 452, "mibObjectDescription" },
+    { 453, "mibObjectSyntax" },
+    { 454, "mibModuleName" },
+    { 455, "mobileIMSI" },
+    { 456, "mobileMSISDN" },
+    { 457, "httpStatusCode" },
+    { 458, "sourceTransportPortsLimit" },
+    { 459, "httpRequestMethod" },
+    { 460, "httpRequestHost" },
+    { 461, "httpRequestTarget" },
+    { 462, "httpMessageVersion" },
+    { 463, "natInstanceID" },
+    { 464, "internalAddressRealm" },
+    { 465, "externalAddressRealm" },
+    { 466, "natQuotaExceededEvent" },
+    { 467, "natThresholdEvent" },
+    { 468, "httpUserAgent" },
+    { 469, "httpContentType" },
+    { 470, "httpReasonPhrase" },
+    { 471, "maxSessionEntries" },
+    { 472, "maxBIBEntries" },
+    { 473, "maxEntriesPerUser" },
+    { 474, "maxSubscribers" },
+    { 475, "maxFragmentsPendingReassembly" },
+    { 476, "addressPoolHighThreshold" },
+    { 477, "addressPoolLowThreshold" },
+    { 478, "addressPortMappingHighThreshold" },
+    { 479, "addressPortMappingLowThreshold" },
+    { 480, "addressPortMappingPerUserHighThreshold" },
+    { 481, "globalAddressMappingHighThreshold" },
 
     /* Ericsson NAT Logging */
     { 24628, "NAT_LOG_FIELD_IDX_CONTEXT_ID" },
@@ -2405,6 +2446,54 @@ static int      hf_cflow_layer2_frame_delta_count                   = -1;      /
 static int      hf_cflow_layer2_frame_total_count                   = -1;      /* ID: 431 */
 static int      hf_cflow_pseudo_wire_destination_ipv4_address       = -1;      /* ID: 432 */
 static int      hf_cflow_ignored_layer2_frame_total_count           = -1;      /* ID: 433 */
+static int      hf_cflow_mib_object_value_integer                   = -1;      /* ID: 434 */
+static int      hf_cflow_mib_object_value_octetstring               = -1;      /* ID: 435 */
+static int      hf_cflow_mib_object_value_oid                       = -1;      /* ID: 436 */
+static int      hf_cflow_mib_object_value_bits                      = -1;      /* ID: 437 */
+static int      hf_cflow_mib_object_value_ipaddress                 = -1;      /* ID: 438 */
+static int      hf_cflow_mib_object_value_counter                   = -1;      /* ID: 439 */
+static int      hf_cflow_mib_object_value_gauge                     = -1;      /* ID: 440 */
+static int      hf_cflow_mib_object_value_timeticks                 = -1;      /* ID: 441 */
+static int      hf_cflow_mib_object_value_unsigned                  = -1;      /* ID: 442 */
+static int      hf_cflow_mib_object_value_table                     = -1;      /* ID: 443 */
+static int      hf_cflow_mib_object_value_row                       = -1;      /* ID: 444 */
+static int      hf_cflow_mib_object_identifier                      = -1;      /* ID: 445 */
+static int      hf_cflow_mib_subidentifier                          = -1;      /* ID: 446 */
+static int      hf_cflow_mib_index_indicator                        = -1;      /* ID: 447 */
+static int      hf_cflow_mib_capture_time_semantics                 = -1;      /* ID: 448 */
+static int      hf_cflow_mib_context_engineid                       = -1;      /* ID: 449 */
+static int      hf_cflow_mib_context_name                           = -1;      /* ID: 450 */
+static int      hf_cflow_mib_object_name                            = -1;      /* ID: 451 */
+static int      hf_cflow_mib_object_description                     = -1;      /* ID: 452 */
+static int      hf_cflow_mib_object_syntax                          = -1;      /* ID: 453 */
+static int      hf_cflow_mib_module_name                            = -1;      /* ID: 454 */
+static int      hf_cflow_mobile_imsi                                = -1;      /* ID: 455 */
+static int      hf_cflow_mobile_msisdn                              = -1;      /* ID: 456 */
+static int      hf_cflow_http_statuscode                            = -1;      /* ID: 457 */
+static int      hf_cflow_source_transport_ports_limit               = -1;      /* ID: 458 */
+static int      hf_cflow_http_request_method                        = -1;      /* ID: 459 */
+static int      hf_cflow_http_request_host                          = -1;      /* ID: 460 */
+static int      hf_cflow_http_request_target                        = -1;      /* ID: 461 */
+static int      hf_cflow_http_message_version                       = -1;      /* ID: 462 */
+static int      hf_cflow_nat_instanceid                             = -1;      /* ID: 463 */
+static int      hf_cflow_internal_address_realm                     = -1;      /* ID: 464 */
+static int      hf_cflow_external_address_realm                     = -1;      /* ID: 465 */
+static int      hf_cflow_nat_quota_exceeded_event                   = -1;      /* ID: 466 */
+static int      hf_cflow_nat_threshold_event                        = -1;      /* ID: 467 */
+static int      hf_cflow_http_user_agent                            = -1;      /* ID: 468 */
+static int      hf_cflow_http_content_type                          = -1;      /* ID: 469 */
+static int      hf_cflow_http_reason_phrase                         = -1;      /* ID: 470 */
+static int      hf_cflow_max_session_entries                        = -1;      /* ID: 471 */
+static int      hf_cflow_max_bib_entries                            = -1;      /* ID: 472 */
+static int      hf_cflow_max_entries_per_user                       = -1;      /* ID: 473 */
+static int      hf_cflow_max_subscribers                            = -1;      /* ID: 474 */
+static int      hf_cflow_max_fragments_pending_reassembly           = -1;      /* ID: 475 */
+static int      hf_cflow_addresspool_highthreshold                  = -1;      /* ID: 476 */
+static int      hf_cflow_addresspool_lowthreshold                   = -1;      /* ID: 477 */
+static int      hf_cflow_addressport_mapping_highthreshold          = -1;      /* ID: 478 */
+static int      hf_cflow_addressport_mapping_lowthreshold           = -1;      /* ID: 479 */
+static int      hf_cflow_addressport_mapping_per_user_highthreshold = -1;      /* ID: 480 */
+static int      hf_cflow_global_addressmapping_highthreshold        = -1;      /* ID: 481 */
 
 static int      hf_cflow_mpls_label                                 = -1;
 static int      hf_cflow_mpls_exp                                   = -1;
@@ -2635,7 +2724,7 @@ static int      hf_pie_ntop_radius_acct_session_id      = -1;
 static int      hf_pie_ntop_radius_acct_status_type     = -1;
 static int      hf_pie_ntop_radius_acct_in_octects      = -1;
 static int      hf_pie_ntop_radius_acct_out_octects     = -1;
-static int      hf_pie_ntop_radus_acct_in_pkts          = -1;
+static int      hf_pie_ntop_radius_acct_in_pkts         = -1;
 static int      hf_pie_ntop_radius_acct_out_pkts        = -1;
 static int      hf_pie_ntop_imap_login                  = -1;
 
@@ -2885,6 +2974,9 @@ static int      hf_pie_ixia_dns_txt                     = -1;
 static int      hf_pie_ixia_source_as_name              = -1;
 static int      hf_pie_ixia_dest_as_name                = -1;
 static int      hf_pie_ixia_transaction_latency         = -1;
+static int      hf_pie_ixia_dns_query_names             = -1;
+static int      hf_pie_ixia_dns_answer_names            = -1;
+static int      hf_pie_ixia_dns_classes                 = -1;
 
 static int      hf_pie_netscaler                                         = -1;
 static int      hf_pie_netscaler_roundtriptime                           = -1;
@@ -3100,6 +3192,58 @@ static const value_string special_mpls_top_label_type[] = {
     {3, "VPN"},
     {4, "BGP"},
     {5, "LDP"},
+    {0, NULL }
+};
+
+static const value_string special_mib_capture_time_semantics[] = {
+    {0, "undefined"},
+    {1, "begin"},
+    {2, "end"},
+    {3, "export"},
+    {4, "average"},
+    {0, NULL }
+};
+
+static const value_string special_nat_quota_exceeded_event[] = {
+    {0, "Reserved"},
+    {1, "Maximum session entries"},
+    {2, "Maximum BIB entries"},
+    {3, "Maximum entries per user"},
+    {4, "Maximum active hosts or subscribers"},
+    {5, "Maximum fragments pending reassembly"},
+    {0, NULL }
+};
+
+static const value_string special_nat_threshold_event[] = {
+    {0, "Reserved"},
+    {1, "Address pool high threshold event"},
+    {2, "Address pool low threshold event"},
+    {3, "Address and port mapping high threshold event"},
+    {4, "Address and port mapping per user high threshold event"},
+    {5, "Global address mapping high threshold event"},
+    {0, NULL }
+};
+
+static const value_string special_nat_event_type[] = {
+    {0, "Reserved"},
+    {1, "NAT translation create (Historic)"},
+    {2, "NAT translation delete (Historic)"},
+    {3, "NAT Addresses exhausted"},
+    {4, "NAT44 session create"},
+    {5, "NAT44 session delete"},
+    {6, "NAT64 session create"},
+    {7, "NAT64 session delete"},
+    {8, "NAT44 BIB create"},
+    {9, "NAT44 BIB delete"},
+    {10, "NAT64 BIB create"},
+    {11, "NAT64 BIB delete"},
+    {12, "NAT ports exhausted"},
+    {13, "Quota Exceeded"},
+    {14, "Address binding create"},
+    {15, "Address binding delete"},
+    {16, "Port block allocation"},
+    {17, "Port block de-allocation"},
+    {18, "Threshold Reached"},
     {0, NULL }
 };
 
@@ -6524,6 +6668,246 @@ dissect_v9_v10_pdu_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *pdutree, 
                                      tvb, offset, length, ENC_BIG_ENDIAN);
             break;
 
+        case 434: /* mibObjectValueInteger */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_integer,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 435: /* mibObjectValueOctetString */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_octetstring,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 436: /* mibObjectValueOID */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_oid,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 437: /* mibObjectValueBits */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_bits,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 438: /* mibObjectValueIPAddress */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_ipaddress,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 439: /* mibObjectValueCounter */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_counter,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 440: /* mibObjectValueGauge */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_gauge,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 441: /* mibObjectValueTimeTicks */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_timeticks,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 442: /* mibObjectValueUnsigned */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_unsigned,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 443: /* mibObjectValueTable */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_table,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 444: /* mibObjectValueRow */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_value_row,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 445: /* mibObjectIdentifier */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_identifier,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 446: /* mibSubIdentifier */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_subidentifier,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 447: /* mibIndexIndicator */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_index_indicator,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 448: /* mibCaptureTimeSemantics */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_capture_time_semantics,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 449: /* mibContextEngineID */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_context_engineid,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 450: /* mibContextName */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_context_name,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 451: /* mibObjectName */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_name,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 452: /* mibObjectDescription */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_description,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 453: /* mibObjectSyntax */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_object_syntax,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 454: /* mibModuleName */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mib_module_name,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 455: /* mobileIMSI */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mobile_imsi,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 456: /* mobileMSISDN */
+            ti = proto_tree_add_item(pdutree, hf_cflow_mobile_msisdn,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 457: /* httpStatusCode */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_statuscode,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 458: /* sourceTransportPortsLimit */
+            ti = proto_tree_add_item(pdutree, hf_cflow_source_transport_ports_limit,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 459: /* httpRequestMethod */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_request_method,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 460: /* httpRequestHost */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_request_host,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 461: /* httpRequestTarget */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_request_target,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 462: /* httpMessageVersion */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_message_version,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 463: /* natInstanceID */
+            ti = proto_tree_add_item(pdutree, hf_cflow_nat_instanceid,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 464: /* internalAddressRealm */
+            ti = proto_tree_add_item(pdutree, hf_cflow_internal_address_realm,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 465: /* externalAddressRealm */
+            ti = proto_tree_add_item(pdutree, hf_cflow_external_address_realm,
+                                     tvb, offset, length, ENC_NA);
+            break;
+
+        case 466: /* natQuotaExceededEvent */
+            ti = proto_tree_add_item(pdutree, hf_cflow_nat_quota_exceeded_event,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 467: /* natThresholdEvent */
+            ti = proto_tree_add_item(pdutree, hf_cflow_nat_threshold_event,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 468: /* httpUserAgent */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_user_agent,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 469: /* httpContentType */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_content_type,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 470: /* httpReasonPhrase */
+            ti = proto_tree_add_item(pdutree, hf_cflow_http_reason_phrase,
+                                     tvb, offset, length, ENC_UTF_8|ENC_NA);
+            break;
+
+        case 471: /* maxSessionEntries */
+            ti = proto_tree_add_item(pdutree, hf_cflow_max_session_entries,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 472: /* maxBIBEntries */
+            ti = proto_tree_add_item(pdutree, hf_cflow_max_bib_entries,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 473: /* maxEntriesPerUser */
+            ti = proto_tree_add_item(pdutree, hf_cflow_max_entries_per_user,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 474: /* maxSubscribers */
+            ti = proto_tree_add_item(pdutree, hf_cflow_max_subscribers,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 475: /* maxFragmentsPendingReassembly */
+            ti = proto_tree_add_item(pdutree, hf_cflow_max_fragments_pending_reassembly,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 476: /* addressPoolHighThreshold */
+            ti = proto_tree_add_item(pdutree, hf_cflow_addresspool_highthreshold,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 477: /* addressPoolLowThreshold */
+            ti = proto_tree_add_item(pdutree, hf_cflow_addresspool_lowthreshold,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 478: /* addressPortMappingHighThreshold */
+            ti = proto_tree_add_item(pdutree, hf_cflow_addressport_mapping_highthreshold,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 479: /* addressPortMappingLowThreshold */
+            ti = proto_tree_add_item(pdutree, hf_cflow_addressport_mapping_lowthreshold,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 480: /* addressPortMappingPerUserHighThreshold */
+            ti = proto_tree_add_item(pdutree, hf_cflow_addressport_mapping_per_user_highthreshold ,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
+        case 481: /* globalAddressMappingHighThreshold */
+            ti = proto_tree_add_item(pdutree, hf_cflow_global_addressmapping_highthreshold,
+                                     tvb, offset, length, ENC_BIG_ENDIAN);
+            break;
+
 
         case 34000: /* cts_sgt_source_tag */
             ti = proto_tree_add_item(pdutree, hf_cflow_cts_sgt_source_tag,
@@ -7687,7 +8071,7 @@ dissect_v9_v10_pdu_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *pdutree, 
 
         case (NTOP_BASE + 254):           /* RADIUS_ACCT_IN_PKTS */
         case ((VENDOR_NTOP << 16) | 254): /* RADIUS_ACCT_IN_PKTS */
-            ti = proto_tree_add_item(pdutree, hf_pie_ntop_radius_acct_out_pkts,
+            ti = proto_tree_add_item(pdutree, hf_pie_ntop_radius_acct_in_pkts,
                                      tvb, offset, length, ENC_BIG_ENDIAN);
             break;
 
@@ -9022,6 +9406,18 @@ dissect_v9_v10_pdu_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree *pdutree, 
             ti = proto_tree_add_item(pdutree, hf_pie_ixia_transaction_latency,
                                      tvb, offset, length, ENC_BIG_ENDIAN);
             break;
+        case ((VENDOR_IXIA << 16) | 189):
+            ti = proto_tree_add_item(pdutree, hf_pie_ixia_dns_query_names,
+                                     tvb, offset, length, ENC_ASCII|ENC_NA);
+            break;
+        case ((VENDOR_IXIA << 16) | 190):
+            ti = proto_tree_add_item(pdutree, hf_pie_ixia_dns_answer_names,
+                                     tvb, offset, length, ENC_ASCII|ENC_NA);
+            break;
+        case ((VENDOR_IXIA << 16) | 191):
+            ti = proto_tree_add_item(pdutree, hf_pie_ixia_dns_classes,
+                                     tvb, offset, length, ENC_ASCII|ENC_NA);
+            break;
             /* END Ixia Communications */
 
             /* START Netscaler Communications */
@@ -9960,7 +10356,7 @@ dissect_v9_v10_template_fields(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree
         length  = tvb_get_ntohs(tvb, offset+2); /* XXX: 0 length should not be allowed ? exception: "ScopeSystem" */
         if ((ver == 10) && (type & 0x8000)) {   /* IPFIX only */
             pen = tvb_get_ntohl(tvb, offset+4);
-            pen_str = val_to_str_ext_const(pen, &sminmpec_values_ext, "(Unknown)");
+            pen_str = enterprises_lookup(pen, "(Unknown)");
         }
 
         if (tmplt_p->fields_p[fields_type] != NULL) {
@@ -11586,7 +11982,7 @@ proto_register_netflow(void)
         },
         {&hf_cflow_nat_event,
          {"Nat Event", "cflow.nat_event",
-          FT_UINT8, BASE_DEC, NULL, 0x0,
+          FT_UINT8, BASE_DEC, VALS(special_nat_event_type), 0x0,
           NULL, HFILL}
         },
         {&hf_cflow_initiator_octets,
@@ -12599,6 +12995,246 @@ proto_register_netflow(void)
         {&hf_cflow_ignored_layer2_frame_total_count,
           {"Ignored_Layer2_Frame_Total_Count", "cflow.ignored_layer2_frame_total_count",
            FT_UINT64, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_integer,
+          {"mibObject Value Integer", "cflow.mib_object_value_integer",
+           FT_INT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_octetstring,
+          {"mibObject Octet String", "cflow.mib_object_octetstring",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_oid,
+          {"mibObject Value OID", "cflow.mib_object_value_oid",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_bits,
+          {"mibObject Value Bits", "cflow.mib_object_value_bits",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_ipaddress,
+          {"mibObject Value IP Address", "cflow.mib_object_value_ipaddress",
+           FT_IPv4, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_counter,
+          {"mibObject Value Counter", "cflow.mib_object_value_counter",
+           FT_UINT64, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_gauge,
+          {"mibObject Value Gauge", "cflow.mib_object_value_gauge",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_timeticks,
+          {"mibObject Value Timeticks", "cflow.mib_object_value_timeticks",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_unsigned,
+          {"mibObject Value Unsigned", "cflow.mib_object_value_unsigned",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_table,
+          {"mibObject Value Table", "cflow.mib_object_value_table",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_value_row,
+          {"mibObject Value Row", "cflow.mib_object_value_row",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_identifier,
+          {"mibObject Identifier", "cflow.mib_object_identifier",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_subidentifier,
+          {"mib SubIdentifier", "cflow.mib_subidentifier",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_index_indicator,
+          {"mib Index Indicator", "cflow.mib_index_indicator",
+           FT_UINT64, BASE_HEX, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_capture_time_semantics,
+          {"mib Capture Time Semantics", "cflow.mib_capture_time_semantics",
+           FT_UINT8, BASE_DEC, VALS(special_mib_capture_time_semantics), 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_context_engineid,
+          {"mib Context EngineID", "cflow.mib_context_engineid",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_context_name,
+          {"mib Context Name", "cflow.mib_context_name",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_name,
+          {"mib Object Name", "cflow.mib_object_name",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_description,
+          {"mib Object Description", "cflow.mib_object_description",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_object_syntax,
+          {"mib Object Syntax", "cflow.mib_object_syntax",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mib_module_name,
+          {"mib Module Name", "cflow.mib_module_name",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mobile_imsi,
+          {"mib Mobile IMSI", "cflow.mib_mobile_imsi",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_mobile_msisdn,
+          {"mib Mobile MSISDN", "cflow.mib_mobile_msisdn",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_statuscode,
+          {"HTTP Statuscode", "cflow.http_statuscode",
+           FT_UINT16, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_source_transport_ports_limit,
+          {"Source Transport Ports Limit", "cflow.source_transport_ports_limit",
+           FT_UINT16, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_request_method,
+          {"HTTP Request Method", "cflow.http_request_method",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_request_host,
+          {"HTTP Request Host", "cflow.http_request_host",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_request_target,
+          {"HTTP Request Target", "cflow.http_request_target",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_message_version,
+          {"HTTP Message Version", "cflow.http_message_version",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_nat_instanceid,
+          {"NAT Instance ID", "cflow.nat_instanceid",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_internal_address_realm,
+          {"Internal Address Realm", "cflow.internal_address_realm",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_external_address_realm,
+          {"External Address Realm", "cflow.external_address_realm",
+           FT_BYTES, BASE_NONE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_nat_quota_exceeded_event,
+          {"NAT Quota Exceeded Event", "cflow.nat_quota_exceeded_event",
+           FT_UINT32, BASE_DEC, VALS(special_nat_quota_exceeded_event), 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_nat_threshold_event,
+          {"NAT Threshold Event", "cflow.nat_threshold_event",
+           FT_UINT32, BASE_DEC, VALS(special_nat_threshold_event), 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_user_agent,
+          {"HTTP User Agent", "cflow.http_user_agent",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_content_type,
+          {"HTTP Content Type", "cflow.http_content_type",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_http_reason_phrase,
+          {"HTTP Reason Phrase", "cflow.http_reason_phrase",
+           FT_STRING, STR_UNICODE, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_max_session_entries,
+          {"Max Session Entries", "cflow.max_session_entries",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_max_bib_entries,
+          {"Max BIB Entries", "cflow.max_bib_entries",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_max_entries_per_user,
+          {"Max Entries Per User", "cflow.max_entries_per_user",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_max_subscribers,
+          {"Max Subscribers", "cflow.max_subscribers",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_max_fragments_pending_reassembly,
+          {"Max Fragments Pending Reassembly", "cflow.max_fragments_pending_reassembly",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_addresspool_highthreshold,
+          {"Addresspool High Threshold", "cflow.addresspool_highthreshold",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_addresspool_lowthreshold,
+          {"Addresspool Low Threshold", "cflow.addresspool_lowthreshold",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_addressport_mapping_highthreshold,
+          {"Addressport Mapping High Threshold", "cflow.addressport_mapping_highthreshold",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_addressport_mapping_lowthreshold,
+          {"Addressport Mapping Low Threshold", "cflow.addressport_mapping_lowthreshold",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_addressport_mapping_per_user_highthreshold,
+          {"Addressport Mapping Per User High Threshold", "cflow.addressport_mapping_per_user_highthreshold",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
+           NULL, HFILL}
+        },
+        {&hf_cflow_global_addressmapping_highthreshold,
+          {"Global Address Mapping High Threshold", "cflow.global_addressmapping_highthreshold",
+           FT_UINT32, BASE_DEC, NULL, 0x0,
            NULL, HFILL}
         },
 
@@ -13946,8 +14582,8 @@ proto_register_netflow(void)
           NULL, HFILL}
         },
         /* ntop, 35632 / 254 */
-        {&hf_pie_ntop_radus_acct_in_pkts,
-         {"RADIUS Accounting Input Packets", "cflow.pie.ntop.radus_acct_in_pkts",
+        {&hf_pie_ntop_radius_acct_in_pkts,
+         {"RADIUS Accounting Input Packets", "cflow.pie.ntop.radius_acct_in_pkts",
           FT_UINT32, BASE_DEC, NULL, 0x0,
           NULL, HFILL}
         },
@@ -15386,9 +16022,30 @@ proto_register_netflow(void)
 
         /* ixia, 3054 / 188 */
         {&hf_pie_ixia_transaction_latency,
-         {"Transaction Latency (ms)", "cflow.pie.ixia.transact-latency-ms",
+         {"Transaction Latency (us)", "cflow.pie.ixia.transact-latency-us",
           FT_UINT32, BASE_DEC, NULL, 0x0,
           NULL, HFILL}
+        },
+
+        /* ixia, 3054 / 189 */
+        {&hf_pie_ixia_dns_query_names,
+         {"DNS Query Names", "cflow.pie.ixia.dns-query-names",
+          FT_STRING, STR_ASCII, NULL, 0x0,
+          "Names in the Query section of a DNS message (comma separated list)", HFILL}
+        },
+
+        /* ixia, 3054 / 190 */
+        {&hf_pie_ixia_dns_answer_names,
+         {"DNS Answer Names", "cflow.pie.ixia.dns-answer-names",
+          FT_STRING, STR_ASCII, NULL, 0x0,
+          "Names in the Answer section of a DNS message (comma separated list)", HFILL}
+        },
+
+        /* ixia, 3054 / 191 */
+        {&hf_pie_ixia_dns_classes,
+         {"DNS Classes", "cflow.pie.ixia.dns-classes",
+          FT_STRING, STR_ASCII, NULL, 0x0,
+          "Class types appearing in a DNS message (comma separated list)", HFILL}
         },
 
         /* Netscaler root (a hidden item to allow filtering) */
@@ -16555,7 +17212,7 @@ proto_register_netflow(void)
     static ei_register_info ei[] = {
         { &ei_cflow_flowset_length,
           { "cflow.flowset_length.invalid", PI_MALFORMED, PI_WARN,
-            NULL, EXPFILL }},
+            "Flow length invalid", EXPFILL }},
         { &ei_cflow_no_flow_information,
           { "cflow.no_flow_information", PI_MALFORMED, PI_WARN,
             "No flow information", EXPFILL }},
@@ -16564,31 +17221,31 @@ proto_register_netflow(void)
             "No scope fields", EXPFILL }},
         { &ei_cflow_template_ipfix_scope_field_count_too_many,
           { "cflow.template_ipfix_scope_field_count.too_many", PI_MALFORMED, PI_WARN,
-            NULL, EXPFILL }},
+            "More IPFIX scopes than can be handled", EXPFILL }},
         { &ei_cflow_options,
           { "cflow.options.too_many", PI_UNDECODED, PI_WARN,
-            NULL, EXPFILL }},
+            "More options than can be handled", EXPFILL }},
         { &ei_cflow_scopes,
           { "cflow.scopes.too_many", PI_UNDECODED, PI_WARN,
-            NULL, EXPFILL }},
+            "More scopes than can be handled", EXPFILL }},
         { &ei_cflow_entries,
           { "cflow.entries.too_many", PI_UNDECODED, PI_WARN,
-            NULL, EXPFILL }},
+            "More entries than can be handled", EXPFILL }},
         { &ei_cflow_mpls_label_bad_length,
           { "cflow.mpls_label.bad_length", PI_UNDECODED, PI_WARN,
-            NULL, EXPFILL }},
+            "MPLS-Label bad length", EXPFILL }},
         { &ei_cflow_flowsets_impossible,
           { "cflow.flowsets.impossible", PI_MALFORMED, PI_WARN,
-            NULL, EXPFILL }},
+            "FlowSets impossible", EXPFILL }},
         { &ei_cflow_no_template_found,
           { "cflow.no_template_found", PI_MALFORMED, PI_WARN,
-            NULL, EXPFILL }},
+            "No template found", EXPFILL }},
         { &ei_transport_bytes_out_of_order,
           { "cflow.transport_bytes.out-of-order", PI_MALFORMED, PI_WARN,
-            NULL, EXPFILL}},
+            "Transport Bytes Out of Order", EXPFILL}},
         { &ei_unexpected_sequence_number,
           { "cflow.unexpected_sequence_number", PI_SEQUENCE, PI_WARN,
-            NULL, EXPFILL}},
+            "Unexpected flow sequence for domain ID", EXPFILL}},
     };
 
     module_t *netflow_module;
@@ -16629,17 +17286,42 @@ proto_register_netflow(void)
                                    " (default: " G_STRINGIFY(V9_TMPLT_MAX_FIELDS_DEF) ")",
                                    10, &v9_tmplt_max_fields);
 
+    prefs_register_bool_preference(netflow_module, "desegment", "Reassemble Netflow v10 messages spanning multiple TCP segments.", "Whether the Netflow/Ipfix dissector should reassemble messages spanning multiple TCP segments.  To use this option, you must also enable \"Allow subdissectors to reassemble TCP streams\" in the TCP protocol settings.", &netflow_preference_desegment);
+
     v9_v10_tmplt_table = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), v9_v10_tmplt_table_hash, v9_v10_tmplt_table_equal);
     netflow_sequence_analysis_domain_hash = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), g_direct_hash, g_direct_equal);
     netflow_sequence_analysis_result_hash = wmem_map_new_autoreset(wmem_epan_scope(), wmem_file_scope(), g_direct_hash, g_direct_equal);
 }
 
+static guint
+get_netflow_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *data _U_)
+{
+    unsigned int    ver;
+    guint16         plen;
+
+    ver = tvb_get_ntohs(tvb, offset);
+    if (ver == 10) {
+        plen = tvb_get_ntohs(tvb, offset+2);
+    } else {
+        plen = tvb_reported_length(tvb);
+    }
+
+  return plen;
+}
+
+static int
+dissect_tcp_netflow(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
+{
+  tcp_dissect_pdus(tvb, pinfo, tree, netflow_preference_desegment, 4, get_netflow_pdu_len,
+                   dissect_netflow, data);
+  return tvb_reported_length(tvb);
+}
 
 /*
  * protocol/port association
  */
 static void
-ipfix_delete_callback(guint32 port)
+ipfix_delete_callback(guint32 port, gpointer ptr _U_)
 {
     if ( port ) {
         dissector_delete_uint("udp.port",  port, netflow_handle);
@@ -16648,7 +17330,7 @@ ipfix_delete_callback(guint32 port)
 }
 
 static void
-ipfix_add_callback(guint32 port)
+ipfix_add_callback(guint32 port, gpointer ptr _U_)
 {
     if ( port ) {
         dissector_add_uint("udp.port",  port, netflow_handle);
@@ -16665,13 +17347,14 @@ proto_reg_handoff_netflow(void)
 
     if (!netflow_prefs_initialized) {
         netflow_handle = create_dissector_handle(dissect_netflow, proto_netflow);
+        netflow_tcp_handle = create_dissector_handle(dissect_tcp_netflow, proto_netflow);
         netflow_prefs_initialized = TRUE;
         dissector_add_uint("wtap_encap", WTAP_ENCAP_RAW_IPFIX, netflow_handle);
-        dissector_add_uint_range_with_preference("tcp.port", IPFIX_UDP_PORTS, netflow_handle);
+        dissector_add_uint_range_with_preference("tcp.port", IPFIX_UDP_PORTS, netflow_tcp_handle);
     } else {
         dissector_delete_uint_range("udp.port", netflow_ports, netflow_handle);
         wmem_free(wmem_epan_scope(), netflow_ports);
-        range_foreach(ipfix_ports, ipfix_delete_callback);
+        range_foreach(ipfix_ports, ipfix_delete_callback, NULL);
         wmem_free(wmem_epan_scope(), ipfix_ports);
     }
 
@@ -16679,7 +17362,7 @@ proto_reg_handoff_netflow(void)
     ipfix_ports = range_copy(wmem_epan_scope(), global_ipfix_ports);
 
     dissector_add_uint_range("udp.port", netflow_ports, netflow_handle);
-    range_foreach(ipfix_ports, ipfix_add_callback);
+    range_foreach(ipfix_ports, ipfix_add_callback, NULL);
 }
 
 /*

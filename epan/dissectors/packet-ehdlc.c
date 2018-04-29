@@ -11,19 +11,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -231,6 +219,10 @@ dissect_ehdlc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U
 		ctei = (hdr2 >> 9) & 0xF;
 		tei = tei_from_ctei(ctei);
 
+		/* Add TEI to INFO column */
+		col_append_fstr(pinfo->cinfo, COL_INFO, " | TEI:1%u | ", tei);
+		col_set_fence(pinfo->cinfo, COL_INFO);
+
 		if (tree) {
 			/* Use MIN(...,...) in the following to prevent a premature */
 			/* exception before we try to dissect whatever is available. */
@@ -243,12 +235,15 @@ dissect_ehdlc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U
 					    tvb, offset, 1, ENC_BIG_ENDIAN);
 			proto_tree_add_item(ehdlc_tree, hf_ehdlc_ctei,
 					    tvb, offset, 1, ENC_BIG_ENDIAN);
-			proto_tree_add_uint(ehdlc_tree, hf_ehdlc_c_r,
+			ti = proto_tree_add_uint(ehdlc_tree, hf_ehdlc_c_r,
 							 tvb, offset, 1, c_r);
-			proto_tree_add_uint(ehdlc_tree, hf_ehdlc_sapi,
+			PROTO_ITEM_SET_GENERATED(ti);
+			ti = proto_tree_add_uint(ehdlc_tree, hf_ehdlc_sapi,
 							 tvb, offset, 1, sapi);
-			proto_tree_add_uint(ehdlc_tree, hf_ehdlc_tei,
+			PROTO_ITEM_SET_GENERATED(ti);
+			ti = proto_tree_add_uint(ehdlc_tree, hf_ehdlc_tei,
 							 tvb, offset, 1, tei);
+			PROTO_ITEM_SET_GENERATED(ti);
 			proto_tree_add_item(ehdlc_tree, hf_ehdlc_data_len,
 					    tvb, offset, 2, ENC_BIG_ENDIAN);
 		}

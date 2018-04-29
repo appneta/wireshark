@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -27,7 +15,7 @@
 #include <epan/packet.h>
 #include <epan/ax25_pids.h>
 #include <epan/llcsaps.h>
-#include <epan/circuit.h>
+#include <epan/conversation.h>
 #include <epan/reassemble.h>
 #include <epan/prefs.h>
 #include <epan/expert.h>
@@ -542,45 +530,45 @@ static heur_dissector_list_t x25_heur_subdissector_list;
 static void
 x25_hash_add_proto_start(guint16 vc, guint32 frame, dissector_handle_t dissect)
 {
-    circuit_t *circuit;
+    conversation_t *conv;
 
     /*
      * Is there already a circuit with this VC number?
      */
-    circuit = find_circuit(CT_X25, vc, frame);
-    if (circuit != NULL) {
+    conv = find_conversation_by_id(frame, ENDPOINT_X25, vc, 0);
+    if (conv != NULL) {
         /*
          * Yes - close it, as we're creating a new one.
          */
-        close_circuit(circuit, frame - 1);
+        conv->last_frame = frame - 1;
     }
 
     /*
      * Set up a new circuit.
      */
-    circuit = circuit_new(CT_X25, vc, frame);
+    conv = conversation_new_by_id(frame, ENDPOINT_X25, vc, 0);
 
     /*
      * Set its dissector.
      */
-    circuit_set_dissector(circuit, dissect);
+    conversation_set_dissector(conv, dissect);
 }
 
 static void
 x25_hash_add_proto_end(guint16 vc, guint32 frame)
 {
-    circuit_t *circuit;
+    conversation_t *conv;
 
     /*
      * Try to find the circuit.
      */
-    circuit = find_circuit(CT_X25, vc, frame);
+    conv = find_conversation_by_id(frame, ENDPOINT_X25, vc, 0);
 
     /*
      * If we succeeded, close it.
      */
-    if (circuit != NULL)
-        close_circuit(circuit, frame);
+    if (conv != NULL)
+        conv->last_frame = frame;
 }
 
 static const range_string clear_code_rvals[] = {
@@ -1241,8 +1229,7 @@ dissect_x25_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     modulo = ((bytes0_1 & 0x2000) ? 128 : 8);
     vc     = (int)(bytes0_1 & 0x0FFF);
 
-    pinfo->ctype = CT_X25;
-    pinfo->circuit_id = vc;
+    conversation_create_endpoint_by_id(pinfo, ENDPOINT_X25, vc, 0);
 
     if (bytes0_1 & X25_ABIT) toa = TRUE;
     else toa = FALSE;
@@ -1936,7 +1923,7 @@ dissect_x25_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
       next_tvb = tvb_new_subset_remaining(tvb, localoffset);
 
     /* See if there's already a dissector for this circuit. */
-    if (try_circuit_dissector(CT_X25, vc, pinfo->num, next_tvb, pinfo,
+    if (try_conversation_dissector_by_id(ENDPOINT_X25, vc, next_tvb, pinfo,
                               tree, &q_bit_set)) {
                 return; /* found it and dissected it */
     }

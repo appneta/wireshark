@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -41,10 +29,7 @@
 #endif
 
 #include <wsutil/socket.h>
-
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
+#include <wsutil/inet_addr.h>
 
 #ifndef _WIN32
 #include <sys/un.h>
@@ -52,6 +37,7 @@
 #endif
 
 #include <wsutil/strtoi.h>
+#include <wsutil/win32-utils.h>
 
 #include "sharkd.h"
 
@@ -145,7 +131,7 @@ socket_init(char *path)
 			return INVALID_SOCKET;
 
 		s_in.sin_family = AF_INET;
-		s_in.sin_addr.s_addr = inet_addr(path);
+		ws_inet_pton4(path, &(s_in.sin_addr.s_addr));
 		s_in.sin_port = g_htons(port);
 		*port_sep = ':';
 
@@ -182,7 +168,7 @@ sharkd_init(int argc, char **argv)
 
 	if (argc != 2)
 	{
-		fprintf(stderr, "Usage: %s <socket>\n", argv[0]);
+		fprintf(stderr, "Usage: %s <-|socket>\n", argv[0]);
 		fprintf(stderr, "\n");
 
 		fprintf(stderr, "<socket> examples:\n");
@@ -212,18 +198,21 @@ sharkd_init(int argc, char **argv)
 		_server_fd = fd;
 	}
 
-#ifndef _WIN32
-	/* all good - try to daemonize */
-	pid = fork();
-	if (pid == -1)
-		fprintf(stderr, "cannot go to background fork() failed: %s\n", g_strerror(errno));
-
-	if (pid != 0)
+	if (!_use_stdinout)
 	{
-		/* parent */
-		exit(0);
-	}
+		/* all good - try to daemonize */
+#ifndef _WIN32
+		pid = fork();
+		if (pid == -1)
+			fprintf(stderr, "cannot go to background fork() failed: %s\n", g_strerror(errno));
+
+		if (pid != 0)
+		{
+			/* parent */
+			exit(0);
+		}
 #endif
+	}
 
 	return 0;
 }
@@ -244,7 +233,6 @@ sharkd_loop(void)
 		PROCESS_INFORMATION pi;
 		STARTUPINFO si;
 		char *exename;
-		gunichar2 *commandline;
 #endif
 		socket_handle_t fd;
 
@@ -260,6 +248,7 @@ sharkd_loop(void)
 		pid = fork();
 		if (pid == 0)
 		{
+			closesocket(_server_fd);
 			/* redirect stdin, stdout to socket */
 			dup2(fd, 0);
 			dup2(fd, 1);
@@ -284,11 +273,10 @@ sharkd_loop(void)
 		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
 
 		exename = g_strdup_printf("%s\\%s", get_progfile_dir(), "sharkd.exe");
-		commandline = g_utf8_to_utf16("sharkd.exe -", -1, NULL, NULL, NULL);
 
-		if (!CreateProcess(utf_8to16(exename), commandline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi))
+		if (!win32_create_process(exename, "sharkd.exe -", NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi))
 		{
-			fprintf(stderr, "CreateProcess(%s) failed\n", exename);
+			fprintf(stderr, "win32_create_process(%s) failed\n", exename);
 		}
 		else
 		{
@@ -296,7 +284,6 @@ sharkd_loop(void)
 		}
 
 		g_free(exename);
-		g_free(commandline);
 #endif
 
 		closesocket(fd);

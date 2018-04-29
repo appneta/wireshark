@@ -7,20 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "config.h"
 
@@ -300,12 +287,12 @@ sipstat_packet(void *psp, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const
 	if (value->response_code != 0)
 	{
 		/* Responses */
-		guint *key = g_new(guint, 1);
+		guint key;
 		sip_response_code_t *sc;
 
 		/* Look up response code in hash table */
-		*key = value->response_code;
-		sc = (sip_response_code_t *)g_hash_table_lookup(sp->hash_responses, key);
+		key = value->response_code;
+		sc = (sip_response_code_t *)g_hash_table_lookup(sp->hash_responses, &key);
 		if (sc == NULL)
 		{
 			/* Non-standard status code ; we classify it as others
@@ -320,31 +307,31 @@ sipstat_packet(void *psp, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const
 			}
 			else if (i < 200)
 			{
-				*key = 199;	/* Hopefully, this status code will never be used */
+				key = 199;	/* Hopefully, this status code will never be used */
 			}
 			else if (i < 300)
 			{
-				*key = 299;
+				key = 299;
 			}
 			else if (i < 400)
 			{
-				*key = 399;
+				key = 399;
 			}
 			else if (i < 500)
 			{
-				*key = 499;
+				key = 499;
 			}
 			else if (i < 600)
 			{
-				*key = 599;
+				key = 599;
 			}
 			else
 			{
-				*key = 699;
+				key = 699;
 			}
 
 			/* Now look up this fallback code to get its text description */
-			sc = (sip_response_code_t *)g_hash_table_lookup(sp->hash_responses, key);
+			sc = (sip_response_code_t *)g_hash_table_lookup(sp->hash_responses, &key);
 			if (sc == NULL)
 			{
 				return 0;
@@ -422,11 +409,7 @@ sipstat_init(const char *opt_arg, void *userdata _U_)
 	}
 
 	sp = g_new0(sipstat_t, 1);
-	if (filter) {
-		sp->filter = g_strdup(filter);
-	} else {
-		sp->filter = NULL;
-	}
+	sp->filter = g_strdup(filter);
 	/*g_hash_table_foreach( sip_status, (GHFunc)sip_reset_hash_responses, NULL);*/
 
 

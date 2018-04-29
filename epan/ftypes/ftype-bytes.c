@@ -3,19 +3,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2001 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -370,8 +358,6 @@ vines_from_unparsed(fvalue_t *fv, const char *s, gboolean allow_partial_value, g
 static gboolean
 ether_from_unparsed(fvalue_t *fv, const char *s, gboolean allow_partial_value, gchar **err_msg)
 {
-	guint8	*mac;
-
 	/*
 	 * Don't request an error message if bytes_from_unparsed fails;
 	 * if it does, we'll report an error specific to this address
@@ -396,17 +382,11 @@ ether_from_unparsed(fvalue_t *fv, const char *s, gboolean allow_partial_value, g
 		return TRUE;
 	}
 
-	mac = get_ether_addr(s);
-	if (!mac) {
-		if (err_msg != NULL) {
-			*err_msg = g_strdup_printf("\"%s\" is not a valid hostname or Ethernet address.",
-			    s);
-		}
-		return FALSE;
-	}
+	/* XXX - Try resolving as an Ethernet host name and parse that? */
 
-	ether_fvalue_set(fv, mac);
-	return TRUE;
+	if (err_msg != NULL)
+		*err_msg = g_strdup_printf("\"%s\" is not a valid Ethernet address.", s);
+	return FALSE;
 }
 
 static gboolean

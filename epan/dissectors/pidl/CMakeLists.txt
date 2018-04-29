@@ -4,21 +4,10 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
+# TODO fix srvsvc wkssvc
 set(PIDL_DISSECTOR_NAMES
 	atsvc
 	clusapi
@@ -111,12 +100,6 @@ set(PIDL_DISSECTOR_wkssvc_EXTRA_DEPS
 )
 
 set(PIDL_DISSECTOR_TARGETS)
-set(PIDL_DISSECTOR_SRC)
-# TODO fix these dissectors, remove this and update PIDL_DISSECTOR_NAMES above.
-list(APPEND PIDL_DISSECTOR_SRC
-	packet-dcerpc-srvsvc.c
-	packet-dcerpc-wkssvc.c
-)
 
 foreach(PROTOCOL_NAME IN LISTS PIDL_DISSECTOR_NAMES)
 	add_custom_command(
@@ -148,12 +131,7 @@ foreach(PROTOCOL_NAME IN LISTS PIDL_DISSECTOR_NAMES)
 	list(APPEND PIDL_DISSECTOR_TARGETS
 		generate_dissector-dcerpc-${PROTOCOL_NAME}
 	)
-	list(APPEND PIDL_DISSECTOR_SRC
-		packet-dcerpc-${PROTOCOL_NAME}.c
-	)
 endforeach()
-
-set(PIDL_DISSECTOR_SRC ${PIDL_DISSECTOR_SRC} PARENT_SCOPE)
 
 add_custom_target(pidl-dissectors ALL DEPENDS ${PIDL_DISSECTOR_TARGETS})
 set_target_properties(pidl-dissectors

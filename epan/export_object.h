@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __EXPORT_OBJECT_H__
@@ -36,7 +24,13 @@ typedef struct _export_object_entry_t {
     gchar *content_type;
     gchar *filename;
     /* We need to store a 64 bit integer to hold a file length
-      (was guint payload_len;) */
+      (was guint payload_len;)
+
+      XXX - we store the entire object in the program's address space,
+      so the *real* maximum object size is size_t; if we were to export
+      objects by going through all of the packets containing data from
+      the object, one packet at a time, and write the object incrementally,
+      we could support objects that don't fit into the address space. */
     gint64 payload_len;
     guint8 *payload_data;
 } export_object_entry_t;

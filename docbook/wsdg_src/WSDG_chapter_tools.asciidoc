@@ -1,6 +1,4 @@
-++++++++++++++++++++++++++++++++++++++
-<!-- WSDG Chapter Tools -->
-++++++++++++++++++++++++++++++++++++++
+// WSDG Chapter Tools
 
 [[ChapterTools]]
 
@@ -42,8 +40,8 @@ tested.
 Documentation for these tools is outside the scope of this document. If you need
 further information on using a specific tool you should find lots of useful
 information on the web, as these tools are commonly used. You can also get help
-for the UNIX based tools with `toolname --help` or the man page via `man
-toolname`.
+for the UNIX based tools with `**toolname** --help` or the man page via `man
+**toolname**`.
 
 You will find explanations of the tool usage for some of the specific
 development tasks in <<ChapterSources>>.
@@ -52,21 +50,23 @@ development tasks in <<ChapterSources>>.
 
 Chocolatey is a Windows package manager that can be used to install (and update)
 many of the packages required for Wireshark development. Chocolatey can be
-obtained from the http://chocolatey.org[website] or from a DOS command prompt:
+obtained from the http://chocolatey.org[website] or from a Command Prompt:
 
+[source,cmd]
 ----
-C:\>@powershell -NoProfile -ExecutionPolicy unrestricted -Command "iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))" && SET PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin
+C:\>@powershell -NoProfile -ExecutionPolicy unrestricted -Command "iex ((new-object net.webclient).DownloadString(_https://chocolatey.org/install.ps1_))" && SET PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin
 ----
 
 or a Powershell prompt:
 
+[source,cmd]
 ----
-PS:\>iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))
+PS:\>iex ((new-object net.webclient).DownloadString(_https://chocolatey.org/install.ps1_))
 ----
 
 Chocolatey sometimes installs packages in unexpected locations. Cygwin is a notable
-example -- recent versions of the Cygwin package are installed in `C:\ProgramData\chocolatey\lib\Cygwin\tools\cygwin` instead of Cygwin's default location
-(`C:\cygwin` or `C:\cygwin64`).
+example -- recent versions of the Cygwin package are installed in _C:\ProgramData\chocolatey\lib\Cygwin\tools\cygwin_ instead of Cygwin’s default location
+(_C:\cygwin_ or _C:\cygwin64_).
 
 [[ChToolsCygwin]]
 
@@ -75,29 +75,29 @@ example -- recent versions of the Cygwin package are installed in `C:\ProgramDat
 Cygwin provides a lot of UNIX based tools on the Windows platform. It uses a UNIX
 emulation layer which might be a bit slower compared to the native Windows tools,
 but at an acceptable level. The installation and update is pretty easy and done
-through a single utility, 'setup-x86.exe' for 32-bit Windows and
-'setup-x86_64.exe' for 64-bit Windows.
+through a single utility, _setup-x86.exe_ for 32-bit Windows and
+_setup-x86_64.exe_ for 64-bit Windows.
 
 Over time the Wireshark development toolchain has been migrating away from Cygwin
 toward native tools and we hope to eliminate it as a requirement someday.
 
 Although Cygwin consists of several separate packages, the installation
-and update is done through a single utility, 'setup-x86.exe' or
-'setup-x86_64.exe', which acts similarly to other web based installers.
+and update is done through a single utility, _setup-x86.exe_ or
+_setup-x86_64.exe_, which acts similarly to other web based installers.
 You can install Cygwin and its packages using Chocolatey, but this is not
-recommended due to Chocolatey's default installation location, described
+recommended due to Chocolatey’s default installation location, described
 in the previous section.
 
 ==== Installing Cygwin using the Cygwin installer
 
-You will find 'setup-x86.exe', for 32-bit systems, and
-'setup-x86_64.exe', for 64-bit systems, at
+You will find _setup-x86.exe_, for 32-bit systems, and
+_setup-x86_64.exe_, for 64-bit systems, at
 http://www.cygwin.com/install.html[]. Click on the link for the
 appropriate setup utility to download it. After the download completes,
 run it.
 
 All tools will be installed into one base folder. The default is
-'C:\cygwin' for the 32-bit installer and `C:\cygwin64` for the 64-bit
+_C:\cygwin_ for the 32-bit installer and _C:\cygwin64_ for the 64-bit
 installer.
 
 The setup utility will ask you for some settings. The defaults
@@ -118,9 +118,9 @@ After clicking the Next button several times the setup
 will then download and install the selected packages (this may
 take a while, depending on the package size).
 
-Under: 'Start->Programs->Cygwin->Cygwin Bash Shell' you should now be able to start
-a new Cygwin bash shell, which is similar to the standard Windows command line
-interpreters (command.com / cmd.exe) but much more powerful.
+Under menu:Start[Programs,Cygwin,Cygwin Bash Shell] you should now be able to start
+a new Cygwin bash shell, which is similar to the standard Windows Command Prompt
+(cmd.exe) but much more powerful.
 
 [[ChToolsCygwinPackages]]
 
@@ -134,34 +134,118 @@ number will be displayed, so it will be automatically updated.  You can
 change the current setting by simply clicking at it, it will change
 between:
 
-* 'A specific version number.' This specific package version will be installed.
+* _A specific version number._ This specific package version will be installed.
 
-* 'Skip.' Not installed, no changes.
+* _Skip._ Not installed, no changes.
 
-* 'Keep.' Already installed, no changes.
+* _Keep._ Already installed, no changes.
 
-* 'Uninstall.' Uninstall this package.
+* _Uninstall._ Uninstall this package.
 
-* 'Reinstall.' Reinstall this package.
+* _Reinstall._ Reinstall this package.
 
 ==== Installing Cygwin using Chocolatey
 
 Chocolatey supports Cygwin as an external package source.
 To install Cygwin itself run
 
+[source,cmd]
 ----
 PS$>choco install cygwin
 # You might also need to install cyg-get:
 PS$>choco install cyg-get
 ----
 
-Chocolatey installs Cygwin in 'C:\ProgramData\chocolatey\lib\Cygwin\tools\cygwin' by default.
+Chocolatey installs Cygwin in _C:\ProgramData\chocolatey\lib\Cygwin\tools\cygwin_ by default.
 
-One or more Cygwin packages can be installed using "cyg-get":
+One or more Cygwin packages can be installed using `cyg-get`:
 
+[source,cmd]
 ----
 PS$>cyg-get sed asciidoc
 ----
+
+[[ChToolsCMake]]
+
+=== CMake
+
+Wireshark’s build environment can be configured using CMake on Windows,
+Linux, macOS, and UNIX. CMake is designed to support out of tree builds.
+So much so, that in tree builds do not work properly in all cases. Along
+with being cross-platform, CMake supports many build tools and
+environments including traditional make, Ninja, and MSBuild. Our
+Buildbot runs CMake steps on Ubuntu, Win32, Win64, and macOS. In
+particular, the macOS and Windows packages are built using CMake.
+
+Building with CMake typically includes creating a build directory and
+specifying a *generator*, aka a build tool. For example, to build
+Wireshark using Ninja in the directory _wireshark-ninja_ you might
+run the following commands:
+
+[source,sh]
+----
+# Starting from your Wireshark source directory, create a build directory
+# alongside it.
+$ cd ..
+$ mkdir wireshark-ninja
+$ cd wireshark-ninja
+# Assumes your source directory is named "wireshark".
+$ cmake -G Ninja ../wireshark
+$ ninja (or cmake --build .)
+----
+
+Using CMake on Windows is described further in <<ChWin32Generate>>.
+
+Along with specifying a generator with the `-G` flag you can set variables
+using the `-D` flag. Useful variables and generators include the following:
+
+-DBUILD_wireshark=OFF:: Don't build the Wireshark GUI application.
+Each command line utility has its own BUILD_xxx flag as well. For
+example, you can use -DBUILD_mmdbresolve=OFF to disable mmdbresolve.
+
+-DENABLE_CAP=OFF:: Disable the POSIX capabilities check
+
+-DCMAKE_BUILD_TYPE=Debug:: Enable debugging symbols
+
+-DCARES_INCLUDE_DIR=/your/custom/cares/include, -DCARES_LIBRARY=/your/custom/cares/lib/libcares.so::
+Let you set the path to a locally-compiled version of c-ares. Most
+optional libraries have xxx_INCLUDE_DIR and xxx_LIB flags that let you
+control their discovery.
+
+
+-DPYTHON_EXECUTABLE=c:/Python27/python:: Force the Python path. Useful on Windows since Cygwin’s /usrbin/python is a symlink.
+
+-DENABLE_APPLICATION_BUNDLE=OFF:: Disable building an application bundle (Wireshark.app) on macOS
+
+You can list all build variables (with help) by running `cmake -LH [options]
+../<Name_of_WS_source_dir>`. This lists the cache of build variables
+after the cmake run. To only view the current cache, add option `-N`.
+
+After running cmake, you can always run `make help` to see a list of all possible make targets.
+
+Note that CMake honors user umask for creating directories as of now. You should set
+the umask explicitly before running the `install` target.
+
+CMake links:
+
+The home page of the CMake project: https://cmake.org/
+
+Official documentation: https://cmake.org/documentation/
+
+About CMake in general and why KDE4 uses it: http://lwn.net/Articles/188693/
+
+Introductory tutorial/presentation:
+http://ait.web.psi.ch/services/linux/hpc/hpc_user_cookbook/tools/cmake/docs/Cmake_VM_2007.pdf
+
+Introductory article in the Linux Journal:
+http://www.linuxjournal.com/node/6700/print
+
+Useful variables: http://www.cmake.org/Wiki/CMake_Useful_Variables
+
+Frequently Asked Questions: http://www.cmake.org/Wiki/CMake_FAQ
+
+// 2017-08-04 dead
+//Additional cmake modules: http://code.google.com/p/cmake-modules/
 
 [[ChToolsGNUChain]]
 
@@ -181,6 +265,7 @@ http://gcc.gnu.org/[].
 After correct installation, typing at the
 bash command line prompt:
 
+[source,sh]
 ----
 $ gcc --version
 ----
@@ -195,81 +280,6 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 ----
 
 Your version string may vary, of course.
-
-[[ChToolsCMake]]
-
-Wireshark's build environment can be configured using CMake on Windows
-and either CMake or Autotools on Linux, macOS, and UNIX. CMake is designed
-to support out of tree builds. So much so, that in tree builds do not work
-properly in all cases. Along with being cross-platform, CMake supports
-many build tools and environments including traditional make, Ninja, and
-MSBuild. Our Buildbot runs CMake steps on Ubuntu, Win32, Win64, and macOS.
-In particular, the macOS and Windows packages are built using CMake.
-
-Building with CMake typically includes creating a build directory and
-specifying a *generator*, aka a build tool. For example, to build
-Wireshark using Ninja in the directory `wireshark-ninja` you might
-run the following commands:
-
-----
-# Starting from your Wireshark source directory, create a build directory
-# alongside it.
-$ cd ..
-$ mkdir wsbuild
-$ cd wsbuild
-# Assumes your source directory is named "wireshark".
-$ cmake -G Ninja ../wireshark
-$ ninja (or cmake --build .)
-----
-
-Using CMake on Windows is described further in <<ChWin32Generate>>.
-
-Along with specifying a generator with the `-G` flag you can set variables
-using the `-D` flag. Useful variables and generators include the following:
-
--DENABLE_CAP=OFF:: Disable the POSIX capabilities check
-
--DCMAKE_BUILD_TYPE=Debug:: Enable debugging symbols
-
--DENABLE_GTK3=ON:: Enable GTK+ 3
-
--DENABLE_HTML_GUIDES=ON -DENABLE_PDF_GUIDES=ON:: Build documentation
-
--DCMAKE_C_FLAGS='-Qunused-arguments':: Make ccache and clang work together
-
--DPYTHON_EXECUTABLE=c:/Python27/python:: Force the Python path. Useful on Windows since Cygwin's /usrbin/python is a symlink.
-
--DENABLE_APPLICATION_BUNDLE=OFF:: Disable building an application bundle (Wireshark.app) on macOS
-
-You can list all build variables (with help) using `cmake -LH [options]
-../<Name_of_WS_source_dir>`. This lists the cache of build variables
-after the cmake run. To only view the current cache, add option `-N`.
-
-After running cmake, you can always run "make help" to see a list of all possible make targets.
-
-Note that CMake honors user umask for creating directories as of now. You should set
-the umask explicitly before running the `install` target.
-
-CMake links:
-
-The home page of the CMake project: http://www.cmake.org/
-
-Official documentation: https://cmake.org/documentation/
-
-About CMake in general and why KDE4 uses it: http://lwn.net/Articles/188693/
-
-Introductory tutorial/presentation:
-http://ait.web.psi.ch/services/linux/hpc/hpc_user_cookbook/tools/cmake/docs/Cmake_VM_2007.pdf
-
-Introductory article in the Linux Journal:
-http://www.linuxjournal.com/node/6700/print
-
-Useful variables: http://www.cmake.org/Wiki/CMake_Useful_Variables
-
-Frequently Asked Questions: http://www.cmake.org/Wiki/CMake_FAQ
-
-// 2017-08-04 dead
-//Additional cmake modules: http://code.google.com/p/cmake-modules/
 
 [[ChToolsGDB]]
 
@@ -288,6 +298,7 @@ http://www.gnu.org/software/gdb/gdb.html[].
 
 After correct installation:
 
+[source,sh]
 ----
 $ gdb --version
 ----
@@ -343,6 +354,7 @@ http://www.gnu.org/software/make/[].
 
 After correct installation:
 
+[source,sh]
 ----
 $ make --version
 ----
@@ -364,52 +376,52 @@ Your version string may vary, of course.
 
 === Microsoft compiler toolchain (Windows native)
 
-To compile Wireshark on Windows using the Microsoft C/$$C++$$
+To compile Wireshark on Windows using the Microsoft C/{cpp}
 compiler, you'll need:
 
-. C compiler (`cl.exe`)
+. C compiler (_cl.exe_)
 
-. Assembler (`ml.exe` for 32-bit targets and `ml64.exe` for 64-bit targets)
+. Assembler (_ml.exe_ for 32-bit targets and _ml64.exe_ for 64-bit targets)
 
-. Linker (`link.exe`)
+. Linker (_link.exe_)
 
-. Resource Compiler (`rc.exe`)
+. Resource Compiler (_rc.exe_)
 
-. C runtime headers and libraries (e.g. 'stdio.h', 'msvcrt.lib')
+. C runtime headers and libraries (e.g. _stdio.h_, _msvcrt.lib_)
 
 . Windows platform headers and libraries (e.g.
-'windows.h', 'WSock32.lib')
+_windows.h_, _WSock32.lib_)
 +
 // Can we drop support for CHM?
-. HTML help headers and libraries ('htmlhelp.h', 'htmlhelp.lib')
+. HTML help headers and libraries (_htmlhelp.h_, _htmlhelp.lib_)
 
 ==== Official Toolchain Packages And Alternatives
 
-The official Wireshark 2.4.x releases are compiled using Microsoft Visual $$C++$$ 2015.
-The Wireshark 2.2.x and 2.0.x releases are compiled using Microsoft Visual $$C++$$ 2013.
+The official Wireshark 2.4.x releases are compiled using Microsoft Visual {cpp} 2015.
+The Wireshark 2.2.x and 2.0.x releases are compiled using Microsoft Visual {cpp} 2013.
 The Wireshark 1.12.x and 1.10.x releases were compiled using
-Microsoft Visual $$C++$$ 2010 SP1.
+Microsoft Visual {cpp} 2010 SP1.
 The 1.8 releases were compiled using
-Microsoft Visual $$C++$$ 2010 SP1 as well.
+Microsoft Visual {cpp} 2010 SP1 as well.
 The 1.6, 1.4, and 1.2 releases were compiled using
-Microsoft Visual $$C++$$ 2008 SP1.
+Microsoft Visual {cpp} 2008 SP1.
 Other past releases, including the 1.0 branch,
-were compiled using Microsoft Visual $$C++$$ 6.0.
+were compiled using Microsoft Visual {cpp} 6.0.
 
 Using the release compilers is recommended for Wireshark development work.
 
 The older "Express
-Edition" compilers such as Visual $$C++$$ 2010 Express Edition SP1 can be
+Edition" compilers such as Visual {cpp} 2010 Express Edition SP1 can be
 used but any PortableApps packages you create with them
-will require the installation of a separate Visual $$C++$$
+will require the installation of a separate Visual {cpp}
 Redistributable package on any machine on which the PortableApps
 package is to be used. See
 <<msvc-runtime-redistributable>> below for more details.
 
-However, you might already have a different Microsoft $$C++$$ compiler
+However, you might already have a different Microsoft {cpp} compiler
 installed. It should be possible to use any of the following with the considerations listed:
 
-.Visual $$C++$$ 2013 Community Edition
+.Visual {cpp} 2013 Community Edition
 
 IDE + Debugger?:: Yes
 
@@ -417,9 +429,9 @@ Purchase required?:: http://www.visualstudio.com/en-us/downloads/download-visual
 
 SDK required for 64-bit builds?:: No
 
-CMake Generator: `Visual Studio 12`
+CMake Generator: *`Visual Studio 12`*
 
-.Visual $$C++$$ 2010 Express Edition
+.Visual {cpp} 2010 Express Edition
 
 IDE + Debugger?:: Yes
 
@@ -427,15 +439,15 @@ Purchase required?:: http://www.microsoft.com/express/Downloads/#Visual_Studio_2
 
 SDK required for 64-bit builds?:: Yes.
 
-CMake Generator: `Visual Studio 10`
+CMake Generator: *`Visual Studio 10`*
 
-Remarks:: Installers created using express editions require a $$C++$$ redistributable
-'$$vcredist_x86.exe$$' (3MB free
+Remarks:: Installers created using express editions require a {cpp} redistributable
+_vcredist_x86.exe_ (3MB free
 download) is required to build
 Wireshark-win32-{wireshark-version}.exe, and
-'$$vcredist_x64.exe$$' is required to build
+_vcredist_x64.exe_ is required to build
 Wireshark-win64-{wireshark-version}.exe. The version of
-'$$vcredist_x86.exe$$' or '$$vcredist_x64.exe$$' _must_ match the version for your
+_vcredist_x86.exe_ or _vcredist_x64.exe_ _must_ match the version for your
 compiler including any service packs installed for the compiler.]
 
 .Visual Studio 2010
@@ -446,14 +458,15 @@ Purchase required?:: Yes
 
 SDK required for 64-bit builds?:: No
 
-CMake Generator: `Visual Studio 10`
+CMake Generator: *`Visual Studio 10`*
 
 Remarks:: Building a 64-bit installer
-requires a a $$C++$$ redistributable
-('$$vcredist_x86.exe$$').footnoteref[vcredist]
+requires a a {cpp} redistributable
+(_vcredist_x86.exe_).footnoteref[vcredist]
 
 You can use Chocolatey to install Visual Studio, e.g:
 
+[source,cmd]
 ----
 PS:\> choco install VisualStudioCommunity2013
 ----
@@ -475,6 +488,7 @@ versions ordered by release date.
 After correct installation of the toolchain, typing
 at the Visual Studio Command line prompt (cmd.exe):
 
+[source,cmd]
 ----
 > cl
 ----
@@ -482,7 +496,7 @@ at the Visual Studio Command line prompt (cmd.exe):
 should result in something like:
 
 ----
-Microsoft (R) C/$$C++$$ Optimizing Compiler Version 18.00.31101 for x86
+Microsoft (R) C/{cpp} Optimizing Compiler Version 18.00.31101 for x86
 Copyright (C) Microsoft Corporation.  All rights reserved.
 
 usage: cl [ option... ] filename... [ /link linkoption...
@@ -497,6 +511,7 @@ http://msdn.microsoft.com/en-us/library/wk21sfcf.aspx[Microsoft MSDN]
 
 After correct installation, typing at the Visual Studio Command line prompt (cmd.exe):
 
+[source,cmd]
 ----
 > link
 ----
@@ -518,11 +533,10 @@ http://msdn.microsoft.com/en-us/library/t2fck18t.aspx[Microsoft MSDN]
 
 [[msvc-runtime-redistributable]]
 
-
 ==== C-Runtime "Redistributable" Files
 
 Please note: The following is not legal advice - ask your preferred lawyer
-instead. It's the authors view and this view might be wrong.
+instead. It’s the authors view and this view might be wrong.
 
 Depending on the Microsoft compiler version you use, some binary files coming
 from Microsoft might be required to be installed on Windows machine to run
@@ -531,12 +545,12 @@ they are available - but they might not be available on a user machine!
 
 This is especially true for the C runtime DLL (msvcr*.dll), which contains the
 implementation of ANSI and alike functions, e.g.: fopen(), malloc(). The DLL is
-named like: msvcr'version'.dll, an abbreviation for "MicroSoft Visual C
+named like: _msvcr**version**.dll_, an abbreviation for "Microsoft Visual C
 Runtime". For Wireshark to work, this DLL must be available on the users
 machine.
 
 Starting with MSVC7, it is necessary to ship the C runtime DLL
-(msvcr'version'.dll) together with the application installer somehow, as that
+(_msvcr**version**.dll_) together with the application installer somehow, as that
 DLL is possibly not available on the target system.
 
 
@@ -554,7 +568,7 @@ interested reader:
 
 * http://msdn.microsoft.com/en-us/library/ms235299.aspx[Redistributing Visual C++ Files]
 
-In all cases where '$$vcredist_x86.exe$$' or '$$vcredist_x64.exe$$' is
+In all cases where _vcredist_x86.exe_ or _vcredist_x64.exe_ is
 downloaded it should be downloaded to the directory into which the support
 libraries for Wireshark have been downloaded and installed. This directory is
 specified by the WIRESHARK_BASE_DIR or WIRESHARK_LIB_DIR environment variables.
@@ -566,42 +580,42 @@ There are three redistribution methods that MSDN
 mentions for MSVC 2013 (see:
 http://msdn.microsoft.com/en-us/library/vstudio/ms235316(v=vs.120).aspx["Choosing a Deployment Method"]):
 
-. 'Using Visual $$C++$$ Redistributable Package'.
+. _Using Visual {cpp} Redistributable Package._
 The Microsoft libraries are installed by copying
-'$$vcredist_x64.exe$$' or
-'$$vcredist_x86.exe$$' to the target
+_vcredist_x64.exe_ or
+_vcredist_x86.exe_ to the target
 machine and executing it on that machine (MSDN recommends
 this for applications built with Visual Studio 2013)
 
-. 'Using Visual $$C++$$ Redistributable Merge Modules'.
+. _Using Visual {cpp} Redistributable Merge Modules._
 (Loadable modules for building msi installers.
-Not suitable for Wireshark's NSIS based installer)
+Not suitable for Wireshark’s NSIS based installer)
 
-. 'Install a particular Visual $$C++$$ assembly as a
-private assembly for the application'. The
+. _Install a particular Visual {cpp} assembly as a
+private assembly for the application._ The
 Microsoft libraries are installed by copying the folder
-content of 'Microsoft.VC120.CRT' to
-the target directory (e.g. 'C:\Program Files\Wireshark')
+content of _Microsoft.VC120.CRT_ to
+the target directory (e.g. _C:\Program Files\Wireshark_)
 
 To save installer size, and to make a portable
 version of Wireshark (which must be completely self-contained,
 on a medium such as a flash drive, and not require that an
 installer be run to install anything on the target machine)
 possible, when building 32-bit Wireshark with MSVC2013, method
-3 (copying the content of 'Microsoft.VC120.CRT')
+3 (copying the content of _Microsoft.VC120.CRT_)
 is used (this produces the smallest package).
 
 ==== Windows (Platform) SDK
 
 The Windows Platform SDK (PSDK) or Windows SDK is a free
 (as in beer) download and contains platform specific headers and
-libraries (e.g. 'windows.h', 'WSock32.lib', etc.). As new Windows
-features evolve in time, updated SDK's become available that
+libraries (e.g. `windows.h`, `WSock32.lib`, etc.). As new Windows
+features evolve in time, updated SDK’s become available that
 include new and updated APIs.
 
 When you purchase a commercial Visual Studio or use the Community Edition, it will
 include an SDK. The free Express (as in beer) downloadable C compiler
-versions (V$$C++$$ 2012 Express, V$$C++$$ 2012 Express, etc.) do not
+versions (V{cpp} 2012 Express, V{cpp} 2012 Express, etc.) do not
 contain an SDK -- you'll need to download a PSDK in order to
 have the required C header files and libraries.
 
@@ -609,26 +623,63 @@ Older versions of the SDK should also work. However, the
 command to set the environment settings will be different, try
 search for SetEnv.* in the SDK directory.
 
+=== Documentation Toolchain
+
+Wireshark’s documentation is split across two directories. The `doc`
+directory contains man pages written in Perl’s POD (Plain Old
+Documentation) format. The `docbook` directory contains the User’s
+Guide, Developer’s Guide, and the release notes, which are written in
+Asciidoctor markup.
+
+Our various output formats are generated using the following tools.
+Intermediate formats are in _italics_.
+
+Guide HTML:: Asciidoctor → _DocBook XML_ → xsltproc + DocBook XSL
+Guide PDF:: Asciidoctor
+Guide HTML Help:: Asciidoctor → _DocBook XML_ → xsltproc + DocBook XSL → HHC
+
+Release notes HTML:: Asciidoctor
+Release notes text:: Asciidoctor → _HTML_ → html2text.py
+
+==== Asciidoctor
+
+Asciidoctor[https://asciidoctor.org/] comes in several flavors: a Ruby
+gem (Asciidoctor), a Java bundle (AsciidoctorJ), and transpiled
+JavaScript (Asciidoctor.js). Only the Asciidoctor and AsciidoctorJ
+flavors are supported for building the Wireshark documentation and
+AsciidoctorJ is recommended.
+
+The guides and release notes were originally written in DocBook (hence
+the directory name). They were later converted to AsciiDoc and then
+migrated to Asciidoctor.
+`compat-mode`[https://asciidoctor.org/docs/migration/] is currently
+enabled for the guides, but we are steadily migrating to Asciidoctor’s
+modern (>= 1.5.0) syntax.
+
+PDF output requires Asciidoctor PDF. It is included with AsciidoctorJ
+but _not_ with Asciidoctor.
+
+==== Xsltproc And DocBook
+
+The single HTML, chunked HTML, and HTML Help guides are generated using
+DocBook XSL stylesheets. They in turn require an XSLT processor. We use
+`xsltproc`.
+
 ==== HTML Help
 
-HTML Help is used to create the User's and Developer's Guide in .chm format and
-to show the User's Guide as the Wireshark "Online Help".
-
-Both features are currently optional, and might be removed in future versions.
-
-===== HTML Help Compiler (hhc.exe)
+HTML Help is used to create the User’s and Developer’s Guide in .chm format.
+The User’s Guide .chm file is included with the NSIS and WiX installers and
+is used as Wireshark's built-in help on Windows.
 
 This compiler is used to generate a .chm file from a bunch of HTML files -- in
-our case to generate the User's and Developer's Guide in .chm format.
+our case to generate the User’s and Developer’s Guide in .chm format.
 
 The compiler is only available as the free (as in beer) "HTML Help Workshop"
 download. If you want to compile the guides yourself, you need to download and
 install this. If you don't install it into the default directory, you may also
 have a look at the HHC_DIR setting in the file docbook/Makefile.
 
-===== HTML Help Build Files (htmlhelp.c / htmlhelp.lib)
-
-The files 'htmlhelp.c' and 'htmlhelp.lib' are required to
+The files `htmlhelp.c` and `htmlhelp.lib` are required to
 be able to open .chm files from Wireshark and show the
 online help. Both files are part of the SDK (standalone (P)SDK or MSVC
 since 2002).
@@ -654,6 +705,7 @@ To set the correct paths for Visual Studio when running Wireshark under the
 debugger, add the build output directory to the path before opening Visual
 Studio from the same command prompt, e.g.
 
+[source,cmd]
 ----
 C:\Development\wsbuild32>set PATH="%PATH%;C:\Development\wsbuild32\run\RelwithDebInfo"
 C:\Development\wsbuild32>wireshark.sln
@@ -661,6 +713,7 @@ C:\Development\wsbuild32>wireshark.sln
 
 for PowerShell use
 
+[source,cmd]
 ----
 PS C:\Development\wsbuild32>$env:PATH += ";$(Convert-Path run\RelWithDebInfo)"
 PS C:\Development\wsbuild32>wireshark.sln
@@ -688,7 +741,7 @@ If you require a non-optimised version, then build using a debug configuration.
 ===== Debugging Tools for Windows
 
 You can also use the Microsoft Debugging Tools for Windows toolkit, which is a
-standalone GUI debugger. Although it's not that comfortable compared to
+standalone GUI debugger. Although it’s not that comfortable compared to
 debugging with the Visual Studio integrated debugger it can be helpful if you
 have to debug on a machine where an integrated debugger is not available.
 
@@ -697,6 +750,7 @@ http://msdn.microsoft.com/en-us/library/windows/hardware/ff551063%28v=vs.85%29.a
 
 You can also use Chocolatey to install WinDbg:
 
+[source,cmd]
 ----
 PS:\> choco install windbg
 ----
@@ -709,7 +763,7 @@ menu and then click on the required line and press F9.  To run the program,
 press F5.
 
 If you require a non-optimised version, then build using a debug configuration, e.g.
-`msbuild /m /p:Configuration=Debug Wireshark.sln`.  The build products will be found
+*`msbuild /m /p:Configuration=Debug Wireshark.sln`*. The build products will be found
 in C:\Development\wsbuild32\run\Debug\.
 
 [[ChToolsBash]]
@@ -732,6 +786,7 @@ http://www.gnu.org/software/bash/bash.html[].
 
 After correct installation, typing at the bash command line prompt:
 
+[source,sh]
 ----
 $ bash --version
 ----
@@ -759,30 +814,34 @@ Python 2.5 or later (including Python 3) should work fine and Python 3.5 and
 
 Python is either included or available as a package on most UNIX-like platforms.
 Windows packages and source are available at http://python.org/download/[].
-The Cygwin Python package is *not* recommended since `/usr/bin/python` is
+The Cygwin Python package is *not* recommended since _/usr/bin/python_ is
 a symbolic link, which causes confusion outside Cygwin.
 
 You can also use Chocolatey to install Python:
 
+[source,cmd]
 ----
 PS:\> choco install Python3
 ----
 
 or
 
+[source,cmd]
 ----
 PS:\> choco install Python2
 ----
 
-Chocolatey installs Python into 'C:\tools\python3' or 'C:\tools\python2' by
+Chocolatey installs Python into _C:\tools\python3_ or _C:\tools\python2_ by
 default. You can verify your Python version by running
 
+[source,sh]
 ----
 $ python --version
 ----
 
 on UNIX and Linux and
 
+[source,cmd]
 ----
 rem Official package
 C:> cd python35
@@ -826,6 +885,7 @@ http://www.perl.com/[].
 After correct installation, typing at the
 bash command line prompt:
 
+[source,sh]
 ----
 $ perl --version
 ----
@@ -842,7 +902,7 @@ Perl may be copied only under the terms of either the Artistic License or the
 GNU General Public License, which may be found in the Perl 5 source kit.
 
 Complete documentation for Perl, including FAQ lists, should be found on
-this system using `man perl' or `perldoc perl'.  If you have access to the
+this system using *`man perl'* or *`perldoc perl'*.  If you have access to the
 Internet, point your browser at http://www.perl.com/, the Perl Home Page.
 ----
 
@@ -897,7 +957,7 @@ However, the version string may vary.
 
 === Bison
 
-Bison is a parser generator used for some of Wireshark's file format support.
+Bison is a parser generator used for some of Wireshark’s file format support.
 
 [[ChToolsUnixBison]]
 
@@ -911,6 +971,7 @@ platform you can get it at: http://www.gnu.org/software/bison/bison.html[].
 
 After correct installation running the following
 
+[source,sh]
 ----
 $ bison --version
 ----
@@ -934,7 +995,7 @@ Your version string may vary.
 
 A native Windows version of bison is available in the _winflexbison_
 https://chocolatey.org/[Chocolatey] package. Note that the executable is named
-`win_bison`.
+_win_bison_.
 
 Native packages are available from other sources such as
 http://gnuwin32.sourceforge.net/packages/bison.htm[GnuWin]. They aren't
@@ -944,7 +1005,7 @@ officially supported but _should_ work.
 
 === Flex
 
-Flex is a lexical analyzer generator used for Wireshark's display filters, some
+Flex is a lexical analyzer generator used for Wireshark’s display filters, some
 file formats, and other features.
 
 [[ChToolsUnixFlex]]
@@ -959,6 +1020,7 @@ you can get it at http://www.gnu.org/software/flex/[].
 
 After correct installation running the following
 
+[source,sh]
 ----
 $ flex --version
 ----
@@ -977,8 +1039,9 @@ Your version string may vary.
 
 A native Windows version of flex is available in the _winflexbison_
 https://chocolatey.org/[Chocolatey] package. Note that the executable is named
-`win_flex`.
+_win_flex_.
 
+[source,cmd]
 ----
 PS:\>choco install winflexbison
 ----
@@ -1016,6 +1079,7 @@ can get it at: http://git-scm.com/[].
 
 After correct installation, typing at the bash command line prompt:
 
+[source,sh]
 ----
 $ git --version
 ----
@@ -1023,18 +1087,19 @@ $ git --version
 should result in something like:
 
 ----
-git version 1.8.3.4
+git version 2.14.1
 ----
 
 Your version will likely be different.
 
 [[ChToolsWindowsGit]]
 
-==== Windows native: git
+==== Windows Native: git
 
 The Git command line tools for Windows can be found at
 http://git-scm.com/download/win[] and can also be installed using Chocolatey:
 
+[source,cmd]
 ----
 PS:\> choco install git
 ----
@@ -1042,14 +1107,15 @@ PS:\> choco install git
 After correct installation, typing at the command
 line prompt (cmd.exe):
 
+[source,cmd]
 ----
-$ git --version
+> git --version
 ----
 
 should result in something like:
 
 ----
-git version 1.8.3.4
+git version 2.16.1.windows.1
 ----
 
 However, the version string may vary.
@@ -1062,6 +1128,7 @@ A useful tool for command line git on Windows is https://github.com/dahlbyk/posh
 Poshgit provides git command completion and alters the prompt to indicate the local working
 copy status.  You can install it using Chocolatey:
 
+[source,cmd]
 ----
 PS:\>choco install poshgit
 ----
@@ -1107,6 +1174,7 @@ http://www.gnu.org/software/patch/patch.html[].
 After correct installation, typing at the
 bash command line prompt:
 
+[source,sh]
 ----
 $ patch --version
 ----
@@ -1141,14 +1209,15 @@ installation should be straightforward.
 === Windows: NSIS (optional)
 
 The NSIS (Nullsoft Scriptable Install System) is used to generate
-'Wireshark-win32-{wireshark-version}.exe' from all the files
+_Wireshark-win32-{wireshark-version}.exe_ from all the files
 needed to be installed, including all required DLLs, plugins, and supporting
 files.
 
 To install it, download the latest released version from
-http://nsis.sourceforge.net[]. NSIS v3 is recommended and may be
-required in the future. You can also install it using Chocolatey:
+http://nsis.sourceforge.net[]. NSIS v3 is required. You can also install
+it using Chocolatey:
 
+[source,cmd]
 ----
 PS$> choco install nsis
 ----
@@ -1158,7 +1227,7 @@ You can find more instructions on using NSIS in <<ChSrcNSIS>>.
 === Windows: PortableApps (optional)
 
 The PortableApps.com Installer is used to generate
-'WiresharkPortable-{wireshark-version}.paf.exe' from all the files
+_WiresharkPortable-{wireshark-version}.paf.exe_ from all the files
 needed to be installed, including all required DLLs, plugins, and supporting
 files.
 
@@ -1180,8 +1249,6 @@ To install it, do the following:
 You can find more instructions on using the PortableApps.com Installer in
 <<ChSrcPortableApps>>.
 
-++++++++++++++++++++++++++++++++++++++
-<!-- End of WSDG Chapter Tools -->
-++++++++++++++++++++++++++++++++++++++
+// End of WSDG Chapter Tools
 
 // vim: set syntax=asciidoc:

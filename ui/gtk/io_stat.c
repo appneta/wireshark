@@ -46,6 +46,7 @@
 #include "ui/gtk/filter_autocomplete.h"
 #include "ui/main_statusbar.h"
 
+#include "globals.h"
 
 void register_tap_listener_gtk_iostat(void);
 
@@ -1826,8 +1827,7 @@ filter_callback(GtkWidget *widget, gpointer user_data)
         io_stat_redraw(gio->io);
         return;
     }
-    if (dfilter != NULL)
-        dfilter_free(dfilter);
+    dfilter_free(dfilter);
 
     /* ok, we have a valid filter and the graph is active.
        first just try to delete any previous settings and then apply

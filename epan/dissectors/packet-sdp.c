@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  * Ref http://www.ietf.org/rfc/rfc4566.txt?number=4566
  */
 
@@ -248,8 +236,10 @@ typedef struct {
  */
 typedef struct {
     transport_proto_t proto;    /**< Protocol, parsed from "m=" line. */
-    gboolean is_video;          /**< Whether "m=video" */
+    guint32 media_types;        /**< Whether "m=video" or others */
+    gboolean bundled;           /**< "m=" lines are "bundled", that is, all on same port */
     guint16 media_port;         /**< Port number, parsed from "m=" line. */
+    guint16 control_port;       /**< Port number, parsed from "a=rtcp" or "a=rtcp-mux" line. */
     address conn_addr;          /**< The address from the "c=" line (default
                                      from session level, possibly overridden at
                                      the media level). */
@@ -511,7 +501,7 @@ parse_sdp_connection_address(const char *connection_type, const char *connection
             alloc_address_wmem(allocator, conn_addr, AT_IPv4, 4, &ip4_addr);
         }
     } else if (strcmp(connection_type, "IP6") == 0) {
-        struct e_in6_addr ip6_addr;
+        ws_in6_addr ip6_addr;
 
         if (str_to_ip6(connection_address, &ip6_addr)) {
             /* connection_address could be converted to a valid ipv6 address*/
@@ -1025,7 +1015,12 @@ dissect_sdp_media(tvbuff_t *tvb, packet_info* pinfo, proto_item *ti,
                         ENC_UTF_8|ENC_NA, wmem_packet_scope(), &media_type_str);
     if (media_desc) {
         /* for RTP statistics (supposedly?) */
-        media_desc->is_video = strcmp(media_type_str, "video") == 0;
+        if (strcmp(media_type_str, "audio") == 0)
+            media_desc->media_types |= RTP_MEDIA_AUDIO;
+        else if (strcmp(media_type_str, "video") == 0)
+            media_desc->media_types |= RTP_MEDIA_VIDEO;
+        else
+            media_desc->media_types |= RTP_MEDIA_OTHER;
     }
     DPRINT(("parsed media_type=%s", media_type_str));
 
@@ -1541,6 +1536,8 @@ typedef struct {
 #define SDP_ED137_TYPE          8
 #define SDP_ED137_TXRXMODE      9
 #define SDP_ED137_FID           10
+#define SDP_RTCP                11
+#define SDP_RTCP_MUX            12
 
 static const sdp_names_t sdp_media_attribute_names[] = {
     { "Unknown-name"},    /* 0 Pad so that the real headers start at index 1 */
@@ -1554,6 +1551,8 @@ static const sdp_names_t sdp_media_attribute_names[] = {
     { "type" },           /* 8 */
     { "txrxmode" },       /* 9 */
     { "fid" },            /* 10 */
+    { "rtcp" },           /* 11 */
+    { "rtcp-mux" },       /* 12 */
 };
 
 static gint find_sdp_media_attribute_names(tvbuff_t *tvb, int offset, guint len)
@@ -2036,6 +2035,13 @@ static void dissect_sdp_media_attribute(tvbuff_t *tvb, packet_info *pinfo, proto
             proto_tree_add_item(sdp_media_attribute_tree, hf_media_attribute_value,
                                 tvb, offset, -1, ENC_UTF_8|ENC_NA);
             break;
+        case SDP_RTCP :
+            if (!ws_strtou16(attribute_value, NULL, &media_desc->control_port))
+                media_desc->control_port = 0; /* Just use default, if not legal port */
+            break;
+        case SDP_RTCP_MUX :
+            media_desc->control_port = media_desc->media_port;
+            break;
         default:
             /* No special treatment for values of this attribute type, just add as one item. */
             proto_tree_add_item(sdp_media_attribute_tree, hf_media_attribute_value,
@@ -2089,12 +2095,51 @@ complete_descriptions(transport_info_t *transport_info, guint answer_offset)
 {
     guint media_count = wmem_array_get_count(transport_info->media_descriptions);
     media_description_t *media_descs = (media_description_t *)wmem_array_get_raw(transport_info->media_descriptions);
+    media_description_t *bundle_media_desc = NULL;
 
     DPRINT(("complete_descriptions called with answer_offset=%d media_count=%d",
             answer_offset, media_count));
 
+    for (guint i = answer_offset; i < media_count && !bundle_media_desc; i++) {
+        for (guint j = i+1; j < media_count && !bundle_media_desc; j++) {
+            if (media_descs[i].media_port == media_descs[j].media_port)
+                bundle_media_desc = &media_descs[i];
+        }
+    }
+
+    if (bundle_media_desc) {
+        /* We have "bundling" of media, so now combine all the media bit masks
+           and merge the rtp_dyn_payload so that the first media description
+           has all the data for every media desciption. */
+        for (guint i = answer_offset; i < media_count; i++) {
+            media_description_t *media_desc = &media_descs[i];
+
+            if (bundle_media_desc->media_port == media_desc->media_port) {
+                media_desc->bundled = TRUE;
+
+                if (media_desc != bundle_media_desc) {
+                    bundle_media_desc->media_types |= media_desc->media_types;
+                    for (guint pt = 0; pt < 128; ++pt) {
+                        const char * encoding_name;
+                        int sample_rate;
+                        if (rtp_dyn_payload_get_full(media_desc->media.rtp_dyn_payload,
+                                                     pt, &encoding_name, &sample_rate))
+                            rtp_dyn_payload_insert(bundle_media_desc->media.rtp_dyn_payload,
+                                                   pt, encoding_name, sample_rate);
+                    }
+                }
+            }
+        }
+    }
+
     for (guint i = answer_offset; i < media_count; i++) {
         media_description_t *media_desc = &media_descs[i];
+
+        if (media_desc->control_port == 0)
+            media_desc->control_port = media_desc->media_port + 1;
+
+        if (media_desc->control_port == 0)
+            media_desc->control_port = media_desc->media_port + 1;
 
         /* If this is an answer to a previous offer... */
         if (answer_offset > 0) {
@@ -2154,6 +2199,8 @@ apply_sdp_transport(packet_info *pinfo, transport_info_t *transport_info, int re
         establish_frame = request_frame;
     }
 
+    gboolean bundled_media_set = FALSE;
+
     for (guint i = 0; i < wmem_array_get_count(transport_info->media_descriptions); i++) {
         media_description_t *media_desc =
             (media_description_t *)wmem_array_index(transport_info->media_descriptions, i);
@@ -2161,10 +2208,19 @@ apply_sdp_transport(packet_info *pinfo, transport_info_t *transport_info, int re
 
         /* Add (s)rtp and (s)rtcp conversation, if available (overrides t38 if conversation already set) */
         if ((media_desc->media_port != 0) &&
+            !media_desc->media.set_rtp &&
             (media_desc->proto == SDP_PROTO_RTP ||
              media_desc->proto == SDP_PROTO_SRTP) &&
             (media_desc->conn_addr.type == AT_IPv4 ||
              media_desc->conn_addr.type == AT_IPv6)) {
+
+            media_desc->media.set_rtp = TRUE;
+
+            if (media_desc->bundled) {
+                if (bundled_media_set)
+                    continue;
+                bundled_media_set = TRUE;
+            }
 
             if (media_desc->proto == SDP_PROTO_SRTP) {
                 srtp_info = wmem_new0(wmem_file_scope(), struct srtp_info);
@@ -2181,7 +2237,7 @@ apply_sdp_transport(packet_info *pinfo, transport_info_t *transport_info, int re
                 /* srtp_add_address and rtp_add_address are given the request_frame's not this frame's number,
                    because that's where the RTP flow started, and thus conversation needs to check against */
                 srtp_add_address(pinfo, PT_UDP, &media_desc->conn_addr, media_desc->media_port, 0, "SDP", establish_frame,
-                                 media_desc->is_video,
+                                 media_desc->media_types,
                                  media_desc->media.rtp_dyn_payload, srtp_info);
                 DENDENT();
             } else {
@@ -2189,26 +2245,25 @@ apply_sdp_transport(packet_info *pinfo, transport_info_t *transport_info, int re
                         i, media_desc->media_port));
                 DINDENT();
                 rtp_add_address(pinfo, PT_UDP, &media_desc->conn_addr, media_desc->media_port, 0, "SDP", establish_frame,
-                                media_desc->is_video,
+                                media_desc->media_types,
                                 media_desc->media.rtp_dyn_payload);
                 DENDENT();
             }
-            media_desc->media.set_rtp = TRUE;
             /* SPRT might use the same port... */
             current_rtp_port = media_desc->media_port;
 
-            if (rtcp_handle) {
+            if (rtcp_handle && media_desc->media_port != media_desc->control_port) {
                 if (media_desc->proto == SDP_PROTO_SRTP) {
-                    DPRINT(("calling rtcp_add_address, channel=%d, media_port=%d",
-                            i, media_desc->media_port+1));
+                    DPRINT(("calling rtcp_add_address, channel=%d, control_port=%d",
+                            i, media_desc->control_port));
                     DINDENT();
-                    srtcp_add_address(pinfo, &media_desc->conn_addr, media_desc->media_port+1, 0, "SDP", establish_frame, srtp_info);
+                    srtcp_add_address(pinfo, &media_desc->conn_addr, media_desc->control_port, 0, "SDP", establish_frame, srtp_info);
                     DENDENT();
                  } else {
-                    DPRINT(("calling rtcp_add_address, channel=%d, media_port=%d",
-                            i, media_desc->media_port+1));
+                    DPRINT(("calling rtcp_add_address, channel=%d, control_port=%d",
+                            i, media_desc->control_port));
                     DINDENT();
-                    rtcp_add_address(pinfo, &media_desc->conn_addr, media_desc->media_port+1, 0, "SDP", establish_frame);
+                    rtcp_add_address(pinfo, &media_desc->conn_addr, media_desc->control_port, 0, "SDP", establish_frame);
                     DENDENT();
                  }
             }

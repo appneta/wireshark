@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * CIE decoding for extensions and Cisco 12.4T extensions
  * added by Timo Teras <timo.teras@iki.fi>
@@ -36,7 +24,6 @@
 #include <epan/etypes.h>
 #include <epan/ipproto.h>
 #include <epan/nlpid.h>
-#include <epan/oui.h>
 #include <epan/afn.h>
 #include <epan/in_cksum.h>
 #include "packet-iana-oui.h"
@@ -909,16 +896,24 @@ static void dissect_nhrp_ext(tvbuff_t    *tvb,
                 }
                 else {
                     proto_tree *vendor_tree;
-                    gchar manuf[3];
+                    proto_item *vendor_item;
+                    guint32 manuf;
+                    const gchar* oui;
 
-                    tvb_memcpy(tvb, manuf, offset, 3);
-                    vendor_tree = proto_tree_add_subtree_format(nhrp_tree, tvb, offset, len,
-                        ett_nhrp_vendor_ext, NULL, "Extension Data: Vendor ID=%s, Data=%s", get_manuf_name(manuf),
-                        tvb_bytes_to_str(wmem_packet_scope(), tvb, offset + 3, len - 3));
-                    proto_tree_add_bytes_format_value(vendor_tree, hf_nhrp_vendor_ext_id, tvb,
-                        offset, 3, manuf, "%s", get_manuf_name(manuf));
+                    vendor_tree = proto_tree_add_subtree(nhrp_tree, tvb, offset, len,
+                        ett_nhrp_vendor_ext, &vendor_item, "Extension Data:");
+                    proto_tree_add_item_ret_uint(vendor_tree, hf_nhrp_vendor_ext_id, tvb, offset, 3, ENC_BIG_ENDIAN, &manuf);
+                    oui = uint_get_manuf_name_if_known(manuf);
+                    if (oui != NULL) {
+                        proto_item_append_text(vendor_item, " Vendor ID=%s", oui);
+                    } else {
+                        proto_item_append_text(vendor_item, " Vendor ID=Unknown");
+                    }
                     if (len > 3) {
                         proto_tree_add_item(vendor_tree, hf_nhrp_vendor_ext_data, tvb, offset + 3, len - 3, ENC_NA);
+                        proto_item_append_text(vendor_item, ", Data=%s", tvb_bytes_to_str(wmem_packet_scope(), tvb, offset + 3, len - 3));
+                    } else {
+                        proto_item_append_text(vendor_item, ", Data=<none>");
                     }
                 }
                 break;
@@ -1011,7 +1006,7 @@ proto_register_nhrp(void)
         },
         { &hf_nhrp_hdr_pro_snap_oui,
           { "Protocol Type (long form) - OUI", "nhrp.hdr.pro.snap.oui",
-            FT_UINT24, BASE_HEX, VALS(oui_vals), 0x0,
+            FT_UINT24, BASE_OUI, NULL, 0x0,
             NULL, HFILL }
         },
         { &hf_nhrp_hdr_pro_snap_pid,

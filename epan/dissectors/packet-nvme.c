@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* This file dissects NVMe packets received from the underlying
@@ -78,6 +66,9 @@ static int hf_nvme_cmd_dsm_access_lat = -1;
 static int hf_nvme_cmd_dsm_seq_req = -1;
 static int hf_nvme_cmd_dsm_incompressible = -1;
 static int hf_nvme_cmd_rsvd3 = -1;
+static int hf_nvme_identify_cntid = -1;
+static int hf_nvme_identify_rsvd = -1;
+static int hf_nvme_identify_cns = -1;
 
 /* NVMe CQE fields */
 static int hf_nvme_cqe_sts = -1;
@@ -91,6 +82,9 @@ static int hf_nvme_cqe_status_rsvd = -1;
 static int hf_nvme_cmd_pkt = -1;
 static int hf_nvme_cqe_pkt = -1;
 static int hf_nvme_cmd_latency = -1;
+
+/* Data response fields */
+static int hf_nvme_gen_data = -1;
 
 /* Initialize the subtree pointers */
 static gint ett_data = -1;
@@ -284,6 +278,7 @@ nvme_add_cmd_to_pending_list(packet_info *pinfo, struct nvme_q_ctx *q_ctx,
     cmd_ctx->cqe_pkt_num = 0;
     cmd_ctx->cmd_start_time = pinfo->abs_ts;
     nstime_set_zero(&cmd_ctx->cmd_end_time);
+    cmd_ctx->remote_key = 0;
 
     /* this is a new cmd, create a new command context and map it to the
        unmatched table
@@ -299,6 +294,59 @@ void* nvme_lookup_cmd_in_pending_list(struct nvme_q_ctx *q_ctx, guint16 cmd_id)
 
     nvme_build_pending_cmd_key(cmd_key, &key);
     return wmem_tree_lookup32_array(q_ctx->pending_cmds, cmd_key);
+}
+
+void nvme_add_data_request(packet_info *pinfo, struct nvme_q_ctx *q_ctx,
+                           struct nvme_cmd_ctx *cmd_ctx, void *ctx)
+{
+    wmem_tree_key_t cmd_key[3];
+    guint32 key = cmd_ctx->remote_key;
+
+    cmd_ctx->data_req_pkt_num = pinfo->num;
+    cmd_ctx->data_resp_pkt_num = 0;
+    nvme_build_pending_cmd_key(cmd_key, &key);
+    wmem_tree_insert32_array(q_ctx->data_requests, cmd_key, (void *)ctx);
+}
+
+void* nvme_lookup_data_request(struct nvme_q_ctx *q_ctx, guint32 key)
+{
+    wmem_tree_key_t cmd_key[3];
+
+    nvme_build_pending_cmd_key(cmd_key, &key);
+    return wmem_tree_lookup32_array(q_ctx->data_requests, cmd_key);
+}
+
+void
+nvme_add_data_response(struct nvme_q_ctx *q_ctx,
+                       struct nvme_cmd_ctx *cmd_ctx, guint32 rkey)
+{
+    wmem_tree_key_t cmd_key[3];
+    guint32 key = rkey;
+    guint32 frame_num;
+
+    nvme_build_done_cmd_key(cmd_key, &key, &frame_num);
+
+    /* Found matching data response packet. Add entries to the matched table
+     * for cmd and response packets
+     */
+    frame_num = cmd_ctx->data_req_pkt_num;
+    wmem_tree_insert32_array(q_ctx->data_responses, cmd_key, (void*)cmd_ctx);
+
+    frame_num = cmd_ctx->data_resp_pkt_num;
+    wmem_tree_insert32_array(q_ctx->data_responses, cmd_key, (void*)cmd_ctx);
+}
+
+void*
+nvme_lookup_data_response(packet_info *pinfo, struct nvme_q_ctx *q_ctx,
+                          guint32 rkey)
+{
+    wmem_tree_key_t cmd_key[3];
+    guint32 key = rkey;
+    guint32 frame_num = pinfo->num;
+
+    nvme_build_done_cmd_key(cmd_key, &key, &frame_num);
+
+    return wmem_tree_lookup32_array(q_ctx->data_responses, cmd_key);
 }
 
 void
@@ -379,7 +427,7 @@ nvme_publish_cmd_to_cqe_link(proto_tree *cmd_tree, tvbuff_t *cmd_tvb,
 }
 
 void dissect_nvme_cmd_sgl(tvbuff_t *cmd_tvb, proto_tree *cmd_tree,
-                          int field_index)
+                          int field_index, struct nvme_cmd_ctx *cmd_ctx)
 {
     proto_item *ti, *sgl_tree, *type_item, *sub_type_item;
     guint8 sgl_identifier, desc_type, desc_sub_type;
@@ -424,6 +472,9 @@ void dissect_nvme_cmd_sgl(tvbuff_t *cmd_tvb, proto_tree *cmd_tree,
                             offset + 12, 3, ENC_NA);
         break;
     case NVME_CMD_SGL_KEYED_DATA_DESC:
+        if (cmd_ctx)
+            cmd_ctx->remote_key = tvb_get_guint32(cmd_tvb, offset + 11,
+                                                  ENC_LITTLE_ENDIAN);
         proto_tree_add_item(sgl_tree, hf_nvme_cmd_sgl_desc_addr, cmd_tvb,
                             offset, 8, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(sgl_tree, hf_nvme_cmd_sgl_desc_len, cmd_tvb,
@@ -483,6 +534,18 @@ dissect_nvme_rwc_common_word_10_11_12_14_15(tvbuff_t *cmd_tvb, proto_tree *cmd_t
                         62, 2, ENC_LITTLE_ENDIAN);
 }
 
+static void dissect_nvme_identify_cmd(tvbuff_t *cmd_tvb, proto_tree *cmd_tree,
+                                      struct nvme_cmd_ctx *cmd_ctx)
+{
+    cmd_ctx->resp_type = tvb_get_guint16(cmd_tvb, 40, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(cmd_tree, hf_nvme_identify_cns, cmd_tvb,
+                        40, 2, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(cmd_tree, hf_nvme_identify_rsvd, cmd_tvb,
+                        42, 2, ENC_NA);
+    proto_tree_add_item(cmd_tree, hf_nvme_identify_cntid, cmd_tvb,
+                        44, 4, ENC_NA);
+}
+
 static void dissect_nvme_rw_cmd(tvbuff_t *cmd_tvb, proto_tree *cmd_tree)
 {
     proto_item *ti, *dsm_tree, *item;
@@ -515,12 +578,50 @@ static void dissect_nvme_rw_cmd(tvbuff_t *cmd_tvb, proto_tree *cmd_tree)
 }
 
 void
+dissect_nvme_data_response(tvbuff_t *nvme_tvb, packet_info *pinfo, proto_tree *root_tree,
+                 struct nvme_q_ctx *q_ctx, struct nvme_cmd_ctx *cmd_ctx, guint len)
+{
+    proto_tree *cmd_tree;
+    proto_item *ti;
+    const guint8 *str_opcode;
+
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "NVMe");
+    ti = proto_tree_add_item(root_tree, proto_nvme, nvme_tvb, 0,
+                             len, ENC_NA);
+    cmd_tree = proto_item_add_subtree(ti, ett_data);
+    if (q_ctx->qid) { //IOQ
+        str_opcode = val_to_str(cmd_ctx->opcode, ioq_opc_tbl,
+                                "Unknown IOQ Opcode");
+        switch (cmd_ctx->opcode) {
+        case NVME_IOQ_OPC_READ:
+        case NVME_IOQ_OPC_WRITE:
+        default:
+            proto_tree_add_bytes_format_value(cmd_tree, hf_nvme_gen_data,
+                                              nvme_tvb, 0, len, NULL,
+                                              "%s", str_opcode);
+            break;
+        }
+    } else { //AQ
+        str_opcode = val_to_str(cmd_ctx->opcode, aq_opc_tbl,
+                                "Unknown AQ Opcode");
+        switch (cmd_ctx->opcode) {
+        default:
+            proto_tree_add_bytes_format_value(cmd_tree, hf_nvme_gen_data,
+                                              nvme_tvb, 0, len, NULL,
+                                              "%s", str_opcode);
+            break;
+        }
+    }
+    col_add_lstr(pinfo->cinfo, COL_INFO, "NVMe ", str_opcode, ": Data",
+                 COL_ADD_LSTR_TERMINATOR);
+}
+
+void
 dissect_nvme_cmd(tvbuff_t *nvme_tvb, packet_info *pinfo, proto_tree *root_tree,
                  struct nvme_q_ctx *q_ctx, struct nvme_cmd_ctx *cmd_ctx)
 {
     proto_tree *cmd_tree;
     proto_item *ti, *opc_item;
-    guint8 opcode;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "NVMe");
     ti = proto_tree_add_item(root_tree, proto_nvme, nvme_tvb, 0,
@@ -528,15 +629,15 @@ dissect_nvme_cmd(tvbuff_t *nvme_tvb, packet_info *pinfo, proto_tree *root_tree,
     proto_item_append_text(ti, " (Cmd)");
     cmd_tree = proto_item_add_subtree(ti, ett_data);
 
-    opcode = tvb_get_guint8(nvme_tvb, 0);
+    cmd_ctx->opcode = tvb_get_guint8(nvme_tvb, 0);
     opc_item = proto_tree_add_item(cmd_tree, hf_nvme_cmd_opc, nvme_tvb,
                         0, 1, ENC_LITTLE_ENDIAN);
     if (q_ctx->qid)
         proto_item_append_text(opc_item, " %s",
-                               val_to_str(opcode, ioq_opc_tbl, "Reserved"));
+                               val_to_str(cmd_ctx->opcode, ioq_opc_tbl, "Reserved"));
     else
         proto_item_append_text(opc_item, " %s",
-                               val_to_str(opcode, aq_opc_tbl, "Reserved"));
+                               val_to_str(cmd_ctx->opcode, aq_opc_tbl, "Reserved"));
 
     nvme_publish_cmd_to_cqe_link(cmd_tree, nvme_tvb, hf_nvme_cqe_pkt, cmd_ctx);
 
@@ -555,15 +656,25 @@ dissect_nvme_cmd(tvbuff_t *nvme_tvb, packet_info *pinfo, proto_tree *root_tree,
     proto_tree_add_item(cmd_tree, hf_nvme_cmd_mptr, nvme_tvb,
                         16, 8, ENC_LITTLE_ENDIAN);
 
-    dissect_nvme_cmd_sgl(nvme_tvb, cmd_tree, hf_nvme_cmd_sgl);
+    dissect_nvme_cmd_sgl(nvme_tvb, cmd_tree, hf_nvme_cmd_sgl, cmd_ctx);
 
-    switch (opcode) {
-    case NVME_IOQ_OPC_READ:
-    case NVME_IOQ_OPC_WRITE:
-        dissect_nvme_rw_cmd(nvme_tvb, cmd_tree);
-        break;
-    default:
-        break;
+    if (q_ctx->qid) { //IOQ
+        switch (cmd_ctx->opcode) {
+        case NVME_IOQ_OPC_READ:
+        case NVME_IOQ_OPC_WRITE:
+            dissect_nvme_rw_cmd(nvme_tvb, cmd_tree);
+            break;
+        default:
+            break;
+        }
+    } else { //AQ
+        switch (cmd_ctx->opcode) {
+        case NVME_AQ_OPC_IDENTIFY:
+            dissect_nvme_identify_cmd(nvme_tvb, cmd_tree, cmd_ctx);
+            break;
+        default:
+            break;
+        }
     }
 }
 
@@ -747,6 +858,18 @@ proto_register_nvme(void)
             { "Reserved", "nvme.cmd.rsvd3",
                FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL}
         },
+        { &hf_nvme_identify_cntid,
+            { "Controller Identifier (CNTID)", "nvme.cmd.identify.cntid",
+               FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL}
+        },
+        { &hf_nvme_identify_rsvd,
+            { "Reserved", "nvme.cmd.identify.rsvd",
+               FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL}
+        },
+        { &hf_nvme_identify_cns,
+            { "Controller or Namespace Structure (CNS)", "nvme.cmd.identify.cns",
+               FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL}
+        },
 
         /* NVMe Response fields */
         { &hf_nvme_cqe_sts,
@@ -787,6 +910,10 @@ proto_register_nvme(void)
             { "Cmd Latency", "nvme.cmd_latency",
               FT_DOUBLE, BASE_NONE, NULL, 0x0,
               "The time between the command and completion, in usec", HFILL }
+        },
+        { &hf_nvme_gen_data,
+            { "Nvme Data", "nvme.data",
+              FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL}
         },
     };
     static gint *ett[] = {

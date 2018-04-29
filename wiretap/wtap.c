@@ -3,19 +3,7 @@
  * Wiretap Library
  * Copyright (c) 1998 by Gilbert Ramirez <gram@alumni.rice.edu>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -37,67 +25,24 @@
 
 #ifdef HAVE_PLUGINS
 
-#include <wsutil/plugins.h>
 
-/*
- * List of wiretap plugins.
- */
-typedef struct {
-	void (*register_wtap_module)(void);  /* routine to call to register a wiretap module */
-} wtap_plugin;
-
+static plugins_t *libwiretap_plugins = NULL;
 static GSList *wtap_plugins = NULL;
 
-/*
- * Callback for each plugin found.
- */
-static gboolean
-check_for_wtap_plugin(GModule *handle)
-{
-	gpointer gp;
-	wtap_plugin *plugin;
-
-	/*
-	 * Do we have a register_wtap_module routine?
-	 */
-	if (!g_module_symbol(handle, "register_wtap_module", &gp)) {
-		/* No, so this isn't a wiretap module plugin. */
-		return FALSE;
-	}
-
-	/*
-	 * Yes - this plugin includes one or more wiretap modules.
-	 * Add this one to the list of wiretap module plugins.
-	 */
-	plugin = (wtap_plugin *)g_malloc(sizeof (wtap_plugin));
-DIAG_OFF(pedantic)
-	plugin->register_wtap_module = (void (*)(void))gp;
-DIAG_ON(pedantic)
-	wtap_plugins = g_slist_append(wtap_plugins, plugin);
-	return TRUE;
-}
-
-static void
-wtap_register_plugin_types(void)
-{
-	add_plugin_type("libwiretap", check_for_wtap_plugin);
-}
-
-static void
-register_wtap_module_plugin(gpointer data, gpointer user_data _U_)
-{
-	wtap_plugin *plugin = (wtap_plugin *)data;
-
-	(plugin->register_wtap_module)();
-}
-
-/*
- * For all wiretap module plugins, call their register routines.
- */
 void
-register_all_wiretap_modules(void)
+wtap_register_plugin(const wtap_plugin *plug)
 {
-	g_slist_foreach(wtap_plugins, register_wtap_module_plugin, NULL);
+	wtap_plugins = g_slist_prepend(wtap_plugins, (wtap_plugin *)plug);
+}
+
+static void
+call_plugin_register_wtap_module(gpointer data, gpointer user_data _U_)
+{
+	wtap_plugin *plug = (wtap_plugin *)data;
+
+	if (plug->register_wtap_module) {
+		plug->register_wtap_module();
+	}
 }
 #endif /* HAVE_PLUGINS */
 
@@ -921,8 +866,51 @@ static struct encap_type_info encap_table_base[] = {
 	/* WTAP_ENCAP_USB_DARWIN */
 	{ "USB packets with Darwin (macOS, etc.) headers", "usb-darwin" },
 
-	/* Nordic BLE Sniffer */
+	/* WTAP_ENCAP_LORATAP */
+	{ "LoRaTap", "loratap"},
+
+	/* WTAP_ENCAP_3MB_ETHERNET */
+	{ "Xerox 3MB Ethernet", "xeth"},
+
+	/* WTAP_ENCAP_VSOCK */
+	{ "Linux vsock", "vsock" },
+
+	/* WTAP_ENCAP_NORDIC_BLE */
 	{ "Nordic BLE Sniffer", "nordic_ble" },
+
+	/* WTAP_ENCAP_NETMON_NET_NETEVENT */
+	{ "Network Monitor Network Event", "netmon_event" },
+
+	/* WTAP_ENCAP_NETMON_HEADER */
+	{ "Network Monitor Header", "netmon_header" },
+
+	/* WTAP_ENCAP_NETMON_NET_FILTER */
+	{ "Network Monitor Filter", "netmon_filter" },
+
+	/* WTAP_ENCAP_NETMON_NETWORK_INFO_EX */
+	{ "Network Monitor Network Info", "netmon_network_info" },
+
+	/* WTAP_ENCAP_MA_WFP_CAPTURE_V4 */
+	{ "Message Analyzer WFP Capture v4", "message_analyzer_wfp_capture_v4" },
+
+	/* WTAP_ENCAP_MA_WFP_CAPTURE_V6 */
+	{ "Message Analyzer WFP Capture v6", "message_analyzer_wfp_capture_v6" },
+
+	/* WTAP_ENCAP_MA_WFP_CAPTURE_2V4 */
+	{ "Message Analyzer WFP Capture2 v4", "message_analyzer_wfp_capture2_v4" },
+
+	/* WTAP_ENCAP_MA_WFP_CAPTURE_2V6 */
+	{ "Message Analyzer WFP Capture2 v6", "message_analyzer_wfp_capture2_v6" },
+
+	/* WTAP_ENCAP_MA_WFP_CAPTURE_AUTH_V4 */
+	{ "Message Analyzer WFP Capture Auth v4", "message_analyzer_wfp_capture_auth_v4" },
+
+	/* WTAP_ENCAP_MA_WFP_CAPTURE_AUTH_V6 */
+	{ "Message Analyzer WFP Capture Auth v6", "message_analyzer_wfp_capture_auth_v6" },
+
+	/* WTAP_ENCAP_DOCSIS31_XRA31 */
+	{ "DOCSIS31 XRA31", "docsis31_xra31" },
+
 };
 
 WS_DLL_LOCAL
@@ -1111,7 +1099,10 @@ static const char *wtap_errlist[] = {
 	"That record type cannot be written in that format",
 
 	/* WTAP_ERR_UNWRITABLE_REC_DATA */
-	"That record can't be written in that format"
+	"That record can't be written in that format",
+
+	/* WTAP_ERR_DECOMPRESSION_NOT_SUPPORTED */
+	"We don't support decompressing that type of compressed file",
 };
 #define	WTAP_ERRLIST_SIZE	(sizeof wtap_errlist / sizeof wtap_errlist[0])
 
@@ -1153,10 +1144,10 @@ wtap_sequential_close(wtap *wth)
 		wth->fh = NULL;
 	}
 
-	if (wth->frame_buffer) {
-		ws_buffer_free(wth->frame_buffer);
-		g_free(wth->frame_buffer);
-		wth->frame_buffer = NULL;
+	if (wth->rec_data) {
+		ws_buffer_free(wth->rec_data);
+		g_free(wth->rec_data);
+		wth->rec_data = NULL;
 	}
 }
 
@@ -1192,8 +1183,7 @@ wtap_close(wtap *wth)
 	if (wth->random_fh != NULL)
 		file_close(wth->random_fh);
 
-	if (wth->priv != NULL)
-		g_free(wth->priv);
+	g_free(wth->priv);
 
 	if (wth->fast_seek != NULL) {
 		g_ptr_array_foreach(wth->fast_seek, g_fast_seek_item_free, NULL);
@@ -1236,8 +1226,8 @@ wtap_read(wtap *wth, int *err, gchar **err_info, gint64 *data_offset)
 	 *
 	 * Do the same for the packet time stamp resolution.
 	 */
-	wth->phdr.pkt_encap = wth->file_encap;
-	wth->phdr.pkt_tsprec = wth->file_tsprec;
+	wth->rec.rec_header.packet_header.pkt_encap = wth->file_encap;
+	wth->rec.tsprec = wth->file_tsprec;
 
 	*err = 0;
 	*err_info = NULL;
@@ -1257,19 +1247,24 @@ wtap_read(wtap *wth, int *err, gchar **err_info, gint64 *data_offset)
 	}
 
 	/*
-	 * It makes no sense for the captured data length to be bigger
-	 * than the actual data length.
+	 * Is this a packet record?
 	 */
-	if (wth->phdr.caplen > wth->phdr.len)
-		wth->phdr.caplen = wth->phdr.len;
+	if (wth->rec.rec_type == REC_TYPE_PACKET) {
+		/*
+		 * It makes no sense for the captured data length
+		 * to be bigger than the actual data length.
+		 */
+		if (wth->rec.rec_header.packet_header.caplen > wth->rec.rec_header.packet_header.len)
+			wth->rec.rec_header.packet_header.caplen = wth->rec.rec_header.packet_header.len;
 
-	/*
-	 * Make sure that it's not WTAP_ENCAP_PER_PACKET, as that
-	 * probably means the file has that encapsulation type
-	 * but the read routine didn't set this packet's
-	 * encapsulation type.
-	 */
-	g_assert(wth->phdr.pkt_encap != WTAP_ENCAP_PER_PACKET);
+		/*
+		 * Make sure that it's not WTAP_ENCAP_PER_PACKET, as that
+		 * probably means the file has that encapsulation type
+		 * but the read routine didn't set this packet's
+		 * encapsulation type.
+		 */
+		g_assert(wth->rec.rec_header.packet_header.pkt_encap != WTAP_ENCAP_PER_PACKET);
+	}
 
 	return TRUE;	/* success */
 }
@@ -1363,34 +1358,34 @@ wtap_read_so_far(wtap *wth)
 	return file_tell_raw(wth->fh);
 }
 
-struct wtap_pkthdr *
-wtap_phdr(wtap *wth)
+wtap_rec *
+wtap_get_rec(wtap *wth)
 {
-	return &wth->phdr;
+	return &wth->rec;
 }
 
 guint8 *
-wtap_buf_ptr(wtap *wth)
+wtap_get_buf_ptr(wtap *wth)
 {
-	return ws_buffer_start_ptr(wth->frame_buffer);
+	return ws_buffer_start_ptr(wth->rec_data);
 }
 
 void
-wtap_phdr_init(struct wtap_pkthdr *phdr)
+wtap_rec_init(wtap_rec *rec)
 {
-	memset(phdr, 0, sizeof(struct wtap_pkthdr));
-	ws_buffer_init(&phdr->ft_specific_data, 0);
+	memset(rec, 0, sizeof *rec);
+	ws_buffer_init(&rec->options_buf, 0);
 }
 
 void
-wtap_phdr_cleanup(struct wtap_pkthdr *phdr)
+wtap_rec_cleanup(wtap_rec *rec)
 {
-	ws_buffer_free(&phdr->ft_specific_data);
+	ws_buffer_free(&rec->options_buf);
 }
 
 gboolean
-wtap_seek_read(wtap *wth, gint64 seek_off,
-	struct wtap_pkthdr *phdr, Buffer *buf, int *err, gchar **err_info)
+wtap_seek_read(wtap *wth, gint64 seek_off, wtap_rec *rec, Buffer *buf,
+    int *err, gchar **err_info)
 {
 	/*
 	 * Set the packet encapsulation to the file's encapsulation
@@ -1402,28 +1397,33 @@ wtap_seek_read(wtap *wth, gint64 seek_off,
 	 *
 	 * Do the same for the packet time stamp resolution.
 	 */
-	phdr->pkt_encap = wth->file_encap;
-	phdr->pkt_tsprec = wth->file_tsprec;
+	rec->rec_header.packet_header.pkt_encap = wth->file_encap;
+	rec->tsprec = wth->file_tsprec;
 
 	*err = 0;
 	*err_info = NULL;
-	if (!wth->subtype_seek_read(wth, seek_off, phdr, buf, err, err_info))
+	if (!wth->subtype_seek_read(wth, seek_off, rec, buf, err, err_info))
 		return FALSE;
 
 	/*
-	 * It makes no sense for the captured data length to be bigger
-	 * than the actual data length.
+	 * Is this a packet record?
 	 */
-	if (phdr->caplen > phdr->len)
-		phdr->caplen = phdr->len;
+	if (rec->rec_type == REC_TYPE_PACKET) {
+		/*
+		 * It makes no sense for the captured data length
+		 * to be bigger than the actual data length.
+		 */
+		if (rec->rec_header.packet_header.caplen > rec->rec_header.packet_header.len)
+			rec->rec_header.packet_header.caplen = rec->rec_header.packet_header.len;
 
-	/*
-	 * Make sure that it's not WTAP_ENCAP_PER_PACKET, as that
-	 * probably means the file has that encapsulation type
-	 * but the read routine didn't set this packet's
-	 * encapsulation type.
-	 */
-	g_assert(phdr->pkt_encap != WTAP_ENCAP_PER_PACKET);
+		/*
+		 * Make sure that it's not WTAP_ENCAP_PER_PACKET, as that
+		 * probably means the file has that encapsulation type
+		 * but the read routine didn't set this packet's
+		 * encapsulation type.
+		 */
+		g_assert(rec->rec_header.packet_header.pkt_encap != WTAP_ENCAP_PER_PACKET);
+	}
 
 	return TRUE;
 }
@@ -1432,14 +1432,17 @@ wtap_seek_read(wtap *wth, gint64 seek_off,
  * Initialize the library.
  */
 void
-wtap_init(void)
+wtap_init(gboolean load_wiretap_plugins)
 {
 	init_open_routines();
 	wtap_opttypes_initialize();
 	wtap_init_encap_types();
+	if (load_wiretap_plugins) {
 #ifdef HAVE_PLUGINS
-	wtap_register_plugin_types();
+		libwiretap_plugins = plugins_init(WS_PLUGIN_WIRETAP);
+		g_slist_foreach(wtap_plugins, call_plugin_register_wtap_module, NULL);
 #endif
+	}
 }
 
 /*
@@ -1452,6 +1455,12 @@ wtap_cleanup(void)
 	wtap_opttypes_cleanup();
 	ws_buffer_cleanup();
 	cleanup_open_routines();
+#ifdef HAVE_PLUGINS
+	g_slist_free(wtap_plugins);
+	wtap_plugins = NULL;
+	plugins_cleanup(libwiretap_plugins);
+	libwiretap_plugins = NULL;
+#endif
 }
 
 /*

@@ -5,25 +5,17 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 2006 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __WIN32UTIL_H__
 #define __WIN32UTIL_H__
 
-#include <config.h>
+/*
+ * This is included in ABI checking, so protect it with #ifdef _WIN32,
+ * so it doesn't break ABI checking on UN*X.
+ */
+#ifdef _WIN32
 
 #include "ws_symbol_export.h"
 
@@ -72,8 +64,32 @@ const char * win32strerror(DWORD error);
 WS_DLL_PUBLIC
 const char * win32strexception(DWORD exception);
 
+/**
+ * @brief ws_pipe_create_process Create a process and assign it to the main application
+ *        job object so that it will be killed the the main application exits.
+ * @param application_name Application name. Will be converted to its UTF-16 equivalent or NULL.
+ * @param command_line Command line. Will be converted to its UTF-16 equivalent.
+ * @param process_attributes Same as CreateProcess.
+ * @param thread_attributes Same as CreateProcess.
+ * @param inherit_handles Same as CreateProcess.
+ * @param creation_flags Will be ORed with CREATE_SUSPENDED|CREATE_BREAKAWAY_FROM_JOB.
+ * @param environment Same as CreateProcess.
+ * @param current_directory Current directory. Will be converted to its UTF-16 equivalent or NULL.
+ * @param startup_info Same as CreateProcess.
+ * @param process_information Same as CreateProcess.
+ * @return
+ */
+WS_DLL_PUBLIC
+BOOL win32_create_process(const char *application_name, const char *command_line,
+    LPSECURITY_ATTRIBUTES process_attributes, LPSECURITY_ATTRIBUTES thread_attributes,
+    BOOL inherit_handles, DWORD creation_flags, LPVOID environment,
+    const char *current_directory, LPSTARTUPINFO startup_info, LPPROCESS_INFORMATION process_information
+);
+
 #ifdef	__cplusplus
 }
 #endif
+
+#endif /* _WIN32 */
 
 #endif /* __WIN32UTIL_H__ */

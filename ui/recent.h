@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __RECENT_H__
@@ -31,7 +19,7 @@ extern "C" {
 #include <glib.h>
 #include <stdio.h>
 #include "epan/timestamp.h"
-#include "ui/ui_util.h"
+#include "ui/ws_ui_util.h"
 
 /** @file
  *  Recent user interface settings.
@@ -64,9 +52,15 @@ typedef struct _col_width_data {
 #define COLUMN_XALIGN_RIGHT   'R'
 
 typedef enum {
-  BYTES_HEX,
-  BYTES_BITS
+    BYTES_HEX,
+    BYTES_BITS
 } bytes_view_type;
+
+typedef enum {
+    BYTES_ENC_FROM_PACKET, // frame_data packet_char_enc
+    BYTES_ENC_ASCII,
+    BYTES_ENC_EBCDIC
+} bytes_encoding_type;
 
 /** Recent settings. */
 typedef struct recent_settings_tag {
@@ -84,6 +78,7 @@ typedef struct recent_settings_tag {
     ts_seconds_type gui_seconds_format;
     gint        gui_zoom_level;
     bytes_view_type gui_bytes_view;
+    bytes_encoding_type gui_bytes_encoding;
 
     gint        gui_geometry_main_x;
     gint        gui_geometry_main_y;
@@ -116,6 +111,12 @@ typedef struct recent_settings_tag {
 
 /** Global recent settings. */
 extern recent_settings_t recent;
+
+/** Initialize recent settings module (done at startup) */
+extern void recent_init(void);
+
+/** Cleanup/Frees recent settings (done at shutdown) */
+extern void recent_cleanup(void);
 
 /** Write recent settings file.
  *
@@ -250,21 +251,6 @@ extern void recent_free_remote_host_list(void);
  */
 extern void recent_add_remote_host(gchar *host, struct remote_host *rh);
 
-/**
- * Fill the remote_host_list with the entries stored in the 'recent' file.
- *
- * @param s String to be filled from the 'recent' file.
- * @return True, if the list was written successfully, False otherwise.
- */
-extern gboolean capture_remote_combo_add_recent(const gchar *s);
-
-/**
- * Write the contents of the remote_host_list to the 'recent' file.
- *
- * @param rf File to write to.
- */
-extern void capture_remote_combo_recent_write_all(FILE *rf);
-
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -272,7 +258,7 @@ extern void capture_remote_combo_recent_write_all(FILE *rf);
 #endif /* recent.h */
 
 /*
- * Editor modelines
+ * Editor modelines  -  https://www.wireshark.org/tools/modelines.html
  *
  * Local Variables:
  * c-basic-offset: 4

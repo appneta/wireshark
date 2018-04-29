@@ -6,21 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- *   Free Software Foundation, Inc.,
- *   51 Franklin Street, Fifth Floor,
- *   Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -213,7 +199,7 @@ dissect_soupbintcp_common(
         conv = conversation_new(pinfo->num,
                                 &pinfo->src,
                                 &pinfo->dst,
-                                pinfo->ptype,
+                                conversation_pt_to_endpoint_type(pinfo->ptype),
                                 pinfo->srcport,
                                 pinfo->destport,
                                 0);
@@ -228,13 +214,7 @@ dissect_soupbintcp_common(
     if (pkt_type == 'S') {
         if (!PINFO_FD_VISITED(pinfo)) {
             /* Get next expected sequence number from conversation */
-            conv = find_conversation(pinfo->num,
-                                     &pinfo->src,
-                                     &pinfo->dst,
-                                     pinfo->ptype,
-                                     pinfo->srcport,
-                                     pinfo->destport,
-                                     0);
+            conv = find_conversation_pinfo(pinfo, 0);
             if (!conv) {
                 this_seq = 0;
             } else {
@@ -387,22 +367,6 @@ dissect_soupbintcp_common(
 
         /* Sub-dissector tvb starts at 3 (length (2) + pkt_type (1)) */
         sub_tvb = tvb_new_subset_remaining(tvb, 3);
-
-#if 0   /* XXX: It's not valid for a soupbintcp subdissector to call       */
-        /*  conversation_set_dissector() since the conversation is really  */
-        /*  a TCP conversation.  (A 'soupbintcp' port type would need to   */
-        /*  be defined to be able to use conversation_set_dissector()).    */
-        /* In addition, no current soupbintcp subdissector calls           */
-        /*  conversation_set_dissector().                                  */
-
-        /* If this packet is part of a conversation, call dissector
-         * for the conversation if available */
-        if (try_conversation_dissector(&pinfo->dst, &pinfo->src, pinfo->ptype,
-                                       pinfo->srcport, pinfo->destport,
-                                       sub_tvb, pinfo, tree, NULL)) {
-            return;
-        }
-#endif
 
         /* Otherwise, try heuristic dissectors */
         if (dissector_try_heuristic(heur_subdissector_list,

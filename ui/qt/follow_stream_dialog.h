@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #ifndef FOLLOW_STREAM_DIALOG_H
 #define FOLLOW_STREAM_DIALOG_H
@@ -57,7 +44,7 @@ public:
     bool follow(QString previous_filter = QString(), bool use_stream_index = false, int stream_num = -1);
 
 public slots:
-    void captureFileClosing();
+    void captureEvent(CaptureEvent e);
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event);
@@ -134,6 +121,8 @@ private:
     bool                    save_as_;
     bool                    use_regex_find_;
     QFile                   file_;
+
+    bool                    terminating_;
 };
 
 #endif // FOLLOW_STREAM_DIALOG_H

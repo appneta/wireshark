@@ -68,6 +68,8 @@
 #include "ui/gtk/old-gtk-compat.h"
 #include "ui/gtk/packet_win.h"
 
+#include "globals.h"
+
 # define BUTTON_SIZE_X -1
 # define BUTTON_SIZE_Y -1
 
@@ -262,6 +264,7 @@ static guint8 *unhexbytes(const char *si, guint len, guint *len_p, char** err) {
 
 on_error:
 	*err = g_strdup("Error parsing hex string");
+	g_free(buf);
 	return NULL;
 }
 
@@ -292,6 +295,9 @@ static gboolean uat_dlg_cb(GtkWidget *win _U_, gpointer user_data) {
 				break;
 
 			case PT_TXTMOD_STRING:
+			case PT_TXTMOD_BOOL:
+			case PT_TXTMOD_DISPLAY_FILTER:
+			case PT_TXTMOD_PROTO_FIELD:
 				text = gtk_entry_get_text(GTK_ENTRY(e));
 				len = (unsigned) strlen(text);
 				break;
@@ -515,6 +521,9 @@ static void uat_edit_dialog(uat_t *uat, gint row, gboolean copy) {
 			case PT_TXTMOD_NONE:
 			case PT_TXTMOD_STRING:
 			case PT_TXTMOD_HEXBYTES:
+			case PT_TXTMOD_DISPLAY_FILTER:
+			case PT_TXTMOD_PROTO_FIELD:
+			case PT_TXTMOD_BOOL:
 				entry = gtk_entry_new();
 				if (! dd->is_new || copy) {
 					gtk_entry_set_text(GTK_ENTRY(entry), text);

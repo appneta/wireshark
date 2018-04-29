@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -121,6 +109,8 @@ static int list_config(char *interface)
 	g_strfreev(longname_list);
 	inc++;
 
+	extcap_config_debug(&inc);
+
 	return EXIT_SUCCESS;
 }
 
@@ -136,7 +126,6 @@ int main(int argc, char *argv[])
 	int produce_type = -1;
 	randpkt_example	*example;
 	wtap_dumper* savedump;
-	int i;
 	int ret = EXIT_FAILURE;
 
 #ifdef _WIN32
@@ -179,9 +168,6 @@ int main(int argc, char *argv[])
 #ifdef _WIN32
 	attach_parent_console();
 #endif  /* _WIN32 */
-
-	for (i = 0; i < argc; i++)
-		g_debug("%s ", argv[i]);
 
 	while ((result = getopt_long(argc, argv, ":", longopts, &option_idx)) != -1) {
 		switch (result) {
@@ -242,6 +228,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	extcap_cmdline_debug(argv, argc);
+
 	if (optind != argc) {
 		g_warning("Invalid option: %s", argv[optind]);
 		goto end;
@@ -283,6 +271,8 @@ int main(int argc, char *argv[])
 			g_warning("ERROR: invalid interface");
 			goto end;
 		}
+
+		wtap_init(FALSE);
 
 		if (!all_random) {
 			produce_type = randpkt_parse_type(type);

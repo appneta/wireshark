@@ -1,6 +1,4 @@
-++++++++++++++++++++++++++++++++++++++
-<!-- WSDG Chapter Setup -->
-++++++++++++++++++++++++++++++++++++++
+// WSDG Chapter Setup
 
 [[ChapterSetup]]
 
@@ -16,7 +14,7 @@ If a tool is not already installed on your system, you can usually install it
 using the package in your distribution: aptitude, yum, Synaptic, etc.
 
 If an install package is not available or you have a
-reason not to use it (maybe because it's simply too old), you
+reason not to use it (maybe because it’s simply too old), you
 can install that tool from source code. The following sections
 will provide you with the webpage addresses where you can get
 these sources.
@@ -44,7 +42,7 @@ Known traps are:
 
 [[ChSetupChocolatey]]
 
-==== Optional: Install Chocolatey
+==== Recommended: Install Chocolatey
 
 https://chocolatey.org/[Chocolatey] is a native package manager for Windows.
 There are https://chocolatey.org/packages[packages] for most of the software
@@ -65,7 +63,7 @@ You need to install, in exactly this order:
 
 . C compiler:
 https://go.microsoft.com/fwlink/?LinkId=532606&clcid=0x409[Download]
-and install "Microsoft Visual Studio 2015 Community Edition." This is a small
+and install ``Microsoft Visual Studio 2015 Community Edition.'' This is a small
 download that then downloads all the other required parts (which are quite large).
 
 Select the "Custom" install and then uncheck all the optional components other
@@ -81,7 +79,7 @@ PS$>choco install VisualStudio2015Community --timeout 0 -package-parameters "--A
 ----
 
 You can use other Microsoft C compiler variants, but VS2015 is used to
-build the development releases and is the preferred option. It's
+build the development releases and is the preferred option. It’s
 possible to compile Wireshark with a wide range of Microsoft C compiler
 variants. For details see <<ChToolsMSChain>>.
 
@@ -117,22 +115,25 @@ example, the ``msvc2015 64-bit'' component is used to build the official
 components as they aren't required.
 
 Note that installation of separate Qt components are required for 32 bit
-and 64 bit builds, e.g. `msvc2015 32-bit` and `msvc2015 64-bit`. The
+and 64 bit builds, e.g. ``msvc2015 32-bit'' and ``msvc2015 64-bit''. The
 environment variable `QT5_BASE_DIR` should be set as appropriate for your
 environment and should point to the Qt directory that contains the bin
-directory, e.g. `C:\Qt\5.9.1\msvc2015_64`
+directory, e.g. _C:\Qt\5.9.1\msvc2015_64_
 
-The Qt maintenance tool (`C:\Qt\MaintenanceTool.exe`) can be used to
+The Qt maintenance tool (_C:\Qt\MaintenanceTool.exe_) can be used to
 upgrade Qt to newer versions.
 
 [[ChSetupCygwin]]
 
-==== Install Cygwin
+==== Optional: Install Cygwin
 
 On 32-bit Windows, http://www.cygwin.com/setup-x86.exe[download the
 32-bit Cygwin installer] and start it. On 64-bit Windows,
 http://www.cygwin.com/setup-x86_64.exe[download the 64-bit Cygwin
 installer] and start it.
+
+Over time the Wireshark development toolchain has been migrating away from Cygwin
+toward native tools and we hope to eliminate it as a requirement someday.
 
 At the "Select Packages" page, you'll need to select
 some additional packages which are not installed by default.
@@ -152,8 +153,6 @@ so it shows a version number for:
 
 * Web/wget (not needed if using CMake)
 
-* Text/asciidoc
-
 * Text/docbook-xml45
 
 // Also need: bash/sh, sed
@@ -165,7 +164,7 @@ You might also have to install
 if installing Devel/bison doesn't provide a working version of Bison. If
 m4 is missing bison will fail.
 
-After clicking the Next button several times, the setup
+After clicking the btn:[Next] button several times, the setup
 will then download and install the selected packages (this
 may take a while).
 
@@ -174,18 +173,18 @@ Alternatively you can install Cygwin and its packages using Chocolatey:
 ----
 PS$>choco install cygwin
 PS$>choco install cyg-get
-//PS$>choco install sed asciidoc [...] -source cygwin
+----
+//PS$>choco install sed [...] -source cygwin
+
+Chocolatey installs Cygwin in _C:\tools\cygwin_ by default.
+
+You can directly download packages via `cyg-get`
+
+----
+PS$>cyg-get docbook-xml45 [...]
 ----
 
-Chocolatey installs Cygwin in 'C:\tools\cygwin' by default.
-
-You can directly download packages via cyg-get
-
-----
-PS$>cyg-get asciidoc patch docbook-xml45 [...]
-----
-
-You can use Chocolatey's Win flex-bison packages rather than the Cygwin
+You can use Chocolatey’s Win flex-bison packages rather than the Cygwin
 Bison and Flex package:
 
 ----
@@ -197,9 +196,9 @@ PS$>choco install winflexbison
 ==== Install Python
 
 Get the Python 3.5 or 2.7 installer from http://python.org/download/[] and
-install Python into the default location ('C:\Python35' or 'C:\Python27').
+install Python into the default location (_C:\Python35_ or _C:\Python27_).
 
-Why is this recommended? Cygwin's `/usr/bin/python` is a Cygwin-specific
+Why is this recommended? Cygwin’s _/usr/bin/python_ is a Cygwin-specific
 symbolic link which cannot be run from Windows. The native package is faster
 as well.
 
@@ -215,7 +214,7 @@ or
 PS$>choco install python2
 ----
 
-Chocolatey installs Python in 'C:\tools\python3' and 'C:\tools\python2' by default.
+Chocolatey installs Python in _C:\tools\python3_ and _C:\tools\python2_ by default.
 
 [[ChSetupGit]]
 
@@ -235,9 +234,9 @@ available at the URLs below or via https://chocolatey.org/[Chocolatey].
 Note that many of the GUI interfaces depend on the command line version.
 
 If installing the Windows version of git select the
-'Use Git from the Windows Command Prompt' (in chocolatey the '/GitOnlyOnPath'
-option).  Do *not* select the 'Use Git and optional Unix tools from the Windows Command Prompt'
-option (in chocolatey the '/GitAndUnixToolsOnPath' option).
+_Use Git from the Windows Command Prompt_ (in chocolatey the _/GitOnlyOnPath_
+option).  Do *not* select the _Use Git and optional Unix tools from the Windows Command Prompt_
+option (in chocolatey the _/GitAndUnixToolsOnPath_ option).
 
 ===== The Official Windows Installer
 
@@ -283,12 +282,30 @@ PS$>choco install cmake.portable
 
 Chocolatey ensures cmake.exe is on your path.
 
+[[ChSetupAsciidoctor]]
+
+==== Install Asciidoctor, Xsltproc, And DocBook
+
+http://asciidoctor.org/[Asciidoctor] can be run directly as a Ruby
+script or via a Java wrapper (AsciidoctorJ). It is used in conjuntion
+with Xsltproc and DocBook to generate the documenation you're reading
+and the User’s Guide.
+
+The easiest way to install them on Windows is via Chocolatey:
+
+----
+PS$>choco install asciidoctorj xsltproc docbook-bundle
+----
+
+Chocolatey ensures that asciidoctorj.exe and xsltproc.exe is on your
+path and that xsltproc uses the DocBook catalog.
+
 ==== Install and Prepare Sources
 
 [TIP]
 .Make sure everything works
 ====
-It's a good idea to make sure Wireshark compiles and runs at least once before
+It’s a good idea to make sure Wireshark compiles and runs at least once before
 you start hacking the Wireshark sources for your own project. This example uses
 Git Extensions but any other Git client should work as well.
 ====
@@ -296,7 +313,7 @@ Git Extensions but any other Git client should work as well.
 // XXX -
 
 *Download sources* Download Wireshark sources into
-'C:\Development\wireshark' using either the command line or Git Extensions:
+_C:\Development\wireshark_ using either the command line or Git Extensions:
 
 Using the command line:
 
@@ -310,15 +327,15 @@ Using Git extensions:
 . Open the Git Extensions application. By default Git Extensions
    will show a validation checklist at startup. If anything needs to
    be fixed do so now. You can bring up the checklist at any time
-   via _Tools -> Settings_.
+   via menu:Tools[Settings].
 
 . In the main screen select _Clone repository_. Fill in the following:
 +
-Repository to clone: `https://code.wireshark.org/review/wireshark`
+Repository to clone: *`https://code.wireshark.org/review/wireshark`*
 +
-Destination: Your top-level development directory, e.g. `C:\Development`.
+Destination: Your top-level development directory, e.g. _C:\Development_.
 +
-Subdirectory to create: Anything you'd like. Usually `wireshark`.
+Subdirectory to create: Anything you’d like. Usually _wireshark_.
 +
 [TIP]
 .Check your paths
@@ -326,8 +343,8 @@ Subdirectory to create: Anything you'd like. Usually `wireshark`.
 Make sure your repository path doesn't contain spaces.
 ====
 
-. Click the _Clone_ button. Git Extensions should start cloning the
-   Wireshark repository.
+. Click the btn:[Clone] button. Git Extensions should start cloning the
+  Wireshark repository.
 
 [[ChSetupPrepareCommandCom]]
 
@@ -424,7 +441,7 @@ If you've closed the Visual Studio Command Prompt <<ChSetupPrepareCommandCom,pre
 
 To generate the build files enter the following at the Visual Studio command prompt:
 ----
-> cmake -DENABLE_CHM_GUIDES=on -G "Visual Studio 14 2015" ..\wireshark
+> cmake -G "Visual Studio 14 2015" ..\wireshark
 ----
 
 Adjusting the paths as required to Python and the wireshark source tree.
@@ -451,13 +468,13 @@ At the end of the CMake generation process the following should be displayed:
 
 If you get any other output, there is an issue in your envirnment that must be rectified before building.
 Check the parameters passed to CMake, especially the `-G` option and the path to the Wireshark sources and
-the environment variables WIRESHARK_BASE_DIR and QT5_BASE_DIR.
+the environment variables `WIRESHARK_BASE_DIR` and `QT5_BASE_DIR`.
 
 [[ChWin32Build]]
 
 ==== Build Wireshark
 
-Now it's time to build Wireshark!
+Now it’s time to build Wireshark!
 
 . If you've closed the Visual Studio Command Prompt <<ChSetupPrepareCommandCom,prepare>> it again.
 
@@ -472,16 +489,16 @@ to build Wireshark.
 
 . Wait for Wireshark to compile. This will take a while, and there will be a lot of text output in the command prompt window
 
-. For the Qt version run `C:\Development\wsbuild32\run\RelWithDebInfo\Wireshark.exe` and make sure it starts.
+. Run _C:\Development\wsbuild32\run\RelWithDebInfo\Wireshark.exe_ and make sure it starts.
 
-. Open 'Help -> About'. If it shows your "private" program
+. Open menu:Help[About]. If it shows your "private" program
 version, e.g.: Version {wireshark-version}-myprotocol123
 congratulations! You have compiled your own version of Wireshark!
 
-You may also open the Wireshark solution file (Wireshark.sln) in the Visual Studio IDE and build there.
+You may also open the Wireshark solution file (_Wireshark.sln_) in the Visual Studio IDE and build there.
 
 TIP: If compilation fails for suspicious reasons after you changed some source
-files try to clean the build files by running msbuild /m /p:Configuration=RelWithDebInfo Wireshark.sln /t:Clean
+files try to clean the build files by running `msbuild /m /p:Configuration=RelWithDebInfo Wireshark.sln /t:Clean`
 and then building the solution again.
 
 The build files produced by CMake will regenerate themselves if required by changes in the source tree.
@@ -491,10 +508,10 @@ The build files produced by CMake will regenerate themselves if required by chan
 You can debug using the Visual Studio Debugger or WinDbg.  See the section
 on using the <<ChToolsDebugger, Debugger Tools>>.
 
-==== Optional: Create User's and Developer's Guide
+==== Optional: Create User’s and Developer’s Guide
 
 Detailed information to build these guides can be found in the file
-'docbook\README.txt' in the Wireshark sources.
+_docbook\README.adoc_ in the Wireshark sources.
 
 ==== Optional: Create a Wireshark Installer
 
@@ -502,42 +519,38 @@ Note: You should have successfully built Wireshark
 before doing the following.
 
 If you want to build your own
-'Wireshark-win32-{wireshark-version}-myprotocol123.exe',
-you'll need NSIS.
+_Wireshark-win32-{wireshark-version}-myprotocol123.exe_, you'll need
+NSIS. You can download it from http://nsis.sourceforge.net[].
 
-. NSIS:
-http://nsis.sourceforge.net[Download] and install NSIS
-+
 Note that the 32-bit version of NSIS will work for both 32-bit and
-64-bit versions of Wireshark. NSIS v3 is recommended and may be required
-in the future.
+64-bit versions of Wireshark. NSIS v3 is required.
 
-Note: If you do not yet have a copy of vcredist_x86.exe or vcredist_x64.exe in ./wireshark-winXX-libs (where XX is 32 or 64) you will need to download the appropriate file and place it in ./wireshark-winXX-libs before starting this step.
+Note: If you do not yet have a copy of vcredist_x86.exe or vcredist_x64.exe in _./wireshark-win**XX**-libs_ (where *_XX_* is 32 or 64) you will need to download the appropriate file and place it in _./wireshark-win**XX**-libs_ before starting this step.
 
-If building an x86 version using a Visual Studio "Express" edition or an x64 version with any edition, then you must have the appropriate vcredist file for your compiler in the support libraries directory (vcredist_x86.exe in wireshark-32-libs or vcredist_x64.exe in wireshark-win64-libs).
+If building an x86 version using a Visual Studio “Express” edition or an x64 version with any edition, then you must have the appropriate vcredist file for your compiler in the support libraries directory (_vcredist_x86.exe_ in _wireshark-32-libs_ or _vcredist_x64.exe_ in _wireshark-win64-libs_).
 
 The files can be located in the Visual Studio install directory for non-Express edition builds, or downloaded from Microsoft for Expresss edition builds.
 
-Note you must use the correct version of vcredist for your compiler, unfortunately they all have the same name (vcredist_x86.exe or vcredist_x64.exe).  You can use Windows Explorer and examine the Properties >> Details tab for a vcredist file to determine which compiler version the file is for use with.
+Note you must use the correct version of vcredist for your compiler, unfortunately they all have the same name (_vcredist_x86.exe_ or _vcredist_x64.exe_).  You can use Windows Explorer and examine the `Properties -> Details' tab for a vcredist file to determine which compiler version the file is for use with.
 
-. If you've closed the Visual Studio Command Prompt <<ChSetupPrepareCommandCom,prepare>> it again.
+If you've closed the Visual Studio Command Prompt <<ChSetupPrepareCommandCom,prepare>> it again.
 
-. Run
-+
---
+Run
+
 ----
 > msbuild /m /p:Configuration=RelWithDebInfo nsis_package_prep.vcxproj
 > msbuild /m /p:Configuration=RelWithDebInfo nsis_package.vcxproj
 ----
-to build a Wireshark installer.
---
 
-. Run
-+
---
+to build a Wireshark installer. If you sign your executables you should do
+so between the “nsis_package_prep” and “nsis_package” steps.
+
+Run
+
 ----
-> C:\Development\wireshark\packaging\nsis\wireshark-win32-{wireshark-version}-myprotocol123.exe
+> packaging\nsis\wireshark-win64-{wireshark-version}-myprotocol123.exe
 ----
-to test your new installer. It's a good idea to test on a different machine
-than the developer machine. Note that if you've built an x64 version, the installer will be named accordingly.
---
+
+to test your new installer. It’s a good idea to test on a different
+machine than the developer machine. Note that if you've built an x86
+version, the installer name will contain “win32”.

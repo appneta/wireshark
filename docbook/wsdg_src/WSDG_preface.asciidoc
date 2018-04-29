@@ -1,6 +1,4 @@
-++++++++++++++++++++++++++++++++++++++
-<!-- WSDG Preface -->
-++++++++++++++++++++++++++++++++++++++
+// WSDG Preface
 
 [[PreForeword]]
 
@@ -32,7 +30,7 @@ Wireshark.
 
 This book is not intended to explain the usage of Wireshark in general.
 Please refer the
-{wireshark-users-guide-url}[Wireshark User's Guide] about Wireshark usage.
+{wireshark-users-guide-url}[Wireshark User’s Guide] about Wireshark usage.
 
 By reading this book, you will learn how to develop Wireshark. It will
 hopefully guide you around some common problems that frequently appear for
@@ -68,27 +66,6 @@ This book was developed by mailto:{wsdg-author-email}[Ulf Lamping]
 and updated for VS2013 by mailto:{wsdg-author-email2}[Graham Bloice]
 
 It is written in AsciiDoc.
-
-You will find some specially marked parts in this book:
-
-[WARNING]
-.This is a warning
-====
-You should pay attention to a warning, as otherwise data loss might occur.
-====
-
-[NOTE]
-.This is a note
-====
-A note will point you to common mistakes and things that might not be
-obvious.
-====
-
-[TIP]
-.This is a tip
-====
-Tips will be helpful for your everyday work developing Wireshark.
-====
 
 [[PreDownload]]
 

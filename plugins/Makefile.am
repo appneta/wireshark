@@ -21,33 +21,31 @@
 
 -include Custom.make
 
-SUBDIRS = $(_CUSTOM_SUBDIRS_) \
+SUBDIRS = \
+	$(_CUSTOM_SUBDIRS_) \
 	ani_rpp \
 	ani_payload \
 	twamp \
-	docsis \
-	easy_codec \
-	ethercat \
-	gryphon \
-	irda \
-	m2m \
-	mate \
-	opcua \
-	profinet \
-	stats_tree \
-	transum \
-	unistim \
-	wimax \
-	wimaxasncp \
-	wimaxmacphy
+	epan/ethercat		\
+	epan/gryphon		\
+	epan/irda		\
+	epan/mate		\
+	epan/opcua		\
+	epan/profinet		\
+	epan/stats_tree		\
+	epan/transum		\
+	epan/unistim		\
+	epan/wimax		\
+	epan/wimaxasncp		\
+	epan/wimaxmacphy	\
+	wiretap/usbdump		\
+	codecs/l16_mono
 
 EXTRA_DIST = \
 	$(_CUSTOM_EXTRA_DIST_) \
-	Custom.make.example \
-	Custom.m4.example
-
-MAINTAINERCLEANFILES = \
-	Makefile.in
+	Custom.make.example	\
+	Custom.m4.example	\
+	plugin.rc.in
 
 checkapi:
 	for i in $(SUBDIRS); do \

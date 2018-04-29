@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 #ifndef _PACKET_NVME_H_
 #define _PACKET_NVME_H_
@@ -30,6 +18,8 @@
 struct nvme_q_ctx {
     wmem_tree_t *pending_cmds;
     wmem_tree_t *done_cmds;
+    wmem_tree_t *data_requests;
+    wmem_tree_t *data_responses;
     guint16     qid;
 };
 
@@ -37,9 +27,16 @@ struct nvme_cmd_ctx {
     guint32 cmd_pkt_num;  /* pkt number of the cmd */
     guint32 cqe_pkt_num;  /* pkt number of the cqe */
 
+    guint32 data_req_pkt_num;
+    guint32 data_resp_pkt_num;
+
     nstime_t cmd_start_time;
     nstime_t cmd_end_time;
     gboolean fabric;     /* indicate whether cmd fabric type or not */
+
+    guint8  opcode;
+    guint32 remote_key;
+    guint16 resp_type;
 };
 
 void
@@ -63,6 +60,17 @@ nvme_add_cmd_to_pending_list(packet_info *pinfo, struct nvme_q_ctx *q_ctx,
                              void *ctx, guint16 cmd_id);
 void* nvme_lookup_cmd_in_pending_list(struct nvme_q_ctx *q_ctx, guint16 cmd_id);
 
+void nvme_add_data_request(packet_info *pinfo, struct nvme_q_ctx *q_ctx,
+                           struct nvme_cmd_ctx *cmd_ctx, void *ctx);
+void* nvme_lookup_data_request(struct nvme_q_ctx *q_ctx, guint32 key);
+
+void
+nvme_add_data_response(struct nvme_q_ctx *q_ctx,
+                       struct nvme_cmd_ctx *cmd_ctx, guint32 rkey);
+void*
+nvme_lookup_data_response(packet_info *pinfo, struct nvme_q_ctx *q_ctx,
+                          guint32 rkey);
+
 void
 nvme_add_cmd_cqe_to_done_list(struct nvme_q_ctx *q_ctx,
                               struct nvme_cmd_ctx *cmd_ctx, guint16 cmd_id);
@@ -71,10 +79,16 @@ nvme_lookup_cmd_in_done_list(packet_info *pinfo, struct nvme_q_ctx *q_ctx,
                              guint16 cmd_id);
 
 void dissect_nvme_cmd_sgl(tvbuff_t *cmd_tvb, proto_tree *cmd_tree,
-                          int field_index);
+                          int field_index, struct nvme_cmd_ctx *cmd_ctx);
+
 void
 dissect_nvme_cmd(tvbuff_t *nvme_tvb, packet_info *pinfo, proto_tree *root_tree,
                  struct nvme_q_ctx *q_ctx, struct nvme_cmd_ctx *cmd_ctx);
+
+void
+dissect_nvme_data_response(tvbuff_t *nvme_tvb, packet_info *pinfo, proto_tree *root_tree,
+                 struct nvme_q_ctx *q_ctx, struct nvme_cmd_ctx *cmd_ctx, guint len);
+
 void
 dissect_nvme_cqe(tvbuff_t *nvme_tvb, packet_info *pinfo, proto_tree *root_tree,
                  struct nvme_cmd_ctx *cmd_ctx);

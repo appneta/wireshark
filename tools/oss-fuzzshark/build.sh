@@ -1,19 +1,14 @@
 #!/bin/bash -eux
 # Copyright 2017 Google Inc.
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+# List of dissectors compiled below, which should be turned off.
+# This is done to avoid single fuzzer (like IP) to call UDP protocols, which can go back to IP, and so on..
+# While doing so might find some bugs, but it's likely to be the problem for too big corpus in oss-fuzzer
+# (see: https://github.com/google/oss-fuzz/issues/1087).
+# + udplite - it's sharing most of code with UDP.
+DISSECTOR_LIST='"ip", "udp", "udplite", "ospf", "bgp", "bootp", "json"'
 
 FUZZ_DISSECTORS="ip"
 
@@ -41,7 +36,7 @@ generate_fuzzer()
   $CC $CFLAGS -I $SRC/wireshark/ `pkg-config --cflags glib-2.0` \
       $SRC/wireshark/tools/oss-fuzzshark/fuzzshark.c \
       -c -o $WORK/${fuzzer_name}.o \
-      $fuzzer_cflags
+      $fuzzer_cflags -DFUZZ_DISSECTOR_LIST="$DISSECTOR_LIST"
 
   $CXX $CXXFLAGS $WORK/${fuzzer_name}.o \
       -o $OUT/${fuzzer_name} \

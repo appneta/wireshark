@@ -4,37 +4,21 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #include "endpoint_dialog.h"
 
-#ifdef HAVE_GEOIP
-#include <GeoIP.h>
-#include <epan/geoip_db.h>
-#include <wsutil/pint.h>
-#endif
+#include <epan/maxmind_db.h>
 
 #include <epan/prefs.h>
 
 #include "ui/recent.h"
 #include "ui/traffic_table_ui.h"
 
+#include "wsutil/pint.h"
 #include "wsutil/str_util.h"
 
-#include "qt_ui_utils.h"
+#include <ui/qt/utils/qt_ui_utils.h>
 #include "wireshark_application.h"
 
 #include <QCheckBox>
@@ -48,14 +32,6 @@ static const QString table_name_ = QObject::tr("Endpoint");
 EndpointDialog::EndpointDialog(QWidget &parent, CaptureFile &cf, int cli_proto_id, const char *filter) :
     TrafficTableDialog(parent, cf, filter, table_name_)
 {
-#ifdef HAVE_GEOIP
-    map_bt_ = buttonBox()->addButton(tr("Map"), QDialogButtonBox::ActionRole);
-    map_bt_->setToolTip(tr("Draw IPv4 or IPv6 endpoints on a map."));
-    connect(map_bt_, SIGNAL(clicked()), this, SLOT(createMap()));
-
-    connect(trafficTableTabWidget(), SIGNAL(currentChanged(int)), this, SLOT(tabChanged()));
-#endif
-
     addProgressFrame(&parent);
 
     QList<int> endp_protos;
@@ -82,10 +58,6 @@ EndpointDialog::EndpointDialog(QWidget &parent, CaptureFile &cf, int cli_proto_i
     }
 
     fillTypeMenu(endp_protos);
-
-#ifdef HAVE_GEOIP
-    tabChanged();
-#endif
 
     QPushButton *close_bt = buttonBox()->button(QDialogButtonBox::Close);
     if (close_bt) {
@@ -169,37 +141,8 @@ bool EndpointDialog::addTrafficTable(register_ct_t *table)
                         EndpointTreeWidget::tapReset,
                         get_hostlist_packet_func(table),
                         EndpointTreeWidget::tapDraw);
-
-#ifdef HAVE_GEOIP
-    connect(endp_tree, SIGNAL(geoIPStatusChanged()), this, SLOT(tabChanged()));
-#endif
     return true;
 }
-
-#ifdef HAVE_GEOIP
-void EndpointDialog::tabChanged()
-{
-    EndpointTreeWidget *cur_tree = qobject_cast<EndpointTreeWidget *>(trafficTableTabWidget()->currentWidget());
-    map_bt_->setEnabled(cur_tree && cur_tree->hasGeoIPData());
-}
-
-void EndpointDialog::createMap()
-{
-    EndpointTreeWidget *cur_tree = qobject_cast<EndpointTreeWidget *>(trafficTableTabWidget()->currentWidget());
-    if (!cur_tree) {
-        return;
-    }
-
-    gchar *err_str;
-    gchar *map_path = create_endpoint_geoip_map(cur_tree->trafficTreeHash()->conv_array, &err_str);
-    if (!map_path) {
-        QMessageBox::warning(this, tr("Map file error"), err_str);
-        g_free(err_str);
-        return;
-    }
-    QDesktopServices::openUrl(QUrl::fromLocalFile(gchar_free_to_qstring(map_path)));
-}
-#endif
 
 void EndpointDialog::on_buttonBox_helpRequested()
 {
@@ -214,9 +157,7 @@ void init_endpoint_table(struct register_ct* ct, const char *filter)
 // EndpointTreeWidgetItem
 // TrafficTableTreeWidgetItem / QTreeWidgetItem subclass that allows sorting
 
-#ifdef HAVE_GEOIP
-static const char *geoip_none_ = UTF8_EM_DASH;
-#endif
+static const char *data_none_ = UTF8_EM_DASH;
 
 class EndpointTreeWidgetItem : public TrafficTableTreeWidgetItem
 {
@@ -252,17 +193,10 @@ public:
                 return QString("%L1").arg(endp_item->rx_frames);
             case ENDP_COLUMN_BYTES_BA:
                 return gchar_free_to_qstring(format_size(endp_item->rx_bytes, format_size_unit_none|format_size_prefix_si));
-#ifdef HAVE_GEOIP
             default:
-            {
-                QString geoip_str = colData(column, resolve_names, true).toString();
-                if (geoip_str.isEmpty()) geoip_str = geoip_none_;
-                return geoip_str;
-            }
-#else
-            default:
-                return colData(column, resolve_names, true);
-#endif
+                QVariant col_data = colData(column, resolve_names);
+                if (col_data.isValid()) return col_data;
+                return QVariant(data_none_);
             }
         }
         return QTreeWidgetItem::data(column, role);
@@ -270,11 +204,15 @@ public:
 
     // Column text raw representation.
     // Return a string, qulonglong, double, or invalid QVariant representing the raw column data.
-    QVariant colData(int col, bool resolve_names, bool strings_only) const {
-#ifndef HAVE_GEOIP
-        Q_UNUSED(strings_only)
-#endif
+    QVariant colData(int col, bool resolve_names) const {
         hostlist_talker_t *endp_item = &g_array_index(conv_array_, hostlist_talker_t, conv_idx_);
+
+        const mmdb_lookup_t *mmdb_lookup = NULL;
+        if (endp_item->myaddress.type == AT_IPv4) {
+            mmdb_lookup = maxmind_db_lookup_ipv4(pntoh32(endp_item->myaddress.data));
+        } else if (endp_item->myaddress.type == AT_IPv6) {
+            mmdb_lookup = maxmind_db_lookup_ipv6((ws_in6_addr *) endp_item->myaddress.data);
+        }
 
         switch (col) {
         case ENDP_COLUMN_ADDR:
@@ -286,7 +224,7 @@ public:
         }
         case ENDP_COLUMN_PORT:
             if (resolve_names) {
-                char* port_str = get_conversation_port(NULL, endp_item->port, endp_item->ptype, resolve_names);
+                char* port_str = get_conversation_port(NULL, endp_item->port, endp_item->etype, resolve_names);
                 QString q_port_str(port_str);
                 wmem_free(NULL, port_str);
                 return q_port_str;
@@ -305,54 +243,31 @@ public:
             return quint64(endp_item->rx_frames);
         case ENDP_COLUMN_BYTES_BA:
             return quint64(endp_item->rx_bytes);
-#ifdef HAVE_GEOIP
-        default:
-        {
-            QString geoip_str;
-            /* Filled in from the GeoIP config, if any */
-            EndpointTreeWidget *ep_tree = qobject_cast<EndpointTreeWidget *>(treeWidget());
-            if (!ep_tree) return geoip_str;
-            foreach (unsigned db, ep_tree->columnToDb(col)) {
-                if (endp_item->myaddress.type == AT_IPv4) {
-                    geoip_str = geoip_db_lookup_ipv4(db, pntoh32(endp_item->myaddress.data), NULL);
-                } else if (endp_item->myaddress.type == AT_IPv6) {
-                    const struct e_in6_addr *addr = (const struct e_in6_addr *) endp_item->myaddress.data;
-                    geoip_str = geoip_db_lookup_ipv6(db, *addr, NULL);
-                }
-                if (!geoip_str.isEmpty()) {
-                    break;
-                }
+        case ENDP_COLUMN_GEO_COUNTRY:
+            if (mmdb_lookup && mmdb_lookup->found && mmdb_lookup->country) {
+                return QVariant(mmdb_lookup->country);
             }
-
-            if (strings_only) return geoip_str;
-
-            bool ok;
-
-            double dval = geoip_str.toDouble(&ok);
-            if (ok) { // Assume lat / lon
-                return dval;
+            return QVariant();
+        case ENDP_COLUMN_GEO_CITY:
+            if (mmdb_lookup && mmdb_lookup->found && mmdb_lookup->city) {
+                return QVariant(mmdb_lookup->city);
             }
-
-            qulonglong ullval = geoip_str.toULongLong(&ok);
-            if (ok) { // Assume uint
-                return ullval;
+            return QVariant();
+        case ENDP_COLUMN_GEO_AS_NUM:
+            if (mmdb_lookup && mmdb_lookup->found && mmdb_lookup->as_number) {
+                return QVariant(mmdb_lookup->as_number);
             }
-
-            qlonglong llval = geoip_str.toLongLong(&ok);
-            if (ok) { // Assume int
-                return llval;
+            return QVariant();
+        case ENDP_COLUMN_GEO_AS_ORG:
+            if (mmdb_lookup && mmdb_lookup->found && mmdb_lookup->as_org) {
+                return QVariant(mmdb_lookup->as_org);
             }
+            return QVariant();
 
-            return geoip_str;
-        }
-#else
         default:
             return QVariant();
-#endif
         }
     }
-
-    virtual QVariant colData(int col, bool resolve_names) const { return colData(col, resolve_names, false); }
 
     bool operator< (const QTreeWidgetItem &other) const
     {
@@ -379,27 +294,26 @@ public:
             return endp_item->rx_frames < other_item->rx_frames;
         case ENDP_COLUMN_BYTES_BA:
             return endp_item->rx_bytes < other_item->rx_bytes;
-#ifdef HAVE_GEOIP
-        default:
+        case ENDP_COLUMN_GEO_COUNTRY:
+        case ENDP_COLUMN_GEO_CITY:
+        case ENDP_COLUMN_GEO_AS_ORG:
         {
-            double ei_val, oi_val;
-            bool ei_ok, oi_ok;
-            ei_val = text(sort_col).toDouble(&ei_ok);
-            oi_val = other.text(sort_col).toDouble(&oi_ok);
-
-            if (ei_ok && oi_ok) { // Assume lat / lon
-                return ei_val < oi_val;
-            } else {
-                // XXX Fall back to string comparison. We might want to try sorting naturally
-                // using QCollator instead.
-                return text(sort_col) < other.text(sort_col);
-            }
-            break;
+            QString this_str = data(sort_col, Qt::DisplayRole).toString();
+            QString other_str = other_row->data(sort_col, Qt::DisplayRole).toString();
+            return (this_str < other_str);
         }
-#else
+        case ENDP_COLUMN_GEO_AS_NUM:
+        {
+            // Valid values first, similar to strings above.
+            bool ok;
+            unsigned this_asn = colData(sort_col, false).toUInt(&ok);
+            if (!ok) this_asn = UINT_MAX;
+            unsigned other_asn = other_row->colData(sort_col, false).toUInt(&ok);
+            if (!ok) other_asn = UINT_MAX;
+            return (this_asn < other_asn);
+        }
         default:
             return false;
-#endif
         }
     }
 private:
@@ -414,40 +328,32 @@ private:
 //
 
 EndpointTreeWidget::EndpointTreeWidget(QWidget *parent, register_ct_t *table) :
-    TrafficTableTreeWidget(parent, table)
-#ifdef HAVE_GEOIP
-  , has_geoip_data_(false)
-#endif
+    TrafficTableTreeWidget(parent, table),
+    table_address_type_(AT_NONE)
 {
     setColumnCount(ENDP_NUM_COLUMNS);
     setUniformRowHeights(true);
 
-    for (int i = 0; i < ENDP_NUM_COLUMNS; i++) {
-        headerItem()->setText(i, endp_column_titles[i]);
+    QString proto_filter_name = proto_get_protocol_filter_name(get_conversation_proto_id(table_));
+    if (proto_filter_name == "ip") {
+        table_address_type_ = AT_IPv4;
+    } else if (proto_filter_name == "ipv6") {
+        table_address_type_ = AT_IPv6;
     }
-
     if (get_conversation_hide_ports(table_)) {
         hideColumn(ENDP_COLUMN_PORT);
-    } else if (!strcmp(proto_get_protocol_filter_name(get_conversation_proto_id(table_)), "ncp")) {
+    } else if (proto_filter_name == "ncp") {
         headerItem()->setText(ENDP_COLUMN_PORT, endp_conn_title);
     }
 
-#ifdef HAVE_GEOIP
-    QMap<QString, int> db_name_to_col;
-    for (unsigned db = 0; db < geoip_db_num_dbs(); db++) {
-        QString db_name = geoip_db_name(db);
-        int col = db_name_to_col.value(db_name, -1);
-
-        if (col < 0) {
-            col = columnCount();
-            setColumnCount(col + 1);
-            headerItem()->setText(col, db_name);
-            hideColumn(col);
-            db_name_to_col[db_name] = col;
-        }
-        col_to_db_[col] << db;
+    int column_count = ENDP_NUM_COLUMNS;
+    if (table_address_type_ == AT_IPv4 || table_address_type_ == AT_IPv6) {
+        column_count = ENDP_NUM_GEO_COLUMNS;
     }
-#endif
+    for (int col = 0; col < column_count; col++) {
+        headerItem()->setText(col, endp_column_titles[col]);
+    }
+
 
     int one_en = fontMetrics().height() / 2;
     for (int i = 0; i < columnCount(); i++) {
@@ -469,7 +375,7 @@ EndpointTreeWidget::EndpointTreeWidget(QWidget *parent, register_ct_t *table) :
             setColumnWidth(i, one_en * (int) strlen("000,000"));
             break;
         default:
-            setColumnWidth(i, one_en * (int) strlen("-00.000000")); // GeoIP
+            setColumnWidth(i, one_en * 15); // Geolocation
         }
     }
 
@@ -548,19 +454,6 @@ void EndpointTreeWidget::updateItems()
     if (!hash_.conv_array) {
         return;
     }
-
-#ifdef HAVE_GEOIP
-    if (topLevelItemCount() < 1 && hash_.conv_array->len > 0) {
-        hostlist_talker_t *endp_item = &g_array_index(hash_.conv_array, hostlist_talker_t, 0);
-        if (endp_item->myaddress.type == AT_IPv4 || endp_item->myaddress.type == AT_IPv6) {
-            for (unsigned i = 0; i < geoip_db_num_dbs(); i++) {
-                showColumn(ENDP_NUM_COLUMNS + i);
-            }
-            has_geoip_data_ = true;
-            emit geoIPStatusChanged();
-        }
-    }
-#endif
 
     setSortingEnabled(false);
 

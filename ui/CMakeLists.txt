@@ -4,22 +4,10 @@
 # By Gerald Combs <gerald@wireshark.org>
 # Copyright 1998 Gerald Combs
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 
-set(COMMON_UI_SRC
+set(NONGENERATED_UI_SRC
 	alert_box.c
 	capture.c
 	capture_ui_utils.c
@@ -31,6 +19,7 @@ set(COMMON_UI_SRC
 	export_pdu_ui_utils.c
 	help_url.c
 	failure_message.c
+	file_dialog.c
 	filter_files.c
 	firewall_rules.c
 	iface_toolbar.c
@@ -50,11 +39,11 @@ set(COMMON_UI_SRC
 	service_response_time.c
 	software_update.c
 	ssl_key_export.c
+	summary.c
 	tap_export_pdu.c
 	tap-iax2-analysis.c
 	tap-rtp-common.c
 	tap-sctp-analysis.c
-	tap-sequence-analysis.c
 	tap-rlc-graph.c
 	tap-tcp-stream.c
 	text_import.c
@@ -72,34 +61,36 @@ file(GLOB EXTRA_UI_HEADERS
 	tap-rtp-analysis.h
 )
 
-add_lex_files(LEX_FILES GENERATED_FILES
+set(UI_SRC ${NONGENERATED_UI_SRC})
+
+add_lex_files(LEX_FILES UI_SRC
 	text_import_scanner.l
 )
 
-set(CLEAN_FILES
-	${COMMON_UI_SRC}
-)
-
 set_source_files_properties(
-	${CLEAN_FILES}
+	${UI_SRC}
 	PROPERTIES
 	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
 )
 
 
-add_library(ui STATIC
-	${COMMON_UI_SRC}
-	${GENERATED_FILES}
+add_library(ui STATIC ${UI_SRC})
+
+set_target_properties(ui PROPERTIES
+	LINK_FLAGS "${WS_LINK_FLAGS}"
+	FOLDER "UI"
 )
 
-set_target_properties(ui PROPERTIES COMPILE_OPTIONS "${WS_WARNINGS_C_FLAGS}")
-set_target_properties(ui PROPERTIES LINK_FLAGS "${WS_LINK_FLAGS}")
-set_target_properties(ui PROPERTIES FOLDER "UI")
+add_executable(make-taps make-taps.c)
+# wsutil is only required for glib-compat.c
+target_link_libraries(make-taps ${GLIB2_LIBRARIES} wsutil)
 
 if (HTML_HELP_COMPILER)
 	add_definitions(-DHHC_DIR)
 	target_link_libraries(ui Htmlhelp.lib)
 endif()
+
+add_definitions(-DDOC_DIR="${CMAKE_INSTALL_FULL_DOCDIR}")
 
 CHECKAPI(
 	NAME
@@ -107,9 +98,8 @@ CHECKAPI(
 	SWITCHES
 	  -g deprecated-gtk
 	SOURCES
-	  ${COMMON_UI_SRC}
-# LEX files commented out due to use of malloc, free etc.
-#	  ${LEX_FILES}
+	  ${NONGENERATED_UI_SRC}
+# Flex files not included due to use of malloc, free etc.
 )
 CHECKAPI(
 	NAME
@@ -117,9 +107,8 @@ CHECKAPI(
 	SWITCHES
 	  -M -g deprecated-gtk-todo
 	SOURCES
-	  ${COMMON_UI_SRC}
-# LEX files commented out due to use of malloc, free etc.
-#	  ${LEX_FILES}
+	  ${NONGENERATED_UI_SRC}
+# Flex files not included due to use of malloc, free etc.
 )
 
 #

@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -650,12 +638,6 @@ DIAG_ON(pedantic)
                  * That's not it.  If there are more
                  * path components to test, try them.
                  */
-                if (*path_end == '\0') {
-                    /*
-                     * There's nothing more to try.
-                     */
-                    break;
-                }
                 if (*path_end == ':')
                     path_end++;
                 path_start = path_end;
@@ -935,11 +917,10 @@ get_datafile_dir(void)
     return datafile_dir;
 }
 
-#if defined(HAVE_PLUGINS) || defined(HAVE_LUA)
 /*
  * Find the directory where the plugins are stored.
  *
- * On Windows, we use the plugin/{VERSION} subdirectory of the datafile
+ * On Windows, we use the plugin\{VERSION} subdirectory of the datafile
  * directory, where {VERSION} is the version number of this version of
  * Wireshark.
  *
@@ -955,14 +936,18 @@ get_datafile_dir(void)
  *    otherwise, if we're running from an app bundle in macOS, we
  *    use the Contents/PlugIns/wireshark subdirectory of the app bundle;
  *
- *    otherwise, we use the PLUGIN_INSTALL_DIR value supplied by the
+ *    otherwise, we use the PLUGIN_DIR value supplied by the
  *    configure script.
  */
 static char *plugin_dir = NULL;
+static char *plugin_dir_with_version = NULL;
+static char *plugin_pers_dir = NULL;
+static char *plugin_pers_dir_with_version = NULL;
 
 static void
 init_plugin_dir(void)
 {
+#if defined(HAVE_PLUGINS) || defined(HAVE_LUA)
 #ifdef _WIN32
     /*
      * On Windows, the data file directory is the installation
@@ -972,7 +957,7 @@ init_plugin_dir(void)
      * on Windows, the data file directory is the directory
      * in which the Wireshark binary resides.
      */
-    plugin_dir = g_build_filename(get_datafile_dir(), "plugins", VERSION, (gchar *)NULL);
+    plugin_dir = g_build_filename(get_datafile_dir(), "plugins", (gchar *)NULL);
 
     /*
      * Make sure that pathname refers to a directory.
@@ -1027,28 +1012,65 @@ init_plugin_dir(void)
         }
 #endif
         else {
-            plugin_dir = g_strdup(PLUGIN_INSTALL_DIR);
+            plugin_dir = g_strdup(PLUGIN_DIR);
         }
     }
 #endif
+#endif /* defined(HAVE_PLUGINS) || defined(HAVE_LUA) */
 }
-#endif /* HAVE_PLUGINS || HAVE_LUA */
+
+static void
+init_plugin_pers_dir(void)
+{
+#if defined(HAVE_PLUGINS) || defined(HAVE_LUA)
+#ifdef _WIN32
+    plugin_pers_dir = get_persconffile_path(PLUGINS_DIR_NAME, FALSE);
+#else
+    plugin_pers_dir = g_build_filename(g_get_home_dir(), ".local/lib/wireshark/" PLUGINS_DIR_NAME, (gchar *)NULL);
+#endif
+#endif /* defined(HAVE_PLUGINS) || defined(HAVE_LUA) */
+}
 
 /*
  * Get the directory in which the plugins are stored.
  */
 const char *
-get_plugin_dir(void)
+get_plugins_dir(void)
 {
-#if defined(HAVE_PLUGINS) || defined(HAVE_LUA)
-    if (!plugin_dir) init_plugin_dir();
+    if (!plugin_dir)
+        init_plugin_dir();
     return plugin_dir;
-#else
-    return NULL;
-#endif
 }
 
-#if defined(HAVE_EXTCAP)
+const char *
+get_plugins_dir_with_version(void)
+{
+    if (!plugin_dir)
+        init_plugin_dir();
+    if (plugin_dir && !plugin_dir_with_version)
+        plugin_dir_with_version = g_build_filename(plugin_dir, VERSION_RELEASE, (gchar *)NULL);
+    return plugin_dir_with_version;
+}
+
+/* Get the personal plugin dir */
+const char *
+get_plugins_pers_dir(void)
+{
+    if (!plugin_pers_dir)
+        init_plugin_pers_dir();
+    return plugin_pers_dir;
+}
+
+const char *
+get_plugins_pers_dir_with_version(void)
+{
+    if (!plugin_pers_dir)
+        init_plugin_pers_dir();
+    if (plugin_pers_dir && !plugin_pers_dir_with_version)
+        plugin_pers_dir_with_version = g_build_filename(plugin_pers_dir, VERSION_RELEASE, (gchar *)NULL);
+    return plugin_pers_dir_with_version;
+}
+
 /*
  * Find the directory where the extcap hooks are stored.
  *
@@ -1127,22 +1149,17 @@ static void init_extcap_dir(void) {
     }
 #endif
 }
-#endif /* HAVE_EXTCAP */
 
 /*
  * Get the directory in which the extcap hooks are stored.
  *
- * XXX - A fix instead of HAVE_EXTCAP must be found
  */
 const char *
-get_extcap_dir(void) {
-#if defined(HAVE_EXTCAP)
+get_extcap_dir(void)
+{
     if (!extcap_dir)
         init_extcap_dir();
     return extcap_dir;
-#else
-    return NULL;
-#endif
 }
 
 /*
@@ -1447,7 +1464,14 @@ gboolean
 profile_exists(const gchar *profilename, gboolean global)
 {
     gchar *path = NULL, *global_path;
+
     if (global) {
+        /*
+         * If we're looking up a global profile, we must have a
+         * profile name.
+         */
+        if (!profilename)
+            return FALSE;
         global_path = get_global_profiles_dir();
         path = g_strdup_printf ("%s%s%s", global_path,
                            G_DIR_SEPARATOR_S, profilename);
@@ -1457,6 +1481,10 @@ profile_exists(const gchar *profilename, gboolean global)
             return TRUE;
         }
     } else {
+        /*
+         * If we didn't supply a profile name, i.e. if profilename is
+         * null, get_persconffile_dir() returns the default profile.
+         */
         path = get_persconffile_dir (profilename);
         if (test_for_directory (path) == EISDIR) {
             g_free (path);
@@ -1849,14 +1877,11 @@ get_persconffile_path(const char *filename, gboolean from_profile)
     }
 
     if (from_profile) {
-      dir = get_persconffile_dir(persconfprofile);
-      path = g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s",
-                 dir, filename);
+        dir = get_persconffile_dir(persconfprofile);
     } else {
-      dir = get_persconffile_dir(NULL);
-      path = g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s",
-                 dir, filename);
+        dir = get_persconffile_dir(NULL);
     }
+    path = g_build_filename(dir, filename, NULL);
 
     g_free(dir);
     return path;
@@ -1884,14 +1909,6 @@ get_datafile_path(const char *filename)
     } else {
         return g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s", get_datafile_dir(), filename);
     }
-}
-
-/* Get the personal plugin dir */
-/* Return value is malloced so the caller should g_free() it. */
-char *
-get_plugins_pers_dir(void)
-{
-    return get_persconffile_path(PLUGINS_DIR_NAME, FALSE);
 }
 
 /*
@@ -2230,11 +2247,15 @@ free_progdirs(void)
 #if defined(HAVE_PLUGINS) || defined(HAVE_LUA)
     g_free(plugin_dir);
     plugin_dir = NULL;
+    g_free(plugin_dir_with_version);
+    plugin_dir_with_version = NULL;
+    g_free(plugin_pers_dir);
+    plugin_pers_dir = NULL;
+    g_free(plugin_pers_dir_with_version);
+    plugin_pers_dir_with_version = NULL;
 #endif
-#ifdef HAVE_EXTCAP
     g_free(extcap_dir);
     extcap_dir = NULL;
-#endif
 }
 
 /*

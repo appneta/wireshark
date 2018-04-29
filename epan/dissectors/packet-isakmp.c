@@ -22,19 +22,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * References:
  * IKEv2 http://www.ietf.org/rfc/rfc4306.txt?number=4306
@@ -162,6 +150,7 @@ static int hf_isakmp_notify_data = -1;
 static int hf_isakmp_notify_data_dpd_are_you_there = -1;
 static int hf_isakmp_notify_data_dpd_are_you_there_ack = -1;
 static int hf_isakmp_notify_data_unity_load_balance = -1;
+static int hf_isakmp_notify_data_accepted_dh_group = -1;
 static int hf_isakmp_notify_data_ipcomp_cpi = -1;
 static int hf_isakmp_notify_data_ipcomp_transform_id = -1;
 static int hf_isakmp_notify_data_redirect_gw_ident_type = -1;
@@ -189,6 +178,7 @@ static int hf_isakmp_notify_data_ha_expected_send_req_msg_id = -1;
 static int hf_isakmp_notify_data_ha_expected_recv_req_msg_id = -1;
 static int hf_isakmp_notify_data_ha_incoming_ipsec_sa_delta_value = -1;
 static int hf_isakmp_notify_data_secure_password_methods = -1;
+static int hf_isakmp_notify_data_signature_hash_algorithms = -1;
 static int hf_isakmp_delete_doi = -1;
 static int hf_isakmp_delete_protoid_v1 = -1;
 static int hf_isakmp_delete_protoid_v2 = -1;
@@ -229,6 +219,19 @@ static int hf_isakmp_sig = -1;
 static int hf_isakmp_nonce = -1;
 
 static int hf_isakmp_notify_data_3gpp_backoff_timer_len = -1;
+
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_len = -1;
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_spare = -1;
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_element_len = -1;
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_flags = -1;
+
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b1_police = -1;
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b2_ambulance = -1;
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b3_fire_brigade = -1;
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b4_marine_guard = -1;
+static int hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b5_mountain_rescue = -1;
+
+
 
 static attribute_common_fields hf_isakmp_ipsec_attr = { -1, -1, -1, -1, -1 };
 static int hf_isakmp_ipsec_attr_life_type = -1;
@@ -379,6 +382,8 @@ static gint ett_isakmp_sa = -1;
 static gint ett_isakmp_attr = -1;
 static gint ett_isakmp_id = -1;
 static gint ett_isakmp_notify_data = -1;
+static gint ett_isakmp_notify_data_3gpp_emergency_call_numbers_main = -1;
+static gint ett_isakmp_notify_data_3gpp_emergency_call_numbers_element = -1;
 static gint ett_isakmp_ts = -1;
 /* For decrypted IKEv2 Encrypted payload*/
 static gint ett_isakmp_decrypted_data = -1;
@@ -1361,7 +1366,9 @@ static const range_string notifmsg_v2_3gpp_type[] = {
   { 41101,41101,      "DEVICE_IDENTITY" },
   { 41102,41111,      "Private Use - STATUS TYPES" },
   { 41112,41112,      "EMERGENCY_SUPPORT" },
-  { 41113,41287,      "Private Use - STATUS TYPES" },
+  { 41113,41133,      "Private Use - STATUS TYPES" },
+  { 41134,41134,      "EMERGENCY_CALL_NUMBERS" },
+  { 41135,41287,      "Private Use - STATUS TYPES" },
   { 41288,41288,      "NBIFOM_GENERIC_CONTAINER" },
   { 41289,41303,      "Private Use - STATUS TYPES" },
   { 41304,41304,      "PTI" },
@@ -1628,6 +1635,19 @@ static const range_string rohc_attr_type[] = {
   { 16384,32767, "Private use" },
   { 0,0,         NULL },
 };
+
+static const range_string signature_hash_algorithms[] = {
+  { 0,0,        "Reserved" },
+  { 1,1,        "SHA1" },
+  { 2,2,        "SHA2-256" },
+  { 3,3,        "SHA2-384" },
+  { 4,4,        "SHA2-512" },
+  { 5,5,        "Identity" },
+  { 6,1023,     "Unassigned" },
+  { 1024,65535, "Reserved for Private Use" },
+  {0,0,         NULL },
+};
+
 
 #define ISAKMP_HDR_SIZE ((int)sizeof(struct isakmp_hdr) + (2 * COOKIE_SIZE))
 
@@ -4376,9 +4396,7 @@ dissect_ikev2_fragmentation(tvbuff_t *tvb, int offset, proto_tree *tree,
   if (fragment_number == total_fragments) {
     if (!pinfo->fd->flags.visited) {
       /* On first pass, get it from the conversation info */
-      conversation_t *p_conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-                                                 pinfo->ptype, pinfo->srcport,
-                                                 pinfo->destport, 0);
+      conversation_t *p_conv = find_conversation_pinfo(pinfo, 0);
       if (p_conv != NULL) {
         ikev2_fragmentation_state_t *p_state = (ikev2_fragmentation_state_t*)conversation_get_proto_data(p_conv, proto_isakmp);
         if (p_state != NULL) {
@@ -4480,7 +4498,6 @@ dissect_ikev2_fragmentation(tvbuff_t *tvb, int offset, proto_tree *tree,
   }
   /* End Reassembly stuff for IKE2 fragmentation */
 }
-
 
 static void
 dissect_notif(tvbuff_t *tvb, packet_info *pinfo, int offset, int length, proto_tree *tree, int isakmp_version)
@@ -4589,6 +4606,9 @@ dissect_notif(tvbuff_t *tvb, packet_info *pinfo, int offset, int length, proto_t
   } else if (isakmp_version == 2)
   {
     switch(msgtype){
+      case 17: /* INVALID_KE_PAYLOAD */
+        proto_tree_add_item(tree, hf_isakmp_notify_data_accepted_dh_group, tvb, offset, 2, ENC_BIG_ENDIAN);
+        break;
       case 16387: /* IPCOMP_SUPPORTED */
         proto_tree_add_item(tree, hf_isakmp_notify_data_ipcomp_cpi, tvb, offset, 2, ENC_BIG_ENDIAN);
         proto_tree_add_item(tree, hf_isakmp_notify_data_ipcomp_transform_id, tvb, offset+2, 1, ENC_BIG_ENDIAN);
@@ -4662,11 +4682,97 @@ dissect_notif(tvbuff_t *tvb, packet_info *pinfo, int offset, int length, proto_t
       case 16424: /* SECURE_PASSWORD_METHODS */
         proto_tree_add_item(tree, hf_isakmp_notify_data_secure_password_methods, tvb, offset, length, ENC_NA);
         break;
+      case 16431: /*SIGNATURE_HASH_ALGORITHMS*/
+        while(offset < offset_end) {
+          proto_tree_add_item(tree, hf_isakmp_notify_data_signature_hash_algorithms, tvb, offset, 2, ENC_BIG_ENDIAN);
+          offset += 2;
+        }
+        break;
       case 41041:
         /* private status 3GPP BACKOFF_TIMER*/
         proto_tree_add_item(tree, hf_isakmp_notify_data_3gpp_backoff_timer_len, tvb, offset, 1, ENC_BIG_ENDIAN);
         offset++;
         de_gc_timer3(tvb, tree, pinfo, offset, 1, NULL, 0);
+        break;
+      case 41134:
+        /* private status 3GPP EMERGENCY_CALL_NUMBERS*/
+        /* If Notify Data is not empty/missing */
+        if(length>0)
+        {
+          /* As specified in 3GPP TS 23.302 (Section 8.1.2.3) and TS 24.008 (Section 10.5.3.13) */
+          proto_tree *em_call_num_tree;
+          proto_item *em_call_num_item;
+
+          /* Main Payload Subtree */
+          em_call_num_item = proto_tree_add_item(tree,hf_text_only,tvb,offset,length,ENC_BIG_ENDIAN);
+          proto_item_set_text(em_call_num_item, "Emergency Call Numbers");
+          em_call_num_tree = proto_item_add_subtree(em_call_num_item, ett_isakmp_notify_data_3gpp_emergency_call_numbers_main);
+
+          /* Payload Octet 5 - Length of IE Contents */
+          proto_tree_add_item(em_call_num_tree, hf_isakmp_notify_data_3gpp_emergency_call_numbers_len, tvb, offset, 1, ENC_BIG_ENDIAN);
+          offset += 1;
+
+          /* Subtree for actual values */
+          proto_item *current_emergency_call_number_header;
+          proto_tree *current_emergency_call_number_tree;
+
+          proto_item *current_emergency_call_number_item;
+
+          while(offset<offset_end){
+            guint8 current_em_num_len = tvb_get_guint8(tvb,offset)+1; //Total length including octets 3 and 4 for proper highlighting
+
+            /* Header to main payload subtree */
+            current_emergency_call_number_header = proto_tree_add_item(em_call_num_tree,hf_text_only,tvb,offset,current_em_num_len,ENC_BIG_ENDIAN);
+            proto_item_set_text(current_emergency_call_number_header, "Emergency Number");
+
+            /* Subtree for elements*/
+            current_emergency_call_number_tree = proto_item_add_subtree(current_emergency_call_number_header, ett_isakmp_notify_data_3gpp_emergency_call_numbers_element);
+
+            /*IE Octet 3 Number of octets used to encode the Emergency Service Category Value and the Number digits. */
+            proto_tree_add_item(current_emergency_call_number_tree, hf_isakmp_notify_data_3gpp_emergency_call_numbers_element_len,tvb,offset,1,ENC_BIG_ENDIAN);
+            offset += 1;
+
+            /*IE Octet 4 |Spare=0|Spare=0|Spare=0|Emergency Service Category Value|
+             * Bits 1 to 5 are coded as bits 1 to 5 of octet 3 of the Service Category
+             * information element as specified in subclause 10.5.4.33. (TS 24.008)
+             */
+            static const int * isakmp_notify_data_3gpp_emergency_call_numbers_flags[] = {
+              &hf_isakmp_notify_data_3gpp_emergency_call_numbers_spare,
+              &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b5_mountain_rescue,
+              &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b4_marine_guard,
+              &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b3_fire_brigade,
+              &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b2_ambulance,
+              &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b1_police,
+              NULL
+            };
+            proto_tree_add_bitmask_with_flags(current_emergency_call_number_tree, tvb, offset, hf_isakmp_notify_data_3gpp_emergency_call_numbers_flags,
+                ett_isakmp_notify_data_3gpp_emergency_call_numbers_element, isakmp_notify_data_3gpp_emergency_call_numbers_flags,ENC_BIG_ENDIAN, BMT_NO_FALSE | BMT_NO_INT | BMT_NO_TFS);
+            offset += 1;
+
+            /*IE Octet 5 to j | Digit_N+1 | Digit_N | */
+            current_emergency_call_number_item = proto_tree_add_item(current_emergency_call_number_tree, hf_text_only,tvb,offset,current_em_num_len,ENC_BIG_ENDIAN);
+            proto_item_set_text(current_emergency_call_number_item, "Emergency Number: ");
+            int current_element_offset = 0;
+            current_em_num_len -= 2; //Not counting octets 3 and 4
+            //appending digits
+            while(current_element_offset<current_em_num_len){
+              //Digit 1
+              proto_item_append_text(current_emergency_call_number_item, "%d",
+                  tvb_get_guint8(tvb, offset+current_element_offset)&0x0F
+                  );
+              //Digit2
+              //(1111 XXXX indicates odd number of digits and bits 5 to 8 are spare)
+              if( (tvb_get_guint8(tvb, offset+current_element_offset)&0xF0) != 0xF0)
+                proto_item_append_text(current_emergency_call_number_item, "%d",
+                    (tvb_get_guint8(tvb, offset+current_element_offset)&0xF0)>>4
+                    );
+
+              current_element_offset += 1;
+            }
+            offset += current_em_num_len; //moving to the next number in the list
+          }
+        }
+        break;
       default:
         /* No Default Action */
         break;
@@ -4688,10 +4794,10 @@ dissect_delete(tvbuff_t *tvb, int offset, int length, proto_tree *tree, int isak
 
   if (isakmp_version == 1)
   {
-     proto_tree_add_item(tree, hf_isakmp_delete_protoid_v1, tvb, offset, 1, ENC_BIG_ENDIAN);
+    proto_tree_add_item(tree, hf_isakmp_delete_protoid_v1, tvb, offset, 1, ENC_BIG_ENDIAN);
   }else if (isakmp_version == 2)
   {
-     proto_tree_add_item(tree, hf_isakmp_delete_protoid_v2, tvb, offset, 1, ENC_BIG_ENDIAN);
+    proto_tree_add_item(tree, hf_isakmp_delete_protoid_v2, tvb, offset, 1, ENC_BIG_ENDIAN);
   }
 
   offset += 1;
@@ -4708,9 +4814,9 @@ dissect_delete(tvbuff_t *tvb, int offset, int length, proto_tree *tree, int isak
 
   if (spi_size > 0) {
     while (length > 0) {
-         proto_tree_add_item(tree, hf_isakmp_delete_spi, tvb, offset, spi_size, ENC_NA);
-         offset+=spi_size;
-         length-=spi_size;
+      proto_tree_add_item(tree, hf_isakmp_delete_spi, tvb, offset, spi_size, ENC_NA);
+      offset+=spi_size;
+      length-=spi_size;
     }
   }
 }
@@ -5281,9 +5387,8 @@ dissect_enc(tvbuff_t *tvb,
 
     /* Check if encr/auth specs are set properly (if for some case not, wireshark would crash) */
     if (!key_info->encr_spec || !key_info->auth_spec) {
-      REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-        "IKEv2: decryption/integrity specs not set-up properly: encr_spec: %p, auth_spec: %p",
-        (void *)key_info->auth_spec, (void*)key_info->auth_spec));
+      REPORT_DISSECTOR_BUG("IKEv2: decryption/integrity specs not set-up properly: encr_spec: %p, auth_spec: %p",
+        (void *)key_info->auth_spec, (void*)key_info->auth_spec);
     }
 
     iv_len = key_info->encr_spec->iv_len;
@@ -5353,16 +5458,14 @@ dissect_enc(tvbuff_t *tvb,
         proto_item_append_text(icd_item, " <%s>", val_to_str(key_info->auth_spec->number, vs_ikev2_auth_algs, "Unknown mac algo: %d"));
         err = gcry_md_open(&md_hd, key_info->auth_spec->gcry_alg, key_info->auth_spec->gcry_flag);
         if (err) {
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 hashing error: algorithm %d: gcry_md_open failed: %s",
-            key_info->auth_spec->gcry_alg, gcry_strerror(err)));
+          REPORT_DISSECTOR_BUG("IKEv2 hashing error: algorithm %d: gcry_md_open failed: %s",
+            key_info->auth_spec->gcry_alg, gcry_strerror(err));
         }
         err = gcry_md_setkey(md_hd, key_info->auth_key, key_info->auth_spec->key_len);
         if (err) {
           gcry_md_close(md_hd);
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 hashing error: algorithm %s, key length %u: gcry_md_setkey failed: %s",
-            gcry_md_algo_name(key_info->auth_spec->gcry_alg), key_info->auth_spec->key_len, gcry_strerror(err)));
+          REPORT_DISSECTOR_BUG("IKEv2 hashing error: algorithm %s, key length %u: gcry_md_setkey failed: %s",
+            gcry_md_algo_name(key_info->auth_spec->gcry_alg), key_info->auth_spec->key_len, gcry_strerror(err));
         }
 
         /* Calculate hash over the bytes from the beginning of the ISAKMP header to the right before the ICD. */
@@ -5372,9 +5475,8 @@ dissect_enc(tvbuff_t *tvb,
         md_len = gcry_md_get_algo_dlen(key_info->auth_spec->gcry_alg);
         if (md_len < icd_len) {
           gcry_md_close(md_hd);
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 hashing error: algorithm %s: gcry_md_get_algo_dlen returned %d which is smaller than icd length %d",
-            gcry_md_algo_name(key_info->auth_spec->gcry_alg), md_len, icd_len));
+          REPORT_DISSECTOR_BUG("IKEv2 hashing error: algorithm %s: gcry_md_get_algo_dlen returned %d which is smaller than icd length %d",
+            gcry_md_algo_name(key_info->auth_spec->gcry_alg), md_len, icd_len);
         }
         if (tvb_memeql(tvb, offset, md, icd_len) == 0) {
           proto_item_append_text(icd_item, "[correct]");
@@ -5413,9 +5515,8 @@ dissect_enc(tvbuff_t *tvb,
     } else {
       err = gcry_cipher_open(&cipher_hd, key_info->encr_spec->gcry_alg, key_info->encr_spec->gcry_mode, 0);
       if (err) {
-        REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-          "IKEv2 decryption error: algorithm %d, mode %d: gcry_cipher_open failed: %s",
-          key_info->encr_spec->gcry_alg, key_info->encr_spec->gcry_mode, gcry_strerror(err)));
+        REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d, mode %d: gcry_cipher_open failed: %s",
+          key_info->encr_spec->gcry_alg, key_info->encr_spec->gcry_mode, gcry_strerror(err));
       }
 
       /* Handling CTR mode and AEAD ciphers */
@@ -5431,9 +5532,8 @@ dissect_enc(tvbuff_t *tvb,
 
         if (encr_key_len < 0 || encr_iv_len < encr_iv_offset + (int)key_info->encr_spec->salt_len + iv_len) {
           gcry_cipher_close(cipher_hd);
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 decryption error: algorithm %d, key length %d, salt length %d, input iv length %d, cipher iv length: %d: invalid length(s) of cipher parameters",
-            key_info->encr_spec->gcry_alg, encr_key_len, key_info->encr_spec->salt_len, iv_len, encr_iv_len));
+          REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d, key length %d, salt length %d, input iv length %d, cipher iv length: %d: invalid length(s) of cipher parameters",
+            key_info->encr_spec->gcry_alg, encr_key_len, key_info->encr_spec->salt_len, iv_len, encr_iv_len);
         }
 
         encr_iv = (guchar *)wmem_alloc0(wmem_packet_scope(), encr_iv_len);
@@ -5453,18 +5553,16 @@ dissect_enc(tvbuff_t *tvb,
 
       err = gcry_cipher_setkey(cipher_hd, key_info->encr_key, encr_key_len);
       if (err) {
-        REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-          "IKEv2 decryption error: algorithm %d, key length %d:  gcry_cipher_setkey failed: %s",
-          key_info->encr_spec->gcry_alg, encr_key_len, gcry_strerror(err)));
+        REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d, key length %d:  gcry_cipher_setkey failed: %s",
+          key_info->encr_spec->gcry_alg, encr_key_len, gcry_strerror(err));
       }
       if (key_info->encr_spec->gcry_mode == GCRY_CIPHER_MODE_CTR)
         err = gcry_cipher_setctr(cipher_hd, encr_iv, encr_iv_len);
       else
         err = gcry_cipher_setiv(cipher_hd, encr_iv, encr_iv_len);
       if (err) {
-        REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-          "IKEv2 decryption error: algorithm %d, iv length %d:  gcry_cipher_setiv/gcry_cipher_setctr failed: %s",
-          key_info->encr_spec->gcry_alg, encr_iv_len, gcry_strerror(err)));
+        REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d, iv length %d:  gcry_cipher_setiv/gcry_cipher_setctr failed: %s",
+          key_info->encr_spec->gcry_alg, encr_iv_len, gcry_strerror(err));
       }
 
 #ifdef HAVE_LIBGCRYPT_AEAD
@@ -5477,9 +5575,8 @@ dissect_enc(tvbuff_t *tvb,
         err = gcry_cipher_ctl(cipher_hd, GCRYCTL_SET_CCM_LENGTHS, ccm_lengths, sizeof(ccm_lengths));
         if (err) {
           gcry_cipher_close(cipher_hd);
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 decryption error: algorithm %d:  gcry_cipher_ctl(GCRYCTL_SET_CCM_LENGTHS) failed: %s",
-            key_info->encr_spec->gcry_alg, gcry_strerror(err)));
+          REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d:  gcry_cipher_ctl(GCRYCTL_SET_CCM_LENGTHS) failed: %s",
+            key_info->encr_spec->gcry_alg, gcry_strerror(err));
         }
       }
 
@@ -5487,9 +5584,8 @@ dissect_enc(tvbuff_t *tvb,
         err = gcry_cipher_authenticate(cipher_hd, aa_data, aad_len);
         if (err) {
           gcry_cipher_close(cipher_hd);
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 decryption error: algorithm %d:  gcry_cipher_authenticate failed: %s",
-            key_info->encr_spec->gcry_alg, gcry_strerror(err)));
+          REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d:  gcry_cipher_authenticate failed: %s",
+            key_info->encr_spec->gcry_alg, gcry_strerror(err));
         }
       }
 #endif
@@ -5497,9 +5593,8 @@ dissect_enc(tvbuff_t *tvb,
       err = gcry_cipher_decrypt(cipher_hd, decr_data, decr_data_len, encr_data, encr_data_len);
       if (err) {
         gcry_cipher_close(cipher_hd);
-        REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-          "IKEv2 decryption error: algorithm %d:  gcry_cipher_decrypt failed: %s",
-          key_info->encr_spec->gcry_alg, gcry_strerror(err)));
+        REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d:  gcry_cipher_decrypt failed: %s",
+          key_info->encr_spec->gcry_alg, gcry_strerror(err));
       }
 
 #ifdef HAVE_LIBGCRYPT_AEAD
@@ -5526,18 +5621,16 @@ dissect_enc(tvbuff_t *tvb,
 
         if (tag_len < icv_len) {
           gcry_cipher_close(cipher_hd);
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 decryption error: algorithm %d:  gcry_cipher_get_algo_blklen returned %d which is smaller than icv length %d",
-            key_info->encr_spec->gcry_alg, tag_len, icv_len));
+          REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d:  gcry_cipher_get_algo_blklen returned %d which is smaller than icv length %d",
+            key_info->encr_spec->gcry_alg, tag_len, icv_len);
         }
 
         tag = (guchar *)wmem_alloc(wmem_packet_scope(), tag_len);
         err = gcry_cipher_gettag(cipher_hd, tag, tag_len);
         if (err) {
           gcry_cipher_close(cipher_hd);
-          REPORT_DISSECTOR_BUG(wmem_strdup_printf(wmem_packet_scope(),
-            "IKEv2 decryption error: algorithm %d:  gcry_cipher_gettag failed: %s",
-            key_info->encr_spec->gcry_alg, gcry_strerror(err)));
+          REPORT_DISSECTOR_BUG("IKEv2 decryption error: algorithm %d:  gcry_cipher_gettag failed: %s",
+            key_info->encr_spec->gcry_alg, gcry_strerror(err));
         }
         else if (memcmp(tag, icv_data, icv_len) == 0)
           proto_item_append_text(icd_item, "[correct]");
@@ -6116,6 +6209,10 @@ proto_register_isakmp(void)
       { "UNITY LOAD BALANCE", "isakmp.notify.data.unity.load_balance",
         FT_IPv4, BASE_NONE, NULL, 0x0,
         NULL, HFILL }},
+    { &hf_isakmp_notify_data_accepted_dh_group,
+      { "Accepted DH group number", "isakmp.notify.data.accepted_dh_group",
+        FT_UINT16, BASE_DEC, VALS(dh_group), 0x0,
+        NULL, HFILL }},
     { &hf_isakmp_notify_data_ipcomp_cpi,
       { "IPCOMP CPI", "isakmp.notify.data.ipcomp.cpi",
         FT_UINT16, BASE_DEC, NULL, 0x0,
@@ -6240,6 +6337,10 @@ proto_register_isakmp(void)
     { &hf_isakmp_notify_data_secure_password_methods,
       { "Secure Password Methods", "isakmp.notify.data.secure_password_methods",
         FT_BYTES, BASE_NONE, NULL, 0x0,
+        NULL, HFILL }},
+    { &hf_isakmp_notify_data_signature_hash_algorithms,
+      { "Supported Signature Hash Algorithm", "isakmp.notify.data.signature_hash_algorithms",
+        FT_UINT16, BASE_RANGE_STRING | BASE_DEC, VALS(signature_hash_algorithms), 0x0,
         NULL, HFILL }},
 
     { &hf_isakmp_delete_doi,
@@ -7039,6 +7140,45 @@ proto_register_isakmp(void)
       { "Length", "isakmp.notyfy.priv.3gpp.backoff_timer_len",
         FT_UINT8, BASE_DEC, NULL, 0x0,
         NULL, HFILL }},
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_len,
+      { "Total Length", "isakmp.notify.priv.3gpp.emergency_call_numbers_len",
+        FT_UINT8, BASE_DEC, NULL, 0x0,
+        NULL, HFILL }},
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_spare,
+      { "Spare", "isakmp.notify.priv.3gpp.emergency_call_numbers_spare",
+        FT_UINT8, BASE_DEC, NULL, 0xE0,
+        NULL, HFILL }},
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_element_len,
+      { "Length", "isakmp.notify.priv.3gpp.emergency_call_numbers_element_len",
+        FT_UINT8, BASE_DEC, NULL, 0,
+        NULL, HFILL }},
+
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flags,
+      { "Service Category Value", "isakmp.notify.priv.3gpp.emergency_call_numbers_flags",
+        FT_UINT8, BASE_HEX, NULL, 0x0,
+        NULL, HFILL }},
+
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b1_police,
+      { "Police", "isakmp.notify.priv.3gpp.emergency_call_numbers_flag_b1_police",
+        FT_UINT8, BASE_DEC, NULL, 0x01,
+        NULL, HFILL }},
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b2_ambulance,
+      { "Ambulance", "isakmp.notify.priv.3gpp.emergency_call_numbers_flag_b2_ambulance",
+        FT_UINT8, BASE_DEC, NULL, 0x02,
+        NULL, HFILL }},
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b3_fire_brigade,
+      { "Fire Brigade", "isakmp.notify.priv.3gpp.emergency_call_numbers_flag_b3_fire_brigade",
+        FT_UINT8, BASE_DEC, NULL, 0x04,
+        NULL, HFILL }},
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b4_marine_guard,
+	  { "Marine Guard", "isakmp.notify.priv.3gpp.emergency_call_numbers_b4_marine_guard",
+        FT_UINT8, BASE_DEC, NULL, 0x08,
+        NULL, HFILL }},
+    { &hf_isakmp_notify_data_3gpp_emergency_call_numbers_flag_b5_mountain_rescue,
+      { "Mountain Rescue", "isakmp.notify.priv.3gpp.emergency_call_numbers_flag_b5_mountain_rescue",
+        FT_UINT8, BASE_DEC, NULL, 0x10,
+        NULL, HFILL }},
+
   };
 
 
@@ -7053,6 +7193,8 @@ proto_register_isakmp(void)
     &ett_isakmp_attr,
     &ett_isakmp_id,
     &ett_isakmp_notify_data,
+    &ett_isakmp_notify_data_3gpp_emergency_call_numbers_main,
+    &ett_isakmp_notify_data_3gpp_emergency_call_numbers_element,
     &ett_isakmp_ts,
     &ett_isakmp_decrypted_data,
     &ett_isakmp_decrypted_payloads

@@ -6,23 +6,11 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * Based on the RANAP dissector
  *
- * References: 3GPP TS 36.413 V13.5.0 (2016-12)
+ * References: 3GPP TS 36.413 V15.0.0 (2017-12)
  */
 
 #include "config.h"
@@ -49,6 +37,7 @@
 #include "packet-gsm_map.h"
 #include "packet-cell_broadcast.h"
 #include "packet-gsm_a_common.h"
+#include "packet-ntp.h"
 
 #define PNAME  "S1 Application Protocol"
 #define PSNAME "S1AP"
@@ -63,6 +52,10 @@ void proto_reg_handoff_s1ap(void);
 static dissector_handle_t nas_eps_handle;
 static dissector_handle_t lppa_handle;
 static dissector_handle_t bssgp_handle;
+static dissector_handle_t lte_rrc_ue_radio_access_cap_info_handle;
+static dissector_handle_t lte_rrc_ue_radio_access_cap_info_nb_handle;
+static dissector_handle_t lte_rrc_ue_radio_paging_info_handle;
+static dissector_handle_t lte_rrc_ue_radio_paging_info_nb_handle;
 
 #include "packet-s1ap-val.h"
 
@@ -104,6 +97,16 @@ static int hf_s1ap_measurementsToActivate_M7 = -1;
 static int hf_s1ap_MDT_Location_Info_GNSS = -1;
 static int hf_s1ap_MDT_Location_Info_E_CID = -1;
 static int hf_s1ap_MDT_Location_Info_Reserved = -1;
+static int hf_s1ap_NRencryptionAlgorithms_NEA1 = -1;
+static int hf_s1ap_NRencryptionAlgorithms_NEA2 = -1;
+static int hf_s1ap_NRencryptionAlgorithms_NEA3 = -1;
+static int hf_s1ap_NRencryptionAlgorithms_Reserved = -1;
+static int hf_s1ap_NRintegrityProtectionAlgorithms_NIA1 = -1;
+static int hf_s1ap_NRintegrityProtectionAlgorithms_NIA2 = -1;
+static int hf_s1ap_NRintegrityProtectionAlgorithms_NIA3 = -1;
+static int hf_s1ap_NRintegrityProtectionAlgorithms_Reserved = -1;
+static int hf_s1ap_UE_Application_Layer_Measurement_Capability_QoE_Measurement = -1;
+static int hf_s1ap_UE_Application_Layer_Measurement_Capability_Reserved = -1;
 #include "packet-s1ap-hf.c"
 
 /* Initialize the subtree pointers */
@@ -136,6 +139,9 @@ static int ett_s1ap_MeasurementsToActivate = -1;
 static int ett_s1ap_MDT_Location_Info = -1;
 static int ett_s1ap_IMSI = -1;
 static int ett_s1ap_NASSecurityParameters = -1;
+static int ett_s1ap_NRencryptionAlgorithms = -1;
+static int ett_s1ap_NRintegrityProtectionAlgorithms = -1;
+static int ett_s1ap_UE_Application_Layer_Measurement_Capability = -1;
 #include "packet-s1ap-ett.c"
 
 static expert_field ei_s1ap_number_pages_le15 = EI_INIT;
@@ -248,7 +254,7 @@ s1ap_Time_UE_StayedInCell_EnhancedGranularity_fmt(gchar *s, guint32 v)
   g_snprintf(s, ITEM_LABEL_LENGTH, "%.1fs", ((float)v)/10);
 }
 
-static const value_string s1ap_serialNumber_gs_vals[] = {
+const value_string s1ap_serialNumber_gs_vals[] = {
   { 0, "Display mode immediate, cell wide"},
   { 1, "Display mode normal, PLMN wide"},
   { 2, "Display mode normal, tracking area wide"},
@@ -256,7 +262,7 @@ static const value_string s1ap_serialNumber_gs_vals[] = {
   { 0, NULL},
 };
 
-static const value_string s1ap_warningType_vals[] = {
+const value_string s1ap_warningType_vals[] = {
   { 0, "Earthquake"},
   { 1, "Tsunami"},
   { 2, "Earthquake and Tsunami"},
@@ -265,8 +271,8 @@ static const value_string s1ap_warningType_vals[] = {
   { 0, NULL},
 };
 
-static void
-dissect_s1ap_warningMessageContents(tvbuff_t *warning_msg_tvb, proto_tree *tree, packet_info *pinfo, guint8 dcs)
+void
+dissect_s1ap_warningMessageContents(tvbuff_t *warning_msg_tvb, proto_tree *tree, packet_info *pinfo, guint8 dcs, int hf_nb_pages, int hf_decoded_page)
 {
   guint32 offset;
   guint8 nb_of_pages, length, *str;
@@ -275,7 +281,7 @@ dissect_s1ap_warningMessageContents(tvbuff_t *warning_msg_tvb, proto_tree *tree,
   int i;
 
   nb_of_pages = tvb_get_guint8(warning_msg_tvb, 0);
-  ti = proto_tree_add_uint(tree, hf_s1ap_WarningMessageContents_nb_pages, warning_msg_tvb, 0, 1, nb_of_pages);
+  ti = proto_tree_add_uint(tree, hf_nb_pages, warning_msg_tvb, 0, 1, nb_of_pages);
   if (nb_of_pages > 15) {
     expert_add_info_format(pinfo, ti, &ei_s1ap_number_pages_le15,
                            "Number of pages should be <=15 (found %u)", nb_of_pages);
@@ -287,7 +293,7 @@ dissect_s1ap_warningMessageContents(tvbuff_t *warning_msg_tvb, proto_tree *tree,
     cb_data_tvb = dissect_cbs_data(dcs, cb_data_page_tvb, tree, pinfo, 0);
     if (cb_data_tvb) {
       str = tvb_get_string_enc(wmem_packet_scope(), cb_data_tvb, 0, tvb_reported_length(cb_data_tvb), ENC_UTF_8|ENC_NA);
-      proto_tree_add_string_format(tree, hf_s1ap_WarningMessageContents_decoded_page, warning_msg_tvb, offset, 83,
+      proto_tree_add_string_format(tree, hf_decoded_page, warning_msg_tvb, offset, 83,
                                    str, "Decoded Page %u: %s", i+1, str);
     }
     offset += 83;
@@ -352,7 +358,7 @@ static int dissect_ProtocolIEFieldValue(tvbuff_t *tvb, packet_info *pinfo, proto
   s1ap_ctx.ProtocolIE_ID       = s1ap_data->protocol_ie_id;
   s1ap_ctx.ProtocolExtensionID = s1ap_data->protocol_extension_id;
 
-  return (dissector_try_uint_new(s1ap_ies_dissector_table, s1ap_data->protocol_ie_id, tvb, pinfo, tree, TRUE, &s1ap_ctx)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(s1ap_ies_dissector_table, s1ap_data->protocol_ie_id, tvb, pinfo, tree, FALSE, &s1ap_ctx)) ? tvb_captured_length(tvb) : 0;
 }
 /* Currently not used
 static int dissect_ProtocolIEFieldPairFirstValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
@@ -380,28 +386,28 @@ static int dissect_ProtocolExtensionFieldExtensionValue(tvbuff_t *tvb, packet_in
   s1ap_ctx.ProtocolIE_ID       = s1ap_data->protocol_ie_id;
   s1ap_ctx.ProtocolExtensionID = s1ap_data->protocol_extension_id;
 
-  return (dissector_try_uint_new(s1ap_extension_dissector_table, s1ap_data->protocol_extension_id, tvb, pinfo, tree, TRUE, &s1ap_ctx)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(s1ap_extension_dissector_table, s1ap_data->protocol_extension_id, tvb, pinfo, tree, FALSE, &s1ap_ctx)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int dissect_InitiatingMessageValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
   struct s1ap_private_data *s1ap_data = s1ap_get_private_data(pinfo);
 
-  return (dissector_try_uint_new(s1ap_proc_imsg_dissector_table, s1ap_data->procedure_code, tvb, pinfo, tree, TRUE, data)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(s1ap_proc_imsg_dissector_table, s1ap_data->procedure_code, tvb, pinfo, tree, FALSE, data)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int dissect_SuccessfulOutcomeValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
   struct s1ap_private_data *s1ap_data = s1ap_get_private_data(pinfo);
 
-  return (dissector_try_uint_new(s1ap_proc_sout_dissector_table, s1ap_data->procedure_code, tvb, pinfo, tree, TRUE, data)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(s1ap_proc_sout_dissector_table, s1ap_data->procedure_code, tvb, pinfo, tree, FALSE, data)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int dissect_UnsuccessfulOutcomeValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
   struct s1ap_private_data *s1ap_data = s1ap_get_private_data(pinfo);
 
-  return (dissector_try_uint_new(s1ap_proc_uout_dissector_table, s1ap_data->procedure_code, tvb, pinfo, tree, TRUE, data)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_new(s1ap_proc_uout_dissector_table, s1ap_data->procedure_code, tvb, pinfo, tree, FALSE, data)) ? tvb_captured_length(tvb) : 0;
 }
 
 
@@ -453,6 +459,10 @@ proto_reg_handoff_s1ap(void)
     nas_eps_handle = find_dissector_add_dependency("nas-eps", proto_s1ap);
     lppa_handle = find_dissector_add_dependency("lppa", proto_s1ap);
     bssgp_handle = find_dissector_add_dependency("bssgp", proto_s1ap);
+    lte_rrc_ue_radio_access_cap_info_handle = find_dissector_add_dependency("lte-rrc.ue_radio_access_cap_info", proto_s1ap);
+    lte_rrc_ue_radio_access_cap_info_nb_handle = find_dissector_add_dependency("lte-rrc.ue_radio_access_cap_info.nb", proto_s1ap);
+    lte_rrc_ue_radio_paging_info_handle = find_dissector_add_dependency("lte-rrc.ue_radio_paging_info", proto_s1ap);
+    lte_rrc_ue_radio_paging_info_nb_handle = find_dissector_add_dependency("lte-rrc.ue_radio_paging_info.nb", proto_s1ap);
     dissector_add_for_decode_as("sctp.port", s1ap_handle);
     dissector_add_uint("sctp.ppi", S1AP_PAYLOAD_PROTOCOL_ID,   s1ap_handle);
     Initialized=TRUE;
@@ -615,6 +625,46 @@ void proto_register_s1ap(void) {
       { "Reserved", "s1ap.MDT_Location_Info.Reserved",
         FT_UINT8, BASE_HEX, NULL, 0x3f,
         NULL, HFILL }},
+    { &hf_s1ap_NRencryptionAlgorithms_NEA1,
+      { "128-NEA1", "s1ap.NRencryptionAlgorithms.NEA1",
+        FT_BOOLEAN, 16, TFS(&tfs_supported_not_supported), 0x8000,
+        NULL, HFILL }},
+    { &hf_s1ap_NRencryptionAlgorithms_NEA2,
+      { "128-NEA2", "s1ap.NRencryptionAlgorithms.NEA2",
+        FT_BOOLEAN, 16, TFS(&tfs_supported_not_supported), 0x4000,
+        NULL, HFILL }},
+    { &hf_s1ap_NRencryptionAlgorithms_NEA3,
+      { "128-NEA3", "s1ap.NRencryptionAlgorithms.NEA3",
+        FT_BOOLEAN, 16, TFS(&tfs_supported_not_supported), 0x2000,
+        NULL, HFILL }},
+    { &hf_s1ap_NRencryptionAlgorithms_Reserved,
+      { "Reserved", "s1ap.NRencryptionAlgorithms.Reserved",
+        FT_UINT16, BASE_HEX, NULL, 0x1fff,
+        NULL, HFILL }},
+    { &hf_s1ap_NRintegrityProtectionAlgorithms_NIA1,
+      { "128-NIA1", "s1ap.NRintegrityProtectionAlgorithms.NIA1",
+        FT_BOOLEAN, 16, TFS(&tfs_supported_not_supported), 0x8000,
+        NULL, HFILL }},
+    { &hf_s1ap_NRintegrityProtectionAlgorithms_NIA2,
+      { "128-NIA2", "s1ap.NRintegrityProtectionAlgorithms.NIA2",
+        FT_BOOLEAN, 16, TFS(&tfs_supported_not_supported), 0x4000,
+        NULL, HFILL }},
+    { &hf_s1ap_NRintegrityProtectionAlgorithms_NIA3,
+      { "128-NIA3", "s1ap.NRintegrityProtectionAlgorithms.NIA3",
+        FT_BOOLEAN, 16, TFS(&tfs_supported_not_supported), 0x2000,
+        NULL, HFILL }},
+    { &hf_s1ap_NRintegrityProtectionAlgorithms_Reserved,
+      { "Reserved", "s1ap.NRintegrityProtectionAlgorithms.Reserved",
+        FT_UINT16, BASE_HEX, NULL, 0x1fff,
+        NULL, HFILL }},
+    { &hf_s1ap_UE_Application_Layer_Measurement_Capability_QoE_Measurement,
+      { "QoE Measurement", "s1ap.UE_Application_Layer_Measurement_Capability.QoE_Measurement",
+        FT_BOOLEAN, 8, TFS(&tfs_supported_not_supported), 0x80,
+        NULL, HFILL }},
+    { &hf_s1ap_UE_Application_Layer_Measurement_Capability_Reserved,
+      { "Reserved", "s1ap.UE_Application_Layer_Measurement_Capability.Reserved",
+        FT_UINT8, BASE_HEX, NULL, 0x7f,
+        NULL, HFILL }},
 #include "packet-s1ap-hfarr.c"
   };
 
@@ -649,6 +699,9 @@ void proto_register_s1ap(void) {
     &ett_s1ap_MDT_Location_Info,
     &ett_s1ap_IMSI,
     &ett_s1ap_NASSecurityParameters,
+    &ett_s1ap_NRencryptionAlgorithms,
+    &ett_s1ap_NRintegrityProtectionAlgorithms,
+    &ett_s1ap_UE_Application_Layer_Measurement_Capability,
 #include "packet-s1ap-ettarr.c"
   };
 

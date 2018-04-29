@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -85,12 +73,12 @@ static int dissect_opa_fe(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, v
     return tvb_captured_length(tvb);
 }
 
-static void range_delete_fe_ssl_callback(guint32 port)
+static void range_delete_fe_ssl_callback(guint32 port, gpointer ptr _U_)
 {
     ssl_dissector_delete(port, opa_fe_handle);
 }
 
-static void range_add_fe_ssl_callback(guint32 port)
+static void range_add_fe_ssl_callback(guint32 port, gpointer ptr _U_)
 {
     ssl_dissector_add(port, opa_fe_handle);
 }
@@ -152,10 +140,10 @@ void proto_reg_handoff_opa_fe(void)
         initialized = TRUE;
     }
 
-    range_foreach(fe_ssl_range, range_delete_fe_ssl_callback);
+    range_foreach(fe_ssl_range, range_delete_fe_ssl_callback, NULL);
     wmem_free(wmem_epan_scope(), fe_ssl_range);
     fe_ssl_range = range_copy(wmem_epan_scope(), global_fe_ssl_range);
-    range_foreach(fe_ssl_range, range_add_fe_ssl_callback);
+    range_foreach(fe_ssl_range, range_add_fe_ssl_callback, NULL);
 
 }
 

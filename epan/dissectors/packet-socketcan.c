@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -44,8 +32,6 @@
 #define CAN_EFF_FLAG 0x80000000 /* EFF/SFF is set in the MSB */
 #define CAN_RTR_FLAG 0x40000000 /* remote transmission request */
 #define CAN_ERR_FLAG 0x20000000 /* error frame */
-#define CAN_EFF_MASK 0x1FFFFFFF /* extended frame format (EFF) */
-#define CAN_SFF_MASK 0x000007FF /* standard frame format (SFF) */
 
 void proto_register_socketcan(void);
 void proto_reg_handoff_socketcan(void);
@@ -94,16 +80,6 @@ static const value_string frame_type_vals[] =
 	{ LINUX_CAN_ERR, "ERR" },
 	{ 0, NULL }
 };
-
-static void can_prompt(packet_info *pinfo _U_, gchar* result)
-{
-	g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Next level protocol as");
-}
-
-static gpointer can_value(packet_info *pinfo _U_)
-{
-	return 0;
-}
 
 static int
 dissect_socketcan_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
@@ -168,9 +144,7 @@ dissect_socketcan_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
 	next_tvb = tvb_new_subset_length(tvb, CAN_DATA_OFFSET, frame_len);
 
-	/* Functionality for choosing subdissector is controlled through Decode As as CAN doesn't
-	   have a unique identifier to determine subdissector */
-	if (!dissector_try_uint_new(subdissector_table, 0, next_tvb, pinfo, tree, TRUE, &can_id))
+	if (!dissector_try_payload_new(subdissector_table, next_tvb, pinfo, tree, TRUE, &can_id))
 	{
 		call_data_dissector(next_tvb, pinfo, tree);
 	}
@@ -260,9 +234,7 @@ dissect_socketcanfd_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
 	next_tvb = tvb_new_subset_length(tvb, CAN_DATA_OFFSET, frame_len);
 
-	/* Functionality for choosing subdissector is controlled through Decode As as CAN doesn't
-	   have a unique identifier to determine subdissector */
-	if (!dissector_try_uint_new(subdissector_table, 0, next_tvb, pinfo, tree, TRUE, &can_id))
+	if (!dissector_try_payload_new(subdissector_table, next_tvb, pinfo, tree, TRUE, &can_id))
 	{
 		call_data_dissector(next_tvb, pinfo, tree);
 	}
@@ -388,12 +360,6 @@ proto_register_socketcan(void)
 
 	module_t *can_module;
 
-	/* Decode As handling */
-	static build_valid_func can_da_build_value[1] = {can_value};
-	static decode_as_value_t can_da_values = {can_prompt, 1, can_da_build_value};
-	static decode_as_t can_da = {"can", "Network", "can.subdissector", 1, 0, &can_da_values, NULL, NULL,
-									decode_as_default_populate_list, decode_as_default_reset, decode_as_default_change, NULL};
-
 	proto_can = proto_register_protocol("Controller Area Network", "CAN", "can");
 	socketcan_bigendian_handle = register_dissector("can-bigendian", dissect_socketcan_bigendian, proto_can);
 	socketcan_hostendian_handle = register_dissector("can-hostendian", dissect_socketcan_hostendian, proto_can);
@@ -404,9 +370,6 @@ proto_register_socketcan(void)
 	proto_register_field_array(proto_can, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 
-	subdissector_table = register_dissector_table("can.subdissector",
-		"CAN next level dissector", proto_can, FT_UINT32, BASE_HEX);
-
 	can_module = prefs_register_protocol(proto_can, NULL);
 
 	prefs_register_obsolete_preference(can_module, "protocol");
@@ -415,7 +378,7 @@ proto_register_socketcan(void)
 	    "Whether the CAN ID/flags field should be byte-swapped",
 	    &byte_swap);
 
-	register_decode_as(&can_da);
+	subdissector_table = register_decode_as_next_proto(proto_can, "Network", "can.subdissector", "CAN next level dissector", NULL);
 }
 
 void

@@ -22,19 +22,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1405,7 +1393,7 @@ typedef struct ansi_a_shared_data_t
 
     address             rtp_src_addr;
     guint32             rtp_ipv4_addr;
-    struct e_in6_addr   rtp_ipv6_addr;
+    ws_in6_addr   rtp_ipv6_addr;
     guint16             rtp_port;
 
     gboolean            meid_configured;
@@ -10585,14 +10573,14 @@ typedef enum
 static stat_tap_table_item dtap_stat_fields[] = {{TABLE_ITEM_UINT, TAP_ALIGN_RIGHT, "IEI", "0x%02x  "}, {TABLE_ITEM_STRING, TAP_ALIGN_LEFT, "Message Name", "%-50s"},
     {TABLE_ITEM_UINT, TAP_ALIGN_RIGHT, "Count", "%d"}};
 
-static void ansi_a_dtap_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb gui_callback, void* gui_data)
+static void ansi_a_dtap_stat_init(stat_tap_table_ui* new_stat, stat_tap_gui_init_cb gui_callback, void* gui_data)
 {
     int num_fields = sizeof(dtap_stat_fields)/sizeof(stat_tap_table_item);
-    stat_tap_table* table = new_stat_tap_init_table("ANSI A-I/F DTAP Statistics", num_fields, 0, NULL, gui_callback, gui_data);
+    stat_tap_table* table = stat_tap_init_table("ANSI A-I/F DTAP Statistics", num_fields, 0, NULL, gui_callback, gui_data);
     int i = 0;
     stat_tap_table_item_type items[sizeof(dtap_stat_fields)/sizeof(stat_tap_table_item)];
 
-    new_stat_tap_add_table(new_stat, table);
+    stat_tap_add_table(new_stat, table);
 
     /* Add a fow for each value type */
     while (ansi_a_dtap_strings[i].strptr)
@@ -10604,7 +10592,7 @@ static void ansi_a_dtap_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_
         items[COUNT_COLUMN].type = TABLE_ITEM_UINT;
         items[COUNT_COLUMN].value.uint_value = 0;
 
-        new_stat_tap_init_table_row(table, i, num_fields, items);
+        stat_tap_init_table_row(table, i, num_fields, items);
         i++;
     }
 }
@@ -10612,7 +10600,7 @@ static void ansi_a_dtap_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_
 static gboolean
 ansi_a_dtap_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const void *data)
 {
-    new_stat_data_t* stat_data = (new_stat_data_t*)tapdata;
+    stat_data_t* stat_data = (stat_data_t*)tapdata;
     const ansi_a_tap_rec_t      *data_p = (const ansi_a_tap_rec_t *)data;
     stat_tap_table_item_type* dtap_data;
     stat_tap_table* table;
@@ -10625,9 +10613,9 @@ ansi_a_dtap_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *e
 
         table = g_array_index(stat_data->stat_tap_data->tables, stat_tap_table*, i);
 
-        dtap_data = new_stat_tap_get_field_data(table, data_p->message_type, COUNT_COLUMN);
+        dtap_data = stat_tap_get_field_data(table, data_p->message_type, COUNT_COLUMN);
         dtap_data->value.uint_value++;
-        new_stat_tap_set_field_data(table, data_p->message_type, COUNT_COLUMN, dtap_data);
+        stat_tap_set_field_data(table, data_p->message_type, COUNT_COLUMN, dtap_data);
 
         return TRUE;
     }
@@ -10643,9 +10631,9 @@ ansi_a_stat_reset(stat_tap_table* table)
 
     for (element = 0; element < table->num_elements; element++)
     {
-        item_data = new_stat_tap_get_field_data(table, element, COUNT_COLUMN);
+        item_data = stat_tap_get_field_data(table, element, COUNT_COLUMN);
         item_data->value.uint_value = 0;
-        new_stat_tap_set_field_data(table, element, COUNT_COLUMN, item_data);
+        stat_tap_set_field_data(table, element, COUNT_COLUMN, item_data);
     }
 
 }
@@ -10653,14 +10641,14 @@ ansi_a_stat_reset(stat_tap_table* table)
 static stat_tap_table_item bsmap_stat_fields[] = {{TABLE_ITEM_UINT, TAP_ALIGN_RIGHT, "IEI", "0x%02x  "}, {TABLE_ITEM_STRING, TAP_ALIGN_LEFT, "Message Name", "%-50s"},
     {TABLE_ITEM_UINT, TAP_ALIGN_RIGHT, "Count", "%d"}};
 
-static void ansi_a_bsmap_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui_init_cb gui_callback, void* gui_data)
+static void ansi_a_bsmap_stat_init(stat_tap_table_ui* new_stat, stat_tap_gui_init_cb gui_callback, void* gui_data)
 {
     int num_fields = sizeof(bsmap_stat_fields)/sizeof(stat_tap_table_item);
-    stat_tap_table* table = new_stat_tap_init_table("ANSI A-I/F BSMAP Statistics", num_fields, 0, NULL, gui_callback, gui_data);
+    stat_tap_table* table = stat_tap_init_table("ANSI A-I/F BSMAP Statistics", num_fields, 0, NULL, gui_callback, gui_data);
     int i = 0;
     stat_tap_table_item_type items[sizeof(bsmap_stat_fields)/sizeof(stat_tap_table_item)];
 
-    new_stat_tap_add_table(new_stat, table);
+    stat_tap_add_table(new_stat, table);
 
     /* Add a fow for each value type */
     while (ansi_a_bsmap_strings[i].strptr)
@@ -10672,7 +10660,7 @@ static void ansi_a_bsmap_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui
         items[COUNT_COLUMN].type = TABLE_ITEM_UINT;
         items[COUNT_COLUMN].value.uint_value = 0;
 
-        new_stat_tap_init_table_row(table, i, num_fields, items);
+        stat_tap_init_table_row(table, i, num_fields, items);
         i++;
     }
 }
@@ -10680,7 +10668,7 @@ static void ansi_a_bsmap_stat_init(stat_tap_table_ui* new_stat, new_stat_tap_gui
 static gboolean
 ansi_a_bsmap_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *edt _U_, const void *data)
 {
-    new_stat_data_t* stat_data = (new_stat_data_t*)tapdata;
+    stat_data_t* stat_data = (stat_data_t*)tapdata;
     const ansi_a_tap_rec_t      *data_p = (const ansi_a_tap_rec_t *)data;
     stat_tap_table_item_type* dtap_data;
     stat_tap_table* table;
@@ -10693,9 +10681,9 @@ ansi_a_bsmap_stat_packet(void *tapdata, packet_info *pinfo _U_, epan_dissect_t *
 
         table = g_array_index(stat_data->stat_tap_data->tables, stat_tap_table*, i);
 
-        dtap_data = new_stat_tap_get_field_data(table, data_p->message_type, COUNT_COLUMN);
+        dtap_data = stat_tap_get_field_data(table, data_p->message_type, COUNT_COLUMN);
         dtap_data->value.uint_value++;
-        new_stat_tap_set_field_data(table, data_p->message_type, COUNT_COLUMN, dtap_data);
+        stat_tap_set_field_data(table, data_p->message_type, COUNT_COLUMN, dtap_data);
 
         return TRUE;
     }

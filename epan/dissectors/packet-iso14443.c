@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* ISO14443 is a set of standards describing the communication between a
@@ -37,14 +25,16 @@
 
 
 #include "config.h"
-#include <math.h>
 #include <epan/packet.h>
 #include <epan/expert.h>
-#include <epan/circuit.h>
+#include <epan/conversation.h>
 #include <epan/tfs.h>
-#include <wiretap/wtap.h>
+#include <epan/reassemble.h>
 #include <epan/crc16-tvb.h>
 
+#include <wiretap/wtap.h>
+
+#include <wsutil/pow2.h>
 
 /* Proximity Integrated Circuit Card, i.e. the smartcard */
 #define ADDR_PICC "PICC"
@@ -182,6 +172,8 @@ static int ett_iso14443_attr_p2 = -1;
 static int ett_iso14443_attr_p3 = -1;
 static int ett_iso14443_pcb = -1;
 static int ett_iso14443_inf = -1;
+static int ett_iso14443_frag = -1;
+static int ett_iso14443_frags = -1;
 
 static int hf_iso14443_hdr_ver = -1;
 static int hf_iso14443_event = -1;
@@ -276,6 +268,16 @@ static int hf_iso14443_s_blk_cmd = -1;
 static int hf_iso14443_pwr_lvl_ind = -1;
 static int hf_iso14443_wtxm = -1;
 static int hf_iso14443_inf = -1;
+static int hf_iso14443_frags = -1;
+static int hf_iso14443_frag = -1;
+static int hf_iso14443_frag_overlap = -1;
+static int hf_iso14443_frag_overlap_conflicts = -1;
+static int hf_iso14443_frag_multiple_tails = -1;
+static int hf_iso14443_frag_too_long_frag = -1;
+static int hf_iso14443_frag_err = -1;
+static int hf_iso14443_frag_cnt = -1;
+static int hf_iso14443_reass_in = -1;
+static int hf_iso14443_reass_len = -1;
 static int hf_iso14443_crc = -1;
 static int hf_iso14443_crc_status = -1;
 
@@ -304,6 +306,27 @@ static const int *ats_ta1_fields[] = {
 static expert_field ei_iso14443_unknown_cmd = EI_INIT;
 static expert_field ei_iso14443_wrong_crc = EI_INIT;
 static expert_field ei_iso14443_uid_inval_size = EI_INIT;
+
+static reassembly_table i_block_reassembly_table;
+
+static const fragment_items i_block_frag_items _U_ = {
+    &ett_iso14443_frag,
+    &ett_iso14443_frags,
+
+    &hf_iso14443_frags,
+    &hf_iso14443_frag,
+    &hf_iso14443_frag_overlap,
+    &hf_iso14443_frag_overlap_conflicts,
+    &hf_iso14443_frag_multiple_tails,
+    &hf_iso14443_frag_too_long_frag,
+    &hf_iso14443_frag_err,
+    &hf_iso14443_frag_cnt,
+
+    &hf_iso14443_reass_in,
+    &hf_iso14443_reass_len,
+    NULL,
+    "I-block fragments"
+};
 
 
 static int
@@ -519,8 +542,8 @@ dissect_iso14443_cmd_type_wupb(tvbuff_t *tvb, packet_info *pinfo,
         col_set_str(pinfo->cinfo, COL_INFO, msg_type);
         proto_item_append_text(ti, ": %s", msg_type);
         proto_tree_add_uint_bits_format_value(tree, hf_iso14443_n,
-                tvb, offset*8+5, 3, (guint8)pow(2, param&0x07),
-                "%d", (guint8)pow(2, param&0x07));
+                tvb, offset*8+5, 3, pow2(guint32, param&0x07),
+                "%u", pow2(guint32, param&0x07));
         offset++;
 
         if (!crc_dropped) {
@@ -649,7 +672,7 @@ static int dissect_iso14443_ats(tvbuff_t *tvb, gint offset,
         packet_info *pinfo, proto_tree *tree, gboolean crc_dropped)
 {
     proto_item *ti = proto_tree_get_parent(tree);
-    circuit_t *circuit;
+    conversation_t *conv;
     guint8 tl, t0 = 0, fsci, fwi, sfgi;
     proto_item *t0_it, *tb1_it, *tc1_it, *pi;
     proto_tree *t0_tree, *tb1_tree, *tc1_tree;
@@ -659,9 +682,8 @@ static int dissect_iso14443_ats(tvbuff_t *tvb, gint offset,
     col_set_str(pinfo->cinfo, COL_INFO, "ATS");
     proto_item_append_text(ti, ": ATS");
 
-    circuit = circuit_new(CT_ISO14443, ISO14443_CIRCUIT_ID, pinfo->num);
-    circuit_add_proto_data(circuit,
-            proto_iso14443, GUINT_TO_POINTER((guint)ISO14443_A));
+    conv = conversation_new_by_id(pinfo->num, ENDPOINT_ISO14443, ISO14443_CIRCUIT_ID, 0);
+    conversation_add_proto_data(conv, proto_iso14443, GUINT_TO_POINTER((guint)ISO14443_A));
 
     offset_tl = offset;
     tl = tvb_get_guint8(tvb, offset);
@@ -876,7 +898,7 @@ dissect_iso14443_cmd_type_attrib(tvbuff_t *tvb, packet_info *pinfo,
     gint offset = 0;
     guint8 mbli, cid;
     gint hl_resp_len;
-    circuit_t *circuit;
+    conversation_t *conv;
 
     if (pinfo->p2p_dir == P2P_DIR_SENT) {
         offset = dissect_iso14443_attrib(
@@ -886,9 +908,8 @@ dissect_iso14443_cmd_type_attrib(tvbuff_t *tvb, packet_info *pinfo,
         col_set_str(pinfo->cinfo, COL_INFO, "Response to Attrib");
         proto_item_append_text(ti, ": Response to Attrib");
 
-        circuit = circuit_new(CT_ISO14443, ISO14443_CIRCUIT_ID, pinfo->num);
-        circuit_add_proto_data(circuit,
-                proto_iso14443, GUINT_TO_POINTER((guint)ISO14443_B));
+        conv = conversation_new_by_id(pinfo->num, ENDPOINT_ISO14443, ISO14443_CIRCUIT_ID, 0);
+        conversation_add_proto_data(conv, proto_iso14443, GUINT_TO_POINTER((guint)ISO14443_B));
 
         mbli = tvb_get_guint8(tvb, offset) >> 4;
         proto_tree_add_uint_bits_format_value(tree, hf_iso14443_mbli,
@@ -1021,6 +1042,9 @@ dissect_iso14443_cmd_type_block(tvbuff_t *tvb, packet_info *pinfo,
     }
 
     if (inf_len > 0) {
+        fragment_head *frag_msg;
+        tvbuff_t *payload_tvb;
+
         inf_ti = proto_tree_add_item(tree, hf_iso14443_inf,
                 tvb, offset, inf_len, ENC_NA);
         if (block_type == S_BLOCK_TYPE) {
@@ -1034,17 +1058,31 @@ dissect_iso14443_cmd_type_block(tvbuff_t *tvb, packet_info *pinfo,
                         tvb, offset, 1, ENC_BIG_ENDIAN);
             }
         }
+
+        if (block_type == I_BLOCK_TYPE) {
+            frag_msg = fragment_add_seq_next(&i_block_reassembly_table,
+                    tvb, offset, pinfo, 0, NULL, inf_len, (pcb & 0x10) ? 1 : 0);
+
+            payload_tvb = process_reassembled_data(tvb, offset, pinfo,
+                    "Reassembled APDU", frag_msg,
+                    &i_block_frag_items, NULL, tree);
+
+            if (payload_tvb) {
+                /* XXX - forward to the actual upper layer protocol */
+                call_data_dissector(payload_tvb, pinfo, tree);
+            }
+        }
+
         offset += inf_len;
     }
 
     if (!crc_dropped) {
         iso14443_type_t t;
-        circuit_t *circuit;
+        conversation_t *conv;
 
-        circuit = find_circuit(CT_ISO14443, ISO14443_CIRCUIT_ID, pinfo->num);
-        if (circuit) {
-            t = (iso14443_type_t)GPOINTER_TO_UINT(
-                    (gpointer)circuit_get_proto_data(circuit, proto_iso14443));
+        conv = find_conversation_by_id(pinfo->num, ENDPOINT_ISO14443, ISO14443_CIRCUIT_ID, 0);
+        if (conv) {
+            t = (iso14443_type_t)GPOINTER_TO_UINT(conversation_get_proto_data(conv, proto_iso14443));
 
             proto_tree_add_checksum(tree, tvb, offset,
                     hf_iso14443_crc, hf_iso14443_crc_status, &ei_iso14443_wrong_crc, pinfo,
@@ -1113,15 +1151,33 @@ iso14443_block_pcb(guint8 byte)
 
 
 static iso14443_transaction_t *
-iso14443_get_transaction(packet_info *pinfo, proto_tree *tree)
+iso14443_get_transaction(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
     proto_item *it;
+    wmem_tree_key_t key[3];
     iso14443_transaction_t *iso14443_trans = NULL;
+    /* Is the current message a Waiting-Time-Extension request or response? */
+    gboolean wtx = (tvb_get_guint8(tvb, 0) & 0xF7) == 0xF2;
 
-    if (pinfo->p2p_dir == P2P_DIR_SENT) {
+    /* When going backwards from the current message, we want to link wtx
+       messages only to other wtx messages (and non-wtx messages to non-wtx,
+       respectively). For this to work, the wtx flag must be the first
+       component of the key. */
+    key[0].length = 1;
+    key[0].key = &wtx;
+    key[1].length = 1;
+    key[1].key = &pinfo->num;
+    key[2].length = 0;
+    key[2].key = NULL;
+
+    /* Is this a request message? WTX requests are sent by the PICC, all
+       other requests are sent by the PCD. */
+    if (((pinfo->p2p_dir == P2P_DIR_SENT) && !wtx) ||
+        ((pinfo->p2p_dir == P2P_DIR_RECV) && wtx)) {
         if (PINFO_FD_VISITED(pinfo)) {
-            iso14443_trans = (iso14443_transaction_t *)wmem_tree_lookup32(
-                    transactions, pinfo->num);
+            iso14443_trans =
+                (iso14443_transaction_t *)wmem_tree_lookup32_array(
+                    transactions, key);
             if (iso14443_trans && iso14443_trans->rqst_frame==pinfo->num &&
                     iso14443_trans->resp_frame!=0) {
                it = proto_tree_add_uint(tree, hf_iso14443_resp_in,
@@ -1130,17 +1186,17 @@ iso14443_get_transaction(packet_info *pinfo, proto_tree *tree)
             }
         }
         else {
-            iso14443_trans = wmem_new(wmem_file_scope(), iso14443_transaction_t);
+            iso14443_trans =
+                wmem_new(wmem_file_scope(), iso14443_transaction_t);
             iso14443_trans->rqst_frame = pinfo->num;
             iso14443_trans->resp_frame = 0;
-            /* iso14443_trans->ctrl = ctrl; */
-            wmem_tree_insert32(transactions,
-                    iso14443_trans->rqst_frame, (void *)iso14443_trans);
+            wmem_tree_insert32_array(transactions, key, (void *)iso14443_trans);
         }
     }
-    else if (pinfo->p2p_dir == P2P_DIR_RECV) {
-        iso14443_trans = (iso14443_transaction_t *)wmem_tree_lookup32_le(
-                transactions, pinfo->num);
+    else if (((pinfo->p2p_dir == P2P_DIR_SENT) && wtx) ||
+        ((pinfo->p2p_dir == P2P_DIR_RECV) && !wtx)) {
+        iso14443_trans = (iso14443_transaction_t *)wmem_tree_lookup32_array_le(
+                transactions, key);
         if (iso14443_trans && iso14443_trans->resp_frame==0) {
             /* there's a pending request, this packet is the response */
             iso14443_trans->resp_frame = pinfo->num;
@@ -1219,7 +1275,7 @@ dissect_iso14443_msg(tvbuff_t *tvb, packet_info *pinfo,
         crc_dropped = TRUE;
     }
 
-    iso14443_trans = iso14443_get_transaction(pinfo, tree);
+    iso14443_trans = iso14443_get_transaction(tvb, pinfo, tree);
     if (!iso14443_trans)
         return -1;
 
@@ -1254,7 +1310,7 @@ static int dissect_iso14443(tvbuff_t *tvb,
     proto_item *tree_ti;
     proto_tree *iso14443_tree, *hdr_tree;
     tvbuff_t    *payload_tvb;
-    circuit_t   *circuit;
+    conversation_t *conv;
 
     if (tvb_captured_length(tvb) < 4)
         return 0;
@@ -1307,9 +1363,9 @@ static int dissect_iso14443(tvbuff_t *tvb,
 
         /* all events that are not data transfers close the connection
            to the card (e.g. the field is switched on or off) */
-        circuit = find_circuit(CT_ISO14443, ISO14443_CIRCUIT_ID, pinfo->num);
-        if (circuit)
-                close_circuit(circuit, pinfo->num);
+        conv = find_conversation_by_id(pinfo->num, ENDPOINT_ISO14443, ISO14443_CIRCUIT_ID, 0);
+        if (conv)
+            conv->last_frame = pinfo->num;
     }
 
     return offset;
@@ -1692,6 +1748,48 @@ proto_register_iso14443(void)
             { "INF", "iso14443.inf",
                 FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }
         },
+        { &hf_iso14443_frags,
+          { "Tpdu fragments", "iso14443.tpdu_fragments",
+           FT_NONE, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_frag,
+          { "Tpdu fragment", "iso14443.tpdu_fragment",
+           FT_FRAMENUM, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_frag_overlap,
+          { "Tpdu fragment overlap", "iso14443.tpdu_fragment.overlap",
+           FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_frag_overlap_conflicts,
+          { "Tpdu fragment overlapping with conflicting data",
+           "iso14443.tpdu_fragment.overlap.conflicts",
+           FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_frag_multiple_tails,
+          { "Tpdu has multiple tail fragments",
+           "iso14443.tpdu_fragment.multiple_tails",
+          FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_frag_too_long_frag,
+          { "Tpdu fragment too long", "iso14443.tpdu_fragment.too_long_fragment",
+           FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_frag_err,
+          { "Tpdu defragmentation error", "iso14443.tpdu_fragment.error",
+           FT_FRAMENUM, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_frag_cnt,
+          { "Tpdu fragment count", "iso14443.tpdu_fragment.count",
+           FT_UINT32, BASE_DEC, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_reass_in,
+          { "Tpdu reassembled in", "iso14443.tpdu_reassembled.in",
+           FT_FRAMENUM, BASE_NONE, NULL, 0x00, NULL, HFILL }
+        },
+        { &hf_iso14443_reass_len,
+          { "Reassembled tpdu length", "iso14443.tpdu_reassembled.length",
+           FT_UINT32, BASE_DEC, NULL, 0x00, NULL, HFILL }
+        },
         { &hf_iso14443_crc,
             { "CRC", "iso14443.crc",
                 FT_UINT16, BASE_HEX, NULL, 0, NULL, HFILL }
@@ -1718,7 +1816,9 @@ proto_register_iso14443(void)
         &ett_iso14443_attr_p2,
         &ett_iso14443_attr_p3,
         &ett_iso14443_pcb,
-        &ett_iso14443_inf
+        &ett_iso14443_inf,
+        &ett_iso14443_frag,
+        &ett_iso14443_frags
     };
 
     static ei_register_info ei[] = {
@@ -1747,6 +1847,9 @@ proto_register_iso14443(void)
     iso14443_cmd_type_table = register_dissector_table(
             "iso14443.cmd_type", "ISO14443 Command Type",
             proto_iso14443, FT_UINT8, BASE_DEC);
+
+    reassembly_table_register(&i_block_reassembly_table,
+                          &addresses_reassembly_table_functions);
 
     iso14443_handle =
         register_dissector("iso14443", dissect_iso14443, proto_iso14443);

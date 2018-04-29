@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -123,14 +111,14 @@ static gint ett_serialization = -1;
 static int proto_sap = -1;
 static int hf_sap_request = -1;
 static int hf_sap_response = -1;
-/* Generated from convert_proto_tree_add_text.pl */
-static int hf_sap_intermediate_networks = -1;
-static int hf_sap_server_type = -1;
 static int hf_sap_packet_type = -1;
-static int hf_sap_node = -1;
-static int hf_sap_network = -1;
+static int hf_sap_server = -1;
+static int hf_sap_server_type = -1;
 static int hf_sap_server_name = -1;
-static int hf_sap_socket = -1;
+static int hf_sap_server_network = -1;
+static int hf_sap_server_node = -1;
+static int hf_sap_server_socket = -1;
+static int hf_sap_server_intermediate_networks = -1;
 
 static gint ett_ipxsap = -1;
 static gint ett_ipxsap_server = -1;
@@ -166,7 +154,7 @@ ipx_conversation_packet(void *pct, packet_info *pinfo, epan_dissect_t *edt _U_, 
 	conv_hash_t *hash = (conv_hash_t*) pct;
 	const ipxhdr_t *ipxh=(const ipxhdr_t *)vip;
 
-	add_conversation_table_data(hash, &ipxh->ipx_src, &ipxh->ipx_dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &ipx_ct_dissector_info, PT_NONE);
+	add_conversation_table_data(hash, &ipxh->ipx_src, &ipxh->ipx_dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &ipx_ct_dissector_info, ENDPOINT_NONE);
 
 	return 1;
 }
@@ -190,8 +178,8 @@ ipx_hostlist_packet(void *pit, packet_info *pinfo, epan_dissect_t *edt _U_, cons
 	/* Take two "add" passes per packet, adding for each direction, ensures that all
 	packets are counted properly (even if address is sending to itself)
 	XXX - this could probably be done more efficiently inside hostlist_table */
-	add_hostlist_table_data(hash, &ipxh->ipx_src, 0, TRUE, 1, pinfo->fd->pkt_len, &ipx_host_dissector_info, PT_NONE);
-	add_hostlist_table_data(hash, &ipxh->ipx_dst, 0, FALSE, 1, pinfo->fd->pkt_len, &ipx_host_dissector_info, PT_NONE);
+	add_hostlist_table_data(hash, &ipxh->ipx_src, 0, TRUE, 1, pinfo->fd->pkt_len, &ipx_host_dissector_info, ENDPOINT_NONE);
+	add_hostlist_table_data(hash, &ipxh->ipx_dst, 0, FALSE, 1, pinfo->fd->pkt_len, &ipx_host_dissector_info, ENDPOINT_NONE);
 
 	return 1;
 }
@@ -681,7 +669,7 @@ dissect_spx(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 	 * SPX session using that source port; can that happen?  If so,
 	 * we should probably use the direction, as well as the conversation,
 	 * as part of the hash key; if we do that, we can probably just
-	 * use PT_IPX as the port type, and possibly get rid of PT_NCP.
+	 * use ENDPOINT_IPX as the port type, and possibly get rid of ENDPOINT_NCP.
 	 *
 	 * According to
 	 *
@@ -706,7 +694,7 @@ dissect_spx(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 		 */
 		if (!pinfo->fd->flags.visited) {
 			conversation = find_conversation(pinfo->num, &pinfo->src,
-			    &pinfo->dst, PT_NCP, pinfo->srcport,
+			    &pinfo->dst, ENDPOINT_NCP, pinfo->srcport,
 			    pinfo->srcport, 0);
 			if (conversation == NULL) {
 				/*
@@ -714,7 +702,7 @@ dissect_spx(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 				 * a new one.
 				 */
 				conversation = conversation_new(pinfo->num, &pinfo->src,
-				    &pinfo->dst, PT_NCP, pinfo->srcport,
+				    &pinfo->dst, ENDPOINT_NCP, pinfo->srcport,
 				    pinfo->srcport, 0);
 			}
 
@@ -886,8 +874,8 @@ dissect_ipxrip(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 	proto_tree	*rip_tree;
 	proto_item	*ti, *hidden_item;
 	guint16		operation, ticks;
-	int		cursor;
-	int		available_length;
+	guint		cursor;
+	guint		available_length;
 
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "IPX RIP");
 	col_clear(pinfo->cinfo, COL_INFO);
@@ -930,7 +918,7 @@ dissect_ipxrip(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 			}
 			else {
 				proto_tree_add_uint_format_value(rip_tree, hf_ipxrip_ticks, tvb, cursor+6, 2, ticks,
-                    "%d ms", ticks * 1000 / 18);
+					"%d ms", ticks * 1000 / 18);
 			}
 		}
 	}
@@ -1213,7 +1201,7 @@ dissect_ipxsap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 {
 	proto_tree	*sap_tree, *s_tree;
 	proto_item	*ti, *hidden_item;
-	int		cursor;
+	guint		cursor;
 	struct sap_query query;
 
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "IPX SAP");
@@ -1251,17 +1239,20 @@ dissect_ipxsap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
 		if (query.query_type == IPX_SAP_GENERAL_RESPONSE ||
 				query.query_type == IPX_SAP_NEAREST_RESPONSE) { /* responses */
 
-			int available_length = tvb_reported_length(tvb);
-			for (cursor =  2; (cursor + 64) <= available_length; cursor += 64) {
+			guint available_length = tvb_reported_length(tvb);
+			for (cursor =  2; cursor < available_length; cursor += 64) {
+				const guint8 *server_name;
 
-				ti = proto_tree_add_item(sap_tree, hf_sap_server_name, tvb, cursor+2, 48, ENC_ASCII|ENC_NA);
+				ti = proto_tree_add_item(sap_tree, hf_sap_server, tvb, cursor, 64, ENC_NA);
 				s_tree = proto_item_add_subtree(ti, ett_ipxsap_server);
 
 				proto_tree_add_item(s_tree, hf_sap_server_type, tvb, cursor, 2, ENC_BIG_ENDIAN);
-				proto_tree_add_item(s_tree, hf_sap_network, tvb, cursor+50, 4, ENC_NA);
-				proto_tree_add_item(s_tree, hf_sap_node, tvb, cursor+54, 6, ENC_NA);
-				proto_tree_add_item(s_tree, hf_sap_socket, tvb, cursor+60, 2, ENC_BIG_ENDIAN);
-				proto_tree_add_item(s_tree, hf_sap_intermediate_networks, tvb, cursor+62, 2, ENC_BIG_ENDIAN);
+				proto_tree_add_item_ret_string(s_tree, hf_sap_server_name, tvb, cursor+2, 48, ENC_ASCII|ENC_NA, wmem_packet_scope(), &server_name);
+				proto_item_append_text(ti, ": %s", server_name);
+				proto_tree_add_item(s_tree, hf_sap_server_network, tvb, cursor+50, 4, ENC_NA);
+				proto_tree_add_item(s_tree, hf_sap_server_node, tvb, cursor+54, 6, ENC_NA);
+				proto_tree_add_item(s_tree, hf_sap_server_socket, tvb, cursor+60, 2, ENC_BIG_ENDIAN);
+				proto_tree_add_item(s_tree, hf_sap_server_intermediate_networks, tvb, cursor+62, 2, ENC_BIG_ENDIAN);
 			}
 		}
 		else {  /* queries */
@@ -1478,15 +1469,45 @@ proto_register_ipx(void)
 		  FT_BOOLEAN,	BASE_NONE,	NULL,	0x0,
 		  "TRUE if SAP response", HFILL }},
 
-		/* Generated from convert_proto_tree_add_text.pl */
-		{ &hf_sap_packet_type, { "SAP packet type", "ipxsap.packet_type", FT_UINT16, BASE_DEC, VALS(ipxsap_packet_vals), 0x0, NULL, HFILL }},
-		{ &hf_sap_server_name, { "Server Name", "ipxsap.server_name", FT_STRINGZ, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-		{ &hf_sap_server_type, { "Server Type", "ipxsap.server_type", FT_UINT16, BASE_HEX|BASE_EXT_STRING, &novell_server_vals_ext, 0x0, NULL, HFILL }},
-		{ &hf_sap_network, { "Network", "ipxsap.network", FT_IPXNET, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-		{ &hf_sap_node, { "Node", "ipxsap.node", FT_ETHER, BASE_NONE, NULL, 0x0, NULL, HFILL }},
-		{ &hf_sap_socket, { "Socket", "ipxsap.socket", FT_UINT16, BASE_HEX|BASE_EXT_STRING, &ipx_socket_vals_ext, 0x0, NULL, HFILL }},
-		{ &hf_sap_intermediate_networks, { "Intermediate Networks", "ipxsap.intermediate_networks", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+		{ &hf_sap_packet_type,
+		{ "SAP packet type",		"ipxsap.packet_type",
+		  FT_UINT16,	BASE_DEC,	VALS(ipxsap_packet_vals), 0x0,
+		  NULL, HFILL }},
 
+		{ &hf_sap_server,
+		{ "Server",			"ipxsap.server",
+		  FT_NONE,	BASE_NONE,	NULL,	0x0,
+		  NULL, HFILL }},
+
+		{ &hf_sap_server_type,
+		{ "Server Type",		"ipxsap.server.type",
+		  FT_UINT16,	BASE_HEX|BASE_EXT_STRING, &novell_server_vals_ext, 0x0,
+		  NULL, HFILL }},
+
+		{ &hf_sap_server_name,
+		{ "Server Name",		"ipxsap.server.name",
+		  FT_STRINGZ,	BASE_NONE,	NULL,	0x0,
+		  NULL, HFILL }},
+
+		{ &hf_sap_server_network,
+		{ "Network",			"ipxsap.server.network",
+		  FT_IPXNET,	BASE_NONE,	NULL,	0x0,
+		  NULL, HFILL }},
+
+		{ &hf_sap_server_node,
+		{ "Node",			"ipxsap.server.node",
+		  FT_ETHER,	BASE_NONE,	NULL,	0x0,
+		  NULL, HFILL }},
+
+		{ &hf_sap_server_socket,
+		{ "Socket",			"ipxsap.server.socket",
+		  FT_UINT16,	BASE_HEX|BASE_EXT_STRING, &ipx_socket_vals_ext, 0x0,
+		  NULL, HFILL }},
+
+		{ &hf_sap_server_intermediate_networks,
+		{ "Intermediate Networks",	"ipxsap.server.intermediate_networks",
+		  FT_UINT16,	BASE_DEC,	NULL,	0x0,
+		  NULL, HFILL }},
 	};
 
 	static hf_register_info hf_ipxmsg[] = {

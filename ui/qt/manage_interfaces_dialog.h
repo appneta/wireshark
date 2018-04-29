@@ -4,20 +4,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later*/
 
 #ifndef MANAGE_INTERFACES_DIALOG_H
 #define MANAGE_INTERFACES_DIALOG_H
@@ -27,8 +14,8 @@
 #include <glib.h>
 #include "capture_opts.h"
 
-#include "ui/qt/interface_tree_cache_model.h"
-#include "ui/qt/interface_sort_filter_model.h"
+#include <ui/qt/models/interface_tree_cache_model.h>
+#include <ui/qt/models/interface_sort_filter_model.h>
 
 #include "geometry_state_dialog.h"
 #include <QStyledItemDelegate>
@@ -73,8 +60,10 @@ private slots:
 
     void on_buttonBox_accepted();
 
+#ifdef HAVE_LIBPCAP
     void on_addPipe_clicked();
     void on_delPipe_clicked();
+#endif
 
     void onSelectionChanged(const QItemSelection &sel, const QItemSelection &desel);
 

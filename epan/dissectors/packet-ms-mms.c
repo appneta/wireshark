@@ -15,19 +15,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /* Information sources:
@@ -308,7 +296,7 @@ static void dissect_media_stream_mbr_selector(tvbuff_t *tvb, proto_tree *tree, g
 static void dissect_header_request(tvbuff_t *tvb, proto_tree *tree, guint offset);
 static void dissect_stop_button_pressed(tvbuff_t *tvb, proto_tree *tree, guint offset);
 
-static void msmms_data_add_address(packet_info *pinfo, address *addr, port_type pt, int port);
+static void msmms_data_add_address(packet_info *pinfo, address *addr, endpoint_type et, int port);
 
 
 
@@ -762,21 +750,21 @@ static void dissect_client_transport_info(tvbuff_t *tvb, packet_info *pinfo, pro
     /* Use this information to set up a conversation for the data stream */
     if (fields_matched == 6)
     {
-        port_type pt = PT_NONE;
+        endpoint_type et = ENDPOINT_NONE;
 
         /* Work out the port type */
         if (strncmp(protocol, "UDP", 3) == 0)
         {
-            pt = PT_UDP;
+            et = ENDPOINT_UDP;
         }
         else
         if (strncmp(protocol, "TCP", 3) == 0)
         {
-            pt = PT_TCP;
+            et = ENDPOINT_TCP;
         }
 
         /* Set the dissector for indicated conversation */
-        if (pt != PT_NONE)
+        if (et != ENDPOINT_NONE)
         {
             guint8 octets[4];
             address addr;
@@ -787,7 +775,7 @@ static void dissect_client_transport_info(tvbuff_t *tvb, packet_info *pinfo, pro
             addr.type = AT_IPv4;
             addr.len = 4;
             addr.data = octets;
-            msmms_data_add_address(pinfo, &addr, pt, port);
+            msmms_data_add_address(pinfo, &addr, et, port);
         }
     }
 }
@@ -848,7 +836,7 @@ static void dissect_server_info(tvbuff_t *tvb, packet_info *pinfo, proto_tree *t
                             ENC_UTF_16|ENC_LITTLE_ENDIAN, wmem_packet_scope(), &server_version);
 
         col_append_fstr(pinfo->cinfo, COL_INFO, " (version='%s')",
-                    format_text(wmem_packet_scope(), (guchar*)server_version, strlen(server_version)));
+                    format_text(wmem_packet_scope(), (const guchar*)server_version, strlen(server_version)));
     }
     offset += (server_version_length*2);
 
@@ -902,7 +890,7 @@ static void dissect_client_player_info(tvbuff_t *tvb, packet_info *pinfo, proto_
                         ENC_UTF_16|ENC_LITTLE_ENDIAN, wmem_packet_scope(), &player_info);
 
     col_append_fstr(pinfo->cinfo, COL_INFO, " (%s)",
-                    format_text(wmem_packet_scope(), (guchar*)player_info, strlen(player_info)));
+                    format_text(wmem_packet_scope(), (const guchar*)player_info, strlen(player_info)));
 }
 
 /* Dissect info about where client wants to start playing from */
@@ -977,7 +965,7 @@ static void dissect_request_server_file(tvbuff_t *tvb, packet_info *pinfo, proto
                         ENC_UTF_16|ENC_LITTLE_ENDIAN, wmem_packet_scope(), &server_file);
 
     col_append_fstr(pinfo->cinfo, COL_INFO, " (%s)",
-                    format_text(wmem_packet_scope(), (guchar*)server_file, strlen(server_file)));
+                    format_text(wmem_packet_scope(), (const guchar*)server_file, strlen(server_file)));
 }
 
 /* Dissect media details from server */
@@ -1108,7 +1096,7 @@ static void dissect_stop_button_pressed(tvbuff_t *tvb, proto_tree *tree, guint o
 /********************************************************/
 /* Helper function to set up an MS-MMS data conversation */
 /********************************************************/
-static void msmms_data_add_address(packet_info *pinfo, address *addr, port_type pt, int port)
+static void msmms_data_add_address(packet_info *pinfo, address *addr, endpoint_type et, int port)
 {
     address         null_addr;
     conversation_t *p_conv;
@@ -1125,13 +1113,13 @@ static void msmms_data_add_address(packet_info *pinfo, address *addr, port_type 
 
     /* Check if the ip address and port combination is not
      * already registered as a conversation. */
-    p_conv = find_conversation(pinfo->num, addr, &null_addr, pt, port, 0,
+    p_conv = find_conversation(pinfo->num, addr, &null_addr, et, port, 0,
                                NO_ADDR_B | NO_PORT_B);
 
     /* If not, create a new conversation. */
     if (!p_conv)
     {
-        p_conv = conversation_new(pinfo->num, addr, &null_addr, pt,
+        p_conv = conversation_new(pinfo->num, addr, &null_addr, et,
                                   (guint32)port, 0, NO_ADDR2 | NO_PORT2);
     }
 

@@ -7,19 +7,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef PACKET_ZBEE_ZDP_H
@@ -209,7 +197,7 @@
  */
 /* General indicies. */
 extern int hf_zbee_zdp_ext_addr;
-extern int hf_zbee_zdp_device;
+extern int hf_zbee_zdp_nwk_addr;
 extern int hf_zbee_zdp_req_type;
 extern int hf_zbee_zdp_index;
 extern int hf_zbee_zdp_ep_count;
@@ -332,7 +320,6 @@ extern gint ett_zbee_zdp_table_entry;
  */
 extern const gchar  *zdp_status_name       (guint8 status);
 extern void     zdp_dump_excess            (tvbuff_t *tvb, guint offset, packet_info *pinfo, proto_tree *tree);
-extern guint    zbee_parse_uint            (proto_tree *tree, int hfindex, tvbuff_t *tvb, guint *offset, guint length, proto_item **ti);
 extern guint64  zbee_parse_eui64           (proto_tree *tree, int hfindex, tvbuff_t *tvb, guint *offset, guint length, proto_item **ti);
 extern void     zbee_append_info           (proto_item *item, packet_info *pinfo, const gchar *format, ...) G_GNUC_PRINTF(3, 4);
 

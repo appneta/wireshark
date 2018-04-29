@@ -10,19 +10,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -458,7 +446,7 @@ dissect_bthci_acl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
 
                 item = proto_tree_add_uint(bthci_acl_tree, hf_bthci_acl_reassembled_in, tvb, 0, 0, mfp->last_frame);
                 PROTO_ITEM_SET_GENERATED(item);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " [Reassembled in #%u]", mfp->last_frame);
+                col_append_frame_number(pinfo, COL_INFO, " [Reassembled in #%u]", mfp->last_frame);
             }
         }
         if (pb_flag == 0x01) { /* continuation fragment */
@@ -478,11 +466,11 @@ dissect_bthci_acl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
 
                 item = proto_tree_add_uint(bthci_acl_tree, hf_bthci_acl_continuation_to, tvb, 0, 0, mfp->first_frame);
                 PROTO_ITEM_SET_GENERATED(item);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " [Continuation to #%u]", mfp->first_frame);
+                col_append_frame_number(pinfo, COL_INFO, " [Continuation to #%u]", mfp->first_frame);
                 if (mfp->last_frame && mfp->last_frame != pinfo->num) {
                     item = proto_tree_add_uint(bthci_acl_tree, hf_bthci_acl_reassembled_in, tvb, 0, 0, mfp->last_frame);
                     PROTO_ITEM_SET_GENERATED(item);
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " [Reassembled in #%u]", mfp->last_frame);
+                    col_append_frame_number(pinfo, COL_INFO, " [Reassembled in #%u]", mfp->last_frame);
                 }
             }
             if (mfp != NULL && mfp->last_frame == pinfo->num) {
@@ -683,7 +671,7 @@ proto_register_bthci_acl(void)
     expert_register_field_array(bthci_acl_expert_module, ei, array_length(ei));
 
     /* Register configuration preferences */
-    bthci_acl_module = prefs_register_protocol(proto_bthci_acl, NULL);
+    bthci_acl_module = prefs_register_protocol_subtree("Bluetooth", proto_bthci_acl, NULL);
     prefs_register_bool_preference(bthci_acl_module, "hci_acl_reassembly",
         "Reassemble ACL Fragments",
         "Whether the ACL dissector should reassemble fragmented PDUs",

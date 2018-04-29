@@ -50,6 +50,8 @@
 #include "ui/gtk/old-gtk-compat.h"
 #include "ui/gtk/firewall_dlg.h"
 
+#include "globals.h"
+
 #define MAX_RULE_LEN 200
 
 /* Copied from packet_info struct */
@@ -460,7 +462,7 @@ firewall_copy_cmd_cb(GtkWidget *w _U_, gpointer data)
 }
 
 static gboolean
-firewall_save_as_ok_cb(char *to_name, rule_info_t *rule_info)
+firewall_save_as_ok_cb(const char *to_name, rule_info_t *rule_info)
 {
     FILE  *fh;
     gchar *rule;
@@ -471,7 +473,6 @@ firewall_save_as_ok_cb(char *to_name, rule_info_t *rule_info)
     fh = ws_fopen(to_name, "w");
     if (fh == NULL) {
         open_failure_alert_box(to_name, errno, TRUE);
-        g_free(to_name);
         return FALSE;
     }
 

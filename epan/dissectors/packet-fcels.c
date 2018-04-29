@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
@@ -1868,12 +1856,12 @@ dissect_fcels (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
             options = NO_PORT2;
         }
         conversation = find_conversation (pinfo->num, &pinfo->dst, &pinfo->src,
-                                          pinfo->ptype, fchdr->oxid,
+                                          conversation_pt_to_endpoint_type(pinfo->ptype), fchdr->oxid,
                                           fchdr->rxid, options);
 
         if (!conversation) {
             conversation = conversation_new (pinfo->num, &pinfo->dst, &pinfo->src,
-                                             pinfo->ptype, fchdr->oxid,
+                                             conversation_pt_to_endpoint_type(pinfo->ptype), fchdr->oxid,
                                              fchdr->rxid, options);
         }
 
@@ -1903,7 +1891,7 @@ dissect_fcels (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 
         options = NO_PORT2;
         conversation = find_conversation (pinfo->num, &pinfo->dst, &pinfo->src,
-                                          pinfo->ptype, fchdr->oxid,
+                                          conversation_pt_to_endpoint_type(pinfo->ptype), fchdr->oxid,
                                           fchdr->rxid, options);
         if (!conversation) {
             /* FLOGI has two ways to save state: without the src and using just
@@ -1925,7 +1913,7 @@ dissect_fcels (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
             addrdata[2] = dstfc[2];
             set_address (&dstaddr, AT_FC, 3, addrdata);
             conversation = find_conversation (pinfo->num, &dstaddr, &pinfo->src,
-                                              pinfo->ptype, fchdr->oxid,
+                                              conversation_pt_to_endpoint_type(pinfo->ptype), fchdr->oxid,
                                               fchdr->rxid, options);
         }
 
@@ -1933,7 +1921,7 @@ dissect_fcels (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
             /* Finally check for FLOGI with both NO_PORT2 and NO_ADDR2 set */
             options = NO_ADDR2 | NO_PORT2;
             conversation = find_conversation (pinfo->num, &pinfo->src, &pinfo->dst,
-                                              pinfo->ptype, fchdr->oxid,
+                                              conversation_pt_to_endpoint_type(pinfo->ptype), fchdr->oxid,
                                               fchdr->rxid, options);
             if (!conversation) {
                 if (tree && (opcode == FC_ELS_ACC)) {

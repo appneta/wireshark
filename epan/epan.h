@@ -4,19 +4,7 @@
  *
  * Copyright (c) 2001 by Gerald Combs <gerald@wireshark.org>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #ifndef __EPAN_H__
@@ -30,6 +18,7 @@ extern "C" {
 #include <epan/tvbuff.h>
 #include <epan/prefs.h>
 #include <epan/frame_data.h>
+#include <wsutil/plugins.h>
 #include "register.h"
 #include "ws_symbol_export.h"
 
@@ -37,6 +26,29 @@ typedef struct epan_dissect epan_dissect_t;
 
 struct epan_dfilter;
 struct epan_column_info;
+
+/*
+ * Opaque structure provided when an epan_t is created; it contains
+ * information needed to allow the user of libwireshark to provide
+ * time stamps, comments, and other information outside the packet
+ * data itself.
+ */
+struct packet_provider_data;
+
+/*
+ * Structure containing pointers to functions supplied by the user
+ * of libwireshark.
+ */
+struct packet_provider_funcs {
+	const nstime_t *(*get_frame_ts)(struct packet_provider_data *prov, guint32 frame_num);
+	const char *(*get_interface_name)(struct packet_provider_data *prov, guint32 interface_id);
+	const char *(*get_interface_description)(struct packet_provider_data *prov, guint32 interface_id);
+	const char *(*get_user_comment)(struct packet_provider_data *prov, const frame_data *fd);
+};
+
+#ifdef HAVE_PLUGINS
+extern plugins_t *libwireshark_plugins;
+#endif
 
 /**
 	@mainpage Wireshark EPAN the packet analyzing engine. Source code can be found in the epan directory
@@ -81,15 +93,6 @@ Ref2 for further edits - delete when done
 	- \ref airpcapdefs
 	- \ref radiotap
 */
-/*
- * Register all the plugin types that are part of libwireshark.
- *
- * Must be called before init_plugins(), which must be called before
- * any registration routines are called, i.e. before epan_init().
- *
- * Must be called only once in a program.
- */
-WS_DLL_PUBLIC void epan_register_plugin_types(void);
 
 /**
  * Init the whole epan module.
@@ -113,6 +116,18 @@ e_prefs *epan_load_settings(void);
 WS_DLL_PUBLIC
 void epan_cleanup(void);
 
+#ifdef HAVE_PLUGINS
+typedef struct {
+	void (*init)(void);
+	void (*dissect_init)(epan_dissect_t *);
+	void (*dissect_cleanup)(epan_dissect_t *);
+	void (*cleanup)(void);
+	void (*register_all_protocols)(register_cb, gpointer);
+	void (*register_all_handoffs)(register_cb, gpointer);
+} epan_plugin;
+
+WS_DLL_PUBLIC void epan_register_plugin(const epan_plugin *plugin);
+#endif
 /**
  * Initialize the table of conversations.  Conversations are identified by
  * their endpoints; they are used for protocols such as IP, TCP, and UDP,
@@ -120,19 +135,6 @@ void epan_cleanup(void);
  * value indicating to which flow the packet belongs.
  */
 void epan_conversation_init(void);
-
-/**
- * Initialize the table of circuits.  Circuits are identified by a
- * circuit ID; they are used for protocols where packets *do* contain
- * a circuit ID value indicating to which flow the packet belongs.
- *
- * We might want to make a superclass for both endpoint-specified
- * conversations and circuit ID-specified circuits, so we can attach
- * information either to a circuit or a conversation with common
- * code.
- */
-void epan_circuit_init(void);
-void epan_circuit_cleanup(void);
 
 /** A client will create one epan_t for an entire dissection session.
  * A single epan_t will be used to analyze the entire sequence of packets,
@@ -143,7 +145,8 @@ void epan_circuit_cleanup(void);
  */
 typedef struct epan_session epan_t;
 
-WS_DLL_PUBLIC epan_t *epan_new(void);
+WS_DLL_PUBLIC epan_t *epan_new(struct packet_provider_data *prov,
+    const struct packet_provider_funcs *funcs);
 
 WS_DLL_PUBLIC const char *epan_get_user_comment(const epan_t *session, const frame_data *fd);
 
@@ -157,6 +160,8 @@ WS_DLL_PUBLIC void epan_free(epan_t *session);
 
 WS_DLL_PUBLIC const gchar*
 epan_get_version(void);
+
+WS_DLL_PUBLIC void epan_get_version_number(int *major, int *minor, int *micro);
 
 /**
  * Set/unset the tree to always be visible when epan_dissect_init() is called.
@@ -195,24 +200,24 @@ epan_dissect_fake_protocols(epan_dissect_t *edt, const gboolean fake_protocols);
 WS_DLL_PUBLIC
 void
 epan_dissect_run(epan_dissect_t *edt, int file_type_subtype,
-        struct wtap_pkthdr *phdr, tvbuff_t *tvb, frame_data *fd,
+        wtap_rec *rec, tvbuff_t *tvb, frame_data *fd,
         struct epan_column_info *cinfo);
 
 WS_DLL_PUBLIC
 void
 epan_dissect_run_with_taps(epan_dissect_t *edt, int file_type_subtype,
-        struct wtap_pkthdr *phdr, tvbuff_t *tvb, frame_data *fd,
+        wtap_rec *rec, tvbuff_t *tvb, frame_data *fd,
         struct epan_column_info *cinfo);
 
 /** run a single file packet dissection */
 WS_DLL_PUBLIC
 void
-epan_dissect_file_run(epan_dissect_t *edt, struct wtap_pkthdr *phdr,
+epan_dissect_file_run(epan_dissect_t *edt, wtap_rec *rec,
         tvbuff_t *tvb, frame_data *fd, struct epan_column_info *cinfo);
 
 WS_DLL_PUBLIC
 void
-epan_dissect_file_run_with_taps(epan_dissect_t *edt, struct wtap_pkthdr *phdr,
+epan_dissect_file_run_with_taps(epan_dissect_t *edt, wtap_rec *rec,
         tvbuff_t *tvb, frame_data *fd, struct epan_column_info *cinfo);
 
 /** Prime an epan_dissect_t's proto_tree using the fields/protocols used in a dfilter. */

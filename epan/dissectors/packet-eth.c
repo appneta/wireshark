@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -57,6 +45,8 @@ static gboolean eth_assume_fcs = FALSE;
 static gboolean eth_check_fcs = TRUE;
 /* Interpret packets as FW1 monitor file packets if they look as if they are */
 static gboolean eth_interpret_as_fw1_monitor = FALSE;
+/* When capturing on a Cisco FEX some frames start with an extra destination mac */
+static gboolean eth_deduplicate_dmac = FALSE;
 /* Preference settings defining conditions for which the CCSDS dissector is called */
 static gboolean ccsds_heuristic_length = FALSE;
 static gboolean ccsds_heuristic_version = FALSE;
@@ -138,7 +128,7 @@ eth_conversation_packet(void *pct, packet_info *pinfo, epan_dissect_t *edt _U_, 
   conv_hash_t *hash = (conv_hash_t*) pct;
   const eth_hdr *ehdr=(const eth_hdr *)vip;
 
-  add_conversation_table_data(hash, &ehdr->src, &ehdr->dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &eth_ct_dissector_info, PT_NONE);
+  add_conversation_table_data(hash, &ehdr->src, &ehdr->dst, 0, 0, 1, pinfo->fd->pkt_len, &pinfo->rel_ts, &pinfo->abs_ts, &eth_ct_dissector_info, ENDPOINT_NONE);
 
   return 1;
 }
@@ -162,8 +152,8 @@ eth_hostlist_packet(void *pit, packet_info *pinfo, epan_dissect_t *edt _U_, cons
   /* Take two "add" passes per packet, adding for each direction, ensures that all
      packets are counted properly (even if address is sending to itself)
      XXX - this could probably be done more efficiently inside hostlist_table */
-  add_hostlist_table_data(hash, &ehdr->src, 0, TRUE, 1, pinfo->fd->pkt_len, &eth_host_dissector_info, PT_NONE);
-  add_hostlist_table_data(hash, &ehdr->dst, 0, FALSE, 1, pinfo->fd->pkt_len, &eth_host_dissector_info, PT_NONE);
+  add_hostlist_table_data(hash, &ehdr->src, 0, TRUE, 1, pinfo->fd->pkt_len, &eth_host_dissector_info, ENDPOINT_NONE);
+  add_hostlist_table_data(hash, &ehdr->dst, 0, FALSE, 1, pinfo->fd->pkt_len, &eth_host_dissector_info, ENDPOINT_NONE);
 
   return 1;
 }
@@ -763,12 +753,24 @@ dissect_eth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
   struct eth_phdr   *eth = (struct eth_phdr *)data;
   proto_tree        *fh_tree;
+  tvbuff_t          *real_tvb;
+  guint              fcs_len = eth_assume_fcs ? 4 : (eth ? eth->fcs_len : -1);
+
+  /* When capturing on a Cisco FEX, some frames (most likely all frames
+     captured without a vntag) have an extra destination mac prepended. */
+  if (eth_deduplicate_dmac && tvb_captured_length(tvb) > 20 &&
+      memcmp(tvb_get_ptr(tvb,0,6),tvb_get_ptr(tvb,6,6), 6) == 0) {
+    real_tvb = tvb_new_subset_length_caplen(tvb, 6,
+      tvb_captured_length(tvb) - 6, tvb_reported_length(tvb) - 6);
+  } else {
+    real_tvb = tvb;
+  }
 
   /* Some devices slice the packet and add their own trailer before
      putting the frame on the network. Make sure these packets get
      a proper trailer (even though the sliced frame might not
      properly dissect. */
-  if ( (eth_trailer_length > 0) && (eth_trailer_length < tvb_captured_length(tvb)) ) {
+  if ( (eth_trailer_length > 0) && (eth_trailer_length < tvb_captured_length(real_tvb)) ) {
     tvbuff_t *next_tvb;
     guint total_trailer_length;
 
@@ -779,25 +781,25 @@ dissect_eth(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     total_trailer_length = eth_trailer_length + (eth_assume_fcs ? 4 : 0);
 
     /* Dissect the tvb up to, but not including the trailer */
-    next_tvb = tvb_new_subset_length_caplen(tvb, 0,
-                              tvb_captured_length(tvb) - total_trailer_length,
-                              tvb_reported_length(tvb) - total_trailer_length);
+    next_tvb = tvb_new_subset_length_caplen(real_tvb, 0,
+                              tvb_captured_length(real_tvb) - total_trailer_length,
+                              tvb_reported_length(real_tvb) - total_trailer_length);
     fh_tree = dissect_eth_common(next_tvb, pinfo, tree, 0);
 
     /* Now handle the ethernet trailer and optional FCS */
-    next_tvb = tvb_new_subset_remaining(tvb, tvb_captured_length(tvb) - total_trailer_length);
+    next_tvb = tvb_new_subset_remaining(real_tvb, tvb_captured_length(real_tvb) - total_trailer_length);
     /*
      * XXX - this overrides Wiretap saying "this packet definitely has
      * no FCS".
      */
-    add_ethernet_trailer(pinfo, tree, fh_tree, hf_eth_trailer, tvb, next_tvb,
-                         eth_assume_fcs ? 4 : eth->fcs_len);
+    add_ethernet_trailer(pinfo, tree, fh_tree, hf_eth_trailer, real_tvb, next_tvb,
+                         fcs_len);
   } else {
     /*
      * XXX - this overrides Wiretap saying "this packet definitely has
      * no FCS".
      */
-    dissect_eth_common(tvb, pinfo, tree, eth_assume_fcs ? 4 : eth->fcs_len);
+    dissect_eth_common(real_tvb, pinfo, tree, fcs_len);
   }
   return tvb_captured_length(tvb);
 }
@@ -957,6 +959,11 @@ proto_register_eth(void)
                                  "Attempt to interpret as FireWall-1 monitor file",
                                  "Whether packets should be interpreted as coming from CheckPoint FireWall-1 monitor file if they look as if they do",
                                  &eth_interpret_as_fw1_monitor);
+
+  prefs_register_bool_preference(eth_module, "deduplicate_dmac",
+                                 "Skip bytes 1-6 if identical to 7-12",
+                                 "When capturing on a Cisco FEX some frames start with an extra destination mac",
+                                 &eth_deduplicate_dmac);
 
   prefs_register_static_text_preference(eth_module, "ccsds_heuristic",
                                         "Dissect as CCSDS if",

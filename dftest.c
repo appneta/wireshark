@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -45,7 +33,7 @@
 #include <wiretap/wtap.h>
 
 #include "ui/util.h"
-#include "register.h"
+#include "epan/register.h"
 
 static void failure_warning_message(const char *msg_format, va_list ap);
 static void open_failure_message(const char *filename, int err,
@@ -84,16 +72,7 @@ main(int argc, char **argv)
 	timestamp_set_type(TS_RELATIVE);
 	timestamp_set_seconds_type(TS_SECONDS_DEFAULT);
 
-#ifdef HAVE_PLUGINS
-	/* Register all the plugin types we have. */
-	epan_register_plugin_types(); /* Types known to libwireshark */
-
-	/* Scan for plugins.  This does *not* call their registration routines;
-	   that's done later. */
-	scan_plugins(REPORT_LOAD_FAILURE);
-#endif
-
-	wtap_init();
+	wtap_init(TRUE);
 
 	/* Register all dissectors; we must do this before checking for the
 	   "-g" flag, as the "-g" flag dumps a list of fields registered

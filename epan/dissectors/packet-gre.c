@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -129,7 +117,7 @@ const value_string gre_typevals[] = {
     { GRE_CISCO_CDP,       "CDP (Cisco)"},
     { GRE_NHRP,            "NHRP"},
     { GRE_ERSPAN_88BE,     "ERSPAN"},
-    { GRE_ERSPAN_22EB,     "ERSPAN"},
+    { GRE_ERSPAN_22EB,     "ERSPAN III"},
     { GRE_MIKROTIK_EOIP,   "MIKROTIK EoIP"},
     { GRE_AIROHIVE,        "AIROHIVE AP AP"},
     { ETHERTYPE_IPX,       "IPX"},
@@ -510,7 +498,7 @@ dissect_gre(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
         }
         next_tvb = tvb_new_subset_remaining(tvb, offset);
         pinfo->flags.in_gre_pkt = TRUE;
-        if (!dissector_try_uint(gre_dissector_table, type, next_tvb, pinfo, tree))
+        if (!dissector_try_uint_new(gre_dissector_table, type, next_tvb, pinfo, tree, TRUE, &flags_and_ver))
             call_data_dissector(next_tvb, pinfo, gre_tree);
     }
     return tvb_captured_length(tvb);
@@ -746,7 +734,25 @@ proto_register_gre(void)
     expert_gre = expert_register_protocol(proto_gre);
     expert_register_field_array(expert_gre, ei, array_length(ei));
 
-    /* subdissector code */
+    /*
+     * Dissector table.
+     *
+     * XXX - according to
+     *
+     *    https://www.iana.org/assignments/gre-parameters/gre-parameters.xhtml#gre-parameters-1
+     *
+     * these are just Ethertypes; should we use "gre.proto" only for
+     * protocols *not* registered as Ethertypes, such as those listed
+     * in the table in "Current List of Protocol Types" in RFC 1701
+     * ("For historical reasons, a number of other values have been
+     * used for some protocols."), and for protocols encapsulated in GRE
+     * differently from the way they're encapsulated over LAN protocols
+     * (for example, Cisco MetaData), and if we don't get a match there,
+     * use the "ethertype" table?
+     *
+     * And should we also somehow do something similar for mapping values
+     * to strings, falling back on etype_vals?
+     */
     gre_dissector_table = register_dissector_table("gre.proto",
                                                    "GRE protocol type", proto_gre, FT_UINT16, BASE_HEX);
 }

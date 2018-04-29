@@ -12,19 +12,7 @@
  * by   Maria-Luiza Crivat <luizacri@gmail.com>
  * &    Brice Augustin <bricecotte@gmail.com>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * Added support for ICMP extensions RFC 4884 and RFC 5837
  * (c) 2011 Gaurav Tungatkar <gstungat@ncsu.edu>
@@ -38,12 +26,15 @@
 #include <epan/prefs.h>
 #include <epan/expert.h>
 #include <epan/in_cksum.h>
+#include <epan/sequence_analysis.h>
 #include <epan/to_str.h>
 #include <epan/conversation.h>
 #include <epan/tap.h>
 #include <epan/ipproto.h>
 #include <epan/capture_dissectors.h>
 #include <epan/proto_data.h>
+
+#include <wsutil/pint.h>
 
 #include "packet-ip.h"
 #include "packet-icmp.h"
@@ -77,7 +68,8 @@ static icmp_transaction_t *transaction_end(packet_info * pinfo,
 if the packet in the payload has more than 128 bytes */
 static gboolean favor_icmp_mpls_ext = FALSE;
 
-int proto_icmp = -1;
+static int proto_icmp = -1;
+
 static int hf_icmp_type = -1;
 static int hf_icmp_code = -1;
 static int hf_icmp_checksum = -1;
@@ -328,6 +320,12 @@ static const value_string mip_extensions[] = {
 	{0, NULL}
 };
 
+static const value_string icmp_ext_class_str[] = {
+	{1, "MPLS Label Stack Class"},
+	{2, "Interface Information Object"},
+	{0, NULL}
+};
+
 /* RFC 5837 ICMP extension - Interface Information Object
  * Interface Role
  */
@@ -355,21 +353,61 @@ static const value_string interface_role_str[] = {
 #define MPLS_EXTENDED_PAYLOAD_C_TYPE             1
 
 /* Return true if the address is in the 224.0.0.0/4 network block */
-#define is_a_multicast_addr(a) \
-	((g_ntohl(a) & 0xf0000000) == 0xe0000000)
+#define is_a_multicast_addr(a)	in4_addr_is_multicast(a)
 
 /* Return true if the address is the 255.255.255.255 broadcast address */
-#define is_a_broadcast_addr(a) \
-	(g_ntohl(a) == 0xffffffff)
+#define is_a_broadcast_addr(a)	((a) == 0xffffffffU)
 
+/*
+ * XXX - should these be checking the address *type*, instead?
+ */
 #define ADDR_IS_MULTICAST(addr) \
-	(((addr)->len == 4) && is_a_multicast_addr(*(const guint32 *)((addr)->data)))
+	(((addr)->len == 4) && is_a_multicast_addr(pntoh32((addr)->data)))
 
 #define ADDR_IS_BROADCAST(addr) \
-	(((addr)->len == 4) && is_a_broadcast_addr(*(const guint32 *)((addr)->data)))
+	(((addr)->len == 4) && is_a_broadcast_addr(pntoh32((addr)->data)))
 
 #define ADDR_IS_NOT_UNICAST(addr) \
 	(ADDR_IS_MULTICAST(addr) || ADDR_IS_BROADCAST(addr))
+
+
+/* whenever a ICMP packet is seen by the tap listener */
+/* Add a new frame into the graph */
+static gboolean
+icmp_seq_analysis_packet( void *ptr, packet_info *pinfo, epan_dissect_t *edt _U_, const void *dummy _U_)
+{
+	seq_analysis_info_t *sainfo = (seq_analysis_info_t *) ptr;
+	seq_analysis_item_t *sai = sequence_analysis_create_sai_with_addresses(pinfo, sainfo);
+
+	if (!sai)
+		return FALSE;
+
+	sai->frame_number = pinfo->num;
+
+	sequence_analysis_use_color_filter(pinfo, sai);
+
+	sai->port_src=pinfo->srcport;
+	sai->port_dst=pinfo->destport;
+
+	sequence_analysis_use_col_info_as_label_comment(pinfo, sai);
+
+	if (pinfo->ptype == PT_NONE) {
+		icmp_info_t *p_icmp_info = (icmp_info_t *)p_get_proto_data(wmem_file_scope(), pinfo, proto_icmp, 0);
+
+		if (p_icmp_info != NULL) {
+			sai->port_src = 0;
+			sai->port_dst = p_icmp_info->type * 256 + p_icmp_info->code;
+		}
+	}
+
+	sai->line_style = 1;
+	sai->conv_num = 0;
+	sai->display = TRUE;
+
+	g_queue_push_tail(sainfo->items, sai);
+
+	return TRUE;
+}
 
 static conversation_t *_find_or_create_conversation(packet_info * pinfo)
 {
@@ -377,13 +415,13 @@ static conversation_t *_find_or_create_conversation(packet_info * pinfo)
 
 	/* Have we seen this conversation before? */
 	conv =
-	    find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-			      pinfo->ptype, 0, 0, 0);
+	    find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, conversation_pt_to_endpoint_type(pinfo->ptype),
+			      0, 0, 0);
 	if (conv == NULL) {
 		/* No, this is a new conversation. */
 		conv =
 		    conversation_new(pinfo->num, &pinfo->src,
-				     &pinfo->dst, pinfo->ptype, 0, 0, 0);
+				     &pinfo->dst, conversation_pt_to_endpoint_type(pinfo->ptype), 0, 0, 0);
 	}
 	return conv;
 }
@@ -851,8 +889,8 @@ dissect_extensions(tvbuff_t * tvb, packet_info *pinfo, gint offset, proto_tree *
 
 		/* Class */
 		class_num = tvb_get_guint8(tvb, offset + 2);
-		proto_tree_add_uint(ext_object_tree, hf_icmp_ext_class,
-				    tvb, offset + 2, 1, class_num);
+		proto_tree_add_item(ext_object_tree, hf_icmp_ext_class,
+				    tvb, offset + 2, 1, ENC_BIG_ENDIAN);
 
 		/* C-Type */
 		c_type = tvb_get_guint8(tvb, offset + 3);
@@ -926,6 +964,19 @@ dissect_extensions(tvbuff_t * tvb, packet_info *pinfo, gint offset, proto_tree *
 }
 
 /* ======================================================================= */
+/*
+	Note: We are tracking conversations via these keys:
+
+	0                   1                   2                   3
+	0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                             |G|            Checksum           |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|           Identifier          |        Sequence Number        |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                            VLAN ID                            |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+*/
 static icmp_transaction_t *transaction_start(packet_info * pinfo,
 					     proto_tree * tree,
 					     guint32 * key)
@@ -951,7 +1002,7 @@ static icmp_transaction_t *transaction_start(packet_info * pinfo,
 		/* this is a new request, create a new transaction structure and map it to the
 		   unmatched table
 		 */
-		icmp_key[0].length = 2;
+		icmp_key[0].length = 3;
 		icmp_key[0].key = key;
 		icmp_key[1].length = 0;
 		icmp_key[1].key = NULL;
@@ -967,7 +1018,7 @@ static icmp_transaction_t *transaction_start(packet_info * pinfo,
 		/* Already visited this frame */
 		guint32 frame_num = pinfo->num;
 
-		icmp_key[0].length = 2;
+		icmp_key[0].length = 3;
 		icmp_key[0].key = key;
 		icmp_key[1].length = 1;
 		icmp_key[1].key = &frame_num;
@@ -1005,7 +1056,7 @@ static icmp_transaction_t *transaction_start(packet_info * pinfo,
 					 icmp_trans->resp_frame);
 		PROTO_ITEM_SET_GENERATED(it);
 
-		col_append_fstr(pinfo->cinfo, COL_INFO, " (reply in %d)",
+		col_append_frame_number(pinfo, COL_INFO, " (reply in %u)",
 				icmp_trans->resp_frame);
 	}
 
@@ -1028,7 +1079,7 @@ static icmp_transaction_t *transaction_end(packet_info * pinfo,
 
 	conversation =
 	    find_conversation(pinfo->num, &pinfo->src, &pinfo->dst,
-			      pinfo->ptype, 0, 0, 0);
+			      conversation_pt_to_endpoint_type(pinfo->ptype), 0, 0, 0);
 	if (conversation == NULL) {
 		return NULL;
 	}
@@ -1041,7 +1092,7 @@ static icmp_transaction_t *transaction_end(packet_info * pinfo,
 	if (!PINFO_FD_VISITED(pinfo)) {
 		guint32 frame_num;
 
-		icmp_key[0].length = 2;
+		icmp_key[0].length = 3;
 		icmp_key[0].key = key;
 		icmp_key[1].length = 0;
 		icmp_key[1].key = NULL;
@@ -1061,7 +1112,7 @@ static icmp_transaction_t *transaction_end(packet_info * pinfo,
 
 		/* we found a match. Add entries to the matched table for both request and reply frames
 		 */
-		icmp_key[0].length = 2;
+		icmp_key[0].length = 3;
 		icmp_key[0].key = key;
 		icmp_key[1].length = 1;
 		icmp_key[1].key = &frame_num;
@@ -1079,7 +1130,7 @@ static icmp_transaction_t *transaction_end(packet_info * pinfo,
 		/* Already visited this frame */
 		guint32 frame_num = pinfo->num;
 
-		icmp_key[0].length = 2;
+		icmp_key[0].length = 3;
 		icmp_key[0].key = key;
 		icmp_key[1].length = 1;
 		icmp_key[1].key = &frame_num;
@@ -1108,7 +1159,7 @@ static icmp_transaction_t *transaction_end(packet_info * pinfo,
 						"%.3f ms", resp_time);
 	PROTO_ITEM_SET_GENERATED(it);
 
-	col_append_fstr(pinfo->cinfo, COL_INFO, " (request in %d)",
+	col_append_frame_number(pinfo, COL_INFO, " (request in %d)",
 			icmp_trans->rqst_frame);
 
 	return icmp_trans;
@@ -1197,10 +1248,10 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 	guint32 i;
 	gboolean save_in_error_pkt;
 	tvbuff_t *next_tvb;
-	guint32 conv_key[2];
+	guint32 conv_key[3];
 	icmp_transaction_t *trans = NULL;
 	nstime_t ts, time_relative;
-	ws_ip *iph = (ws_ip*)data;
+	ws_ip4 *iph = WS_IP4_PTR(data);
 
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "ICMP");
 	col_clear(pinfo->cinfo, COL_INFO);
@@ -1465,11 +1516,12 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 			if (!pinfo->flags.in_error_pkt) {
 				conv_key[0] =
 				    (guint32) tvb_get_ntohs(tvb, 2);
-				if (pinfo->flags.in_gre_pkt)
+				if (pinfo->flags.in_gre_pkt && prefs.strict_conversation_tracking_heuristics)
 					conv_key[0] |= 0x00010000;	/* set a bit for "in GRE" */
 				conv_key[1] =
 				    ((guint32) tvb_get_ntohs(tvb, 4) << 16) |
 				     tvb_get_ntohs(tvb, 6);
+				conv_key[2] = prefs.strict_conversation_tracking_heuristics ? pinfo->vlan_id : 0;
 				trans =
 				    transaction_end(pinfo, icmp_tree,
 						    conv_key);
@@ -1486,12 +1538,13 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 				if (conv_key[0] == 0) {
 					conv_key[0] = 0xffff;
 				}
-				if (pinfo->flags.in_gre_pkt) {
+				if (pinfo->flags.in_gre_pkt && prefs.strict_conversation_tracking_heuristics) {
 					conv_key[0] |= 0x00010000;	/* set a bit for "in GRE" */
 				}
 				conv_key[1] =
 				    ((guint32) tvb_get_ntohs(tvb, 4) << 16) |
 				     tvb_get_ntohs(tvb, 6);
+				conv_key[2] = prefs.strict_conversation_tracking_heuristics ? pinfo->vlan_id : 0;
 				trans =
 				    transaction_start(pinfo, icmp_tree,
 						      conv_key);
@@ -1844,8 +1897,8 @@ void proto_register_icmp(void)
 		  NULL, HFILL}},
 
 		{&hf_icmp_ext_class,
-		 {"Class", "icmp.ext.class", FT_UINT8, BASE_DEC, NULL, 0x0,
-		  NULL, HFILL}},
+		 {"Class", "icmp.ext.class", FT_UINT8, BASE_DEC,
+		 VALS(icmp_ext_class_str), 0x0, NULL, HFILL}},
 
 		{&hf_icmp_ext_c_type,
 		 {"C-Type", "icmp.ext.ctype", FT_UINT8, BASE_DEC, NULL,
@@ -2027,6 +2080,7 @@ void proto_register_icmp(void)
 				       "Whether the 128th and following bytes of the ICMP payload should be decoded as MPLS extensions or as a portion of the original packet",
 				       &favor_icmp_mpls_ext);
 
+	register_seq_analysis("icmp", "ICMP Flows", proto_icmp, NULL, TL_REQUIRES_COLUMNS, icmp_seq_analysis_packet);
 	icmp_handle = register_dissector("icmp", dissect_icmp, proto_icmp);
 	icmp_tap = register_tap("icmp");
 }

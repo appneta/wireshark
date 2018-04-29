@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -26,7 +14,7 @@
 #include <wsutil/str_util.h>
 #include "unit_strings.h"
 
-char* unit_name_string_get_value(guint32 value, unit_name_string* units)
+const char* unit_name_string_get_value(guint32 value, const unit_name_string* units)
 {
     if (units->plural == NULL)
         return units->singular;
@@ -34,7 +22,7 @@ char* unit_name_string_get_value(guint32 value, unit_name_string* units)
     return plurality(value, units->singular, units->plural);
 }
 
-char* unit_name_string_get_value64(guint64 value, unit_name_string* units)
+const char* unit_name_string_get_value64(guint64 value, const unit_name_string* units)
 {
     if (units->plural == NULL)
         return units->singular;
@@ -42,7 +30,7 @@ char* unit_name_string_get_value64(guint64 value, unit_name_string* units)
     return plurality(value, units->singular, units->plural);
 }
 
-char* unit_name_string_get_double(double value, unit_name_string* units)
+const char* unit_name_string_get_double(double value, const unit_name_string* units)
 {
     if (units->plural == NULL)
         return units->singular;
@@ -58,6 +46,7 @@ char* unit_name_string_get_double(double value, unit_name_string* units)
 const unit_name_string units_foot_feet = { " foot", " feet" };
 const unit_name_string units_bit_bits = { " bit", " bits" };
 const unit_name_string units_byte_bytes = { " byte", " bytes" };
+const unit_name_string units_byte_bytespsecond = { " byte/s", " bytes/s" };
 const unit_name_string units_octet_octets = { " octet", " octets" };
 const unit_name_string units_word_words = { " word", " words" };
 const unit_name_string units_tick_ticks = { " tick", " ticks" };
@@ -80,6 +69,7 @@ const unit_name_string units_nanoseconds = { "ns", NULL };
 const unit_name_string units_nanometers = { "nm", NULL };
 const unit_name_string units_degree_degrees = { " degree", " degrees" };
 const unit_name_string units_degree_celsius = { UTF8_DEGREE_SIGN "C", NULL };
+const unit_name_string units_degree_bearing = { UTF8_DEGREE_SIGN, NULL };
 const unit_name_string units_decibels = { "dB", NULL };
 const unit_name_string units_dbm = { "dBm", NULL };
 const unit_name_string units_dbi = { "dBi", NULL };
@@ -108,6 +98,9 @@ const unit_name_string units_revolutions_per_minute = { "rpm", NULL };
 const unit_name_string units_kilopascal = { "kPa", NULL };
 const unit_name_string units_newton_metre = { "Nm", NULL };
 const unit_name_string units_liter_per_hour = { "L/h", NULL };
+const unit_name_string units_amp = { "A", NULL };
+const unit_name_string units_watthour = { "Wh", NULL };
+const unit_name_string units_watt = { "W", NULL };
 
 
 /*

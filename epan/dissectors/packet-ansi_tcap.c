@@ -15,19 +15,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  * References: T1.114
  */
 
@@ -125,7 +113,7 @@ static int hf_ansi_tcap_paramSequence = -1;       /* T_paramSequence */
 static int hf_ansi_tcap_paramSet = -1;            /* T_paramSet */
 
 /*--- End of included file: packet-ansi_tcap-hf.c ---*/
-#line 65 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 53 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
 
 /* Initialize the subtree pointers */
 static gint ett_tcap = -1;
@@ -173,7 +161,7 @@ static gint ett_ansi_tcap_T_paramSequence = -1;
 static gint ett_ansi_tcap_T_paramSet = -1;
 
 /*--- End of included file: packet-ansi_tcap-ett.c ---*/
-#line 86 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 74 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
 
 #define MAX_SSN 254
 
@@ -191,9 +179,6 @@ struct tcapsrt_info_t tcapsrt_global_info[MAX_TCAP_INSTANCE];
 static dissector_table_t ber_oid_dissector_table=NULL;
 static const char * cur_oid;
 static const char * tcapext_oid;
-static proto_tree * tcap_top_tree=NULL;
-static proto_tree * tcap_stat_tree=NULL;
-static proto_item * tcap_stat_item=NULL;
 
 static dissector_handle_t ansi_map_handle;
 
@@ -373,7 +358,7 @@ find_tcap_subdissector(tvbuff_t *tvb, asn1_ctx_t *actx, proto_tree *tree){
                 /* national */
                 guint8 family = (ansi_tcap_private.d.OperationCode_national & 0x7f00)>>8;
                 guint8 specifier = (guint8)(ansi_tcap_private.d.OperationCode_national & 0xff);
-                if(!dissector_try_uint(ansi_tcap_national_opcode_table, ansi_tcap_private.d.OperationCode_national, tvb, actx->pinfo, tcap_top_tree)){
+                if(!dissector_try_uint(ansi_tcap_national_opcode_table, ansi_tcap_private.d.OperationCode_national, tvb, actx->pinfo, actx->subtree.top_tree)){
                         proto_tree_add_expert_format(tree, actx->pinfo, &ei_ansi_tcap_dissector_not_implemented, tvb, 0, -1,
                                         "Dissector for ANSI TCAP NATIONAL code:0x%x(Family %u, Specifier %u) \n"
                                         "not implemented. Contact Wireshark developers if you want this supported(Spec required)",
@@ -400,7 +385,7 @@ find_tcap_subdissector(tvbuff_t *tvb, asn1_ctx_t *actx, proto_tree *tree){
          * Operation Family is coded as decimal 9. Bit H of the Operation Family is always
          * coded as 0.
          */
-        call_dissector_with_data(ansi_map_handle, tvb, actx->pinfo, tcap_top_tree, &ansi_tcap_private);
+        call_dissector_with_data(ansi_map_handle, tvb, actx->pinfo, actx->subtree.top_tree, &ansi_tcap_private);
 
         return TRUE;
 }
@@ -1375,7 +1360,7 @@ dissect_ansi_tcap_PackageType(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int 
 
 
 /*--- End of included file: packet-ansi_tcap-fn.c ---*/
-#line 318 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 303 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
 
 
 
@@ -1397,15 +1382,13 @@ dissect_ansi_tcap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, vo
         asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
         ansi_tcap_ctx_init(&ansi_tcap_private);
 
-    tcap_top_tree = parent_tree;
+    asn1_ctx.subtree.top_tree = parent_tree;
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "ANSI TCAP");
 
     /* create display subtree for the protocol */
     if(parent_tree){
       item = proto_tree_add_item(parent_tree, proto_ansi_tcap, tvb, 0, -1, ENC_NA);
       tree = proto_item_add_subtree(item, ett_tcap);
-      tcap_stat_item=item;
-      tcap_stat_tree=tree;
     }
     cur_oid = NULL;
     tcapext_oid = NULL;
@@ -1719,7 +1702,7 @@ proto_register_ansi_tcap(void)
         NULL, HFILL }},
 
 /*--- End of included file: packet-ansi_tcap-hfarr.c ---*/
-#line 453 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 436 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
     };
 
 /* Setup protocol subtree array */
@@ -1757,7 +1740,7 @@ proto_register_ansi_tcap(void)
     &ett_ansi_tcap_T_paramSet,
 
 /*--- End of included file: packet-ansi_tcap-ettarr.c ---*/
-#line 464 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
+#line 447 "./asn1/ansi_tcap/packet-ansi_tcap-template.c"
     };
 
     static ei_register_info ei[] = {

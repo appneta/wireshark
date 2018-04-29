@@ -1,97 +1,96 @@
 include::attributes.asciidoc[]
+:stylesheet: ws.css
+:linkcss:
 
 = Wireshark {wireshark-version} Release Notes
-// AsciiDoc quick reference: http://powerman.name/doc/asciidoc
+// Asciidoctor Syntax Quick Reference:
+// http://asciidoctor.org/docs/asciidoc-syntax-quick-reference/
+
+This is the first release candidate for Wireshark 2.6.0.
 
 == What is Wireshark?
 
-Wireshark is the world's most popular network protocol analyzer. It is
+Wireshark is the world’s most popular network protocol analyzer. It is
 used for troubleshooting, analysis, development and education.
 
-== What's New
+== What’s New
+
+Wireshark 2.6 is the last release that will support the legacy (GTK+)
+user interface. It will not be supported or available in Wireshark 3.0.
+
+Many user interface improvements have been made. See the “New and Updated
+Features” section below for more details.
 
 === Bug Fixes
 
 The following bugs have been fixed:
 
-* ws-salink:2017-47[]
-+
-The IWARP_MPA dissector could crash.
-(ws-buglink:14236[])
-// cve-idlink:2017-xxxx[]
-// Fixed in master: f23a6e193f
-// Fixed in master-2.4: 8502fe94ef
-// Fixed in master-2.2: 53cf81d4f2
+//* ws_buglink:5000[]
+//* ws_buglink:6000[Wireshark bug]
+//* cve_idlink:2014-2486[]
+//* Wireshark convinced you to switch seats on the plane while neglecting to tell you that its seat was noticeably moist.
 
-* ws-salink:2017-48[]
-+
-The NetBIOS dissector could crash.
-(ws-buglink:14249[])
-// cve-idlink:2017-xxxx[]
-// Fixed in master: b59dc97dfe
-// Fixed in master-2.4: 87b6ea2237
-// Fixed in master-2.2: 79768d63d1
+//_Non-empty section placeholder._
 
-* ws-salink:2017-49[]
-+
-The CIP Safety dissector could crash.
-(ws-buglink:14250[])
-// cve-idlink:2017-xxxx[]
-// Fixed in master: 041e3e7c27, 3d6da018e7
-// Fixed in master-2.4: ec6972193c, 1166734b35
-// Fixed in master-2.2: 6966d5db73, 6966d5db73
-
-//* ws-buglink:5000[]
-//* ws-buglink:6000[Wireshark bug]
-//* cve-idlink:2014-2486[]
-//* Wireshark keeps leaving voicemails advertising timeshare condominiums in Fresno. (ws-buglink:0000[])
-// cp /dev/null /tmp/buglist.txt ; for bugnumber in `git log --stat v2.4.4rc0..| grep ' Bug:' | cut -f2 -d: | sort -n -u ` ; do gen-bugnote $bugnumber; pbpaste >> /tmp/buglist.txt; done
-
-* &quot;tshark -G ?&quot; doesn't provide expected help. (ws-buglink:13984[])
-
-* File loading is very slow with TRANSUM dissector enabled. (ws-buglink:14094[])
-
-* packet-knxnetip.c:936: bad bitmask ?. (ws-buglink:14115[])
-
-* packet-q931.c:1306: bad compare ?. (ws-buglink:14116[])
-
-* SSL Dissection bug. (ws-buglink:14117[])
-
-* Wireshark crashes when exporting various files to .csv, txt and other ‘non-capture file’ formats. (ws-buglink:14128[])
-
-* RLC reassembly doesn't work for RLC over UDP heuristic dissector. (ws-buglink:14129[])
-
-* HTTP Object export fails with long extension (possibly query string). (ws-buglink:14130[])
-
-* 3GPP Civic Address not displayed in Packet Details. (ws-buglink:14131[])
-
-* Wireshark prefers packet.dll in System32\\Npcap over the one in System32. (ws-buglink:14134[])
-
-* PEEKREMOTE dissector does not decode 11ac MCS rates properly. (ws-buglink:14136[])
-
-* Visual Studio Community Edition 2015 lacks tools named in developer guide. (ws-buglink:14147[])
-
-* TCP: Malformed data with Riverbed Probe option. (ws-buglink:14150[])
-
-* Wireshark Crash when trying to use Preferences | Advanced. (ws-buglink:14157[])
-
-* Right click on SMB2 Message ID and then Apply as Column causes Runtime Error. (ws-buglink:14169[])
-
-* Return [Enter] should apply change (Column title - Button Label toolbars). (ws-buglink:14191[])
-
-* Wireshark crashes if &quot;rip.display_routing_domain&quot; is set to TRUE in preferences file. (ws-buglink:14197[])
-
-* Entry point inflatePrime not found for androiddump.exe and randpktdump.exe. (ws-buglink:14207[])
-
-* BGP: IPv6 NLRI is received with Add-path ID, then Wire shark is not able to decode the packet correctly. (ws-buglink:14241[])
-
-* Wrong SSL decryption when using EXTENDED MASTER SECRET and Client certificate request (mutual authentication). (ws-buglink:14243[])
-
-* Frame direction isn't always set if it comes from the pcapng record header rather than the packet pseudo-header. (ws-buglink:14245[])
+Dumpcap might not quit if Wireshark or TShark crashes.
+(ws_buglink:1419[])
 
 === New and Updated Features
 
-There are no new features in this release.
+The following features are new (or have been significantly updated)
+since version 2.5.0:
+
+* HTTP Request sequences are now supported.
+* Wireshark now supports MaxMind DB files. Support for GeoIP and GeoLite
+  Legacy databases has been removed.
+* The Windows packages are now built using Microsoft Visual Studio 2017.
+* The IP map feature (the “Map” button in the “Endpoints” dialog) has been removed.
+
+The following features are new (or have been significantly updated)
+since version 2.4.0:
+
+* Display filter buttons can now be edited, disabled, and removed via a context
+  menu directly from the toolbar
+* Drag & Drop filter fields to the display filter toolbar or edit to create
+  a button on the fly or apply the filter as a display filter.
+* Application startup time has been reduced.
+* Some keyboard shortcut mix-ups have been resolved by assigning new shortcuts
+  to Edit -> Copy methods.
+* TShark now supports color using the --color option.
+* The "matches" display filter operator is now case-insensitive.
+* Display expression (button) preferences have been converted to a UAT.
+  This puts the display expressions in their own file. Wireshark still
+  supports preference files that contain the old preferences, but new
+  preference files will be written without the old fields.
+* SMI private enterprise numbers are now read from the “enterprises.tsv” configuration file.
+* The QUIC dissector has been renamed to **G**oogle QUIC (quic -> **g**quic).
+* The selected packet number can now be shown in the Status Bar by enabling
+  Preferences -> Appearance -> Layout -> Show selected packet number.
+* File load time in the Status Bar is now disabled by default and can be enabled in
+  Preferences -> Appearance -> Layout -> Show file load time.
+* Support for the G.729A codec in the RTP Player is now added via the bcg729 library.
+* Support for hardware-timestamping of packets has been added.
+* Improved NetMon .cap support with comments, event tracing, network filter,
+  network info types and some Message Analyzer exported types.
+* The personal plugins folder on Linux/Unix is now {tilde}/.local/lib/wireshark/plugins.
+* TShark can print flow graphs using `-z flow…`
+* Capinfos now prints SHA256 hashes in addition to RIPEMD160 and SHA1. MD5 output
+  has been removed.
+* The packet editor has been removed. (This was a GTK+ only experimental feature.)
+* Support BBC micro:bit Bluetooth profile
+* The Linux and UNIX installation step for Wireshark will now install
+  headers required to build plugins. A pkg-config file is provided to
+  help with this (see “doc/plugins.example” for details). Note you must
+  still rebuild all plugins between minor releases (X.Y).
+* The Windows installers and packages now ship with Qt 5.9.4.
+* The generic data dissector can now uncompress zlib compressed data.
+* DNS Stats now supports service level statistics.
+* DNS filters for retransmissions and unsolicited responses have been added.
+* The “tcptrace” TCP Stream graph now shows duplicate ACKS and zero
+  window advertisements.
+* The membership operator now supports ranges, allowing display filters such as
+  `tcp.port in {4430..4434}` to be expressed. See the User's Guide, chapter
+  _Building display filter expressions_ for details.
 
 //=== Removed Dissectors
 
@@ -99,46 +98,72 @@ There are no new features in this release.
 
 === New Protocol Support
 
-There are no new protocols in this release.
+// Add one protocol per line between the -- delimiters.
+[commaize]
+--
+ActiveMQ Artemis Core Protocol
+AMT (Automatic Multicast Tunneling)
+AVSP (Arista Vendor Specific Protocol)
+Bluetooth Mesh
+Broadcom tags (Broadcom Ethernet switch management frames)
+CVS password server
+CAN-ETH
+Excentis DOCSIS31 XRA header
+F1 Application Protocol
+F5ethtrailer
+FP Mux
+GRPC (gRPC)
+IEEE 802.3br Frame Preemption Protocol
+IEEE 802.11ax (High Efficiency WLAN (HEW))
+IEEE 802.15.9 IEEE Recommended Practice for Transport of Key Management Protocol (KMP) Datagrams
+IEEE 1905.1a
+ISOBUS
+LoRaTap
+LoRaWAN
+Lustre Network
+Lustre Filesystem
+Nano / RaiBlocks Cryptocurrency Protocol (UDP)
+Network Functional Application Platform Interface (NFAPI) Protocol
+New Radio Radio Resource Control protocol
+New Radio Radio Link Control protocol
+NR (5G) MAC protocol
+NXP 802.15.4 Sniffer Protocol
+Object Security for Constrained RESTful Environments (OSCORE)
+PFCP (Packet Forwarding Control Protocol)
+Protobuf (Protocol Buffers)
+QUIC (IETF)
+RFC 4108 Using CMS to Protect Firmware Packages
+SolarEdge monitoring protocol
+Session Multiplex Protocol
+Steam In-Home Streaming Discovery Protocol
+Tibia
+TWAMP and OWAMP
+Wi-Fi Device Provisioning Protocol
+Wi-SUN FAN Protocol
+--
 
 === Updated Protocol Support
 
---sort-and-group--
-3GPP NAS
-BGP
-CIP Safety
-DTLS
-IEEE 802.11 Radio
-IWARP_MPA
-KNXnet/IP
-LCSAP
-MQTT
-NetBIOS
-PEEKREMOTE
-Q.931
-RIP
-RLC
-SIP
-SSL/TLS
-TCP
-TRANSUM
---sort-and-group--
+Too many protocols have been updated to list here.
 
 === New and Updated Capture File Support
 
-There is no new or updated capture file support in this release.
-//--sort-and-group--
-//--sort-and-group--
+//_Non-empty section placeholder._
+// Add one file type per line between the --sort-and-group-- delimiters.
+[commaize]
+--
+Microsoft Network Monitor
+--
 
-//=== New and Updated Capture Interfaces support
+=== New and Updated Capture Interfaces support
 
 //_Non-empty section placeholder._
-//--sort-and-group--
-//--sort-and-group--
+[commaize]
+--
+LoRaTap
+--
 
 //=== Major API Changes
-
-//_Non-empty section placeholder._
 
 == Getting Wireshark
 
@@ -162,31 +187,28 @@ locations on your system.
 
 == Known Problems
 
-Dumpcap might not quit if Wireshark or TShark crashes.
-(ws-buglink:1419[])
-
 The BER dissector might infinitely loop.
-(ws-buglink:1516[])
+(ws_buglink:1516[])
 
 Capture filters aren't applied when capturing from named pipes.
-(ws-buglink:1814[])
+(ws_buglink:1814[])
 
-Filtering tshark captures with read filters (-R) no longer works.
-(ws-buglink:2234[])
+Filtering tshark captures with read filters (`-R`) no longer works.
+(ws_buglink:2234[])
 
 Application crash when changing real-time option.
-(ws-buglink:4035[])
+(ws_buglink:4035[])
 
 Wireshark and TShark will display incorrect delta times in some cases.
-(ws-buglink:4985[])
+(ws_buglink:4985[])
 
-Wireshark should let you work with multiple capture files. (ws-buglink:10488[])
+Wireshark should let you work with multiple capture files. (ws_buglink:10488[])
 
 == Getting Help
 
-Community support is available on https://ask.wireshark.org/[Wireshark's
+Community support is available on https://ask.wireshark.org/[Wireshark’s
 Q&A site] and on the wireshark-users mailing list. Subscription
-information and archives for all of Wireshark's mailing lists can be
+information and archives for all of Wireshark’s mailing lists can be
 found on https://www.wireshark.org/lists/[the web site].
 
 Official Wireshark training and certification are available from

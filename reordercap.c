@@ -5,20 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include <config.h>
@@ -43,7 +30,7 @@
 #include <wsutil/filesystem.h>
 #include <wsutil/file_util.h>
 #include <wsutil/privileges.h>
-#include <ws_version_info.h>
+#include <version_info.h>
 #include <wiretap/wtap_opttypes.h>
 
 #ifdef HAVE_PLUGINS
@@ -95,7 +82,7 @@ typedef struct FrameRecord_t {
 
 static void
 frame_write(FrameRecord_t *frame, wtap *wth, wtap_dumper *pdh,
-            struct wtap_pkthdr *phdr, Buffer *buf, const char *infile,
+            wtap_rec *rec, Buffer *buf, const char *infile,
             const char *outfile)
 {
     int    err;
@@ -106,7 +93,7 @@ frame_write(FrameRecord_t *frame, wtap *wth, wtap_dumper *pdh,
 
 
     /* Re-read the frame from the stored location */
-    if (!wtap_seek_read(wth, frame->offset, phdr, buf, &err, &err_info)) {
+    if (!wtap_seek_read(wth, frame->offset, rec, buf, &err, &err_info)) {
         if (err != 0) {
             /* Print a message noting that the read failed somewhere along the line. */
             fprintf(stderr,
@@ -118,12 +105,12 @@ frame_write(FrameRecord_t *frame, wtap *wth, wtap_dumper *pdh,
     }
 
     /* Copy, and set length and timestamp from item. */
-    /* TODO: remove when wtap_seek_read() fills in phdr,
+    /* TODO: remove when wtap_seek_read() fills in rec,
        including time stamps, for all file types  */
-    phdr->ts = frame->frame_time;
+    rec->ts = frame->frame_time;
 
     /* Dump frame to outfile */
-    if (!wtap_dump(pdh, phdr, ws_buffer_start_ptr(buf), &err, &err_info)) {
+    if (!wtap_dump(pdh, rec, ws_buffer_start_ptr(buf), &err, &err_info)) {
         cfile_write_failure_message("reordercap", infile, outfile, err,
                                     err_info, frame->num,
                                     wtap_file_type_subtype(wth));
@@ -181,12 +168,12 @@ main(int argc, char *argv[])
     char *init_progfile_dir_error;
     wtap *wth = NULL;
     wtap_dumper *pdh = NULL;
-    struct wtap_pkthdr dump_phdr;
+    wtap_rec dump_rec;
     Buffer buf;
     int err;
     gchar *err_info;
     gint64 data_offset;
-    const struct wtap_pkthdr *phdr;
+    const wtap_rec *rec;
     guint wrong_order_count = 0;
     gboolean write_output_regardless = TRUE;
     guint i;
@@ -243,24 +230,10 @@ main(int argc, char *argv[])
         g_free(init_progfile_dir_error);
     }
 
-    wtap_init();
-
-#ifdef HAVE_PLUGINS
-    /* Register wiretap plugins */
     init_report_message(failure_warning_message, failure_warning_message,
                         NULL, NULL, NULL);
 
-    /* Scan for plugins.  This does *not* call their registration routines;
-       that's done later.
-
-       Don't report failures to load plugins because most (non-wiretap)
-       plugins *should* fail to load (because we're not linked against
-       libwireshark and dissector plugins need libwireshark). */
-    scan_plugins(DONT_REPORT_LOAD_FAILURE);
-
-    /* Register all libwiretap plugin modules. */
-    register_all_wiretap_modules();
-#endif
+    wtap_init(TRUE);
 
     /* Process the options first */
     while ((opt = getopt_long(argc, argv, "hnv", long_options, NULL)) != -1) {
@@ -343,13 +316,13 @@ main(int argc, char *argv[])
     while (wtap_read(wth, &err, &err_info, &data_offset)) {
         FrameRecord_t *newFrameRecord;
 
-        phdr = wtap_phdr(wth);
+        rec = wtap_get_rec(wth);
 
         newFrameRecord = g_slice_new(FrameRecord_t);
         newFrameRecord->num = frames->len + 1;
         newFrameRecord->offset = data_offset;
-        if (phdr->presence_flags & WTAP_HAS_TS) {
-            newFrameRecord->frame_time = phdr->ts;
+        if (rec->presence_flags & WTAP_HAS_TS) {
+            newFrameRecord->frame_time = rec->ts;
         } else {
             nstime_set_unset(&newFrameRecord->frame_time);
         }
@@ -374,18 +347,18 @@ main(int argc, char *argv[])
     }
 
     /* Write out each sorted frame in turn */
-    wtap_phdr_init(&dump_phdr);
+    wtap_rec_init(&dump_rec);
     ws_buffer_init(&buf, 1500);
     for (i = 0; i < frames->len; i++) {
         FrameRecord_t *frame = (FrameRecord_t *)frames->pdata[i];
 
         /* Avoid writing if already sorted and configured to */
         if (write_output_regardless || (wrong_order_count > 0)) {
-            frame_write(frame, wth, pdh, &dump_phdr, &buf, infile, outfile);
+            frame_write(frame, wth, pdh, &dump_rec, &buf, infile, outfile);
         }
         g_slice_free(FrameRecord_t, frame);
     }
-    wtap_phdr_cleanup(&dump_phdr);
+    wtap_rec_cleanup(&dump_rec);
     ws_buffer_free(&buf);
 
     if (!write_output_regardless && (wrong_order_count == 0)) {
@@ -412,9 +385,6 @@ main(int argc, char *argv[])
 clean_exit:
     wtap_cleanup();
     free_progdirs();
-#ifdef HAVE_PLUGINS
-    plugins_cleanup();
-#endif
     return ret;
 }
 

@@ -1,4 +1,4 @@
--- 3GPP TS 36.413 V13.5.0 (2016-12)
+-- 3GPP TS 36.413 V15.0.0 (2017-12)
 -- 9.3.4	Information Element Definitions
 -- **************************************************************
 --
@@ -36,6 +36,7 @@ IMPORTS
 	id-eNBIndirectX2TransportLayerAddresses,
 	id-Muting-Availability-Indication,
 	id-Muting-Pattern-Information,
+	id-NRrestriction,
 	id-Synchronisation-Information,
 	id-uE-HistoryInformationFromTheUE,
 	id-LoggedMBSFNMDT,
@@ -49,6 +50,15 @@ IMPORTS
 	id-M6Configuration,
 	id-M7Configuration,
 	id-RAT-Type,
+	id-extended-e-RAB-MaximumBitrateDL,
+	id-extended-e-RAB-MaximumBitrateUL,
+	id-extended-e-RAB-GuaranteedBitrateDL,
+	id-extended-e-RAB-GuaranteedBitrateUL,
+	id-extended-uEaggregateMaximumBitRateDL,
+	id-extended-uEaggregateMaximumBitRateUL,
+	id-SecondaryRATusageReportItem,
+	id-E-RABUsageReportItem,
+	id-UEAppLayerMeasConfig,
 	maxnoofCSGs,
 	maxnoofE-RABs,
 	maxnoofErrors,
@@ -61,6 +71,7 @@ IMPORTS
 	maxnoofForbTACs,
 	maxnoofCells,
 	maxnoofCellID,
+	maxnoofDCNs,
 	maxnoofEmergencyAreaID,
 	maxnoofTAIforWarning,
 	maxnoofCellinTAI,
@@ -81,7 +92,11 @@ IMPORTS
 	maxEARFCN,
 	maxnoofCellsineNB,
 	maxnoofRecommendedCells,
-	maxnoofRecommendedENBs
+	maxnoofRecommendedENBs,
+	maxnooftimeperiods,
+	maxnoofCellIDforQMC,
+	maxnoofTAforQMC,
+	maxnoofPLMNforQMC
 
 
 
@@ -119,6 +134,15 @@ AreaScopeOfMDT ::= CHOICE {
 	pLMNWide					NULL,
 	...,
 	tAIBased					TAIBasedMDT
+}
+
+
+AreaScopeOfQMC ::= CHOICE {
+	cellBased					CellBasedQMC,
+	tABased						TABasedQMC,
+	tAIBased						TAIBasedQMC,
+	pLMNAreaBased				PLMNAreaBasedQMC,
+	...
 }
 
 AllocationAndRetentionPriority ::= SEQUENCE {
@@ -315,7 +339,8 @@ CauseRadioNetwork ::= ENUMERATED {
 	...,
 	redirection-towards-1xRTT,
 	not-supported-QCI-value,
-	invalid-CSG-Id
+	invalid-CSG-Id,
+	release-due-to-pre-emption
 
 }
 
@@ -396,6 +421,18 @@ CellBasedMDT-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 }
 
 CellIdListforMDT ::= SEQUENCE (SIZE(1..maxnoofCellIDforMDT)) OF EUTRAN-CGI
+
+CellBasedQMC::= SEQUENCE {
+	cellIdListforQMC		CellIdListforQMC,
+	iE-Extensions		ProtocolExtensionContainer { {CellBasedQMC-ExtIEs} } OPTIONAL,
+	...
+}
+
+CellBasedQMC-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
+CellIdListforQMC ::= SEQUENCE (SIZE(1..maxnoofCellIDforQMC)) OF EUTRAN-CGI
 
 Cdma2000PDU	::= OCTET STRING
 
@@ -542,6 +579,11 @@ COUNTvaluePDCP-SNlength18-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 	...
 }
 
+Coverage-Level ::= ENUMERATED {
+	extendedcoverage,
+	...
+}
+
 CriticalityDiagnostics ::= SEQUENCE {
 	procedureCode					ProcedureCode														OPTIONAL,
 	triggeringMessage				TriggeringMessage													OPTIONAL,
@@ -574,10 +616,37 @@ CriticalityDiagnostics-IE-Item-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 
 DataCodingScheme ::= BIT STRING (SIZE (8))
 
+DCN-ID ::= INTEGER (0..65535)
+
+ServedDCNs ::= SEQUENCE (SIZE(0..maxnoofDCNs)) OF ServedDCNsItem
+
+ServedDCNsItem ::= SEQUENCE {
+	dCN-ID						DCN-ID,
+	relativeDCNCapacity			RelativeMMECapacity,
+	iE-Extensions			ProtocolExtensionContainer { {ServedDCNsItem-ExtIEs} }	OPTIONAL,
+	...
+}
+
+ServedDCNsItem-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
+DL-CP-SecurityInformation ::= SEQUENCE {
+	dl-NAS-MAC				DL-NAS-MAC,
+	iE-Extensions			ProtocolExtensionContainer { { DL-CP-SecurityInformation-ExtIEs} }	OPTIONAL,
+	...
+}
+
+DL-CP-SecurityInformation-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
 DL-Forwarding ::= ENUMERATED {
 	dL-Forwarding-proposed,
 	...
 }
+
+DL-NAS-MAC ::= BIT STRING (SIZE (16))
 
 Direct-Forwarding-Path-Availability ::= ENUMERATED {
 	directPathAvailable,
@@ -586,6 +655,11 @@ Direct-Forwarding-Path-Availability ::= ENUMERATED {
 
 Data-Forwarding-Not-Possible ::= ENUMERATED {
 	data-Forwarding-not-Possible,
+	...
+}
+
+DLNASPDUDeliveryAckRequest ::= ENUMERATED {
+	requested,
 	...
 }
 
@@ -646,7 +720,9 @@ EmergencyAreaIDListForRestart	::= SEQUENCE (SIZE(1..maxnoofRestartEmergencyAreaI
 ENB-ID ::= CHOICE {
 	macroENB-ID			BIT STRING (SIZE(20)),
 	homeENB-ID			BIT STRING (SIZE(28)),
-	...
+	... ,
+	short-macroENB-ID 	BIT STRING (SIZE(18)),
+	long-macroENB-ID		BIT STRING (SIZE(21))
 }
 
 GERAN-Cell-ID ::= SEQUENCE {
@@ -691,6 +767,11 @@ ENBname ::= PrintableString (SIZE (1..150,...))
 ENBX2TLAs ::= SEQUENCE (SIZE(1.. maxnoofeNBX2TLAs)) OF TransportLayerAddress
 
 EncryptionAlgorithms ::= BIT STRING (SIZE (16,...))
+
+EnhancedCoverageRestricted ::= ENUMERATED {
+	restricted,
+	...
+}
 
 EPLMNs ::= SEQUENCE (SIZE(1..maxnoofEPLMNs)) OF PLMNidentity
 EventType	::= ENUMERATED {
@@ -744,6 +825,26 @@ E-RABLevelQoSParameters ::= SEQUENCE {
 	allocationRetentionPriority		AllocationAndRetentionPriority,
 	gbrQosInformation					GBR-QosInformation												OPTIONAL,
 	iE-Extensions						ProtocolExtensionContainer { {E-RABQoSParameters-ExtIEs} }	OPTIONAL,
+	...
+}
+
+E-RABUsageReportList ::= SEQUENCE (SIZE(1..maxnooftimeperiods)) OF ProtocolIE-SingleContainer { {E-RABUsageReportItemIEs} }
+
+E-RABUsageReportItemIEs 	S1AP-PROTOCOL-IES ::= {
+	{ ID id-E-RABUsageReportItem	 CRITICALITY ignore 	TYPE E-RABUsageReportItem 	PRESENCE mandatory },
+	...
+}
+
+E-RABUsageReportItem ::= SEQUENCE {
+	startTimestamp					OCTET STRING (SIZE(4)),
+	endTimestamp					OCTET STRING (SIZE(4)),
+	usageCountUL					INTEGER,
+	usageCountDL					INTEGER,
+	iE-Extensions				ProtocolExtensionContainer { { E-RABUsageReportItem-ExtIEs} } OPTIONAL,
+	...
+}
+
+E-RABUsageReportItem-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 	...
 }
 
@@ -802,6 +903,8 @@ ExpectedHOInterval ::= ENUMERATED {
 	sec15, sec30, sec60, sec90, sec120, sec180, long-time,
 	...
 }
+
+ExtendedBitRate	::= INTEGER (10000000001..4000000000000, ...)
 
 ExtendedRNC-ID					::= INTEGER (4096..65535)
 
@@ -864,8 +967,12 @@ GBR-QosInformation ::= SEQUENCE {
 }
 
 GBR-QosInformation-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
-	...
-}
+-- Extension for maximum bitrate > 10G bps --
+	{ ID id-extended-e-RAB-MaximumBitrateDL	CRITICALITY ignore	EXTENSION ExtendedBitRate	PRESENCE optional}|
+	{ ID id-extended-e-RAB-MaximumBitrateUL	CRITICALITY ignore	EXTENSION ExtendedBitRate	PRESENCE optional}|
+	{ ID id-extended-e-RAB-GuaranteedBitrateDL	CRITICALITY ignore	EXTENSION ExtendedBitRate	PRESENCE optional}|
+	{ ID id-extended-e-RAB-GuaranteedBitrateUL	CRITICALITY ignore	EXTENSION ExtendedBitRate	PRESENCE optional},
+	...}
 
 
 GTP-TEID					::= OCTET STRING (SIZE (4))
@@ -895,6 +1002,12 @@ GWContextReleaseIndication ::= ENUMERATED {
 
 -- H
 
+HandoverFlag ::= ENUMERATED {
+	handoverPreparation,
+	...
+}
+
+
 HandoverRestrictionList ::= SEQUENCE {
 	servingPLMN					PLMNidentity,
 	equivalentPLMNs				EPLMNs					OPTIONAL,
@@ -906,6 +1019,7 @@ HandoverRestrictionList ::= SEQUENCE {
 }
 
 HandoverRestrictionList-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	{ ID id-NRrestriction		CRITICALITY ignore	EXTENSION NRrestriction	PRESENCE optional},
 	...
 }
 
@@ -1107,7 +1221,7 @@ M5period ::= ENUMERATED {ms1024, ms2048, ms5120, ms10240, min1, ... }
 M6Configuration ::= SEQUENCE {
 	m6report-Interval	M6report-Interval,
 	m6delay-threshold	M6delay-threshold		OPTIONAL,
--- This IE shall be present if the M6 Links to log IE is set to �uplink� or to �both-uplink-and-downlink� --
+-- This IE shall be present if the M6 Links to log IE is set to "uplink" or to "both-uplink-and-downlink" --
 	m6-links-to-log		Links-to-log,
 	iE-Extensions		ProtocolExtensionContainer { { M6Configuration-ExtIEs} } OPTIONAL,
 	...
@@ -1281,6 +1395,25 @@ NextPagingAreaScope ::= ENUMERATED {
 	...
 }
 
+NRencryptionAlgorithms ::= BIT STRING (SIZE (16,...))
+NRintegrityProtectionAlgorithms ::= BIT STRING (SIZE (16,...))
+
+NRrestriction ::= ENUMERATED {
+	nRrestricted,
+	...
+}
+
+NRUESecurityCapabilities ::= SEQUENCE {
+	nRencryptionAlgorithms				NRencryptionAlgorithms,
+	nRintegrityProtectionAlgorithms		NRintegrityProtectionAlgorithms,
+	iE-Extensions						ProtocolExtensionContainer { { NRUESecurityCapabilities-ExtIEs} }	OPTIONAL,
+...
+}
+
+NRUESecurityCapabilities-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
 NumberofBroadcastRequest ::= INTEGER (0..65535)
 
 NumberOfBroadcasts ::= INTEGER (0..65535)
@@ -1295,7 +1428,10 @@ OverloadAction ::= ENUMERATED {
 	permit-emergency-sessions-and-mobile-terminated-services-only,
 	...,
 	permit-high-priority-sessions-and-mobile-terminated-services-only,
-	reject-delay-tolerant-access
+	reject-delay-tolerant-access,
+	permit-high-priority-sessions-and-exception-reporting-and-mobile-terminated-services-only,
+	not-accept-mo-data-or-delay-tolerant-access-from-CP-CIoT
+
 }
 
 OverloadResponse ::= CHOICE {
@@ -1373,6 +1509,18 @@ M1PeriodicReporting-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 }
 
 PLMNidentity 				::= TBCD-STRING
+
+PLMNAreaBasedQMC ::= SEQUENCE {
+	plmnListforQMC		PLMNListforQMC,
+	iE-Extensions		ProtocolExtensionContainer { {PLMNAreaBasedQMC-ExtIEs} } OPTIONAL,
+	...
+}
+
+PLMNAreaBasedQMC-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
+PLMNListforQMC ::= SEQUENCE (SIZE(1..maxnoofPLMNforQMC)) OF PLMNidentity
 
 Port-Number		::= OCTET STRING (SIZE (2))
 
@@ -1604,6 +1752,36 @@ SecurityContext-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 	...
 }
 
+SecondaryRATType ::= ENUMERATED {
+	nR,
+	...
+}
+
+
+SecondaryRATusageDataRequst ::= ENUMERATED {
+	requested,
+	...
+}
+
+SecondaryRATusageReportList ::= SEQUENCE (SIZE(1.. maxnoofE-RABs)) OF ProtocolIE-SingleContainer { {SecondaryRATusageReportItemIEs} }
+
+SecondaryRATusageReportItemIEs 	S1AP-PROTOCOL-IES ::= {
+	{ ID id-SecondaryRATusageReportItem	 CRITICALITY ignore 	TYPE SecondaryRATusageReportItem 	PRESENCE mandatory },
+	...
+}
+
+SecondaryRATusageReportItem ::= SEQUENCE {
+	e-RAB-ID					E-RAB-ID,
+	secondaryRATType			SecondaryRATType,
+	e-RABUsageReportList		E-RABUsageReportList,
+	iE-Extensions				ProtocolExtensionContainer { { SecondaryRATusageReportItem-ExtIEs} } OPTIONAL,
+	...
+}
+
+SecondaryRATusageReportItem-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
 SerialNumber ::= BIT STRING (SIZE (16))
 
 SONInformation ::= CHOICE{
@@ -1655,10 +1833,10 @@ SONConfigurationTransfer ::= SEQUENCE {
 SONConfigurationTransfer-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 -- Extension for Release 10 to transfer the IP addresses of the eNB initiating the ANR action --
 	{ID id-x2TNLConfigurationInfo		CRITICALITY ignore	EXTENSION X2TNLConfigurationInfo				PRESENCE conditional
-	-- This IE shall be present if the SON Information IE contains the SON Information Request IE and the SON Information Request IE is set to �X2TNL Configuration Info� --}|
+	-- This IE shall be present if the SON Information IE contains the SON Information Request IE and the SON Information Request IE is set to "X2TNL Configuration Info" --}|
 -- Extension for Release 12 to transfer information concerning the source cell of synchronisation and the aggressor cell --
 	{ID id-Synchronisation-Information	CRITICALITY ignore	EXTENSION SynchronisationInformation			PRESENCE conditional
-	-- This IE shall be present if the SON Information IE contains the SON Information Request IE set to � Activate Muting � --},
+	-- This IE shall be present if the SON Information IE contains the SON Information Request IE set to " Activate Muting " --},
 	...
 }
 
@@ -1861,6 +2039,30 @@ TABasedMDT-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 
 TAListforMDT ::= SEQUENCE (SIZE(1..maxnoofTAforMDT)) OF TAC
 
+TABasedQMC ::= SEQUENCE {
+	tAListforQMC		TAListforQMC,
+	iE-Extensions		ProtocolExtensionContainer { {TABasedQMC-ExtIEs} } OPTIONAL,
+	...
+}
+
+TABasedQMC-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
+TAListforQMC ::= SEQUENCE (SIZE(1..maxnoofTAforQMC)) OF TAC
+
+TAIBasedQMC ::= SEQUENCE {
+	tAIListforQMC		TAIListforQMC,
+	iE-Extensions		ProtocolExtensionContainer { {TAIBasedQMC-ExtIEs} } OPTIONAL,
+	...
+}
+
+TAIBasedQMC-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
+TAIListforQMC ::= SEQUENCE (SIZE(1..maxnoofTAforQMC)) OF TAI
+
 CompletedCellinTAI ::= SEQUENCE (SIZE(1..maxnoofCellinTAI)) OF CompletedCellinTAI-Item
 
 CompletedCellinTAI-Item ::= SEQUENCE{
@@ -1967,7 +2169,9 @@ traceCollectionEntityIPAddress		TransportLayerAddress,
 
 TraceActivation-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 -- Extension for Rel-10 to support MDT --
-	{ ID id-MDTConfiguration	CRITICALITY ignore	EXTENSION MDT-Configuration		PRESENCE optional },
+	{ ID id-MDTConfiguration	CRITICALITY ignore	EXTENSION MDT-Configuration		PRESENCE optional }|
+-- Extension for Rel-15 to support QMC –
+	{ ID id-UEAppLayerMeasConfig	CRITICALITY ignore	EXTENSION UEAppLayerMeasConfig		PRESENCE optional },
 	...
 }
 
@@ -2014,6 +2218,20 @@ UEAggregateMaximumBitrate ::= SEQUENCE {
 }
 
 UEAggregate-MaximumBitrates-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+-- Extension for maximum bitrate > 10G bps --
+	{ ID id-extended-uEaggregateMaximumBitRateDL 	CRITICALITY ignore	EXTENSION ExtendedBitRate	PRESENCE optional}|
+	{ ID id-extended-uEaggregateMaximumBitRateUL		CRITICALITY ignore	EXTENSION ExtendedBitRate	PRESENCE optional},
+	...
+}
+
+UEAppLayerMeasConfig ::= SEQUENCE {
+	containerForAppLayerMeasConfig			OCTET STRING (SIZE(1..1000)),
+	areaScopeOfQMC		AreaScopeOfQMC,
+	iE-Extensions		ProtocolExtensionContainer { {UEAppLayerMeasConfig-ExtIEs} } OPTIONAL,
+	...
+}
+
+UEAppLayerMeasConfig-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 	...
 }
 
@@ -2084,7 +2302,33 @@ UESecurityCapabilities-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
 	...
 }
 
+UESidelinkAggregateMaximumBitrate ::= SEQUENCE {
+	uESidelinkAggregateMaximumBitRate		BitRate,
+	iE-Extensions					ProtocolExtensionContainer { {UE-Sidelink-Aggregate-MaximumBitrates-ExtIEs} } OPTIONAL,
+	...
+}
+
+UE-Sidelink-Aggregate-MaximumBitrates-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
 UE-Usage-Type ::= INTEGER (0..255)
+
+UL-CP-SecurityInformation ::= SEQUENCE {
+	ul-NAS-MAC				UL-NAS-MAC,
+	ul-NAS-Count			UL-NAS-Count,
+	iE-Extensions			ProtocolExtensionContainer { { UL-CP-SecurityInformation-ExtIEs} }	OPTIONAL,
+	...
+}
+
+UL-CP-SecurityInformation-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
+UL-NAS-MAC ::= BIT STRING (SIZE (16))
+
+UL-NAS-Count ::= BIT STRING (SIZE (5))
+
 
 UserLocationInformation ::= SEQUENCE {
 	eutran-cgi 				EUTRAN-CGI,
@@ -2102,11 +2346,40 @@ UEUserPlaneCIoTSupportIndicator ::= ENUMERATED {
 	...
 }
 
+UE-Application-Layer-Measurement-Capability ::= BIT STRING (SIZE (8))
+
+-- First bit: QoE Measurement
+
+-- Note that undefined bits are considered as a spare bit and spare bits shall be set to 0 by the transmitter and shall be ignored by the receiver.
+
 -- V
 
 VoiceSupportMatchIndicator ::= ENUMERATED {
 	supported,
 	not-supported,
+	...
+}
+
+V2XServicesAuthorized ::= SEQUENCE {
+	vehicleUE			VehicleUE											OPTIONAL,
+	pedestrianUE 		PedestrianUE						OPTIONAL,
+	iE-Extensions		ProtocolExtensionContainer { {V2XServicesAuthorized-ExtIEs} }	OPTIONAL,
+	...
+}
+
+V2XServicesAuthorized-ExtIEs S1AP-PROTOCOL-EXTENSION ::= {
+	...
+}
+
+VehicleUE ::= ENUMERATED {
+	authorized,
+	not-authorized,
+	...
+}
+
+PedestrianUE ::= ENUMERATED {
+	authorized,
+	not-authorized,
 	...
 }
 

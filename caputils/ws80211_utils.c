@@ -9,17 +9,7 @@ Copyright (c) 2007		Andy Lutomirski
 Copyright (c) 2007		Mike Kershaw
 Copyright (c) 2008-2009		Luis R. Rodriguez
 
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+SPDX-License-Identifier: ISC
 */
 
 #include <config.h>
@@ -142,6 +132,25 @@ static int ack_handler(struct nl_msg *msg _U_, void *arg)
 
 static int nl80211_do_cmd(struct nl_msg *msg, struct nl_cb *cb)
 {
+	/*
+	 * XXX - Coverity doesn't understand how libnl works, so it
+	 * doesn't know that nl_recvmsgs() calls the callback, and
+	 * that the callback has had a pointer to err registered
+	 * with it, and therefore that nl_recvmsgs() can change
+	 * err as a side-effect, so it thinks this can loop
+	 * infinitely.
+	 *
+	 * The proper way to address this is to help Coverity to
+	 * understand the behaviour of nl_recvmsgs(), in that it
+	 * does call the callback, setting err. This help would be
+	 * provided through a so called 'model' of this function.
+	 * We declare err to be volatile to work around it.
+	 *
+	 * XXX - that workaround provokes a compiler complaint that
+	 * casting a pointer to it to "void *" discards the
+	 * volatile qualifier.  Perhaps we should just re-close
+	 * Coverity CID 997052 as "false positive".
+	 */
 	volatile int err;
 
 	if (!nl_state.nl_sock)

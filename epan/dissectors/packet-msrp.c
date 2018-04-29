@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * References:
  * https://tools.ietf.org/html/rfc4975
@@ -177,14 +165,14 @@ msrp_add_address( packet_info *pinfo,
      * Check if the ip address and port combination is not
      * already registered as a conversation.
      */
-    p_conv = find_conversation( pinfo->num, addr, &null_addr, PT_TCP, port, 0,
+    p_conv = find_conversation( pinfo->num, addr, &null_addr, ENDPOINT_TCP, port, 0,
                                 NO_ADDR_B | NO_PORT_B);
 
     /*
      * If not, create a new conversation.
      */
     if (!p_conv) {
-        p_conv = conversation_new( pinfo->num, addr, &null_addr, PT_TCP,
+        p_conv = conversation_new( pinfo->num, addr, &null_addr, ENDPOINT_TCP,
                                    (guint32)port, 0,
                                    NO_ADDR2 | NO_PORT2);
     }
@@ -231,7 +219,7 @@ show_setup_info(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     {
         /* First time, get info from conversation */
         p_conv = find_conversation(pinfo->num, &pinfo->net_dst, &pinfo->net_src,
-                                   PT_TCP,
+                                   ENDPOINT_TCP,
                                    pinfo->destport, pinfo->srcport, 0);
 
         if (p_conv)
@@ -426,15 +414,9 @@ dissect_msrp_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *dat
          */
         if (pinfo->fd->flags.visited){
             /* Look for existing conversation */
-            conversation = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, pinfo->ptype,
-                pinfo->srcport, pinfo->destport, 0);
-            /* Create new one if not found */
-            if (conversation == NULL){
-                conversation = conversation_new(pinfo->num, &pinfo->src, &pinfo->dst,
-                    pinfo->ptype, pinfo->srcport, pinfo->destport, 0);
-                /* Set dissector */
-                conversation_set_dissector(conversation, msrp_handle);
-            }
+            conversation = find_or_create_conversation(pinfo);
+            /* Set dissector */
+            conversation_set_dissector(conversation, msrp_handle);
         }
         dissect_msrp(tvb, pinfo, tree, NULL);
         return TRUE;

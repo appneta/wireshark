@@ -5,19 +5,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -42,9 +30,9 @@ void register_decode_as(decode_as_t* reg)
     dissector_table_t decode_table;
 
     /* Ensure valid functions */
-    DISSECTOR_ASSERT(reg->populate_list);
-    DISSECTOR_ASSERT(reg->reset_value);
-    DISSECTOR_ASSERT(reg->change_value);
+    g_assert(reg->populate_list);
+    g_assert(reg->reset_value);
+    g_assert(reg->change_value);
 
     decode_table = find_dissector_table(reg->table_name);
     if (decode_table != NULL)
@@ -52,9 +40,52 @@ void register_decode_as(decode_as_t* reg)
         dissector_table_allow_decode_as(decode_table);
     }
 
-    decode_as_list = g_list_append(decode_as_list, reg);
+    decode_as_list = g_list_prepend(decode_as_list, reg);
 }
 
+static void next_proto_prompt(packet_info *pinfo _U_, gchar *result)
+{
+    g_snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "Next level protocol as");
+}
+
+static gpointer next_proto_value(packet_info *pinfo _U_)
+{
+    return 0;
+}
+
+static build_valid_func next_proto_values[] = { next_proto_value };
+static decode_as_value_t next_proto_da_values =
+                        { next_proto_prompt, 1, next_proto_values };
+
+dissector_table_t register_decode_as_next_proto(int proto, const gchar *title, const gchar *table_name, const gchar *ui_name, build_label_func label_func)
+{
+    decode_as_t *da;
+
+    dissector_table_t dt = register_dissector_table(table_name, ui_name, proto, FT_NONE, BASE_NONE);
+
+    da = wmem_new0(wmem_epan_scope(), decode_as_t);
+    da->name = wmem_strdup(wmem_epan_scope(), proto_get_protocol_filter_name(proto));
+    da->title = wmem_strdup(wmem_epan_scope(), title);
+    da->table_name = wmem_strdup(wmem_epan_scope(), table_name);
+    da->num_items = 1;
+    if (label_func == NULL)
+    {
+        da->values = &next_proto_da_values;
+    }
+    else
+    {
+        da->values = wmem_new(wmem_epan_scope(), decode_as_value_t);
+        da->values->label_func = label_func;
+        da->values->num_values = 1;
+        da->values->build_values = next_proto_values;
+    }
+    da->populate_list = decode_as_default_populate_list;
+    da->reset_value = decode_as_default_reset;
+    da->change_value = decode_as_default_change;
+
+    register_decode_as(da);
+    return dt;
+}
 
 struct decode_as_default_populate
 {
@@ -100,11 +131,14 @@ gboolean decode_as_default_reset(const gchar *name, gconstpointer pattern)
     case FT_UINT32:
         dissector_reset_uint(name, GPOINTER_TO_UINT(pattern));
         return TRUE;
+    case FT_NONE:
+        dissector_reset_payload(name);
+        return TRUE;
     case FT_STRING:
     case FT_STRINGZ:
     case FT_UINT_STRING:
     case FT_STRINGZPAD:
-        dissector_reset_string(name, (!pattern)?"":(gchar *) pattern);
+        dissector_reset_string(name, (!pattern)?"":(const gchar *) pattern);
         return TRUE;
     default:
         return FALSE;
@@ -124,11 +158,14 @@ gboolean decode_as_default_change(const gchar *name, gconstpointer pattern, gpoi
         case FT_UINT32:
             dissector_change_uint(name, GPOINTER_TO_UINT(pattern), *dissector);
             return TRUE;
+        case FT_NONE:
+            dissector_change_payload(name, *dissector);
+            return TRUE;
         case FT_STRING:
         case FT_STRINGZ:
         case FT_UINT_STRING:
         case FT_STRINGZPAD:
-            dissector_change_string(name, (!pattern)?"":(gchar *) pattern, *dissector);
+            dissector_change_string(name, (!pattern)?"":(const gchar *) pattern, *dissector);
             return TRUE;
         default:
             return FALSE;
@@ -223,7 +260,7 @@ read_set_decode_as_entries(gchar *key, const gchar *value,
                         }
 
                         prefs_add_decode_as_value(pref_value, (guint)long_value, replace);
-                        module->prefs_changed = TRUE;
+                        module->prefs_changed_flags |= prefs_get_effect_flags(pref_value);
                     }
 
                 }
@@ -304,6 +341,17 @@ decode_as_write_entry (const gchar *table_name, ftenum_t selector_type,
         fprintf (da_file,
                  DECODE_AS_ENTRY ": %s,%u,%s,%s\n",
                  table_name, GPOINTER_TO_UINT(key), initial_proto_name,
+                 current_proto_name);
+        break;
+    case FT_NONE:
+        /*
+         * XXX - Just put a placeholder for the key value.  Currently
+         * FT_NONE dissector table uses a single uint value for
+         * a placeholder
+         */
+        fprintf (da_file,
+                 DECODE_AS_ENTRY ": %s,0,%s,%s\n",
+                 table_name, initial_proto_name,
                  current_proto_name);
         break;
 
@@ -393,6 +441,11 @@ decode_build_reset_list (const gchar *table_name, ftenum_t selector_type,
         item->ddi_selector.sel_uint = GPOINTER_TO_UINT(key);
         break;
 
+    case FT_NONE:
+        /* Not really needed, but prevents the assert */
+        item->ddi_selector.sel_uint = 0;
+        break;
+
     case FT_STRING:
     case FT_STRINGZ:
     case FT_UINT_STRING:
@@ -425,6 +478,10 @@ decode_clear_all(void)
         case FT_UINT32:
             dissector_reset_uint(item->ddi_table_name,
                                  item->ddi_selector.sel_uint);
+            break;
+
+        case FT_NONE:
+            dissector_reset_payload(item->ddi_table_name);
             break;
 
         case FT_STRING:

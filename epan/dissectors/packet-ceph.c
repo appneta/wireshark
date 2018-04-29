@@ -6,19 +6,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR ADD PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "config.h"
@@ -1421,6 +1409,7 @@ typedef struct _c_node {
 static
 void c_node_init(c_node *n)
 {
+	clear_address(&n->addr);
 	c_node_name_init(&n->name);
 	n->port = 0xFFFF;
 	n->state = C_STATE_NEW;
@@ -6840,8 +6829,10 @@ guint c_dissect_msgr(proto_tree *tree,
 		*/
 
 		/* Batch multiple unknowns together. */
-		while (c_unknowntagnext(tvb, off))
-			off++, unknowntagcount++;
+		while (c_unknowntagnext(tvb, off)) {
+			off++;
+			unknowntagcount++;
+		}
 
 		c_set_type(data, wmem_strdup_printf(wmem_packet_scope(),
 						    "UNKNOWN x%u",

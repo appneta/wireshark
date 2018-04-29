@@ -8,19 +8,7 @@
  * By Gerald Combs <gerald@wireshark.org>
  * Copyright 1998 Gerald Combs
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier: GPL-2.0-or-later
  *
  * References:
  * RTSP is defined in RFC 2326, http://www.ietf.org/rfc/rfc2326.txt?number=2326
@@ -390,8 +378,7 @@ dissect_rtspinterleaved(tvbuff_t *tvb, int offset, packet_info *pinfo,
         length_remaining = rf_len;
     next_tvb = tvb_new_subset_length_caplen(tvb, offset, length_remaining, rf_len);
 
-    conv = find_conversation(pinfo->num, &pinfo->src, &pinfo->dst, pinfo->ptype,
-        pinfo->srcport, pinfo->destport, 0);
+    conv = find_conversation_pinfo(pinfo, 0);
 
     if (conv &&
         (data = (rtsp_conversation_data_t *)conversation_get_proto_data(conv, proto_rtsp)) &&
@@ -666,13 +653,13 @@ rtsp_create_conversation(packet_info *pinfo, proto_item *ti,
     }
 
     /* Deal with RTSP TCP-interleaved conversations. */
-    if (strstr(buf, rtsp_inter) != NULL) {
+    tmp = strstr(buf, rtsp_inter);
+    if (tmp != NULL) {
         rtsp_conversation_data_t    *data;
         guint               s_data_chan, s_mon_chan;
         int             i;
 
-        /* Move tmp to beyone interleaved string */
-        tmp = strstr(buf, rtsp_inter);
+        /* Move tmp to beyond interleaved string */
         tmp += strlen(rtsp_inter);
         /* Look for channel number(s) */
         i = sscanf(tmp, "%u-%u", &s_data_chan, &s_mon_chan);
@@ -731,6 +718,11 @@ rtsp_create_conversation(packet_info *pinfo, proto_item *ti,
         if (c_data_port)
         {
             rtp_add_address(pinfo, PT_UDP, &dst_addr, c_data_port, s_data_port,
+                            "RTSP", pinfo->num, is_video, NULL);
+        }
+        else if (s_data_port)
+        {
+            rtp_add_address(pinfo, PT_UDP, &src_addr, s_data_port, 0,
                             "RTSP", pinfo->num, is_video, NULL);
         }
 
@@ -868,7 +860,11 @@ dissect_rtspmessage(tvbuff_t *tvb, int offset, packet_info *pinfo,
      * of a server closing the connection indicating the end of
      * a reply body.
      *
-     * We assume that an absent content length in a request means
+     * To support pipelining, we check if line behind blank line
+     * looks like RTSP header. If so, we process rest of packet with
+     * RTSP loop.
+     *
+     * If no, we assume that an absent content length in a request means
      * that we don't have a body, and that an absent content length
      * in a reply means that the reply body runs to the end of
      * the connection.  If the first line is neither, we assume
@@ -1324,41 +1320,53 @@ dissect_rtspmessage(tvbuff_t *tvb, int offset, packet_info *pinfo,
         new_tvb = tvb_new_subset_length_caplen(tvb, offset, datalen,
                 reported_datalen);
 
-        if (media_type_str_lower_case &&
-            dissector_try_string(media_type_dissector_table,
-                media_type_str_lower_case,
-                new_tvb, pinfo, rtsp_tree, NULL)){
-
-        }else {
-            /*
-             * Fix up the top-level item so that it doesn't
-             * include the SDP stuff.
-             */
-            if (ti_top != NULL)
-                proto_item_set_len(ti_top, offset);
-
-            if (tvb_get_guint8(tvb, offset) == RTSP_FRAMEHDR) {
-                /*
-                 * This is interleaved stuff; don't
-                 * treat it as raw data - set "datalen"
-                 * to 0, so we won't skip the offset
-                 * past it, which will cause our
-                 * caller to process that stuff itself.
-                 */
-                datalen = 0;
-            } else {
-                proto_tree_add_bytes_format(rtsp_tree, hf_rtsp_data, tvb, offset,
-                    datalen, NULL, "Data (%d bytes)",
-                    reported_datalen);
-            }
-        }
-
         /*
-         * We've processed "datalen" bytes worth of data
-         * (which may be no data at all); advance the
-         * offset past whatever data we've processed.
+         * Check if next line is RTSP message - pipelining
+         * If yes, stop processing and start next loop
+         * If no, process rest of packet with dissectors
          */
-        offset += datalen;
+        first_linelen = tvb_find_line_end(new_tvb, 0, -1, &next_offset, FALSE);
+        line = tvb_get_ptr(new_tvb, 0, first_linelen);
+        is_request_or_reply = is_rtsp_request_or_reply(line, first_linelen,
+            &rtsp_type_packet);
+
+        if (!is_request_or_reply){
+            if (media_type_str_lower_case &&
+                dissector_try_string(media_type_dissector_table,
+                    media_type_str_lower_case,
+                    new_tvb, pinfo, rtsp_tree, NULL)){
+
+            } else {
+                /*
+                 * Fix up the top-level item so that it doesn't
+                 * include the SDP stuff.
+                 */
+                if (ti_top != NULL)
+                    proto_item_set_len(ti_top, offset);
+
+                if (tvb_get_guint8(tvb, offset) == RTSP_FRAMEHDR) {
+                    /*
+                     * This is interleaved stuff; don't
+                     * treat it as raw data - set "datalen"
+                     * to 0, so we won't skip the offset
+                     * past it, which will cause our
+                     * caller to process that stuff itself.
+                     */
+                    datalen = 0;
+                } else {
+                    proto_tree_add_bytes_format(rtsp_tree, hf_rtsp_data, tvb, offset,
+                        datalen, NULL, "Data (%d bytes)",
+                        reported_datalen);
+                }
+            }
+
+            /*
+             * We've processed "datalen" bytes worth of data
+             * (which may be no data at all); advance the
+             * offset past whatever data we've processed.
+             */
+            offset += datalen;
+        }
     }
 
     tap_queue_packet(rtsp_tap, pinfo, rtsp_stat_info);
@@ -1474,6 +1482,13 @@ dissect_rtsp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
     int len;
 
     while (tvb_reported_length_remaining(tvb, offset) != 0) {
+        /*
+         * Add separator between multiple messages in column info text
+         */
+        if (offset > 0) {
+                col_set_str(pinfo->cinfo, COL_INFO, ", ");
+                col_set_fence(pinfo->cinfo, COL_INFO);
+        }
         len = (tvb_get_guint8(tvb, offset) == RTSP_FRAMEHDR)
             ? dissect_rtspinterleaved(tvb, offset, pinfo, tree)
             : dissect_rtspmessage(tvb, offset, pinfo, tree);
