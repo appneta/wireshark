@@ -23,9 +23,9 @@
 
 SUBDIRS = \
 	$(_CUSTOM_SUBDIRS_) \
-	ani_rpp \
-	ani_payload \
-	twamp \
+	epan/ani_payload	\
+	epan/ani_rpp		\
+	epan/twamp		\
 	epan/ethercat		\
 	epan/gryphon		\
 	epan/irda		\

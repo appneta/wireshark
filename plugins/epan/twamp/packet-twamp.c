@@ -30,8 +30,12 @@
 #include <epan/packet.h>
 #include <epan/prefs.h>
 
-void proto_reg_handoff_twamp(void);
-void proto_register_twamp(void);
+WS_DLL_PUBLIC_DEF const gchar plugin_version[] = PLUGIN_VERSION;
+WS_DLL_PUBLIC_DEF const gchar plugin_release[] = VERSION_RELEASE;
+WS_DLL_PUBLIC void plugin_register(void);
+
+static void proto_reg_handoff_twamp(void);
+static void proto_register_twamp(void);
 
 static dissector_handle_t data_handle;
 
@@ -180,7 +184,7 @@ dissect_twamp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     }
 }
 
-void
+static void
 proto_register_twamp(void)
 {
     module_t *twamp_module;
@@ -273,7 +277,7 @@ proto_register_twamp(void)
             10, &gTWAMP_PORT);
 } /* end proto_register_twamp */
 
-void proto_reg_handoff_twamp(void)
+static void proto_reg_handoff_twamp(void)
 {
     static gboolean initialized = FALSE;
     static dissector_handle_t twamp_handle;
@@ -293,6 +297,16 @@ void proto_reg_handoff_twamp(void)
     }
 
     dissector_add_uint("udp.port", gTWAMP_PORT, twamp_handle);
+}
+
+void
+plugin_register(void)
+{
+    static proto_plugin plug;
+
+    plug.register_protoinfo = proto_register_twamp;
+    plug.register_handoff = proto_reg_handoff_twamp;
+    proto_register_plugin(&plug);
 }
 
 /*

@@ -1,8 +1,8 @@
-wireshark (2.6.0) unstable; urgency=low
+wireshark (2.6.0.appneta.33) unstable; urgency=low
 
-  * Self-made package
+  * Update to 2.6.0
 
- -- Wireshark Self-made package <wireshark@example.com>  Mon, 17 Oct 2016 12:05:44 +0200
+ -- Fred Klassen <fklassen@appneta.com>  Sat, 28 Oct 2018 12:05:44 -0700
 
 wireshark (2.2.4.appneta.31) UNRELEASED; urgency=low
 

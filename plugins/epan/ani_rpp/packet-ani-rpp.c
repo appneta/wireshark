@@ -31,6 +31,10 @@
 #include <epan/proto.h>
 #include <epan/dissectors/packet-rtp.h>
 
+WS_DLL_PUBLIC_DEF const gchar plugin_version[] = PLUGIN_VERSION;
+WS_DLL_PUBLIC_DEF const gchar plugin_release[] = VERSION_RELEASE;
+WS_DLL_PUBLIC void plugin_register(void);
+
 #define UDP_PORT_ANI_RPP  3239
 #define RTP_HEADER_LENGTH 12
 #define NO_FLOW           0xffffffff
@@ -84,8 +88,8 @@ extern void proto_register_responder_ip(void);
 /* #include "packet-ani-rpp.h" */
 
 /* Forward declaration we need below */
-void proto_register_ani_rpp(void);
-void proto_reg_handoff_ani_rpp(void);
+static void proto_register_ani_rpp(void);
+static void proto_reg_handoff_ani_rpp(void);
 
 /* handle for sub-protocols */
 static dissector_handle_t ani_rpp_handle = NULL;
@@ -1272,7 +1276,7 @@ static const true_false_string ani_tf_set_not_set = {
 /*******************************************************************/
 /* Register the protocol with Wireshark
  */
-void
+static void
 proto_register_ani_rpp(void)
 {
     module_t *ani_rpp_module;
@@ -2640,7 +2644,7 @@ proto_register_ani_rpp(void)
    (see prefs_register_protocol above) so it should accommodate being called
    more than once.
  */
-void
+static void
 proto_reg_handoff_ani_rpp(void)
 {
     static gboolean inited = FALSE;
@@ -2652,7 +2656,7 @@ proto_reg_handoff_ani_rpp(void)
     }
     else {
         /* delete the dissector with the old port value */
-        dissector_delete_uint("udp.port", udp_port_ani_rpp,ani_rpp_handle);
+        dissector_delete_uint("udp.port", udp_port_ani_rpp, ani_rpp_handle);
     }
 
     /* save the new port value */
@@ -2662,4 +2666,14 @@ proto_reg_handoff_ani_rpp(void)
 
     ip_handle = find_dissector("ip");
     payload_handle = find_dissector("appneta_payload");
+}
+
+void
+plugin_register(void)
+{
+    static proto_plugin plug;
+
+    plug.register_protoinfo = proto_register_ani_rpp;
+    plug.register_handoff = proto_reg_handoff_ani_rpp;
+    proto_register_plugin(&plug);
 }

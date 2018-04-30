@@ -15,7 +15,7 @@ set(PROJECT_MAJOR_VERSION 2)
 set(PROJECT_MINOR_VERSION 6)
 set(PROJECT_PATCH_VERSION 0)
 set(PROJECT_BUILD_VERSION ${GIT_REVISION})
-set(PROJECT_VERSION_EXTENSION "-appneta33")
+set(PROJECT_VERSION_EXTENSION "-appneta.33")
 set(PROJECT_RELEASE_VERSION "${PROJECT_MAJOR_VERSION}.${PROJECT_MINOR_VERSION}")
 
 if(DEFINED ENV{WIRESHARK_VERSION_EXTRA})
@@ -1395,8 +1395,9 @@ if(ENABLE_PLUGINS)
 	add_custom_target(plugins)
 	set_target_properties(plugins PROPERTIES FOLDER "Plugins")
 	set(PLUGIN_SRC_DIRS
-		plugins/ani_payload
-		plugins/ani_rpp
+		plugins/epan/ani_payload
+		plugins/epan/ani_rpp
+		plugins/epan/twamp
 		plugins/epan/ethercat
 		plugins/epan/gryphon
 		plugins/epan/irda
@@ -1409,7 +1410,6 @@ if(ENABLE_PLUGINS)
 		plugins/epan/wimax
 		plugins/epan/wimaxasncp
 		plugins/epan/wimaxmacphy
-		plugins/twamp
 		plugins/wiretap/usbdump
 		plugins/codecs/l16_mono
 		${CUSTOM_PLUGIN_SRC_DIR}

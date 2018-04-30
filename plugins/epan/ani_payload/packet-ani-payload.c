@@ -34,12 +34,16 @@
 #include <wsutil/str_util.h>
 #include "packet-ani-payload.h"
 
+WS_DLL_PUBLIC_DEF const gchar plugin_version[] = PLUGIN_VERSION;
+WS_DLL_PUBLIC_DEF const gchar plugin_release[] = VERSION_RELEASE;
+WS_DLL_PUBLIC void plugin_register(void);
+
 /* proto_data cannot be static because it's referenced in the
  * print routines
  */
 static module_t *proto_reg_ani_payload = NULL;
-void proto_handoff_ani_payload(void);
-void proto_register_ani_payload(void);
+static void proto_handoff_ani_payload(void);
+static void proto_register_ani_payload(void);
 static dissector_handle_t appneta_responder_handle = NULL;
 
 static gint proto_ani_payload = -1;
@@ -293,7 +297,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
     return tvb_captured_length(tvb);
 }
 
-void
+static void
 proto_register_ani_payload(void)
 {
     static hf_register_info hf[] = {
@@ -366,9 +370,18 @@ proto_register_ani_payload(void)
             &show_appneta_payload);
 }
 
-void
+static void
 proto_handoff_ani_payload(void)
 {
     appneta_responder_handle = find_dissector("appneta_responder");
 }
 
+void
+plugin_register(void)
+{
+    static proto_plugin plug;
+
+    plug.register_protoinfo = proto_register_ani_payload;
+    plug.register_handoff = proto_handoff_ani_payload;
+    proto_register_plugin(&plug);
+}

@@ -19,49 +19,35 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 include $(top_srcdir)/Makefile.am.inc
-include ../Makefile.am.inc
+include $(top_srcdir)/plugins/epan/Makefile.am.inc
 
 # the name of the plugin
-PLUGIN_NAME = ani_payload
+PLUGIN_NAME = twamp
 
-# Non-generated sources to be scanned for registration routines
-NONGENERATED_REGISTER_C_FILES = \
-	packet-ani-payload.c
+PLUGIN_VERSION = 0.0.1
 
 # Non-generated sources
 NONGENERATED_C_FILES = \
-	$(NONGENERATED_REGISTER_C_FILES)
+	$(NONGENERATED_REGISTER_C_FILES) \
+	packet-twamp.c
 
 # Headers.
-CLEAN_HEADER_FILES = \
-	packet-ani-payload.h
+CLEAN_HEADER_FILES =
 
 HEADER_FILES = \
 	$(CLEAN_HEADER_FILES)
 
-plugin_LTLIBRARIES = ani_payload.la
+epan_plugin_LTLIBRARIES = twamp.la
 
-ani_payload_la_SOURCES = \
-	plugin.c \
-	moduleinfo.h \
+twamp_la_SOURCES = \
 	$(SRC_FILES)	\
 	$(HEADER_FILES)
 
-ani_payload_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
+twamp_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
 
-ani_payload_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
+twamp_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
 
-ani_payload_la_LDFLAGS = $(PLUGIN_LDFLAGS)
-
-CLEANFILES = \
-	ani_payload \
-	plugin.c \
-	*~
-
-MAINTAINERCLEANFILES = \
-	Makefile.in	\
-	plugin.c
+twamp_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 
 EXTRA_DIST = \
-	plugin.rc.in		\
 	CMakeLists.txt
