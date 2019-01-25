@@ -9,7 +9,7 @@ m4_define([version_major], [2])
 m4_define([version_minor], [6])
 m4_define([version_micro], [6])
 dnl Updated by make-version.pl
-m4_define([version_extra], [])
+m4_define([version_extra], [-appneta.34])
 m4_define([version_micro_extra], m4_join([], version_micro, version_extra))
 
 AC_INIT(Wireshark, [version_major.version_minor.version_micro_extra], http://bugs.wireshark.org/, , http://www.wireshark.org/)
@@ -2798,6 +2798,9 @@ AC_CONFIG_FILES(
   packaging/rpm/SPECS/wireshark.spec
   packaging/wix/Makefile
   plugins/Makefile
+  plugins/epan/ani_payload/Makefile
+  plugins/epan/ani_rpp/Makefile
+  plugins/epan/twamp/Makefile
   plugins/epan/ethercat/Makefile
   plugins/epan/gryphon/Makefile
   plugins/epan/irda/Makefile

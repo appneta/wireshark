@@ -15,7 +15,7 @@ set(PROJECT_MAJOR_VERSION 2)
 set(PROJECT_MINOR_VERSION 6)
 set(PROJECT_PATCH_VERSION 6)
 set(PROJECT_BUILD_VERSION ${GIT_REVISION})
-set(PROJECT_VERSION_EXTENSION "")
+set(PROJECT_VERSION_EXTENSION "-appneta.34")
 set(PROJECT_RELEASE_VERSION "${PROJECT_MAJOR_VERSION}.${PROJECT_MINOR_VERSION}")
 
 if(DEFINED ENV{WIRESHARK_VERSION_EXTRA})
@@ -1398,6 +1398,9 @@ if(ENABLE_PLUGINS)
 	add_custom_target(plugins)
 	set_target_properties(plugins PROPERTIES FOLDER "Plugins")
 	set(PLUGIN_SRC_DIRS
+		plugins/epan/ani_payload
+		plugins/epan/ani_rpp
+		plugins/epan/twamp
 		plugins/epan/ethercat
 		plugins/epan/gryphon
 		plugins/epan/irda

@@ -1,5 +1,4 @@
 # Makefile.am
-# Automake file for Wireshark plugins
 #
 # Wireshark - Network traffic analyzer
 # By Gerald Combs <gerald@wireshark.org>
@@ -19,36 +18,37 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
--include Custom.make
+include $(top_srcdir)/Makefile.am.inc
+include $(top_srcdir)/plugins/epan/Makefile.am.inc
 
-SUBDIRS = \
-	$(_CUSTOM_SUBDIRS_) \
-	epan/ani_payload	\
-	epan/ani_rpp		\
-	epan/twamp		\
-	epan/ethercat		\
-	epan/gryphon		\
-	epan/irda		\
-	epan/mate		\
-	epan/opcua		\
-	epan/profinet		\
-	epan/stats_tree		\
-	epan/transum		\
-	epan/unistim		\
-	epan/wimax		\
-	epan/wimaxasncp		\
-	epan/wimaxmacphy	\
-	wiretap/usbdump		\
-	codecs/l16_mono
+# the name of the plugin
+PLUGIN_NAME = ani_payload
+
+PLUGIN_VERSION = 0.0.1
+
+# Non-generated sources
+NONGENERATED_C_FILES = \
+	$(NONGENERATED_REGISTER_C_FILES) \
+	packet-ani-payload.c
+
+# Headers.
+CLEAN_HEADER_FILES = \
+	packet-ani-payload.h
+
+HEADER_FILES = \
+	$(CLEAN_HEADER_FILES)
+
+epan_plugin_LTLIBRARIES = ani_payload.la
+
+ani_payload_la_SOURCES = \
+	$(SRC_FILES)	\
+	$(HEADER_FILES)
+
+ani_payload_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
+
+ani_payload_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
+
+ani_payload_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 
 EXTRA_DIST = \
-	$(_CUSTOM_EXTRA_DIST_) \
-	Custom.make.example	\
-	Custom.m4.example	\
-	plugin.rc.in
-
-checkapi:
-	for i in $(SUBDIRS); do \
-		(cd "$$i"; $(MAKE) checkapi); \
-	done
-
+	CMakeLists.txt
