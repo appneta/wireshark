@@ -752,7 +752,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     dissector_add_uint("udp.port", port, ani_rpp_handle);
 
                 /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, " Flow Response (flow ID %d)", flow);
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Flow Response (flow ID %u)", flow);
             }
             offset += (headerLength - 2);
             break;
@@ -766,7 +766,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 proto_tree_add_item(current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE);
 
                 /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, " Close Flow (flow ID %d)", flow);
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Close Flow (flow ID %u)", flow);
             }
             offset += (headerLength - 2);
             break;
