@@ -80,9 +80,6 @@ other than 0! */
 /* Payload type is the last 7 bits */
 #define RTP_PAYLOAD_TYPE(octet)  ((octet) & 0x7F)
 
-extern void dissect_ip(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree);
-extern void proto_register_responder_ip(void);
-
 /* IF PROTO exposes code to other dissectors, then it must be exported
    in a header file. If not, a header file is not needed at all. */
 /* #include "packet-ani-rpp.h" */
@@ -641,7 +638,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
     gint remaining = tvb_captured_length_remaining(tvb, 0);
     guint pass = 0;
 
-    if (data && strcmp(data, "payload") == 0)
+    if (data && strcmp((const char*)data, "payload") == 0)
         currentHeader = HDR_SIGNATURE;
     else
         currentHeader = HDR_SEQUENCE;
