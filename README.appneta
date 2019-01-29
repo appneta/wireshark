@@ -5,7 +5,8 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
 
 Here are updated instructions ....
 
-Using the 10.13 SDK
+Using the 10.14 SDK
+export MACOSX_DEPLOYMENT_TARGET=10.14
 
 You are now prepared to build Wireshark.
 
