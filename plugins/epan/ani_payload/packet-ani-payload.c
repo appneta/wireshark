@@ -179,11 +179,15 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 guint32 iht_value = 0;
                 int bit_offset;
                 const gchar *reply_str;
+                gchar *type_str;
 
-                if (!memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE)))
+                if (!memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE))) {
                     reply_str = "Reply ";
-                else
+                    type_str = "ani-reply-payload";
+                } else {
                     reply_str = "";
+                    type_str = "ani-payload";
+                }
 
                 offset = sizeof(ANI_PAYLOAD_SIGNATURE);
                 status = tvb_get_ntohl(tvb, offset);
@@ -253,7 +257,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                         tvbuff_t *resp_tvb = tvb_new_subset_remaining(tvb, offset);
 
                         offset += call_dissector_with_data(appneta_responder_handle,
-                                resp_tvb, pinfo, data_tree, "payload");
+                                resp_tvb, pinfo, data_tree, type_str);
                     }
                 } else {
                     /* Path */

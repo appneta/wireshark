@@ -1,8 +1,8 @@
-wireshark (2.6.6.appneta.35) unstable; urgency=low
+wireshark (2.6.6.appneta.36) unstable; urgency=low
 
-  * Update to 2.6.6 appneta.35
+  * Update to 2.6.6 appneta.36
 
- -- Fred Klassen <fklassen@appneta.com>  Tue, 29 Jan 2019 10:15:00 -0800
+ -- Fred Klassen <fklassen@appneta.com>  Wed, 6 Mar 2019 11:29:00 -0800
 
 wireshark (2.6.6) unstable; urgency=low
 

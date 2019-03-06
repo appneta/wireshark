@@ -636,12 +636,19 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
     tvbuff_t *next_tvb;
     gboolean   save_in_error_pkt;
     gint remaining = tvb_captured_length_remaining(tvb, 0);
+    appneta_pkt_type_t appneta_pkt_type = APPNETA_PACKET_TYPE_UNDEFINED;
     guint pass = 0;
 
-    if (data && strcmp((const char*)data, "payload") == 0)
+    if (data && strcmp((const char*)data, "ani-payload") == 0) {
         currentHeader = HDR_SIGNATURE;
-    else
+        appneta_pkt_type = APPNETA_PACKET_TYPE_PATH;
+    } else if (data && strcmp((const char*)data, "ani-reply-payload") == 0) {
+        currentHeader = HDR_SIGNATURE;
+        appneta_pkt_type = APPNETA_PACKET_TYPE_PATH_REPLY;
+    } else {
         currentHeader = HDR_SEQUENCE;
+    }
+
     while (currentHeader != HDR_LAST && currentHeader < HDR_INVALID) {
         current_tree = ani_rpp_tree;
         nextHeader = tvb_get_guint8(tvb, offset);
@@ -1134,24 +1141,25 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Signature Header");
             if (current_tree) {
-                const guint8 *cp = tvb_get_ptr(tvb, offset,
-                        tvb_captured_length_remaining(tvb, offset));
-                appneta_pkt_type_t pkt_type = APPNETA_PACKET_TYPE_UNDEFINED;
+                if (appneta_pkt_type == APPNETA_PACKET_TYPE_UNDEFINED) {
+                    const guint8 *cp = tvb_get_ptr(tvb, offset,
+                            tvb_captured_length_remaining(tvb, offset));
 
-                if (cp) {
-                    if (!memcmp(cp, ANI_PAYLOAD_SIGNATURE, sizeof(ANI_PAYLOAD_SIGNATURE)))
-                        pkt_type = APPNETA_PACKET_TYPE_PATH;
-                    else if (!memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE)))
-                        pkt_type = APPNETA_PACKET_TYPE_PATH_REPLY;
-                    else if (!memcmp(cp, ANI_LEGACY_PAYLOAD_SIGNATURE, sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE)))
-                        pkt_type = APPNETA_PACKET_TYPE_LEGACY;
-                    else if (!memcmp(cp, PATHTEST_PAYLOAD_SIGNATURE, sizeof(PATHTEST_PAYLOAD_SIGNATURE)))
-                        pkt_type = APPNETA_PACKET_TYPE_PATHTEST;
+                    if (cp) {
+                        if (!memcmp(cp, ANI_PAYLOAD_SIGNATURE, sizeof(ANI_PAYLOAD_SIGNATURE)))
+                            appneta_pkt_type = APPNETA_PACKET_TYPE_PATH;
+                        else if (!memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE)))
+                            appneta_pkt_type = APPNETA_PACKET_TYPE_PATH_REPLY;
+                        else if (!memcmp(cp, ANI_LEGACY_PAYLOAD_SIGNATURE, sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE)))
+                            appneta_pkt_type = APPNETA_PACKET_TYPE_LEGACY;
+                        else if (!memcmp(cp, PATHTEST_PAYLOAD_SIGNATURE, sizeof(PATHTEST_PAYLOAD_SIGNATURE)))
+                            appneta_pkt_type = APPNETA_PACKET_TYPE_PATHTEST;
+                    }
                 }
 
-                if (headerLength > 6) {
+                if (headerLength >= 6) {
                     /* this is a dual-ended signature */
-                    switch (pkt_type) {
+                    switch (appneta_pkt_type) {
                     case APPNETA_PACKET_TYPE_PATH:
                         proto_tree_add_item(current_tree, hf_ani_rpp_signature_path, tvb, offset,
                                 sizeof(ANI_PAYLOAD_SIGNATURE), ENC_NA);
@@ -1173,7 +1181,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                                 tvb, offset, sizeof(ANI_PAYLOAD_SIGNATURE), ENC_NA);
                     }
 
-                    switch (pkt_type) {
+                    switch (appneta_pkt_type) {
                     case APPNETA_PACKET_TYPE_PATH:
                     case APPNETA_PACKET_TYPE_PATH_REPLY:
                         flags = tvb_get_guint8(tvb, offset + 5);
