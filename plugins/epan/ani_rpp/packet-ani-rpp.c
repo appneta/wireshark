@@ -31,9 +31,8 @@
 #include <epan/proto.h>
 #include <epan/dissectors/packet-rtp.h>
 
-WS_DLL_PUBLIC_DEF const gchar plugin_version[] = PLUGIN_VERSION;
-WS_DLL_PUBLIC_DEF const gchar plugin_release[] = VERSION_RELEASE;
-WS_DLL_PUBLIC void plugin_register(void);
+const gchar plugin_version[] = PLUGIN_VERSION;
+void plugin_register(void);
 
 #define UDP_PORT_ANI_RPP  3239
 #define RTP_HEADER_LENGTH 12
