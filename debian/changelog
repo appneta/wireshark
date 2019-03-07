@@ -1,3 +1,9 @@
+wireshark (3.0.0.appneta.38) unstable; urgency=low
+
+  * Update to 3.0.0 appneta.38
+
+ -- Fred Klassen <fklassen@appneta.com>  Wed, 6 Mar 2019 11:29:00 -0800
+
 wireshark (3.0.0) unstable; urgency=low
 
   * Self-made package
