@@ -98,7 +98,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
             gint offset = 0;
             const guint8 *cp = tvb_get_ptr(tvb, offset, bytes);
             guint path_payload_min_size = (sizeof(ANI_PAYLOAD_SIGNATURE) + 4);
-            guint ecb_payload_min_size = path_payload_min_size + 66;
+            guint ecb_payload_min_size = path_payload_min_size + 6;
 
             if (new_pane) {
                 guint8 *real_data = (guint8 *)tvb_memdup(wmem_packet_scope(), tvb, 0, bytes);
@@ -253,12 +253,13 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                     if (!appneta_responder_handle)
                         appneta_responder_handle = find_dissector("appneta_responder");
 
-                    if (appneta_responder_handle && bytes >= ecb_payload_min_size) {
-                        tvbuff_t *resp_tvb = tvb_new_subset_remaining(tvb, offset);
+                    if (appneta_responder_handle && bytes >= ecb_payload_min_size &&
+                            tvb_captured_length_remaining(tvb, offset) > 0)
+                        call_dissector_with_data(appneta_responder_handle,
+                                tvb_new_subset_remaining(tvb, offset),
+                                pinfo, data_tree, type_str);
 
-                        offset += call_dissector_with_data(appneta_responder_handle,
-                                resp_tvb, pinfo, data_tree, type_str);
-                    }
+                    return tvb_captured_length(tvb);
                 } else {
                     /* Path */
                     proto_tree_add_uint(data_tree, hf_payload_path_burst_length, tvb, offset, 3, burst_length);

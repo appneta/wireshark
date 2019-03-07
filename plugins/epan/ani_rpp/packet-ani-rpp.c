@@ -1157,7 +1157,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     }
                 }
 
-                if (headerLength >= 6) {
+                if (headerLength > 6) {
                     /* this is a dual-ended signature */
                     switch (appneta_pkt_type) {
                     case APPNETA_PACKET_TYPE_PATH:
