@@ -30,8 +30,11 @@
 #include <epan/packet.h>
 #include <epan/prefs.h>
 
-const gchar plugin_version[] = PLUGIN_VERSION;
-void plugin_register(void);
+WS_DLL_PUBLIC_DEF const gchar plugin_version[] = PLUGIN_VERSION;
+WS_DLL_PUBLIC_DEF const int plugin_want_major = VERSION_MAJOR;
+WS_DLL_PUBLIC_DEF const int plugin_want_minor = VERSION_MINOR;
+
+WS_DLL_PUBLIC void plugin_register(void);
 
 static void proto_reg_handoff_twamp(void);
 static void proto_register_twamp(void);
