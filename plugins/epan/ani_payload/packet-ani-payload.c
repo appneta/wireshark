@@ -34,8 +34,11 @@
 #include <wsutil/str_util.h>
 #include "packet-ani-payload.h"
 
-const gchar plugin_version[] = PLUGIN_VERSION;
-void plugin_register(void);
+WS_DLL_PUBLIC_DEF const gchar plugin_version[] = PLUGIN_VERSION;
+WS_DLL_PUBLIC_DEF const int plugin_want_major = VERSION_MAJOR;
+WS_DLL_PUBLIC_DEF const int plugin_want_minor = VERSION_MINOR;
+
+WS_DLL_PUBLIC void plugin_register(void);
 
 /* proto_data cannot be static because it's referenced in the
  * print routines
