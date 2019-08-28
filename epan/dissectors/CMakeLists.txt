@@ -76,6 +76,8 @@ set(CLEAN_ASN1_DISSECTOR_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-acp133.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-acse.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-ain.c
+	${CMAKE_CURRENT_SOURCE_DIR}/packet-ani-payload.c
+	${CMAKE_CURRENT_SOURCE_DIR}/packet-ani-rpp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-ansi_tcap.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-atn-ulcs.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-atn-cm.c
@@ -273,6 +275,7 @@ set(DISSECTOR_PUBLIC_HEADERS
 	packet-afp.h
 	packet-alcap.h
 	packet-amp.h
+	packet-ani-payload.h
 	packet-ansi_a.h
 	packet-ansi_map.h
 	packet-ansi_tcap.h
