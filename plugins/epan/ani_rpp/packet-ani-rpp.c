@@ -111,6 +111,7 @@ static gint hf_ani_rpp_flow_port_first = -1;
 static gint hf_ani_rpp_flow_port_last = -1;
 static gint hf_ani_rpp_test_weight = -1;
 static gint hf_ani_rpp_error_code = -1;
+static gint hf_ani_rpp_error_value = -1;
 static gint hf_ani_rpp_response_status = -1;
 static gint hf_ani_rpp_responder_version_major = -1;
 static gint hf_ani_rpp_responder_version_minor = -1;
@@ -137,6 +138,10 @@ static gint hf_ani_rpp_cb_inbound_flags_csv_debug = -1;
 static gint hf_ani_rpp_cb_resp_ratelimitcbrate = -1;
 static gint hf_ani_rpp_cb_resp_minpacketcount = -1;
 static gint hf_ani_rpp_cb_flags_resp_csv_debug = -1;
+static gint hf_ani_rpp_iface_info_flags = -1;
+static gint hf_ani_rpp_iface_info_flags_is_ani_modified = -1;
+static gint hf_ani_rpp_iface_info_mtu = -1;
+static gint hf_ani_rpp_iface_info_speed = -1;
 static gint hf_ani_rpp_inboundpacketcount = -1;
 static gint hf_ani_rpp_inboundpacketsize = -1;
 static gint hf_ani_rpp_h323port = -1;
@@ -250,6 +255,7 @@ static gint ett_ani_enhanced_controlled_burst_request = -1;
 static gint ett_ani_enhanced_controlled_burst_response = -1;
 static gint ett_ani_signature = -1;
 static gint ett_ani_pseudo_cksum = -1;
+static gint ett_ani_iface_info = -1;
 static gint ett_ani_invalid = -1;
 
 /* Setup protocol subtree array */
@@ -284,6 +290,7 @@ static gint *ett[] = {
         &ett_ani_enhanced_controlled_burst_response,
         &ett_ani_signature,
         &ett_ani_pseudo_cksum,
+        &ett_ani_iface_info,
         &ett_ani_invalid,
 };
 
@@ -324,7 +331,7 @@ static gint *hf_subtrees[] = {
         &ett_ani_enhanced_controlled_burst_response,    /* HDR_ECBRESPONSE */
         &ett_ani_signature,                             /* HDR_SIGNATURE */
         &ett_ani_pseudo_cksum,                          /* HDR_PSEUDO_CKSUM */
-        &ett_ani_invalid,                               /* HDR_RESERVED1 */
+        &ett_ani_iface_info,                            /* HDR_IFACE_INFO */
         &ett_ani_invalid,                               /* HDR_RESERVED2 */
         &ett_ani_invalid,                               /* HDR_RESERVED3 */
         &ett_ani_invalid,                               /* HDR_RESERVED4 */
@@ -374,7 +381,7 @@ static const value_string ani_rpp_header_type_vals[] =
         { 29, "Enhanced Controlled Burst Response" },
         { 30, "Signature Header" },
         { 31, "Pseudo Checksum" },
-        { 32, "Reserved 1" },
+        { 32, "Interface Info" },
         { 33, "Reserved 2" },
         { 34, "Reserved 3" },
         { 35, "Reserved 4" },
@@ -420,7 +427,7 @@ enum ResponderHeaderType
     HDR_ECBRESPONSE,
     HDR_SIGNATURE,         /* 30 */
     HDR_PSEUDO_CKSUM,
-    HDR_RESERVED1,
+    HDR_IFACE_INFO,
     HDR_RESERVED2,
     HDR_RESERVED3,
     HDR_RESERVED4,
@@ -428,7 +435,6 @@ enum ResponderHeaderType
     HDR_RESERVED6,
     HDR_RESERVED7,
     HDR_RESERVED8,
-    HDR_RESERVED9,
     HDR_INVALID,
     HDR_COUNT,
 } ResponderHeaderType;
@@ -681,7 +687,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     "Error Header");
             if (current_tree) {
                 proto_tree_add_item(current_tree, hf_ani_rpp_error_code, tvb, offset, 1, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_next_header_type, tvb, offset+1, 1, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_error_value, tvb, offset+1, 1, FALSE);
 
                 /* set some text in the info column */
                 col_append_str(pinfo->cinfo, COL_INFO, " [Contains Errors]");
@@ -1216,6 +1222,22 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 }
             offset += (headerLength - 2);
             break;
+        case HDR_IFACE_INFO:
+            current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+                    "Interface Info");
+            if (current_tree) {
+                guint32 flags32 = tvb_get_ntohl(tvb, offset);
+                guint32 mtu = tvb_get_ntohl(tvb, offset+4);
+                guint32 speed = tvb_get_ntohl(tvb, offset+8);
+
+                tf = proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_flags, tvb, offset, 4, flags32);
+                field_tree = proto_item_add_subtree( tf, ett_ani_iface_info);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_iface_info_flags_is_ani_modified, tvb, offset, 4, flags32);
+                proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_mtu, tvb, offset+4, 4, mtu);
+                proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_speed, tvb, offset+8, 4, speed);
+            }
+            offset += (headerLength - 2);
+            break;
         default:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Unknown Header");
@@ -1454,6 +1476,18 @@ proto_register_ani_rpp(void)
                             FT_UINT8,
                             BASE_DEC,
                             VALS(ani_rpp_error_code_vals),
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_error_value,
+                    {
+                            "Error Value",
+                            "appneta_rpp.err_value",
+                            FT_UINT8,
+                            BASE_HEX,
+                            NULL,
                             0x0,
                             "", HFILL
                     }
@@ -2377,6 +2411,54 @@ proto_register_ani_rpp(void)
                             "appneta_rpp.pseudo_cksum",
                             FT_UINT16,
                             BASE_HEX_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_iface_info_flags,
+                    {
+                            "Interface Flags",
+                            "appneta_rpp.iface_flags",
+                            FT_UINT32,
+                            BASE_HEX,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_iface_info_flags_is_ani_modified,
+                    {
+                            "Is ANI Modified",
+                            "appneta_rpp.iface_is_ani_modified",
+                            FT_BOOLEAN,
+                            32,
+                            NULL,
+                            0x01,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_iface_info_mtu,
+                    {
+                            "Interface MTU",
+                            "appneta_rpp.iface_mtu",
+                            FT_UINT32,
+                            BASE_DEC,
+                            NULL,
+                            0x0,
+                            "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_iface_info_speed,
+                    {
+                            "Interface Speed",
+                            "appneta_rpp.iface_speed",
+                            FT_UINT32,
+                            BASE_DEC,
                             NULL,
                             0x0,
                             "", HFILL
