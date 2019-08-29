@@ -91,7 +91,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 {
     guint bytes;
 
-    if (show_appneta_payload && tree) {
+    if (show_appneta_payload) {
         bytes = tvb_captured_length_remaining(tvb, 0);
         if (bytes > 0) {
             tvbuff_t   *data_tvb;
@@ -121,7 +121,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 data_tree = proto_item_add_subtree(ti, ett_payload);
 
                 proto_tree_add_item(data_tree, hf_payload_legacy_signature, data_tvb, 0, offset, ENC_NA);
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", AppNeta Legacy Payload");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " AppNeta Legacy Payload");
             } else if (bytes >= sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT) &&
                     !memcmp(cp, ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT, sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE_CORRUPT))) {
                 /* legacy packet */
@@ -133,7 +133,7 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 data_tree = proto_item_add_subtree(ti, ett_payload);
 
                 proto_tree_add_item(data_tree, hf_payload_legacy_corrupt_signature, data_tvb, 0, offset, ENC_NA);
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", AppNeta Legacy Payload - CORRUPT");
+                col_append_fstr(pinfo->cinfo, COL_INFO, "  AppNeta Legacy Payload - CORRUPT");
             } else if (bytes >= (sizeof(PATHTEST_PAYLOAD_SIGNATURE) + 7) &&
                     !memcmp(cp, PATHTEST_PAYLOAD_SIGNATURE, sizeof(PATHTEST_PAYLOAD_SIGNATURE))) {
                 /* pathtest packet */
@@ -163,9 +163,9 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                 proto_tree_add_uint(data_tree, hf_payload_pathtest_stream, tvb, offset + 5, 2, stream);
 
                 if (bytes == 18)
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", PathTest payload - stream=%u (Final)", stream);
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " PathTest payload - stream=%u (Final)", stream);
                 else
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", PathTest payload - stream=%u seq=%u", stream, seq);
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " PathTest payload - stream=%u seq=%u", stream, seq);
                 offset += 7;
             } else if (bytes >= path_payload_min_size  &&
                     (!memcmp(cp, ANI_PAYLOAD_SIGNATURE, sizeof(ANI_PAYLOAD_SIGNATURE))
@@ -273,12 +273,12 @@ dissect_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
                         offset += 4;
                     }
 
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Path %spayload:", reply_str);
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " Path %spayload:", reply_str);
 
                     col_append_fstr(pinfo->cinfo, COL_INFO, " first=%u last=%u", first, last);
 
                     if (iht)
-                        col_append_fstr(pinfo->cinfo, COL_INFO, " iht=%u", iht_value);
+                        col_append_fstr(pinfo->cinfo, COL_INFO, " iht=%u nsec", iht_value);
 
                     col_append_fstr(pinfo->cinfo, COL_INFO, " burst=%u", burst_length);
 
