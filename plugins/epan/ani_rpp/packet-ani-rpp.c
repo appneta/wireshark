@@ -540,8 +540,6 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, gint offset,
     guint32       sync_src;
     proto_tree*   rtp_tree = NULL;
 
-    *marker_set = 0;
-
     /* Get the fields in the first octet */
     octet1 = tvb_get_guint8(tvb, offset);
     octet2 = tvb_get_guint8(tvb, offset + 1);
@@ -551,13 +549,13 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, gint offset,
         return 0;
     }
 
+    /* Get the fields in the second octet */
+    *marker_set = !!RTP_MARKER(octet2);
+
     if (ani_rpp_tree == NULL) {
         /* just return the length without adding items to the dissector tree */
         return RTP_HEADER_LENGTH;
     }
-
-    /* Get the fields in the second octet */
-    *marker_set = RTP_MARKER( octet2);
 
     /* Get the subsequent fields */
     seq_num = tvb_get_ntohs( tvb, offset + 2);
@@ -665,592 +663,508 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
         if (offset > remaining || pass++ > 50) {
             g_print("dissect_responder_header: opps: offset=%d remaining=%d pass=%d\n",
                     offset, remaining, pass);
-            return -1;
+            return 0;
         }
 
-        switch (currentHeader)
-        {
+        switch (currentHeader) {
         case HDR_SEQUENCE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Sequence Header");
-            if (current_tree) {
-                id = tvb_get_ntohl( tvb, offset);
-                proto_tree_add_item(current_tree, hf_ani_rpp_pkt_id, tvb, offset, 4, FALSE);
+            id = tvb_get_ntohl( tvb, offset);
+            proto_tree_add_item(current_tree, hf_ani_rpp_pkt_id, tvb, offset, 4, FALSE);
 
-                /* set some text in the info column */
-                col_add_fstr(pinfo->cinfo, COL_INFO, "Responder: ID %d(0x%x)", id, id);
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " ID=%u(0x%x)", id, id);
             break;
         case HDR_ERROR:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Error Header");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_error_code, tvb, offset, 1, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_error_value, tvb, offset+1, 1, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_error_code, tvb, offset, 1, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_error_value, tvb, offset+1, 1, FALSE);
 
-                /* set some text in the info column */
-                col_append_str(pinfo->cinfo, COL_INFO, " [Contains Errors]");
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_str(pinfo->cinfo, COL_INFO, " [Contains Errors]");
             break;
         case HDR_REQUEST:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Request Header");
-            offset += (headerLength - 2);
             break;
         case HDR_REPLY:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Reply Header");
             /* the next 28 bytes are the ip and udp headers to be used in the response */
-            if (current_tree) {
-                /* Save the current value of the "we're inside an error packet"
+            /* Save the current value of the "we're inside an error packet"
                      flag, and set that flag; subdissectors may treat packets
                      that are the payload of error packets differently from
                      "real" packets. */
-                save_in_error_pkt = pinfo->flags.in_error_pkt;
-                pinfo->flags.in_error_pkt = TRUE;
+            save_in_error_pkt = pinfo->flags.in_error_pkt;
+            pinfo->flags.in_error_pkt = TRUE;
 
-                next_tvb = tvb_new_subset_remaining(tvb, offset);
-                set_actual_length(next_tvb, 28);
-                if (ip_handle) {
-                    call_dissector( ip_handle, next_tvb, pinfo, current_tree);
-                }
-
-                /* Restore the "we're inside an error packet" flag. */
-                pinfo->flags.in_error_pkt = save_in_error_pkt;
-
-                /* set some text in the info column */
-                col_append_str(pinfo->cinfo, COL_INFO, " Reply");
+            next_tvb = tvb_new_subset_remaining(tvb, offset);
+            set_actual_length(next_tvb, 28);
+            if (ip_handle) {
+                call_dissector( ip_handle, next_tvb, pinfo, current_tree);
             }
-            offset += (headerLength - 2);
+
+            /* Restore the "we're inside an error packet" flag. */
+            pinfo->flags.in_error_pkt = save_in_error_pkt;
             break;
         case HDR_FLOW_CREATE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Create Flow Header");
-            if (current_tree) {
-                port = tvb_get_ntohs( tvb, offset);
-                if (headerLength >= 6) {
-                    proto_tree_add_item(current_tree, hf_ani_rpp_flow_port_first, tvb, offset, 2, FALSE);
-                    proto_tree_add_item(current_tree, hf_ani_rpp_flow_port_last, tvb, offset+2, 2, FALSE);
-                } else {
-                    proto_tree_add_item(current_tree, hf_ani_rpp_flow_port, tvb, offset, 2, FALSE);
-                }
-
-                /* set some text in the info column */
-                if (headerLength >= 6) {
-                    portend = tvb_get_ntohs( tvb, offset+2);
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flows (ports %d through %d)", port, portend);
-                } else {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flow (port %d)", port);
-                }
+            port = tvb_get_ntohs( tvb, offset);
+            if (headerLength >= 6) {
+                proto_tree_add_item(current_tree, hf_ani_rpp_flow_port_first, tvb, offset, 2, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_flow_port_last, tvb, offset+2, 2, FALSE);
+            } else {
+                proto_tree_add_item(current_tree, hf_ani_rpp_flow_port, tvb, offset, 2, FALSE);
             }
-            offset += (headerLength - 2);
+
+            /* set some text in the info column */
+            if (headerLength >= 6) {
+                portend = tvb_get_ntohs( tvb, offset+2);
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flows (ports %d through %d)", port, portend);
+            } else {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Create Flow (port %d)", port);
+            }
             break;
         case HDR_FLOW_RESPONSE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Reply Header");
-            if (current_tree) {
-                flow = tvb_get_ntohl( tvb, offset);
-                port = tvb_get_ntohs( tvb, offset+4);
-                proto_tree_add_item(current_tree, hf_ani_rpp_flow_num, tvb, offset, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_flow_port, tvb, offset+4, 2, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE);
+            flow = tvb_get_ntohl( tvb, offset);
+            port = tvb_get_ntohs( tvb, offset+4);
+            proto_tree_add_item(current_tree, hf_ani_rpp_flow_num, tvb, offset, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_flow_port, tvb, offset+4, 2, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE);
 
-                /* tell Wireshark to dissect packets addressed to hf_ani_rpp_flow_port
-                 * using this dissector.
-                 */
-                if (port != UDP_PORT_ANI_RPP)
-                    dissector_add_uint("udp.port", port, ani_rpp_handle);
+            /* tell Wireshark to dissect packets addressed to hf_ani_rpp_flow_port
+             * using this dissector.
+             */
+            if (port != UDP_PORT_ANI_RPP)
+                dissector_add_uint("udp.port", port, ani_rpp_handle);
 
-                /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, " Flow Response (flow ID %u)", flow);
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Flow Response: Flow ID=%u", flow);
             break;
         case HDR_FLOW_CLOSE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Close Flow Header");
-            if (current_tree) {
-                flow = tvb_get_ntohl( tvb, offset);
-                proto_tree_add_item(current_tree, hf_ani_rpp_flow_num, tvb, offset, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_flow_port, tvb, offset+4, 2, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE);
+            flow = tvb_get_ntohl( tvb, offset);
+            proto_tree_add_item(current_tree, hf_ani_rpp_flow_num, tvb, offset, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_flow_port, tvb, offset+4, 2, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_response_status, tvb, offset+6, 2, FALSE);
 
-                /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, " Close Flow (flow ID %u)", flow);
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Close Flow: Flow ID=%u", flow);
             break;
         case HDR_TEST_WEIGHT:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Test Weight Header");
-            if (current_tree) {
-                weight = tvb_get_ntohs( tvb, offset);
-                proto_tree_add_item(current_tree, hf_ani_rpp_test_weight, tvb, offset, 2, FALSE);
+            weight = tvb_get_ntohs( tvb, offset);
+            proto_tree_add_item(current_tree, hf_ani_rpp_test_weight, tvb, offset, 2, FALSE);
 
-                /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, " (weight %d)", weight);
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Weight=%d", weight);
             break;
         case HDR_RESPONDERVERSION:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Responder Version Header");
-            if (current_tree) {
-                major = tvb_get_ntohl( tvb, offset);
-                minor = tvb_get_ntohl( tvb, offset+4);
-                revision = tvb_get_ntohl( tvb, offset+8);
-                build = tvb_get_ntohl( tvb, offset+12);
-                proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_major, tvb, offset, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_minor, tvb, offset+4, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_revision, tvb, offset+8, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_build, tvb, offset+12, 4, FALSE);
+            major = tvb_get_ntohl( tvb, offset);
+            minor = tvb_get_ntohl( tvb, offset+4);
+            revision = tvb_get_ntohl( tvb, offset+8);
+            build = tvb_get_ntohl( tvb, offset+12);
+            proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_major, tvb, offset, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_minor, tvb, offset+4, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_revision, tvb, offset+8, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_responder_version_build, tvb, offset+12, 4, FALSE);
 
-                /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", version %d.%d.%d.%d", major, minor, revision, build);
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Version=%d.%d.%d.%d", major, minor, revision, build);
             break;
         case HDR_COMMAND_INFO:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Command Info Header");
-            if (current_tree) {
-                first_id = tvb_get_ntohl( tvb, offset);
-                burstsize = tvb_get_ntohs( tvb, offset+4);
-                proto_tree_add_item(current_tree, hf_ani_rpp_first_id, tvb, offset, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_burst_size, tvb, offset+4, 2, FALSE);
-                if (headerLength > 8) {
-                    proto_tree_add_item(current_tree, hf_ani_rpp_packet_size, tvb, offset+6, 2, FALSE);
-                }
-                if (headerLength >= 11) {
-                    proto_tree_add_item(current_tree, hf_ani_rpp_command_type, tvb, offset+8, 1, FALSE);
-                    mode = tvb_get_guint8(tvb, offset+8);
-                }
-                if (headerLength >= 12) {
-                    flags = tvb_get_guint8(tvb, offset + 9);
-                    tf = proto_tree_add_uint(current_tree, hf_ani_rpp_command_flags, tvb, offset+9, 1, flags);
-                    field_tree = proto_item_add_subtree( tf, ett_ani_burst_info);
-                    proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_inbound, tvb, offset+9, 1, flags);
-                    proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset+9, 1, flags);
-                    proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_jumbo, tvb, offset+9, 1, flags);
-                }
-
-                /* set some text in the info column */
-                if (mode == 1) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst");
-                } else if (mode == 2) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Datagram");
-                } else if (mode == 3) {
-                    if ((flags & 0x4)) {
-                        col_append_fstr(pinfo->cinfo, COL_INFO, ", Inbound Controlled Burst");
-                    } else {
-                        col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst");
-                    }
-                } else if (mode == 4) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm");
-                } else if (mode == 5) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst Load");
-                } else if (mode == 0x81) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst (Primer)");
-                } else if (mode == 0x82) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Datagram (Primer)");
-                } else if (mode == 0x83) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Controlled Burst (Primer)");
-                } else if (mode == 0x84) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Tight Dgrm (Primer)");
-                } else if (mode == 0x85) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Burst Load (Primer)");
-                }
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", First ID %d, Packets %d", first_id, burstsize);
+            first_id = tvb_get_ntohl( tvb, offset);
+            burstsize = tvb_get_ntohs( tvb, offset+4);
+            proto_tree_add_item(current_tree, hf_ani_rpp_first_id, tvb, offset, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_burst_size, tvb, offset+4, 2, FALSE);
+            if (headerLength > 8) {
+                proto_tree_add_item(current_tree, hf_ani_rpp_packet_size, tvb, offset+6, 2, FALSE);
             }
-            offset += (headerLength - 2);
+            if (headerLength >= 11) {
+                proto_tree_add_item(current_tree, hf_ani_rpp_command_type, tvb, offset+8, 1, FALSE);
+                mode = tvb_get_guint8(tvb, offset+8);
+            }
+            if (headerLength >= 12) {
+                flags = tvb_get_guint8(tvb, offset + 9);
+                tf = proto_tree_add_uint(current_tree, hf_ani_rpp_command_flags, tvb, offset+9, 1, flags);
+                field_tree = proto_item_add_subtree( tf, ett_ani_burst_info);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_inbound, tvb, offset+9, 1, flags);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_super_jumbo, tvb, offset+9, 1, flags);
+                proto_tree_add_boolean(field_tree, hf_ani_rpp_command_flags_is_jumbo, tvb, offset+9, 1, flags);
+            }
+
+            /* set some text in the info column */
+            if (mode == 1) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Burst");
+            } else if (mode == 2) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Datagram");
+            } else if (mode == 3) {
+                if ((flags & 0x4)) {
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " Inbound Controlled Burst");
+                } else {
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " Controlled Burst");
+                }
+            } else if (mode == 4) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Tight Dgrm");
+            } else if (mode == 5) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Burst Load");
+            } else if (mode == 0x81) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Burst (Primer)");
+            } else if (mode == 0x82) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Datagram (Primer)");
+            } else if (mode == 0x83) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Controlled Burst (Primer)");
+            } else if (mode == 0x84) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Tight Dgrm (Primer)");
+            } else if (mode == 0x85) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Burst Load (Primer)");
+            }
+            col_append_fstr(pinfo->cinfo, COL_INFO, " First ID=%d Packets=%d", first_id, burstsize);
             break;
         case HDR_OUTBOUNDARRIVAL:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Outbound Arrival Bits");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_outbound_arrival_bits, tvb, offset, 8, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_outbound_arrival_bits, tvb, offset, 8, FALSE);
 
-                /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", Response");
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Response");
             break;
         case HDR_RESPONDERHOLDTIME:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Responder Hold Times");
-            if (current_tree) {
-                burst_hold_time = tvb_get_ntohl( tvb, offset);
-                proto_tree_add_item(current_tree, hf_ani_burst_hold_time_us, tvb, offset, 4, FALSE);
+            burst_hold_time = tvb_get_ntohl( tvb, offset);
+            proto_tree_add_item(current_tree, hf_ani_burst_hold_time_us, tvb, offset, 4, FALSE);
 
-                /* set some text in the info column */
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", Hold %u us", burst_hold_time);
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " RHT=%u usec", burst_hold_time);
             break;
         case HDR_OUTBOUNDARRIVALTIME:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Outbound Arrival Timestamps");
             i = 0;
-            if (current_tree) {
-                depth = headerLength - 2;
-                for (; i<depth; i+=4) {
-                    proto_tree_add_item(current_tree, hf_ani_rpp_outbound_arrival_times, tvb, offset+i, 4, FALSE);
-                }
+            depth = headerLength - 2;
+            for (; i<depth; i+=4) {
+                proto_tree_add_item(current_tree, hf_ani_rpp_outbound_arrival_times, tvb, offset+i, 4, FALSE);
             }
-            offset += (headerLength - 2);
             break;
         case HDR_LOST_PACKETS:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Lost Packets");
-            if (current_tree) {
-                depth = headerLength - 2;
-                for (i=0; i<depth; i+=4) {
-                    proto_tree_add_item(current_tree, hf_ani_rpp_lost_id, tvb, offset+i, 4, FALSE);
-                }
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", Loss");
+            depth = headerLength - 2;
+            for (i=0; i<depth; i+=4) {
+                proto_tree_add_item(current_tree, hf_ani_rpp_lost_id, tvb, offset+i, 4, FALSE);
             }
-            offset += (headerLength - 2);
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Loss");
             break;
         case HDR_SIPPORT:
+        {
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Sip Port");
-            if (current_tree) {
-                guint32 idLength = headerLength - 4;
-                proto_tree_add_item(current_tree, hf_ani_rpp_sipport, tvb, offset, 2, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ta_id, tvb, offset + 2, idLength, FALSE);
-            }
-            offset += (headerLength - 2);
+            guint32 idLength = headerLength - 4;
+            proto_tree_add_item(current_tree, hf_ani_rpp_sipport, tvb, offset, 2, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ta_id, tvb, offset + 2, idLength, FALSE);
             break;
+        }
         case HDR_PROTOCOL:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Protocol");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_protocol, tvb, offset, 4, FALSE);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_protocol, tvb, offset, 4, FALSE);
             break;
         case HDR_CONTROLLEDBURST:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
-                    "Controlled Burst");
-            if (current_tree) {
-                cb_in_count = tvb_get_ntohl( tvb, offset);
-                cb_in_gap = tvb_get_ntohl( tvb, offset+4);
-                cb_in_flags = cb_in_count & 0x80000000;
-                proto_tree_add_boolean(current_tree, hf_ani_rpp_cb_inbound_flags_csv_debug, tvb, offset, 4, cb_in_flags);
-                proto_tree_add_uint(current_tree, hf_ani_rpp_cb_inbound_packetcount, tvb, offset, 4, cb_in_count & 0x7fffffff);
-                proto_tree_add_uint(current_tree, hf_ani_rpp_cb_inbound_interpacketgap, tvb, offset+4, 4, cb_in_gap);
-                if (cb_in_flags) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Debug ");
-                } else {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", ");
-                }
-                if (headerLength >= 18) {
-                    cb_out_count = tvb_get_ntohl( tvb, offset+8);
-                    cb_out_gap = tvb_get_ntohl( tvb, offset+12);
-                    proto_tree_add_uint(current_tree, hf_ani_rpp_cb_outbound_packetcount, tvb, offset+8, 4, cb_out_count);
-                    proto_tree_add_uint(current_tree, hf_ani_rpp_cb_outbound_interpacketgap, tvb, offset+12, 4, cb_out_gap);
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "Out=%d/%d In=%d/%d (pkts/gap)",
-                            cb_out_count, cb_out_gap, cb_in_count & 0x7fffffff, cb_in_gap);
-                } else {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "%d/%d (pkts/gap)", cb_in_count & 0x7fffffff, cb_in_gap);
-                }
+                    "Controlled Burst ");
+            cb_in_count = tvb_get_ntohl( tvb, offset);
+            cb_in_gap = tvb_get_ntohl( tvb, offset+4);
+            cb_in_flags = cb_in_count & 0x80000000;
+            proto_tree_add_boolean(current_tree, hf_ani_rpp_cb_inbound_flags_csv_debug, tvb, offset, 4, cb_in_flags);
+            proto_tree_add_uint(current_tree, hf_ani_rpp_cb_inbound_packetcount, tvb, offset, 4, cb_in_count & 0x7fffffff);
+            proto_tree_add_uint(current_tree, hf_ani_rpp_cb_inbound_interpacketgap, tvb, offset+4, 4, cb_in_gap);
+            if (cb_in_flags) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, "Debug ");
             }
-            offset += (headerLength - 2);
+            if (headerLength >= 18) {
+                cb_out_count = tvb_get_ntohl( tvb, offset+8);
+                cb_out_gap = tvb_get_ntohl( tvb, offset+12);
+                proto_tree_add_uint(current_tree, hf_ani_rpp_cb_outbound_packetcount, tvb, offset+8, 4, cb_out_count);
+                proto_tree_add_uint(current_tree, hf_ani_rpp_cb_outbound_interpacketgap, tvb, offset+12, 4, cb_out_gap);
+                col_append_fstr(pinfo->cinfo, COL_INFO, "Out=%d/%d In=%d/%d (pkts/gap)",
+                        cb_out_count, cb_out_gap, cb_in_count & 0x7fffffff, cb_in_gap);
+            } else {
+                col_append_fstr(pinfo->cinfo, COL_INFO, "%d/%d (pkts/gap)", cb_in_count & 0x7fffffff, cb_in_gap);
+            }
             break;
         case HDR_CONTROLLEDBURSTRESPONSE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Controlled Burst Response");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_cb_resp_ratelimitcbrate, tvb, offset, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_cb_resp_minpacketcount, tvb, offset+4, 4, FALSE);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_resp_ratelimitcbrate, tvb, offset, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_resp_minpacketcount, tvb, offset+4, 4, FALSE);
             break;
         case HDR_INBOUNDPACKETATTR:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Inbound Packet Attributes");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_inboundpacketcount, tvb, offset, 2, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_inboundpacketsize, tvb, offset+2, 2, FALSE);
-                burstsize = tvb_get_ntohs( tvb, offset);
-                col_append_fstr(pinfo->cinfo, COL_INFO, "/%d (out/in)", burstsize);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_inboundpacketcount, tvb, offset, 2, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_inboundpacketsize, tvb, offset+2, 2, FALSE);
+            burstsize = tvb_get_ntohs( tvb, offset);
+            col_append_fstr(pinfo->cinfo, COL_INFO, "/%d (out/in)", burstsize);
             break;
         case HDR_H323PORT:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "H.323");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_h323port, tvb, offset, 2, FALSE);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_h323port, tvb, offset, 2, FALSE);
             break;
         case HDR_APPLIANCE_TYPE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Device Type");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_appliance_type, tvb, offset, 1, FALSE);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_appliance_type, tvb, offset, 1, FALSE);
             break;
         case HDR_CUSTOM_TYPE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Custom Type");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_custom_appliance_type, tvb, offset, headerLength - 2, FALSE);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_custom_appliance_type, tvb, offset, headerLength - 2, FALSE);
             break;
         case HDR_CONTROLLEDBURSTREADY:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Controlled Burst Ready");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved1, tvb, offset, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved2, tvb, offset+4, 4, FALSE);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved1, tvb, offset, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved2, tvb, offset+4, 4, FALSE);
             break;
         case HDR_CONTROLLEDBURSTREQUEST:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Controlled Burst Request");
-            if (current_tree) {
-                proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved1, tvb, offset, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved2, tvb, offset+4, 4, FALSE);
-            }
-            offset += (headerLength - 2);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved1, tvb, offset, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved2, tvb, offset+4, 4, FALSE);
             break;
         case HDR_ECBREQUEST:
+        {
+            gboolean first_seq, last_seq, is_reply, is_rx_report_all,
+                is_in_gap_ns, is_out_gap_ns;
+
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
-                    "Enhanced Controlled Burst Request");
-            if (current_tree) {
-                gboolean first_seq, last_seq, is_reply, is_rx_report_all,
-			is_in_gap_ns, is_out_gap_ns;
-                flags = tvb_get_guint8(tvb, offset + 1);
-                first_seq = !!(flags & 0x01);
-                last_seq = !!(flags & 0x02);
-                is_reply = !!(flags & 0x04);
-                is_rx_report_all = !!(flags & 0x08);
-                is_in_gap_ns = !!(flags & 0x10);
-                is_out_gap_ns = !!(flags & 0x20);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_padding, tvb, offset, 1, FALSE);
-                tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_request_flags, tvb, offset+1, 1, flags);
-                field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_request);
-                if (is_reply) {
-                    proto_item_append_text(tf, " (Reply)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Reply");
-                }
-                if (first_seq) {
-                    proto_item_append_text(tf, " (First sequence)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", First Seq");
-                }
-                if (last_seq) {
-                    proto_item_append_text(tf, " (Last sequence)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Last Seq");
-                }
-                if (is_rx_report_all) {
-                    proto_item_append_text(tf, " (RX Report All)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", Report All");
-                }
-                if (is_in_gap_ns) {
-                    proto_item_append_text(tf, " (Inbound Gap NS)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", IN NS");
-                }
-                if (is_out_gap_ns) {
-                    proto_item_append_text(tf, " (Outbound Gap NS)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, ", OUT NS");
-                }
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_outbound_gap_ns, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_inbound_gap_ns, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_rx_report_all, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_reply, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_last_seq, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_first_seq, tvb, offset+1, 1, flags);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_ssn, tvb, offset+2, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_magnify, tvb, offset+6, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, ", ECB out[mag=%u", tvb_get_ntohs(tvb, offset+6));
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_duration, tvb, offset+8, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+8));
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_gap, tvb, offset+10, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+10));
-                if (headerLength > 20) {
-                	col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+18));
-                }
-                col_append_fstr(pinfo->cinfo, COL_INFO, "]");
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_magnify, tvb, offset+12, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " in[mag=%u", tvb_get_ntohs(tvb, offset+12));
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_duration, tvb, offset+14, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+14));
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_gap, tvb, offset+16, 2, FALSE);
-                col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+16));
-                if (headerLength > 20) {
-                	proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_max_packets, tvb, offset+18, 4, FALSE);
-                	proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_max_packets, tvb, offset+22, 4, FALSE);
-                	col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+22));
-                }
-                col_append_fstr(pinfo->cinfo, COL_INFO, "]");
+                "Enhanced Controlled Burst Request");
+            flags = tvb_get_guint8(tvb, offset + 1);
+            first_seq = !!(flags & 0x01);
+            last_seq = !!(flags & 0x02);
+            is_reply = !!(flags & 0x04);
+            is_rx_report_all = !!(flags & 0x08);
+            is_in_gap_ns = !!(flags & 0x10);
+            is_out_gap_ns = !!(flags & 0x20);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_padding, tvb, offset, 1, FALSE);
+            tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_request_flags, tvb, offset+1, 1, flags);
+            field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_request);
+            if (is_reply) {
+                proto_item_append_text(tf, " (Reply)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Reply");
             }
-            offset += (headerLength - 2);
+            if (first_seq) {
+                proto_item_append_text(tf, " (First sequence)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " First Seq");
+            }
+            if (last_seq) {
+                proto_item_append_text(tf, " (Last sequence)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Last Seq");
+            }
+            if (is_rx_report_all) {
+                proto_item_append_text(tf, " (RX Report All)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Report All");
+            }
+            if (is_in_gap_ns) {
+                proto_item_append_text(tf, " (Inbound Gap NS)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " IN NS");
+            }
+            if (is_out_gap_ns) {
+                proto_item_append_text(tf, " (Outbound Gap NS)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " OUT NS");
+            }
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_outbound_gap_ns, tvb, offset+1, 1, flags);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_inbound_gap_ns, tvb, offset+1, 1, flags);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_rx_report_all, tvb, offset+1, 1, flags);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_reply, tvb, offset+1, 1, flags);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_last_seq, tvb, offset+1, 1, flags);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_request_flags_first_seq, tvb, offset+1, 1, flags);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_ssn, tvb, offset+2, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_magnify, tvb, offset+6, 2, FALSE);
+            col_append_fstr(pinfo->cinfo, COL_INFO, " ECB out[mag=%u", tvb_get_ntohs(tvb, offset+6));
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_duration, tvb, offset+8, 2, FALSE);
+            col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+8));
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_gap, tvb, offset+10, 2, FALSE);
+            col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+10));
+            if (headerLength > 20) {
+                col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+18));
+            }
+            col_append_fstr(pinfo->cinfo, COL_INFO, "]");
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_magnify, tvb, offset+12, 2, FALSE);
+            col_append_fstr(pinfo->cinfo, COL_INFO, " in[mag=%u", tvb_get_ntohs(tvb, offset+12));
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_duration, tvb, offset+14, 2, FALSE);
+            col_append_fstr(pinfo->cinfo, COL_INFO, " dur=%ums", tvb_get_ntohs(tvb, offset+14));
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_gap, tvb, offset+16, 2, FALSE);
+            col_append_fstr(pinfo->cinfo, COL_INFO, " gap=%uus", tvb_get_ntohs(tvb, offset+16));
+            if (headerLength > 20) {
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_outbound_max_packets, tvb, offset+18, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_request_inbound_max_packets, tvb, offset+22, 4, FALSE);
+                col_append_fstr(pinfo->cinfo, COL_INFO, " max=%upkts", tvb_get_ntohl(tvb, offset+22));
+            }
+            col_append_fstr(pinfo->cinfo, COL_INFO, "]");
             break;
+        }
         case HDR_ECBRESPONSE:
+        {
+            gboolean out_avail, in_avail, final_results;
+
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Enhanced Controlled Burst Response");
-            if (current_tree) {
-                gboolean out_avail, in_avail, final_results;
-                flags = tvb_get_guint8(tvb, offset + 1);
-                in_avail = !!(flags & 0x01);
-                out_avail = !!(flags & 0x02);
-                final_results = !!(flags & 0x04);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_padding, tvb, offset, 1, FALSE);
-                tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_resp_flags, tvb, offset+1, 1, flags);
-                field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_response);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_final, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_out, tvb, offset+1, 1, flags);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_in, tvb, offset+1, 1, flags);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_tx_ts, tvb, offset+2, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_rx_ts, tvb, offset+6, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx, tvb, offset+10, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx_bytes, tvb, offset+14, 8, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_us, tvb, offset+22, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx, tvb, offset+26, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx_bytes, tvb, offset+30, 8, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_us, tvb, offset+38, 4, FALSE);
-                if (final_results) {
-                    proto_item_append_text(tf, " (Final results)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " Final");
-                }
-                if (out_avail) {
-                    proto_item_append_text(tf, " (Out-bound results)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-out[ll=%u", tvb_get_ntohl(tvb, offset+10));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+22) - tvb_get_ntohl(tvb, offset+6));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+26));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+38) - tvb_get_ntohl(tvb, offset+6));
-                }
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_first_tx_ts, tvb, offset+42, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_first_rx_ts, tvb, offset+46, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx, tvb, offset+50, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx_bytes, tvb, offset+54, 8, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_us, tvb, offset+62, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_rx, tvb, offset+66, 4, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_rx_bytes, tvb, offset+70, 8, FALSE);
-                proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_us, tvb, offset+78, 4, FALSE);
-                if (in_avail) {
-                    proto_item_append_text(tf, " (In-bound results)");
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " RX-in[ll=%u", tvb_get_ntohl(tvb, offset+50));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+62) - tvb_get_ntohl(tvb, offset+46));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+66));
-                    col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+78) - tvb_get_ntohl(tvb, offset+46));
-                }
+            flags = tvb_get_guint8(tvb, offset + 1);
+            in_avail = !!(flags & 0x01);
+            out_avail = !!(flags & 0x02);
+            final_results = !!(flags & 0x04);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_padding, tvb, offset, 1, FALSE);
+            tf = proto_tree_add_uint(current_tree, hf_ani_rpp_ecb_resp_flags, tvb, offset+1, 1, flags);
+            field_tree = proto_item_add_subtree( tf, ett_ani_enhanced_controlled_burst_response);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_final, tvb, offset+1, 1, flags);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_out, tvb, offset+1, 1, flags);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_ecb_resp_flags_in, tvb, offset+1, 1, flags);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_tx_ts, tvb, offset+2, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_first_rx_ts, tvb, offset+6, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx, tvb, offset+10, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_rx_bytes, tvb, offset+14, 8, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_ll_us, tvb, offset+22, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx, tvb, offset+26, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_rx_bytes, tvb, offset+30, 8, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_outbound_total_us, tvb, offset+38, 4, FALSE);
+            if (final_results) {
+                proto_item_append_text(tf, " (Final results)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " Final");
             }
-            offset += (headerLength - 2);
+            if (out_avail) {
+                proto_item_append_text(tf, " (Out-bound results)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " RX-out[ll=%u", tvb_get_ntohl(tvb, offset+10));
+                col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+22) - tvb_get_ntohl(tvb, offset+6));
+                col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+26));
+                col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+38) - tvb_get_ntohl(tvb, offset+6));
+            }
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_first_tx_ts, tvb, offset+42, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_first_rx_ts, tvb, offset+46, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx, tvb, offset+50, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_rx_bytes, tvb, offset+54, 8, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_ll_us, tvb, offset+62, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_rx, tvb, offset+66, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_rx_bytes, tvb, offset+70, 8, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_ecb_resp_inbound_total_us, tvb, offset+78, 4, FALSE);
+            if (in_avail) {
+                proto_item_append_text(tf, " (In-bound results)");
+                col_append_fstr(pinfo->cinfo, COL_INFO, " RX-in[ll=%u", tvb_get_ntohl(tvb, offset+50));
+                col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus", tvb_get_ntohl(tvb, offset+62) - tvb_get_ntohl(tvb, offset+46));
+                col_append_fstr(pinfo->cinfo, COL_INFO, " total=%u", tvb_get_ntohl(tvb, offset+66));
+                col_append_fstr(pinfo->cinfo, COL_INFO, "/%uus]", tvb_get_ntohl(tvb, offset+78) - tvb_get_ntohl(tvb, offset+46));
+            }
             break;
+        }
         case HDR_SIGNATURE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Signature Header");
-            if (current_tree) {
-                if (appneta_pkt_type == APPNETA_PACKET_TYPE_UNDEFINED) {
-                    const guint8 *cp = tvb_get_ptr(tvb, offset,
-                            tvb_captured_length_remaining(tvb, offset));
+            if (appneta_pkt_type == APPNETA_PACKET_TYPE_UNDEFINED) {
+                const guint8 *cp = tvb_get_ptr(tvb, offset,
+                        tvb_captured_length_remaining(tvb, offset));
 
-                    if (cp) {
-                        if (!memcmp(cp, ANI_PAYLOAD_SIGNATURE, sizeof(ANI_PAYLOAD_SIGNATURE)))
-                            appneta_pkt_type = APPNETA_PACKET_TYPE_PATH;
-                        else if (!memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE)))
-                            appneta_pkt_type = APPNETA_PACKET_TYPE_PATH_REPLY;
-                        else if (!memcmp(cp, ANI_LEGACY_PAYLOAD_SIGNATURE, sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE)))
-                            appneta_pkt_type = APPNETA_PACKET_TYPE_LEGACY;
-                        else if (!memcmp(cp, PATHTEST_PAYLOAD_SIGNATURE, sizeof(PATHTEST_PAYLOAD_SIGNATURE)))
-                            appneta_pkt_type = APPNETA_PACKET_TYPE_PATHTEST;
-                    }
+                if (cp) {
+                    if (!memcmp(cp, ANI_PAYLOAD_SIGNATURE, sizeof(ANI_PAYLOAD_SIGNATURE)))
+                        appneta_pkt_type = APPNETA_PACKET_TYPE_PATH;
+                    else if (!memcmp(cp, ANI_REPLY_PAYLOAD_SIGNATURE, sizeof(ANI_REPLY_PAYLOAD_SIGNATURE)))
+                        appneta_pkt_type = APPNETA_PACKET_TYPE_PATH_REPLY;
+                    else if (!memcmp(cp, ANI_LEGACY_PAYLOAD_SIGNATURE, sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE)))
+                        appneta_pkt_type = APPNETA_PACKET_TYPE_LEGACY;
+                    else if (!memcmp(cp, PATHTEST_PAYLOAD_SIGNATURE, sizeof(PATHTEST_PAYLOAD_SIGNATURE)))
+                        appneta_pkt_type = APPNETA_PACKET_TYPE_PATHTEST;
                 }
-
-                if (headerLength > 6) {
-                    /* this is a dual-ended signature */
-                    switch (appneta_pkt_type) {
-                    case APPNETA_PACKET_TYPE_PATH:
-                        proto_tree_add_item(current_tree, hf_ani_rpp_signature_path, tvb, offset,
-                                sizeof(ANI_PAYLOAD_SIGNATURE), ENC_NA);
-                        break;
-                    case APPNETA_PACKET_TYPE_PATH_REPLY:
-                        proto_tree_add_item(current_tree, hf_ani_rpp_signature_path_reply, tvb, offset,
-                                sizeof(ANI_REPLY_PAYLOAD_SIGNATURE), ENC_NA);
-                        break;
-                    case APPNETA_PACKET_TYPE_LEGACY:
-                        proto_tree_add_item(current_tree, hf_ani_rpp_signature_legacy, tvb, offset,
-                                sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE), ENC_NA);
-                        break;
-                    case APPNETA_PACKET_TYPE_PATHTEST:
-                        proto_tree_add_item(current_tree, hf_ani_rpp_signature_pathtest, tvb, offset,
-                                sizeof(PATHTEST_PAYLOAD_SIGNATURE), ENC_NA);
-                        break;
-                    default:
-                        proto_tree_add_item(current_tree, hf_ani_rpp_signature_undefined,
-                                tvb, offset, sizeof(ANI_PAYLOAD_SIGNATURE), ENC_NA);
-                    }
-
-                    switch (appneta_pkt_type) {
-                    case APPNETA_PACKET_TYPE_PATH:
-                    case APPNETA_PACKET_TYPE_PATH_REPLY:
-                        flags = tvb_get_guint8(tvb, offset + 5);
-                        tf = proto_tree_add_uint(current_tree, hf_ani_rpp_signature_flags, tvb, offset+5, 1, flags);
-                        field_tree = proto_item_add_subtree( tf, ett_ani_signature);
-                        proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_ext, tvb, offset+5, 1, flags);
-                        proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_iht, tvb, offset+5, 1, flags);
-                        proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_last, tvb, offset+5, 1, flags);
-                        proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_first, tvb, offset+5, 1, flags);
-                        break;
-                    default:
-                        ;
-                    }
-                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_burst_len, tvb, offset+6, 4, FALSE);
-                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_iht, tvb, offset+10, 4, FALSE);
-                } else {
-                    /* this is a single-ended or ICMP extended packet signature found in payload */
-                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_iht, tvb, offset, 4, FALSE);
-                }
-
             }
-            offset += (headerLength - 2);
+
+            if (headerLength > 6) {
+                /* this is a dual-ended signature */
+                switch (appneta_pkt_type) {
+                case APPNETA_PACKET_TYPE_PATH:
+                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_path, tvb, offset,
+                            sizeof(ANI_PAYLOAD_SIGNATURE), ENC_NA);
+                    break;
+                case APPNETA_PACKET_TYPE_PATH_REPLY:
+                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_path_reply, tvb, offset,
+                            sizeof(ANI_REPLY_PAYLOAD_SIGNATURE), ENC_NA);
+                    break;
+                case APPNETA_PACKET_TYPE_LEGACY:
+                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_legacy, tvb, offset,
+                            sizeof(ANI_LEGACY_PAYLOAD_SIGNATURE), ENC_NA);
+                    break;
+                case APPNETA_PACKET_TYPE_PATHTEST:
+                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_pathtest, tvb, offset,
+                            sizeof(PATHTEST_PAYLOAD_SIGNATURE), ENC_NA);
+                    break;
+                default:
+                    proto_tree_add_item(current_tree, hf_ani_rpp_signature_undefined,
+                            tvb, offset, sizeof(ANI_PAYLOAD_SIGNATURE), ENC_NA);
+                }
+
+                switch (appneta_pkt_type) {
+                case APPNETA_PACKET_TYPE_PATH:
+                case APPNETA_PACKET_TYPE_PATH_REPLY:
+                    flags = tvb_get_guint8(tvb, offset + 5);
+                    tf = proto_tree_add_uint(current_tree, hf_ani_rpp_signature_flags, tvb, offset+5, 1, flags);
+                    field_tree = proto_item_add_subtree( tf, ett_ani_signature);
+                    proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_ext, tvb, offset+5, 1, flags);
+                    proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_iht, tvb, offset+5, 1, flags);
+                    proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_last, tvb, offset+5, 1, flags);
+                    proto_tree_add_boolean(field_tree, hf_ani_rpp_signature_flags_first, tvb, offset+5, 1, flags);
+                    break;
+                default:
+                    ;
+                }
+                proto_tree_add_item(current_tree, hf_ani_rpp_signature_burst_len, tvb, offset+6, 4, FALSE);
+                proto_tree_add_item(current_tree, hf_ani_rpp_signature_iht, tvb, offset+10, 4, FALSE);
+            } else {
+                /* this is a single-ended or ICMP extended packet signature found in payload */
+                proto_tree_add_item(current_tree, hf_ani_rpp_signature_iht, tvb, offset, 4, FALSE);
+            }
             break;
         case HDR_PSEUDO_CKSUM:
                 current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                         "Pseudo Checksum");
-                if (current_tree) {
-                    tf = proto_tree_add_item(current_tree, hf_ani_rpp_pseudo_chksum, tvb, offset, 2, FALSE);
-                    field_tree = proto_item_add_subtree( tf, ett_ani_pseudo_cksum);
-                }
-            offset += (headerLength - 2);
+                tf = proto_tree_add_item(current_tree, hf_ani_rpp_pseudo_chksum, tvb, offset, 2, FALSE);
+                field_tree = proto_item_add_subtree( tf, ett_ani_pseudo_cksum);
             break;
         case HDR_IFACE_INFO:
+        {
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Interface Info");
-            if (current_tree) {
-                guint32 flags32 = tvb_get_ntohl(tvb, offset);
-                guint32 mtu = tvb_get_ntohl(tvb, offset+4);
-                guint32 speed = tvb_get_ntohl(tvb, offset+8);
+            guint32 flags32 = tvb_get_ntohl(tvb, offset);
+            guint32 mtu = tvb_get_ntohl(tvb, offset+4);
+            guint32 speed = tvb_get_ntohl(tvb, offset+8);
 
-                tf = proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_flags, tvb, offset, 4, flags32);
-                field_tree = proto_item_add_subtree( tf, ett_ani_iface_info);
-                proto_tree_add_boolean(field_tree, hf_ani_rpp_iface_info_flags_is_ani_modified, tvb, offset, 4, flags32);
-                proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_mtu, tvb, offset+4, 4, mtu);
-                proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_speed, tvb, offset+8, 4, speed);
-            }
-            offset += (headerLength - 2);
+            tf = proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_flags, tvb, offset, 4, flags32);
+            field_tree = proto_item_add_subtree( tf, ett_ani_iface_info);
+            proto_tree_add_boolean(field_tree, hf_ani_rpp_iface_info_flags_is_ani_modified, tvb, offset, 4, flags32);
+            proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_mtu, tvb, offset+4, 4, mtu);
+            proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_speed, tvb, offset+8, 4, speed);
             break;
+        }
         default:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Unknown Header");
-            if (current_tree) {
-                tf = proto_tree_add_item(current_tree, hf_ani_rpp_unknown_header, tvb, offset, headerLength-2, FALSE);
-                field_tree = proto_item_add_subtree( tf, ett_ani_invalid);
+            tf = proto_tree_add_item(current_tree, hf_ani_rpp_unknown_header, tvb, offset, headerLength-2, FALSE);
+            field_tree = proto_item_add_subtree( tf, ett_ani_invalid);
 
-                /* set some text in the info column */
-                col_append_str(pinfo->cinfo, COL_INFO, " [Unknown Header]");
-
-            }
-            offset += (headerLength - 2);
+            /* set some text in the info column */
+            col_append_fstr(pinfo->cinfo, COL_INFO, " [Unknown Header %u]", currentHeader);
         }
+
+        offset += (headerLength - 2);
         currentHeader = nextHeader;
     }
 
@@ -1264,37 +1178,29 @@ static gint
 dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
     unsigned int offset = 0;
-    gboolean            marker_set;
+    gboolean marker_set = FALSE;
+    proto_item *ti = NULL;
+    proto_tree *ani_rpp_tree = NULL;
 
-    /* Make entries in Protocol column and Info column on summary display */
+    /* Make entry in Protocol column */
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "appneta_rpp");
-    col_set_str(pinfo->cinfo, COL_INFO, "APPNETA_RPP Request");
-    col_clear(pinfo->cinfo, COL_INFO);
 
     /* determine how many bytes of the packet will be processed */
     offset = dissect_rtp_header(tvb, pinfo, offset, NULL, &marker_set);
 
-    if (tree) {
-        proto_item *ti = NULL;
-        proto_tree *ani_rpp_tree = NULL;
+    /* Indicate the number of bytes that will be processed */
+    ti = proto_tree_add_item(tree, proto_ani_rpp, tvb, 0, offset, FALSE);
 
-        /* Indicate the number of bytes that will be processed */
-        ti = proto_tree_add_item(tree, proto_ani_rpp, tvb, 0, offset, FALSE);
+    /* Get a pointer to our subtree */
+    ani_rpp_tree = proto_item_add_subtree(ti, ett_ani_rpp);
 
-        /* Get a pointer to our subtree */
-        ani_rpp_tree = proto_item_add_subtree(ti, ett_ani_rpp);
-
-        /* Add items to our subtree */
-        offset = 0;
-        offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree, &marker_set);
-        tvb = tvb_new_subset_remaining(tvb, offset);
-        offset = dissect_responder_header(tvb, pinfo, ani_rpp_tree, data);
-        col_append_fstr(pinfo->cinfo, COL_INFO, marker_set ? ", Dual-ended" : ", Single-ended");
-        call_dissector(payload_handle, tvb_new_subset_remaining(tvb, offset), pinfo, tree);
-    }
-
-    /* Return the amount of data this dissector was able to dissect */
-    return tvb_captured_length(tvb);
+    /* Add items to our subtree */
+    offset = 0;
+    offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree, &marker_set);
+    tvb = tvb_new_subset_remaining(tvb, offset);
+    col_append_fstr(pinfo->cinfo, COL_INFO, marker_set ? " Dual-ended" : " Single-ended");
+    offset = dissect_responder_header(tvb, pinfo, ani_rpp_tree, data);
+    return call_dissector(payload_handle, tvb_new_subset_remaining(tvb, offset), pinfo, tree);
 }
 
 static const true_false_string ani_tf_set_not_set = {

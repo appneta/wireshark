@@ -47,8 +47,8 @@ import time
 import getopt
 import traceback
 
-import lex
-import yacc
+from ply import lex
+from ply import yacc
 
 if sys.version_info[0] < 3:
     from string import maketrans
