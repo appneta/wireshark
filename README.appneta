@@ -10,7 +10,9 @@ export MACOSX_DEPLOYMENT_TARGET=10.14
 
 You are now prepared to build Wireshark.
 
-To build with CMAKE (desired method):
+$ tools/macos-setup-brew.sh
+
+... then follow instructions e.g.
 
 PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
 CMAKE_PREFIX_PATH=:/usr/local/opt/qt/lib/cmake/
@@ -37,3 +39,9 @@ make install
 Make sure you are allowed capture access to the network devices
 See: https://wiki.wireshark.org/CaptureSetup/CapturePrivileges
 
+To build Linux debug:
+
+mkdir -p build-debug
+cd build-debug
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make -j6
