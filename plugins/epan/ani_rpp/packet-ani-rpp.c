@@ -532,13 +532,14 @@ static const value_string ani_rpp_appliance_type_vals[] =
  */
 static gint
 dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, gint offset,
-        proto_tree *ani_rpp_tree, gboolean *marker_set)
+        proto_tree *ani_rpp_tree, gboolean get_len_only)
 {
     guint8        octet1, octet2;
     guint16       seq_num;
     guint32       timestamp;
     guint32       sync_src;
     proto_tree*   rtp_tree = NULL;
+    gchar         *path_type;
 
     /* Get the fields in the first octet */
     octet1 = tvb_get_guint8(tvb, offset);
@@ -550,12 +551,13 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, gint offset,
     }
 
     /* Get the fields in the second octet */
-    *marker_set = !!RTP_MARKER(octet2);
-
-    if (ani_rpp_tree == NULL) {
+    if (get_len_only) {
         /* just return the length without adding items to the dissector tree */
         return RTP_HEADER_LENGTH;
     }
+
+    path_type = RTP_MARKER(octet2) ? " Dual-ended" : " Single-ended";
+    col_append_str(pinfo->cinfo, COL_INFO, path_type);
 
     /* Get the subsequent fields */
     seq_num = tvb_get_ntohs( tvb, offset + 2);
@@ -565,10 +567,12 @@ dissect_rtp_header(tvbuff_t *tvb, packet_info *pinfo _U_, gint offset,
     /* Create a subtree for RTP */
     if (sync_src == NO_FLOW) {
         rtp_tree = proto_tree_add_subtree_format(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH, ett_ani_rtp, NULL,
-                "Responder RTP Header: No flow, %s", *marker_set ? "Dual-ended" : "Single-ended");
+                "Responder RTP Header: No flow, %s", path_type);
     } else {
         rtp_tree = proto_tree_add_subtree_format(ani_rpp_tree, tvb, offset, RTP_HEADER_LENGTH, ett_ani_rtp, NULL,
-                "Responder RTP Header: Flow %u, %s", sync_src, *marker_set ? "Dual-ended" : "Single-ended");
+                "Responder RTP Header: Flow %u, %s", sync_src, path_type);
+        col_append_fstr(pinfo->cinfo, COL_INFO, " Flow=%u", sync_src);
+
     }
 
     /* Add items to the RTP subtree */
@@ -674,7 +678,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             proto_tree_add_item(current_tree, hf_ani_rpp_pkt_id, tvb, offset, 4, FALSE);
 
             /* set some text in the info column */
-            col_append_fstr(pinfo->cinfo, COL_INFO, " ID=%u(0x%x)", id, id);
+            col_append_fstr(pinfo->cinfo, COL_INFO, " ID=%u", id);
             break;
         case HDR_ERROR:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
@@ -1178,7 +1182,6 @@ static gint
 dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
     unsigned int offset = 0;
-    gboolean marker_set = FALSE;
     proto_item *ti = NULL;
     proto_tree *ani_rpp_tree = NULL;
 
@@ -1186,7 +1189,7 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "appneta_rpp");
 
     /* determine how many bytes of the packet will be processed */
-    offset = dissect_rtp_header(tvb, pinfo, offset, NULL, &marker_set);
+    offset = dissect_rtp_header(tvb, pinfo, offset, NULL, TRUE);
 
     /* Indicate the number of bytes that will be processed */
     ti = proto_tree_add_item(tree, proto_ani_rpp, tvb, 0, offset, FALSE);
@@ -1196,9 +1199,8 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
 
     /* Add items to our subtree */
     offset = 0;
-    offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree, &marker_set);
+    offset = dissect_rtp_header (tvb, pinfo, offset, ani_rpp_tree, FALSE);
     tvb = tvb_new_subset_remaining(tvb, offset);
-    col_append_fstr(pinfo->cinfo, COL_INFO, marker_set ? " Dual-ended" : " Single-ended");
     offset = dissect_responder_header(tvb, pinfo, ani_rpp_tree, data);
     return call_dissector(payload_handle, tvb_new_subset_remaining(tvb, offset), pinfo, tree);
 }
@@ -1329,7 +1331,7 @@ proto_register_ani_rpp(void)
             {
                     &hf_rtp_ssrc,
                     {
-                            "RTP SSRC",
+                            "RTP SSRC (Flow ID)",
                             "rtp.ssrc",
                             FT_UINT32,
                             BASE_DEC,
