@@ -1,15 +1,5 @@
-It appears that QT installed by Homebrew is more complete than the Wireshark installer. Therefore
-we need the following:
-
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
-
-Here are updated instructions ....
-
-Using the 10.14 SDK
-export MACOSX_DEPLOYMENT_TARGET=10.14
-
-You are now prepared to build Wireshark.
-
+MacOS
+=====
 $ tools/macos-setup-brew.sh
 
 ... then follow instructions e.g.
@@ -26,18 +16,27 @@ cmake ..
 make -j8
 make app_bundle
 
-To build with AUTOTOOLS:
+Install PackageMaker into Xcode
+-------------------------------
 
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
+From the Xcode menu, select the Open Developer Tool
+menu, and then select More Developer Tools... from that menu.  That will
+open up a page on the Apple Developer Connection Web site; you may need
+a developer account to download the additional tools.  Download the
+Auxiliary Tools for Xcode - Late 2012 package; when the dmg opens,
+drag PackageMaker.app to the Contents/Applications subdirectory of the
+Xcode.app directory (normally /Applications/Xcode.app/Contents/Applications);
 
-./autogen.sh
-mkdir build; cd build
-../configure
-make -j 12
-make install
+You may also want to download the latest Auxiliary Tools and drag
+all its contents into the same he Contents/Applications subdirectory.
 
-Make sure you are allowed capture access to the network devices
-See: https://wiki.wireshark.org/CaptureSetup/CapturePrivileges
+Make MacOS Package
+------------------
+
+$ cd build && make dmg_package
+
+Linux
+=====
 
 To build Linux debug:
 
@@ -45,3 +44,10 @@ mkdir -p build-debug
 cd build-debug
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 make -j6
+
+Make Linux Package
+------------------
+
+Update version in CMakeList.txt and debian/changelog
+
+$ dpkg-buildpackage -us -uc -sa -d
