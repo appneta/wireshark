@@ -1185,11 +1185,15 @@ dissect_ani_rpp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data 
     proto_item *ti = NULL;
     proto_tree *ani_rpp_tree = NULL;
 
-    /* Make entry in Protocol column */
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, "appneta_rpp");
-
     /* determine how many bytes of the packet will be processed */
     offset = dissect_rtp_header(tvb, pinfo, offset, NULL, TRUE);
+
+    /* if not dissected, return 0 to indicate dissector disabled */
+    if (!offset)
+        return 0;
+
+    /* Make entry in Protocol column */
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "appneta_rpp");
 
     /* Indicate the number of bytes that will be processed */
     ti = proto_tree_add_item(tree, proto_ani_rpp, tvb, 0, offset, FALSE);
