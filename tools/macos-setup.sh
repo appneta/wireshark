@@ -1627,7 +1627,7 @@ uninstall_libtiff() {
 install_spandsp() {
     if [ "$SPANDSP_VERSION" -a ! -f spandsp-$SPANDSP_VERSION-done ] ; then
         echo "Downloading, building, and installing SpanDSP:"
-        [ -f spandsp-$SPANDSP_VERSION.tar.gz ] || curl -L -O https://www.soft-switch.org/downloads/spandsp/spandsp-$SPANDSP_VERSION.tar.gz || exit 1
+        [ -f spandsp-$SPANDSP_VERSION.tar.gz ] || curl -L -O https://src.fedoraproject.org/lookaside/pkgs/spandsp/spandsp-0.0.6.tar.gz/897d839516a6d4edb20397d4757a7ca3/spandsp-0.0.6.tar.gz || exit 1
         $no_build && echo "Skipping installation" && return
         gzcat spandsp-$SPANDSP_VERSION.tar.gz | tar xf - || exit 1
         cd spandsp-$SPANDSP_VERSION
