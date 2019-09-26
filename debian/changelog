@@ -1,3 +1,15 @@
+wireshark (3.0.6.appneta.43) unstable; urgency=low
+
+  * Update to 3.0.6 appneta.43
+
+ -- Fred Klassen <fklassen@appneta.com>  Thu, 8 Oct 2019 21:25:00 -0800
+
+wireshark (3.0.5.appneta.42) unstable; urgency=low
+
+  * Update to 3.0.5 appneta.42
+
+ -- Fred Klassen <fklassen@appneta.com>  Thu, 26 Sep 2019 16:05:00 -0800
+
 wireshark (3.0.3.appneta.40) unstable; urgency=low
 
   * Update to 3.0.3 appneta.40
