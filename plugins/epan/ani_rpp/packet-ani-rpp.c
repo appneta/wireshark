@@ -815,7 +815,7 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                 col_append_fstr(pinfo->cinfo, COL_INFO, " Datagram");
             } else if (mode == 3) {
                 if ((flags & 0x4)) {
-                    col_append_fstr(pinfo->cinfo, COL_INFO, " Inbound Controlled Burst");
+                    col_append_fstr(pinfo->cinfo, COL_INFO, " Controlled Burst Response");
                 } else {
                     col_append_fstr(pinfo->cinfo, COL_INFO, " Controlled Burst");
                 }
@@ -938,16 +938,18 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             proto_tree_add_item(current_tree, hf_ani_rpp_custom_appliance_type, tvb, offset, headerLength - 2, FALSE);
             break;
         case HDR_CONTROLLEDBURSTREADY:
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Controlled Burst Ready");
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Controlled Burst Ready");
-            proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved1, tvb, offset, 4, FALSE);
-            proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved2, tvb, offset+4, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved1, tvb, offset, 1, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_ready_reserved2, tvb, offset+1, 1, FALSE);
             break;
         case HDR_CONTROLLEDBURSTREQUEST:
+            col_append_fstr(pinfo->cinfo, COL_INFO, " Controlled Burst Request");
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Controlled Burst Request");
-            proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved1, tvb, offset, 4, FALSE);
-            proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved2, tvb, offset+4, 4, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved1, tvb, offset, 1, FALSE);
+            proto_tree_add_item(current_tree, hf_ani_rpp_cb_request_reserved2, tvb, offset+1, 1, FALSE);
             break;
         case HDR_ECBREQUEST:
         {
@@ -1817,7 +1819,7 @@ proto_register_ani_rpp(void)
                     {
                             "Rate Limit CB Request - reserved1",
                             "appneta_rpp.cb_resp_ratelimit_cb_request_reserved1",
-                            FT_UINT32,
+                            FT_UINT8,
                             BASE_DEC,
                             NULL,
                             0x0,
@@ -1829,7 +1831,7 @@ proto_register_ani_rpp(void)
                     {
                             "Rate Limit CB Request - reserved2",
                             "appneta_rpp.cb_resp_ratelimit_cb_request_reserved2",
-                            FT_UINT32,
+                            FT_UINT8,
                             BASE_DEC,
                             NULL,
                             0x0,
@@ -1841,7 +1843,7 @@ proto_register_ani_rpp(void)
                     {
                             "Rate Limit CB Ready - reserved1",
                             "appneta_rpp.cb_resp_ratelimit_cb_ready_reserved1",
-                            FT_UINT32,
+                            FT_UINT8,
                             BASE_DEC,
                             NULL,
                             0x0,
@@ -1853,7 +1855,7 @@ proto_register_ani_rpp(void)
                     {
                             "Rate Limit CB Ready - reserved2",
                             "appneta_rpp.cb_resp_ratelimit_cb_ready_reserved2",
-                            FT_UINT32,
+                            FT_UINT8,
                             BASE_DEC,
                             NULL,
                             0x0,
