@@ -207,6 +207,11 @@ static gint hf_ani_rpp_signature_flags_iht = -1;
 static gint hf_ani_rpp_signature_flags_ext = -1;
 static gint hf_ani_rpp_signature_iht = -1;
 static gint hf_ani_rpp_signature_burst_len = -1;
+static gint hf_ani_rpp_public_ip = -1;
+static gint hf_ani_rpp_public_ip_addr = -1;
+static gint hf_ani_rpp_public_ipv6 = -1;
+static gint hf_ani_rpp_public_ipv6_addr = -1;
+
 
 /* RTP header fields                                 */
 /* Assumptions about RTP: no padding, no extensions, */
@@ -256,6 +261,7 @@ static gint ett_ani_enhanced_controlled_burst_response = -1;
 static gint ett_ani_signature = -1;
 static gint ett_ani_pseudo_cksum = -1;
 static gint ett_ani_iface_info = -1;
+static gint ett_ani_public_ip_addr = -1;
 static gint ett_ani_invalid = -1;
 
 /* Setup protocol subtree array */
@@ -291,6 +297,7 @@ static gint *ett[] = {
         &ett_ani_signature,
         &ett_ani_pseudo_cksum,
         &ett_ani_iface_info,
+        &ett_ani_public_ip_addr,
         &ett_ani_invalid,
 };
 
@@ -332,7 +339,7 @@ static gint *hf_subtrees[] = {
         &ett_ani_signature,                             /* HDR_SIGNATURE */
         &ett_ani_pseudo_cksum,                          /* HDR_PSEUDO_CKSUM */
         &ett_ani_iface_info,                            /* HDR_IFACE_INFO */
-        &ett_ani_invalid,                               /* HDR_RESERVED2 */
+        &ett_ani_public_ip_addr,                        /* HDR_PUBLIC_IP_ADDRESS */
         &ett_ani_invalid,                               /* HDR_RESERVED3 */
         &ett_ani_invalid,                               /* HDR_RESERVED4 */
         &ett_ani_invalid,                               /* HDR_RESERVED5 */
@@ -382,7 +389,7 @@ static const value_string ani_rpp_header_type_vals[] =
         { 30, "Signature Header" },
         { 31, "Pseudo Checksum" },
         { 32, "Interface Info" },
-        { 33, "Reserved 2" },
+        { 33, "Public IP Address" },
         { 34, "Reserved 3" },
         { 35, "Reserved 4" },
         { 36, "Reserved 5" },
@@ -428,7 +435,7 @@ enum ResponderHeaderType
     HDR_SIGNATURE,         /* 30 */
     HDR_PSEUDO_CKSUM,
     HDR_IFACE_INFO,
-    HDR_RESERVED2,
+    HDR_PUBLIC_IP_ADDRESS,
     HDR_RESERVED3,
     HDR_RESERVED4,
     HDR_RESERVED5,
@@ -1154,12 +1161,40 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
             guint32 speed = tvb_get_ntohl(tvb, offset+8);
 
             tf = proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_flags, tvb, offset, 4, flags32);
-            field_tree = proto_item_add_subtree( tf, ett_ani_iface_info);
+            field_tree = proto_item_add_subtree(tf, ett_ani_iface_info);
             proto_tree_add_boolean(field_tree, hf_ani_rpp_iface_info_flags_is_ani_modified, tvb, offset, 4, flags32);
             proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_mtu, tvb, offset+4, 4, mtu);
             proto_tree_add_uint(current_tree, hf_ani_rpp_iface_info_speed, tvb, offset+8, 4, speed);
             break;
         }
+        case HDR_PUBLIC_IP_ADDRESS:
+            current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+                    "Public IP Address");
+            if (headerLength == 6) {
+                /* IPv4 */
+                proto_item *item;
+                guint32 addr = tvb_get_ipv4(tvb, offset);
+
+                tf = proto_tree_add_ipv4(current_tree, hf_ani_rpp_public_ip, tvb, offset, 4, addr);
+                field_tree = proto_item_add_subtree(tf, ett_ani_public_ip_addr);
+                item = proto_tree_add_ipv4(field_tree, hf_ani_rpp_public_ip_addr, tvb,
+                                            offset, 4, addr);
+                PROTO_ITEM_SET_GENERATED(item);
+                PROTO_ITEM_SET_HIDDEN(item);
+            } else if (headerLength == 18) {
+                /* IPv6 */
+                proto_item *item;
+                ws_in6_addr addr;
+                tvb_get_ipv6(tvb, offset, &addr);
+
+                tf = proto_tree_add_ipv6(current_tree, hf_ani_rpp_public_ipv6, tvb, offset, IPv6_ADDR_SIZE, &addr);
+                field_tree = proto_item_add_subtree(tf, ett_ani_public_ip_addr);
+                item = proto_tree_add_ipv6(field_tree, hf_ani_rpp_public_ipv6_addr, tvb,
+                                            offset, IPv6_ADDR_SIZE, &addr);
+                PROTO_ITEM_SET_GENERATED(item);
+                PROTO_ITEM_SET_HIDDEN(item);
+            }
+            break;
         default:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Unknown Header");
@@ -2604,6 +2639,58 @@ proto_register_ani_rpp(void)
                             NULL,
                             0x0,
                             "", HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_public_ip,
+                    {
+                            "Public Address",
+                            "appneta_public",
+                            FT_IPv4,
+                            BASE_NONE,
+                            NULL,
+                            0x0,
+                            NULL,
+                            HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_public_ip_addr,
+                    {
+                            "Public IPv4 Address",
+                            "appneta_public.addr",
+                            FT_IPv4,
+                            BASE_NONE,
+                            NULL,
+                            0x0,
+                            NULL,
+                            HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_public_ipv6,
+                    {
+                            "Public Address",
+                            "appneta_public",
+                            FT_IPv6,
+                            BASE_NONE,
+                            NULL,
+                            0x0,
+                            NULL,
+                            HFILL
+                    }
+            },
+            {
+                    &hf_ani_rpp_public_ipv6_addr,
+                    {
+                            "Public IPv6 Address",
+                            "appneta_public.addr",
+                            FT_IPv6,
+                            BASE_NONE,
+                            NULL,
+                            0x0,
+                            NULL,
+                            HFILL
                     }
             },
     };
