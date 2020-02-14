@@ -1265,7 +1265,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_version,
                     {
                             "RTP Version",
-                            "rtp.version",
+                            "appneta.rtp.version",
                             FT_UINT8,
                             BASE_DEC,
                             VALS(rtp_version_vals),
@@ -1277,7 +1277,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_padding,
                     {
                             "RTP Padding",
-                            "rtp.padding",
+                            "appneta.rtp.padding",
                             FT_BOOLEAN,
                             8,
                             NULL,
@@ -1289,7 +1289,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_extension,
                     {
                             "RTP Extension",
-                            "rtp.ext",
+                            "appneta.rtp.ext",
                             FT_BOOLEAN,
                             8,
                             NULL,
@@ -1301,7 +1301,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_csrc_count,
                     {
                             "RTP Contributing source identifiers count",
-                            "rtp.cc",
+                            "appneta.rtp.cc",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1313,7 +1313,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_marker,
                     {
                             "RTP Marker (Dual-ended)",
-                            "rtp.marker",
+                            "appneta.rtp.marker",
                             FT_BOOLEAN,
                             8,
                             NULL,
@@ -1325,7 +1325,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_payload_type,
                     {
                             "RTP Payload type",
-                            "rtp.p_type",
+                            "appneta.rtp.p_type",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1337,7 +1337,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_seq_nr,
                     {
                             "RTP Sequence number",
-                            "rtp.seq",
+                            "appneta.rtp.seq",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1349,7 +1349,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_ext_seq_nr,
                     {
                             "RTP Extended sequence number",
-                            "rtp.extseq",
+                            "appneta.rtp.extseq",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1361,7 +1361,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_timestamp,
                     {
                             "RTP Timestamp",
-                            "rtp.timestamp",
+                            "appneta.rtp.timestamp",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1373,7 +1373,7 @@ proto_register_ani_rpp(void)
                     &hf_rtp_ssrc,
                     {
                             "RTP SSRC (Flow ID)",
-                            "rtp.ssrc",
+                            "appneta.rtp.ssrc",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1385,7 +1385,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_next_header_type,
                     {
                             "Next Header Type",
-                            "appneta_rpp.next_hdr_type",
+                            "appneta.next_hdr_type",
                             FT_UINT8,
                             BASE_DEC,
                             VALS(ani_rpp_header_type_vals),
@@ -1397,7 +1397,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_header_length,
                     {
                             "Header Length",
-                            "appneta_rpp.hdr_length",
+                            "appneta.hdr_length",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1409,7 +1409,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_pkt_id,
                     {
                             "Packet ID",
-                            "appneta_rpp.pkt_id",
+                            "appneta.pkt_id",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1421,7 +1421,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_error_code,
                     {
                             "Error Code",
-                            "appneta_rpp.err_code",
+                            "appneta.err_code",
                             FT_UINT8,
                             BASE_DEC,
                             VALS(ani_rpp_error_code_vals),
@@ -1433,7 +1433,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_error_value,
                     {
                             "Error Value",
-                            "appneta_rpp.err_value",
+                            "appneta.err_value",
                             FT_UINT8,
                             BASE_HEX,
                             NULL,
@@ -1445,7 +1445,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_response_status,
                     {
                             "Status",
-                            "appneta_rpp.status",
+                            "appneta.status",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1457,7 +1457,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_flow_num,
                     {
                             "Flow Number",
-                            "appneta_rpp.flow_num",
+                            "appneta.flow_num",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1469,7 +1469,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_flow_port,
                     {
                             "Flow Port",
-                            "appneta_rpp.flow_port",
+                            "appneta.flow_port",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1481,7 +1481,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_flow_port_first,
                     {
                             "Flow Port First",
-                            "appneta_rpp.flow_port_first",
+                            "appneta.flow_port_first",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1493,7 +1493,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_flow_port_last,
                     {
                             "Flow Port Last",
-                            "appneta_rpp.flow_port_last",
+                            "appneta.flow_port_last",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1505,7 +1505,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_test_weight,
                     {
                             "Test Weight",
-                            "appneta_rpp.test_weight",
+                            "appneta.test_weight",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1517,7 +1517,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_responder_version_major,
                     {
                             "Major",
-                            "appneta_rpp.responder_version_major",
+                            "appneta.responder_version_major",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1529,7 +1529,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_responder_version_minor,
                     {
                             "Minor",
-                            "appneta_rpp.responder_version_minor",
+                            "appneta.responder_version_minor",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1541,7 +1541,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_responder_version_revision,
                     {
                             "Revision",
-                            "appneta_rpp.responder_version_revision",
+                            "appneta.responder_version_revision",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1553,7 +1553,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_responder_version_build,
                     {
                             "Build",
-                            "appneta_rpp.responder_version_build",
+                            "appneta.responder_version_build",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1565,7 +1565,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_burst_size,
                     {
                             "Packets",
-                            "appneta_rpp.burst_size",
+                            "appneta.burst_size",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1577,7 +1577,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_packet_size,
                     {
                             "Packet Size",
-                            "appneta_rpp.packet_size",
+                            "appneta.packet_size",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1589,7 +1589,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_command_type,
                     {
                             "Command Type",
-                            "appneta_rpp.command_type",
+                            "appneta.command_type",
                             FT_UINT8,
                             BASE_HEX,
                             VALS(ani_rpp_cmd_type_vals),
@@ -1601,7 +1601,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_first_id,
                     {
                             "First Packet ID in Command",
-                            "appneta_rpp.first_id",
+                            "appneta.first_id",
                             FT_UINT32,
                             BASE_DEC_HEX,
                             NULL,
@@ -1613,7 +1613,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_outbound_arrival_bits,
                     {
                             "Outbound Arrival Bits",
-                            "appneta_rpp.outbound_bits",
+                            "appneta.outbound_bits",
                             FT_UINT64,
                             BASE_HEX,
                             NULL,
@@ -1625,7 +1625,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_burst_hold_time_us,
                     {
                             "Responder hold time usec",
-                            "appneta_rpp.burst_hold_time",
+                            "appneta.burst_hold_time",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1637,7 +1637,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_flags_resp_csv_debug,
                     {
                             "Responder CSV Debug",
-                            "appneta_rpp.resp_csv_debug",
+                            "appneta.resp_csv_debug",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1649,7 +1649,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_command_flags,
                     {
                             "Command Flags",
-                            "appneta_rpp.command_flags",
+                            "appneta.command_flags",
                             FT_UINT8,
                             BASE_HEX,
                             NULL,
@@ -1661,7 +1661,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_command_flags_is_jumbo,
                     {
                             "Is Jumbo Packet",
-                            "appneta_rpp.is_jumbo",
+                            "appneta.is_jumbo",
                             FT_BOOLEAN,
                             8,
                             NULL,
@@ -1673,7 +1673,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_command_flags_is_super_jumbo,
                     {
                             "Is Super Jumbo Packet",
-                            "appneta_rpp.is_super_jumbo",
+                            "appneta.is_super_jumbo",
                             FT_BOOLEAN,
                             8,
                             NULL,
@@ -1685,7 +1685,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_command_flags_is_inbound,
                     {
                             "Is Inbound Packet",
-                            "appneta_rpp.is_inbound",
+                            "appneta.is_inbound",
                             FT_BOOLEAN,
                             8,
                             NULL,
@@ -1697,7 +1697,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_burst_process_time_us,
                     {
                             "Responder processing time usec",
-                            "appneta_rpp.burst_proc_time",
+                            "appneta.burst_proc_time",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1709,7 +1709,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_outbound_arrival_times,
                     {
                             "Outbound Arrival Times",
-                            "appneta_rpp.outbound_times",
+                            "appneta.outbound_times",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1721,7 +1721,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_lost_id,
                     {
                             "Lost Packet ID",
-                            "appneta_rpp.lost_id",
+                            "appneta.lost_id",
                             FT_UINT32,
                             BASE_DEC_HEX,
                             NULL,
@@ -1733,7 +1733,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_sipport,
                     {
                             "Sip Port",
-                            "appneta_rpp.sip_port",
+                            "appneta.sip_port",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -1745,7 +1745,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ta_id,
                     {
                             "Traffic Analysys ID",
-                            "appneta_rpp.ta_id",
+                            "appneta.ta_id",
                             FT_STRING,
                             BASE_NONE,
                             NULL,
@@ -1757,7 +1757,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_protocol,
                     {
                             "Sequencer Protocol Version",
-                            "appneta_rpp.protocol",
+                            "appneta.protocol",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1769,7 +1769,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_inbound_packetcount,
                     {
                             "Inbound Packet Count",
-                            "appneta_rpp.cb_inbound_packet_count",
+                            "appneta.cb_inbound_packet_count",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1781,7 +1781,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_inbound_interpacketgap,
                     {
                             "Inbound Inter-packet Gap (usec)",
-                            "appneta_rpp.cb_inbound_interpacket_gap",
+                            "appneta.cb_inbound_interpacket_gap",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1793,7 +1793,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_outbound_packetcount,
                     {
                             "Outbound Packet Count",
-                            "appneta_rpp.cb_outbound_packet_count",
+                            "appneta.cb_outbound_packet_count",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1805,7 +1805,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_outbound_interpacketgap,
                     {
                             "Outbound Inter-packet Gap (usec)",
-                            "appneta_rpp.cb_outbound_interpacket_gap",
+                            "appneta.cb_outbound_interpacket_gap",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1817,7 +1817,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_inbound_flags_csv_debug,
                     {
                             "CSV Debug",
-                            "appneta_rpp.cb_flags_is_csv_debug",
+                            "appneta.cb_flags_is_csv_debug",
                             FT_BOOLEAN,
                             32,
                             NULL,
@@ -1829,7 +1829,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_resp_ratelimitcbrate,
                     {
                             "Rate Limit CB Rate",
-                            "appneta_rpp.cb_resp_ratelimit_cb_rate",
+                            "appneta.cb_resp_ratelimit_cb_rate",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1841,7 +1841,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_resp_minpacketcount,
                     {
                             "Minimum Packet Count",
-                            "appneta_rpp.cb_resp_min_packet_count",
+                            "appneta.cb_resp_min_packet_count",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -1853,7 +1853,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_request_reserved1,
                     {
                             "Rate Limit CB Request - reserved1",
-                            "appneta_rpp.cb_resp_ratelimit_cb_request_reserved1",
+                            "appneta.cb_resp_ratelimit_cb_request_reserved1",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1865,7 +1865,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_request_reserved2,
                     {
                             "Rate Limit CB Request - reserved2",
-                            "appneta_rpp.cb_resp_ratelimit_cb_request_reserved2",
+                            "appneta.cb_resp_ratelimit_cb_request_reserved2",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1877,7 +1877,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_ready_reserved1,
                     {
                             "Rate Limit CB Ready - reserved1",
-                            "appneta_rpp.cb_resp_ratelimit_cb_ready_reserved1",
+                            "appneta.cb_resp_ratelimit_cb_ready_reserved1",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1889,7 +1889,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_cb_ready_reserved2,
                     {
                             "Rate Limit CB Ready - reserved2",
-                            "appneta_rpp.cb_resp_ratelimit_cb_ready_reserved2",
+                            "appneta.cb_resp_ratelimit_cb_ready_reserved2",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1901,7 +1901,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_padding,
                     {
                             "ECB Request padding",
-                            "appneta_rpp.ecb_request_padding",
+                            "appneta.ecb_request_padding",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -1913,7 +1913,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_flags,
                     {
                             "ECB Request flags",
-                            "appneta_rpp.ecb_request_flags",
+                            "appneta.ecb_request_flags",
                             FT_UINT8,
                             BASE_HEX,
                             NULL,
@@ -1925,7 +1925,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_flags_first_seq,
                     {
                             "Is First sequence",
-                            "appneta_rpp.ecb_request_flags.first",
+                            "appneta.ecb_request_flags.first",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -1937,7 +1937,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_flags_last_seq,
                     {
                             "Is Last sequence",
-                            "appneta_rpp.ecb_request_flags.last",
+                            "appneta.ecb_request_flags.last",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -1949,7 +1949,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_flags_reply,
                     {
                             "Is Reply",
-                            "appneta_rpp.ecb_request_flags.reply",
+                            "appneta.ecb_request_flags.reply",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -1961,7 +1961,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_flags_rx_report_all,
                     {
                             "RX Report All",
-                            "appneta_rpp.ecb_request_flags.report_all",
+                            "appneta.ecb_request_flags.report_all",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -1973,7 +1973,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_flags_inbound_gap_ns,
                     {
                             "Inbound Gap Nanoseconds",
-                            "appneta_rpp.ecb_request_flags.inbound_gap_nanoseconds",
+                            "appneta.ecb_request_flags.inbound_gap_nanoseconds",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -1985,7 +1985,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_flags_outbound_gap_ns,
                     {
                             "Outbound Gap Nanoseconds",
-                            "appneta_rpp.ecb_request_flags.outbound_gap_nanoseconds",
+                            "appneta.ecb_request_flags.outbound_gap_nanoseconds",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -1997,7 +1997,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_ssn,
                     {
                             "ECB Starting Sequence Number",
-                            "appneta_rpp.ecb_request_ssn",
+                            "appneta.ecb_request_ssn",
                             FT_UINT32,
                             BASE_DEC_HEX,
                             NULL,
@@ -2009,7 +2009,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_outbound_magnify,
                     {
                             "ECB Out-bound Magnification",
-                            "appneta_rpp.ecb_request_outbound_magnify",
+                            "appneta.ecb_request_outbound_magnify",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2021,7 +2021,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_outbound_duration,
                     {
                             "ECB Out-bound Duration (msec)",
-                            "appneta_rpp.ecb_request_outbound_duration",
+                            "appneta.ecb_request_outbound_duration",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2033,7 +2033,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_outbound_gap,
                     {
                             "ECB Out-bound Inter-packet Gap (usec)",
-                            "appneta_rpp.ecb_request_outbound_gap",
+                            "appneta.ecb_request_outbound_gap",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2045,7 +2045,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_inbound_magnify,
                     {
                             "ECB In-bound Magnification",
-                            "appneta_rpp.ecb_request_inbound_magnify",
+                            "appneta.ecb_request_inbound_magnify",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2057,7 +2057,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_inbound_duration,
                     {
                             "ECB In-bound Duration (msec)",
-                            "appneta_rpp.ecb_request_inbound_duration",
+                            "appneta.ecb_request_inbound_duration",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2069,7 +2069,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_inbound_gap,
                     {
                             "ECB In-bound Inter-packet Gap (usec)",
-                            "appneta_rpp.ecb_request_inbound_gap",
+                            "appneta.ecb_request_inbound_gap",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2081,7 +2081,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_outbound_max_packets,
                     {
                             "ECB Out-bound Maximum Packets",
-                            "appneta_rpp.ecb_request_outbound_max_packets",
+                            "appneta.ecb_request_outbound_max_packets",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2093,7 +2093,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_request_inbound_max_packets,
                     {
                             "ECB In-bound Maximum Packets",
-                            "appneta_rpp.ecb_request_inbound_max_packets",
+                            "appneta.ecb_request_inbound_max_packets",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2105,7 +2105,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_padding,
                     {
                             "ECB Response padding",
-                            "appneta_rpp.ecb_resp_padding",
+                            "appneta.ecb_resp_padding",
                             FT_UINT8,
                             BASE_DEC,
                             NULL,
@@ -2117,7 +2117,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_flags,
                     {
                             "ECB Response flags",
-                            "appneta_rpp.ecb_resp_flags",
+                            "appneta.ecb_resp_flags",
                             FT_UINT8,
                             BASE_HEX,
                             NULL,
@@ -2129,7 +2129,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_flags_in,
                     {
                             "In-bound results available",
-                            "appneta_rpp.ecb_resp_flags.in",
+                            "appneta.ecb_resp_flags.in",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -2141,7 +2141,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_flags_out,
                     {
                             "Out-bound results available",
-                            "appneta_rpp.ecb_resp_flags.out",
+                            "appneta.ecb_resp_flags.out",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -2153,7 +2153,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_flags_final,
                     {
                             "Final results",
-                            "appneta_rpp.ecb_resp_flags.final",
+                            "appneta.ecb_resp_flags.final",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -2165,7 +2165,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_first_tx_ts,
                     {
                             "ECB Response Out-bound TX timestamp (usecs)",
-                            "appneta_rpp.ecb_resp_outbound_first_tx_ts",
+                            "appneta.ecb_resp_outbound_first_tx_ts",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2177,7 +2177,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_first_rx_ts,
                     {
                             "ECB Response Out-bound First RX timestamp (usecs)",
-                            "appneta_rpp.ecb_resp_outbound_first_rx_ts",
+                            "appneta.ecb_resp_outbound_first_rx_ts",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2189,7 +2189,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_ll_rx,
                     {
                             "ECB Response Out-bound loss-less RX (packets)",
-                            "appneta_rpp.ecb_resp_outbound_ll_rx",
+                            "appneta.ecb_resp_outbound_ll_rx",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2201,7 +2201,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_ll_rx_bytes,
                     {
                             "ECB Response Out-bound loss-less RX (bytes)",
-                            "appneta_rpp.ecb_resp_outbound_ll_rx_bytes",
+                            "appneta.ecb_resp_outbound_ll_rx_bytes",
                             FT_UINT64,
                             BASE_DEC,
                             NULL,
@@ -2213,7 +2213,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_ll_us,
                     {
                             "ECB Response Out-bound loss-less RX timestamp (usec)",
-                            "appneta_rpp.ecb_resp_outbound_ll_us",
+                            "appneta.ecb_resp_outbound_ll_us",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2225,7 +2225,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_total_rx,
                     {
                             "ECB Response Out-bound total RX (packets)",
-                            "appneta_rpp.ecb_resp_outbound_total_rx",
+                            "appneta.ecb_resp_outbound_total_rx",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2237,7 +2237,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_total_rx_bytes,
                     {
                             "ECB Response Out-bound total RX (bytes)",
-                            "appneta_rpp.ecb_resp_outbound_total_rx_bytes",
+                            "appneta.ecb_resp_outbound_total_rx_bytes",
                             FT_UINT64,
                             BASE_DEC,
                             NULL,
@@ -2249,7 +2249,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_outbound_total_us,
                     {
                             "ECB Response Out-bound total RX timestamp (usec)",
-                            "appneta_rpp.ecb_resp_outbound_total_us",
+                            "appneta.ecb_resp_outbound_total_us",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2261,7 +2261,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_first_tx_ts,
                     {
                             "ECB Response In-bound TX timestamp (usecs)",
-                            "appneta_rpp.ecb_resp_inbound_first_tx_ts",
+                            "appneta.ecb_resp_inbound_first_tx_ts",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2273,7 +2273,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_first_rx_ts,
                     {
                             "ECB Response In-bound First RX timestamp (usecs)",
-                            "appneta_rpp.ecb_resp_inbound_first_rx_ts",
+                            "appneta.ecb_resp_inbound_first_rx_ts",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2285,7 +2285,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_ll_rx,
                     {
                             "ECB Response In-bound loss-less RX (packets)",
-                            "appneta_rpp.ecb_resp_inbound_ll_rx",
+                            "appneta.ecb_resp_inbound_ll_rx",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2297,7 +2297,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_ll_rx_bytes,
                     {
                             "ECB Response In-bound loss-less RX (bytes)",
-                            "appneta_rpp.ecb_resp_inbound_ll_rx_bytes",
+                            "appneta.ecb_resp_inbound_ll_rx_bytes",
                             FT_UINT64,
                             BASE_DEC,
                             NULL,
@@ -2309,7 +2309,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_ll_us,
                     {
                             "ECB Response In-bound loss-less RX timestamp (usec)",
-                            "appneta_rpp.ecb_resp_inbound_ll_us",
+                            "appneta.ecb_resp_inbound_ll_us",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2321,7 +2321,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_total_rx,
                     {
                             "ECB Response In-bound total RX (packets)",
-                            "appneta_rpp.ecb_resp_inbound_total_rx",
+                            "appneta.ecb_resp_inbound_total_rx",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2333,7 +2333,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_total_rx_bytes,
                     {
                             "ECB Response In-bound total RX (bytes)",
-                            "appneta_rpp.ecb_resp_inbound_total_rx_bytes",
+                            "appneta.ecb_resp_inbound_total_rx_bytes",
                             FT_UINT64,
                             BASE_DEC,
                             NULL,
@@ -2345,7 +2345,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_ecb_resp_inbound_total_us,
                     {
                             "ECB Response In-bound total RX timestamp (usec)",
-                            "appneta_rpp.ecb_resp_inbound_total_us",
+                            "appneta.ecb_resp_inbound_total_us",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2357,7 +2357,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_pseudo_chksum,
                     {
                             "Pseudo Checksum",
-                            "appneta_rpp.pseudo_cksum",
+                            "appneta.pseudo_cksum",
                             FT_UINT16,
                             BASE_HEX_DEC,
                             NULL,
@@ -2369,7 +2369,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_iface_info_flags,
                     {
                             "Interface Flags",
-                            "appneta_rpp.iface_flags",
+                            "appneta.iface_flags",
                             FT_UINT32,
                             BASE_HEX,
                             NULL,
@@ -2381,7 +2381,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_iface_info_flags_is_ani_modified,
                     {
                             "Is ANI Modified",
-                            "appneta_rpp.iface_is_ani_modified",
+                            "appneta.iface_is_ani_modified",
                             FT_BOOLEAN,
                             32,
                             NULL,
@@ -2393,7 +2393,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_iface_info_mtu,
                     {
                             "Interface MTU",
-                            "appneta_rpp.iface_mtu",
+                            "appneta.iface_mtu",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2405,7 +2405,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_iface_info_speed,
                     {
                             "Interface Speed",
-                            "appneta_rpp.iface_speed",
+                            "appneta.iface_speed",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2417,7 +2417,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_inboundpacketcount,
                     {
                             "Inbound Packet Count",
-                            "appneta_rpp.inbound_packet_count",
+                            "appneta.inbound_packet_count",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2429,7 +2429,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_inboundpacketsize,
                     {
                             "Inbound Packet Size",
-                            "appneta_rpp.inbound_packet_size",
+                            "appneta.inbound_packet_size",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2441,7 +2441,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_h323port,
                     {
                             "H.323 Port",
-                            "appneta_rpp.h323_port",
+                            "appneta.h323_port",
                             FT_UINT16,
                             BASE_DEC,
                             NULL,
@@ -2453,7 +2453,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_appliance_type,
                     {
                             "Device Type",
-                            "appneta_rpp.appliance_type",
+                            "appneta.appliance_type",
                             FT_UINT8,
                             BASE_DEC,
                             VALS(ani_rpp_appliance_type_vals),
@@ -2465,7 +2465,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_custom_appliance_type,
                     {
                             "Custom Type",
-                            "appneta_rpp.custom_appliance_type",
+                            "appneta.custom_appliance_type",
                             FT_STRING,
                             BASE_NONE,
                             NULL,
@@ -2477,7 +2477,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_payload,
                     {
                             "ANI Payload",
-                            "appneta_rpp.payload",
+                            "appneta.payload",
                             FT_BYTES,
                             BASE_NONE,
                             NULL,
@@ -2489,7 +2489,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_unknown_header,
                     {
                             "Unknown Header",
-                            "appneta_rpp.unknown_header",
+                            "appneta.unknown_header",
                             FT_BYTES,
                             BASE_NONE,
                             NULL,
@@ -2501,7 +2501,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_undefined,
                     {
                             "Undefined signature",
-                            "appneta_signature.undefined_signature",
+                            "appneta.signature.undefined_signature",
                             FT_BYTES,
                             BASE_NONE,
                             NULL,
@@ -2513,7 +2513,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_legacy,
                     {
                             "AppNeta Legacy signature",
-                            "appneta_signature.legacy_signature",
+                            "appneta.signature.legacy_signature",
                             FT_BYTES,
                             BASE_NONE,
                             NULL,
@@ -2525,7 +2525,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_path,
                     {
                             "AppNeta Path signature",
-                            "appneta_signature.path_signature",
+                            "appneta.signature.path_signature",
                             FT_BYTES,
                             BASE_NONE,
                             NULL,
@@ -2537,7 +2537,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_path_reply,
                     {
                             "AppNeta Path Reply signature",
-                            "appneta_signature.path_reply_signature",
+                            "appneta.signature.path_reply_signature",
                             FT_BYTES,
                             BASE_NONE,
                             NULL,
@@ -2549,7 +2549,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_pathtest,
                     {
                             "AppNeta PathTest signature",
-                            "appneta_signature.pathtest_signature",
+                            "appneta.signature.pathtest_signature",
                             FT_BYTES,
                             BASE_NONE,
                             NULL,
@@ -2561,7 +2561,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_flags,
                     {
                             "Path flags",
-                            "appneta_signature.path_flags",
+                            "appneta.signature.path_flags",
                             FT_UINT8,
                             BASE_HEX,
                             NULL,
@@ -2573,7 +2573,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_flags_first,
                     {
                             "First packet",
-                            "appneta_signature.path_flags.first",
+                            "appneta.signature.path_flags.first",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -2585,7 +2585,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_flags_last,
                     {
                             "Last packet",
-                            "appneta_signature.path_flags.last",
+                            "appneta.signature.path_flags.last",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -2597,7 +2597,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_flags_iht,
                     {
                             "Interrupt Hold Time (iht) available",
-                            "appneta_signature.path_flags.iht",
+                            "appneta.signature.path_flags.iht",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -2609,7 +2609,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_flags_ext,
                     {
                             "Extended Headers",
-                            "appneta_signature.path_flags.ext_hdr",
+                            "appneta.signature.path_flags.ext_hdr",
                             FT_BOOLEAN,
                             8,
                             TFS(&ani_tf_set_not_set),
@@ -2621,7 +2621,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_iht,
                     {
                             "Interrupt Hold Time (iht)",
-                            "appneta_signature.iht",
+                            "appneta.signature.iht",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2633,7 +2633,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_signature_burst_len,
                     {
                             "Burst Length",
-                            "appneta_signature.burst_len",
+                            "appneta.signature.burst_len",
                             FT_UINT32,
                             BASE_DEC,
                             NULL,
@@ -2645,7 +2645,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_public_ip,
                     {
                             "Public Address",
-                            "appneta_public",
+                            "appneta.public_ip",
                             FT_IPv4,
                             BASE_NONE,
                             NULL,
@@ -2658,7 +2658,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_public_ip_addr,
                     {
                             "Public IPv4 Address",
-                            "appneta_public.addr",
+                            "appneta.public_ip.addr",
                             FT_IPv4,
                             BASE_NONE,
                             NULL,
@@ -2671,7 +2671,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_public_ipv6,
                     {
                             "Public Address",
-                            "appneta_public",
+                            "appneta.public_ip",
                             FT_IPv6,
                             BASE_NONE,
                             NULL,
@@ -2684,7 +2684,7 @@ proto_register_ani_rpp(void)
                     &hf_ani_rpp_public_ipv6_addr,
                     {
                             "Public IPv6 Address",
-                            "appneta_public.addr",
+                            "appneta.public_ip.addr",
                             FT_IPv6,
                             BASE_NONE,
                             NULL,
