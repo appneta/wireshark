@@ -71,7 +71,7 @@ LZIP_VERSION=1.19
 # the latest stable version (currently 3.12.4).
 #
 if [[ $DARWIN_MAJOR_VERSION -gt 11 ]]; then
-    CMAKE_VERSION=${CMAKE_VERSION-3.12.4}
+    CMAKE_VERSION=${CMAKE_VERSION-3.17.2}
 else
     CMAKE_VERSION=${CMAKE_VERSION-3.5.2}
 fi
@@ -81,7 +81,7 @@ fi
 # claimed to build faster than make.
 # Comment it out if you don't want it.
 #
-NINJA_VERSION=${NINJA_VERSION-1.8.2}
+NINJA_VERSION=${NINJA_VERSION-1.10.0}
 
 #
 # The following libraries and tools are required even to build only TShark.
@@ -179,7 +179,7 @@ PYTHON3_VERSION=3.7.1
 # current Wireshark, so we install them unconditionally.
 #
 AUTOCONF_VERSION=2.69
-AUTOMAKE_VERSION=1.15
+AUTOMAKE_VERSION=1.16
 LIBTOOL_VERSION=2.4.6
 
 install_curl() {
@@ -2287,8 +2287,9 @@ uninstall_all() {
 # If not, do "make install", "make uninstall", the removes for Lua,
 # and the renames of [g]libtool* with sudo.
 #
-if [ -w /usr/local ]
-then
+mkdir -p /usr/local/lib
+mkdir -p /usr/local/include
+if [ -w /usr/local/lib ] && [ -w /usr/local/include ]; then
     DO_MAKE_INSTALL="make install"
     DO_MAKE_UNINSTALL="make uninstall"
     DO_RM="rm"
@@ -2298,6 +2299,8 @@ else
     DO_MAKE_UNINSTALL="sudo make uninstall"
     DO_RM="sudo rm"
     DO_MV="sudo mv"
+    [ -d /usr/local/lib ] || sudo mkdir -p /usr/local/lib
+    [ -d /usr/local/include ] || sudo mkdir -p /usr/local/include
 fi
 
 # This script is meant to be run in the source root.  The following
