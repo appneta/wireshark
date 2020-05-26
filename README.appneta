@@ -1,44 +1,37 @@
 MacOS
 =====
-$ tools/macos-setup-brew.sh
 
-... then follow instructions e.g.
+References:
 
-PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/qt/lib/pkgconfig
-CMAKE_PREFIX_PATH=:/usr/local/opt/qt/lib/cmake/
-PATH=/usr/local/opt/qt@5.10/bin:$PATH:
-export PKG_CONFIG_PATH
-export CMAKE_PREFIX_PATH
+* Code Signing:
+    * https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html
+    * https://developer.apple.com/library/archive/technotes/tn2206/_index.html
+
+* Notarizing
+    * https://developer.apple.com/documentation/xcode/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow
+    * https://developer.apple.com/documentation/security/notarizing_your_app_before_distribution/resolving_common_notarization_issues?language=objc
+
+
+Prereq:
+
+$ sudo gem install asciidoctor
+$ pip3 install dmgbuild
+
+Preferred method:
+
+$ MACOSX_SUPPORT_LIBS=/Users/<identity>/git/pvc-appliance/macos-support-libs tools/macos-setup.sh -t 10.14
+
+# some exports - CODE_SIGN_IDENTITY as per 'security find-identity -p codesigning -v login.keychain'
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/Users/<identity>/Qt5.12.1/5.12.1/clang_64/lib/pkgconfig
+export CMAKE_PREFIX_PATH=/Users/<identity>/Qt5.12.1/5.12.1/clang_64/lib/cmake
+export CODE_SIGN_IDENTITY="AppNeta Inc"
+PATH=/Users/<identity>/Qt5.12.1/5.12.1/clang_64/bin:/Library/Frameworks/Python.framework/Versions/3.7/bin/:$PATH
 export PATH
 
 mkdir build; cd build
-cmake ..
-cmake -DENABLE_CCACHE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.12 -G Ninja ..
+cmake -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -G Ninja ..
 ninja
-ninja app_bundle
-
-Install PackageMaker into Xcode
--------------------------------
-
-From the Xcode menu, select the Open Developer Tool
-menu, and then select More Developer Tools... from that menu.  That will
-open up a page on the Apple Developer Connection Web site; you may need
-a developer account to download the additional tools.  Download the
-Auxiliary Tools for Xcode - Late 2012 package; when the dmg opens,
-drag PackageMaker.app to the Contents/Applications subdirectory of the
-Xcode.app directory (normally /Applications/Xcode.app/Contents/Applications);
-
-You may also want to download the latest Auxiliary Tools and drag
-all its contents into the same he Contents/Applications subdirectory.
-
-Also install dmgbuild ...
-
-pip3 install dmgbuild
-
-Make MacOS Package
-------------------
-
-$ cd build && ninja dmg_package
+ninja dmg_package
 
 Linux
 =====
