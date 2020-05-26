@@ -3188,8 +3188,9 @@ uninstall_all() {
 # "make uninstall" or "ninja uninstall", the renames of [g]libtool*,
 # and the writing of a libffi .pc file with sudo.
 #
-if [ -w /usr/local ]
-then
+mkdir -p /usr/local/lib
+mkdir -p /usr/local/include
+if [ -w /usr/local/lib ] && [ -w /usr/local/include ]; then
     DO_MAKE_INSTALL="make install"
     DO_MAKE_UNINSTALL="make uninstall"
     DO_NINJA_INSTALL="ninja -C _build install"
@@ -3205,6 +3206,8 @@ else
     DO_TEE_TO_PC_FILE="sudo tee"
     DO_RM="sudo rm"
     DO_MV="sudo mv"
+    [ -d /usr/local/lib ] || sudo mkdir -p /usr/local/lib
+    [ -d /usr/local/include ] || sudo mkdir -p /usr/local/include
 fi
 
 # This script is meant to be run in the source root.  The following
