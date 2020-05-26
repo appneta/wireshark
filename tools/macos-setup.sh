@@ -2896,8 +2896,9 @@ uninstall_all() {
 # dependencies that don't support "make uninstall", and the renames
 # of [g]libtool* with sudo.
 #
-if [ -w /usr/local ]
-then
+mkdir -p /usr/local/lib
+mkdir -p /usr/local/include
+if [ -w /usr/local/lib ] && [ -w /usr/local/include ]; then
     DO_MAKE_INSTALL="make install"
     DO_MAKE_UNINSTALL="make uninstall"
     DO_RM="rm"
@@ -2907,6 +2908,8 @@ else
     DO_MAKE_UNINSTALL="sudo make uninstall"
     DO_RM="sudo rm"
     DO_MV="sudo mv"
+    [ -d /usr/local/lib ] || sudo mkdir -p /usr/local/lib
+    [ -d /usr/local/include ] || sudo mkdir -p /usr/local/include
 fi
 
 # This script is meant to be run in the source root.  The following
