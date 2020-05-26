@@ -1,3 +1,10 @@
+wireshark (3.0.12.appneta.48) unstable; urgency=medium
+
+  * macOS installer supports Mojave and Catalina
+  * macosx-setup non-sudo mode
+
+ -- AppNeta <support@appneta.com>  Tue, 25 May 2020 23:39:00 -0800
+
 wireshark (3.0.8.appneta.47) unstable; urgency=medium
 
   * MP-2555 Responder reports public source IP address
