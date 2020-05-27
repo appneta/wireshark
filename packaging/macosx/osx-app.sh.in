@@ -144,6 +144,7 @@ echo -e "\\nFixing up $bundle..."
 echo -e "\\nPrepopulating our libraries"
 
 # Copy only <library>.<SOVERSION>.dylib.
+mkdir -p "$pkglib"
 cp -v +([^.]).+([[:digit:]]).dylib "$pkglib"
 
 # Find out libs we need from Fink, MacPorts, or from a custom install
@@ -197,8 +198,10 @@ while $endl; do
 		| sort \
 		| uniq \
 		)"
-	# shellcheck disable=SC2086
-	install -m 644 -C -v $libs "$pkglib"
+	if [ -n "$libs" ]; then
+		# shellcheck disable=SC2086
+		install -m 644 -C -v $libs "$pkglib"
+	fi
 	(( a++ ))
 	# shellcheck disable=SC2012
 	nnfiles=$( ls "$pkglib" | wc -l )

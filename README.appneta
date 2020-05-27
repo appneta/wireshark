@@ -2,50 +2,84 @@ MacOS
 =====
 
 References:
+-----------
 
 * Code Signing:
     * https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html
     * https://developer.apple.com/library/archive/technotes/tn2206/_index.html
 
 * Notarizing
-    * https://developer.apple.com/documentation/xcode/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow
-    * https://developer.apple.com/documentation/security/notarizing_your_app_before_distribution/resolving_common_notarization_issues?language=objc
-
+    * https://developer.apple.com/documentation/xcode/notarizing_macos_software_before_distribution
 
 Prereq:
+-------
 
-$ sudo gem install asciidoctor
-$ pip3 install dmgbuild
+    sudo gem install asciidoctor
+    pip3 install dmgbuild
 
-Preferred method:
+Build:
+------
 
-$ MACOSX_SUPPORT_LIBS=/Users/<identity>/git/pvc-appliance/macos-support-libs tools/macos-setup.sh -t 10.14
+Run one time only, or if moving to a new Wireshark revision
 
-# some exports - CODE_SIGN_IDENTITY as per 'security find-identity -p codesigning -v login.keychain'
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/Users/<identity>/Qt5.12.1/5.12.1/clang_64/lib/pkgconfig
-export CMAKE_PREFIX_PATH=/Users/<identity>/Qt5.12.1/5.12.1/clang_64/lib/cmake
-export CODE_SIGN_IDENTITY="AppNeta Inc"
-PATH=/Users/<identity>/Qt5.12.1/5.12.1/clang_64/bin:/Library/Frameworks/Python.framework/Versions/3.7/bin/:$PATH
-export PATH
+    MACOSX_SUPPORT_LIBS=/Users/<identity>/git/pvc-appliance/macos-support-libs tools/macos-setup.sh -t 10.14
 
-mkdir build; cd build
-cmake -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -G Ninja ..
-ninja
-ninja dmg_package
+Here are some exports - CODE_SIGN_IDENTITY as per 'security find-identity -p codesigning -v login.keychain'
+
+    export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/Users/<identity>/Qt5.12.4/5.12.4/clang_64/lib/pkgconfig
+    export CMAKE_PREFIX_PATH=/Users/<identity>/Qt5.12.4/5.12.4/clang_64/lib/cmake
+    export CODE_SIGN_IDENTITY="AppNeta Inc"
+    PATH=/Users/<identity>/Qt5.12.4/5.12.4/clang_64/bin:/Library/Frameworks/Python.framework/Versions/3.7/bin/:$PATH
+    export PATH
+
+    mkdir build; cd build
+    cmake -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -G Ninja ..
+    ninja
+    ninja app_bundle
+
+Notarize:
+---------
+
+At this point you may want to notarize the app_bundle - you will require an
+application-specific password - https://support.apple.com/en-us/HT204397
+
+    cd run
+    ditto -ck --keepParent Wireshark.app Wireshark.zip
+    xcrun altool --notarize-app --primary-bundle-id "com.appneta.wireshark.app" --username <apple id> --password <app-specific password> --file Wireshark.zip
+
+Wait up to 5 minutes for success - check using this command
+
+    xcrun altool --notarize-history 0 --username <apple id> --password <app-specific password>
+
+Staple the notarization result so app can be verified as notarized when offline
+
+    xcrun stapler staple Wireshark.app
+    cd ..
+
+macOS Package:
+--------------
+
+    cd run
+    ../packaging/macosx/osx-dmg.sh
+    xcrun altool --notarize-app --primary-bundle-id "com.appneta.wireshark.dmg" --username <apple id> --password <app-specific password> --file Wireshark\ <version>\ Intel\ 64.dmg
+    xcrun altool --notarize-history 0 --username <apple id> --password <app-specific password>
+    xcrun stapler staple Wireshark\ <version>\ Intel\ 64.dmg
+    cd ..
 
 Linux
 =====
 
 To build Linux debug:
+---------------------
 
-mkdir -p build-debug
-cd build-debug
-cmake -DCMAKE_BUILD_TYPE=Debug ..
-make -j6
+    mkdir -p build-debug
+    cd build-debug
+    cmake -DCMAKE_BUILD_TYPE=Debug ..
+    make -j6
 
-Make Linux Package
+Make Linux Package:
 ------------------
 
 Update version in CMakeList.txt and debian/changelog
 
-$ dpkg-buildpackage -us -uc -sa -d
+    dpkg-buildpackage -us -uc -sa -d
