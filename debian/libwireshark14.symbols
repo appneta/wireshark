@@ -1343,8 +1343,6 @@ libwireshark.so.14 libwireshark14 #MINVER#
  range_add_value@Base 2.3.0
  range_remove_value@Base 2.3.0
  ranges_are_equal@Base 1.9.1
- read_keytab_file@Base 1.9.1
- read_keytab_file_from_preferences@Base 1.9.1
  read_prefs_file@Base 1.9.1
  reassembly_table_destroy@Base 1.9.1
  reassembly_table_init@Base 1.9.1
@@ -2112,11 +2110,6 @@ libwireshark.so.14 libwireshark14 #MINVER#
  ws_find_media_type_parameter@Base 2.2.0
  ws_strdup_escape_char@Base 1.9.1
  ws_strdup_unescape_char@Base 1.9.1
- wslua_count_plugins@Base 1.12.0~rc1
- wslua_plugin_type_name@Base 2.5.0
- wslua_plugins_dump_all@Base 1.12.0~rc1
- wslua_plugins_get_descriptions@Base 1.12.0~rc1
- wslua_reload_plugins@Base 1.99.9
  wsp_vals_pdu_type_ext@Base 1.9.1
  wsp_vals_status_ext@Base 1.9.1
  xml_escape@Base 1.9.1
