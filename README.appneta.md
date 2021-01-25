@@ -83,3 +83,13 @@ Make Linux Package:
 Update version in CMakeList.txt and debian/changelog
 
     dpkg-buildpackage -us -uc -sa -d
+
+Once packages are made, do something like:
+
+$ mkdir -p ~/data/wireshark_3.4.2.appneta.50_repo
+$ cd ~/data/wireshark_3.4.2.appneta.50_repo
+$ dpkg-scanpackages . | gzip -9c > Packages.gz
+... in /etc/apt/sources.list.d/wireshark.list ...
+deb [trusted=yes] file:/home/fklassen/data/wireshark_3.4.2.appneta.50_repo ./
+$ sudo apt update
+$ sudo apt install wireshark
