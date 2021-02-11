@@ -88,7 +88,7 @@ Once packages are made, do something like:
 
 $ mkdir -p ~/data/wireshark_3.4.2.appneta.50_repo
 $ cd ~/data/wireshark_3.4.2.appneta.50_repo
-$ dpkg-scanpackages . | gzip -9c > Packages.gz
+$ dpkg-scanpackages . | xz -c > Packages.xz
 ... in /etc/apt/sources.list.d/wireshark.list ...
 deb [trusted=yes] file:/home/fklassen/data/wireshark_3.4.2.appneta.50_repo ./
 $ sudo apt update
