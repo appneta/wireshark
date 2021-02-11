@@ -61,7 +61,7 @@ override_dh_auto_install:
 	rm -f debian/*.shlibs
 	rm -rf $(CURDIR)/debian/tmp/usr/share/wireshark/COPYING
 	mkdir -p $(CURDIR)/debian/tmp/etc/wireshark/
-	cp /etc/wireshark/init.lua $(CURDIR)/debian/tmp/usr/share/wireshark/
+	cp $(CURDIR)/epan/wslua/template-init.lua  $(CURDIR)/debian/tmp/usr/share/wireshark/init.lua
 	mv $(CURDIR)/debian/tmp/usr/share/wireshark/init.lua \
 		$(CURDIR)/debian/tmp/etc/wireshark/
 	ln -s /etc/wireshark/init.lua \
