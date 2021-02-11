@@ -53,7 +53,6 @@ override_dh_auto_install:
 	rm -rf $(CURDIR)/debian/tmp/usr/share/wireshark/COPYING
 	cp debian/license-text-about-dialog $(CURDIR)/debian/tmp/usr/share/wireshark/ABOUT.GPL
 	mkdir -p $(CURDIR)/debian/tmp/etc/wireshark/
-	cp $(CURDIR)/epan/wslua/template-init.lua  $(CURDIR)/debian/tmp/usr/share/wireshark/init.lua
 	mv $(CURDIR)/debian/tmp/usr/share/wireshark/init.lua \
 		$(CURDIR)/debian/tmp/etc/wireshark/
 	ln -s /etc/wireshark/init.lua \
@@ -63,9 +62,6 @@ override_dh_install:
 	dh_install
 	# check all necessary headers are included
 	$(CC) -c debian/headers-check.c $(shell pkg-config --cflags glib-2.0) $(shell dpkg-buildflags --get CPPFLAGS) $(shell dpkg-buildflags --get CFLAGS) -Idebian/libwireshark-dev/usr/include -Idebian/libwireshark-dev/usr/include/wireshark -Idebian/libwiretap-dev/usr/include/wireshark -Idebian/libwsutil-dev/usr/include/wireshark -o /dev/null
-
-override_dh_shlibdeps:
-	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
 
 override_dh_fixperms:
 	dh_fixperms
