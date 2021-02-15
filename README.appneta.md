@@ -82,14 +82,17 @@ Make Linux Package:
 
 Update version in CMakeList.txt and debian/changelog
 
-    dpkg-buildpackage -us -uc -sa -d
+    $ mkdir -p /tmp/wireshark_3.4.2.appneta.50_repo
+    pdebuild --use-pdebuild-internal --debbuildopts "-b -a amd64 -us -uc" --buildresult /tmp/wireshark_3.4.2.appneta.50_repo
 
 Once packages are made, do something like:
 
-$ mkdir -p ~/data/wireshark_3.4.2.appneta.50_repo
-$ cd ~/data/wireshark_3.4.2.appneta.50_repo
-$ dpkg-scanpackages . | xz -c > Packages.xz
+    $ cd /tmp/wireshark_3.4.2.appneta.50_repo
+    $ dpkg-scanpackages . | xz -c > Packages.xz
+
+Optionally you can move directory and install packages locally
 ... in /etc/apt/sources.list.d/wireshark.list ...
-deb [trusted=yes] file:/home/fklassen/data/wireshark_3.4.2.appneta.50_repo ./
-$ sudo apt update
-$ sudo apt install wireshark
+
+    deb [trusted=yes] file:/home/fklassen/data/wireshark_3.4.2.appneta.50_repo ./
+    $ sudo apt update
+    $ sudo apt install wireshark
