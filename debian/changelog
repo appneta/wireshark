@@ -1,3 +1,9 @@
+wireshark (3.4.3.appneta.52) UNRELEASED; urgency=medium
+
+  * fix for windows build
+
+ -- AppNeta <support@appneta.com>  Thu, 16 Feb 2021 08:33:48 -0800
+
 wireshark (3.4.3.appneta.51) UNRELEASED; urgency=medium
 
   * fix init.lua build issue

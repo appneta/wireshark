@@ -24,6 +24,12 @@
  */
 
 #include "config.h"
+
+ /* plugins are DLLs */
+#define WS_BUILD_DLL
+#include "ws_symbol_export.h"
+
+
 #include <math.h>
 #include <glib.h>
 
