@@ -96,3 +96,34 @@ Optionally you can move directory and install packages locally
     deb [trusted=yes] file:/home/fklassen/data/wireshark_3.4.2.appneta.50_repo ./
     $ sudo apt update
     $ sudo apt install wireshark
+
+Windows
+=======
+
+* Set up as per [install guide](https://www.wireshark.org/docs/wsdg_html_chunked/ChSetupWin32.html).
+  No need to install Git, CMake, Python or Perl on Windows Dev machine. Install Qt5 not Qt6.
+  
+* I had to open a regular Command Prompt and run 
+  `"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvars64.bat"`
+  rather than open a "x64 Native Tools Command Prompt for VS 2019".
+
+* Set the following environmental variables e.g.
+
+    > set WIRESHARK_BASE_DIR=C:\Users\fklassen\git
+    > set WIRESHARK_VERSION_EXTRA=-appneta.52
+    > set QT5_BASE_DIR=C:\Qt\5.15.2\msvc2019_64\
+
+* Create a build directory and change into it e.g
+
+    > mkdir ..\wsbuild64
+    > cd ..\wsbuild64
+
+* Generate build files
+
+     > "C:\Program Files\CMake\bin\cmake" -G "Visual Studio 16 2019" -A x64 ..\wireshark
+
+* Make
+
+    > msbuild /m /p:Configuration=RelWithDebInfo Wireshark.sln
+
+
