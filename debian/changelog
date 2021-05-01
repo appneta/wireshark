@@ -1,3 +1,9 @@
+wireshark (3.4.5.appneta.53) UNRELEASED; urgency=medium
+
+  * fix for macOS build
+
+ -- AppNeta <support@appneta.com>  Sat, 1 May 2021 10:16:00 -0800
+
 wireshark (3.4.3.appneta.52) UNRELEASED; urgency=medium
 
   * fix for windows build
