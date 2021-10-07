@@ -126,4 +126,10 @@ Windows
 
     > msbuild /m /p:Configuration=RelWithDebInfo Wireshark.sln
 
+* Package
+
+    > msbuild /m /p:Configuration=RelWithDebInfo nsis_package_prep.vcxproj
+    > msbuild /m /p:Configuration=RelWithDebInfo nsis_package.vcxproj
+
+
 
