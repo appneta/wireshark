@@ -706,25 +706,38 @@ dissect_responder_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *ani_rpp_
                     "Request Header");
             break;
         case HDR_REPLY:
-            current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
-                    "Reply Header");
-            /* the next 28 bytes are the ip and udp headers to be used in the response */
-            /* Save the current value of the "we're inside an error packet"
-                     flag, and set that flag; subdissectors may treat packets
-                     that are the payload of error packets differently from
-                     "real" packets. */
-            save_in_error_pkt = pinfo->flags.in_error_pkt;
-            pinfo->flags.in_error_pkt = TRUE;
+            if (tvb_reported_length(tvb) >= 28 && ip_handle) {
+                guint8 version;
 
-            next_tvb = tvb_new_subset_remaining(tvb, offset);
-            set_actual_length(next_tvb, 28);
-            if (ip_handle) {
-                call_dissector( ip_handle, next_tvb, pinfo, current_tree);
+                version = tvb_get_guint8(tvb, offset + 2) >> 4;
+                current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
+                                           "Reply Header");
+                /* Save the current value of the "we're inside an error packet"
+                 * flag, and set that flag; subdissectors may treat packets
+                 * that are the payload of error packets differently from
+                 * "real" packets.
+                 */
+                save_in_error_pkt = pinfo->flags.in_error_pkt;
+                pinfo->flags.in_error_pkt = TRUE;
+
+                next_tvb = tvb_new_subset_remaining(tvb, offset);
+                if (version == 4) {
+                    /* the next 28 bytes are the ipv4 and udp headers to be used in the response */
+                    set_actual_length(next_tvb, 28);
+                    call_dissector(ip_handle, next_tvb, pinfo, current_tree);
+                } else if (version == 6 && tvb_reported_length(next_tvb) >= 48) {
+                    /* the next 48 bytes are the ipv6 and udp headers to be used in the response */
+                    set_actual_length(next_tvb, 48);
+                    call_dissector(ip_handle, next_tvb, pinfo, current_tree);
+                } else {
+                    save_in_error_pkt = TRUE;
+                }
+
+                /* Restore the "we're inside an error packet" flag. */
+                pinfo->flags.in_error_pkt = save_in_error_pkt;
             }
-
-            /* Restore the "we're inside an error packet" flag. */
-            pinfo->flags.in_error_pkt = save_in_error_pkt;
             break;
+
         case HDR_FLOW_CREATE:
             current_tree = add_subtree(tvb, &offset, current_tree, currentHeader, headerLength,
                     "Create Flow Header");
