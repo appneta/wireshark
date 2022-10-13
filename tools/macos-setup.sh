@@ -207,7 +207,7 @@ else
 fi
 BROTLI_VERSION=1.0.9
 # minizip
-ZLIB_VERSION=1.2.11
+ZLIB_VERSION=1.2.13
 # Uncomment to enable automatic updates using Sparkle
 #SPARKLE_VERSION=2.1.0
 
@@ -1694,7 +1694,7 @@ uninstall_zstd() {
 install_libxml2() {
     if [ "$LIBXML2_VERSION" -a ! -f libxml2-$LIBXML2_VERSION-done ] ; then
         echo "Downloading, building, and installing libxml2:"
-        [ -f libxml2-$LIBXML2_VERSION.tar.gz ] || curl -L -O ftp://xmlsoft.org/libxml2/libxml2-$LIBXML2_VERSION.tar.gz || exit 1
+        [ -f libxml2-$LIBXML2_VERSION.tar.gz ] || curl -L -O http://xmlsoft.org/download/libxml2-$LIBXML2_VERSION.tar.gz || exit 1
         $no_build && echo "Skipping installation" && return
         gzcat libxml2-$LIBXML2_VERSION.tar.gz | tar xf - || exit 1
         cd libxml2-$LIBXML2_VERSION
@@ -2376,7 +2376,7 @@ install_minizip() {
         echo "Downloading, building, and installing zlib for minizip:"
         [ -f zlib-$ZLIB_VERSION.tar.gz ] || curl -L -o zlib-$ZLIB_VERSION.tar.gz https://zlib.net/zlib-$ZLIB_VERSION.tar.gz || exit 1
         $no_build && echo "Skipping installation" && return
-        gzcat zlib-$ZLIB_VERSION.tar.gz | tar xf - || exit 1
+        tar xf zlib-$ZLIB_VERSION.tar.gz || exit 1
         #
         # minizip ships both with a minimal Makefile that doesn't
         # support "make install", "make uninstall", or "make distclean",
