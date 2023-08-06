@@ -21,6 +21,7 @@ extern "C" {
 typedef enum tcp_graph_type_ {
     GRAPH_TSEQ_STEVENS,
     GRAPH_TSEQ_TCPTRACE,
+    GRAPH_TSEQ_TCPOVERLAPPED,
     GRAPH_THROUGHPUT,
     GRAPH_RTT,
     GRAPH_WSCALE,

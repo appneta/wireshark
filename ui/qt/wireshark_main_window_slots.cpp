@@ -1323,6 +1323,7 @@ void WiresharkMainWindow::setMenusForSelectedPacket()
     main_ui_->actionStatisticsTcpStreamRoundTripTime->setEnabled(is_tcp);
     main_ui_->actionStatisticsTcpStreamStevens->setEnabled(is_tcp);
     main_ui_->actionStatisticsTcpStreamTcptrace->setEnabled(is_tcp);
+    main_ui_->actionStatisticsTcpStreamTcpOverlapped->setEnabled(is_tcp);
     main_ui_->actionStatisticsTcpStreamThroughput->setEnabled(is_tcp);
     main_ui_->actionStatisticsTcpStreamWindowScaling->setEnabled(is_tcp);
 
@@ -3308,6 +3309,11 @@ void WiresharkMainWindow::on_actionStatisticsTcpStreamStevens_triggered()
 void WiresharkMainWindow::on_actionStatisticsTcpStreamTcptrace_triggered()
 {
     openTcpStreamDialog(GRAPH_TSEQ_TCPTRACE);
+}
+
+void WiresharkMainWindow::on_actionStatisticsTcpStreamTcpOverlapped_triggered()
+{
+    openTcpStreamDialog(GRAPH_TSEQ_TCPOVERLAPPED);
 }
 
 void WiresharkMainWindow::on_actionStatisticsTcpStreamThroughput_triggered()

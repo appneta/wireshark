@@ -116,6 +116,15 @@ private:
     friend class GraphUpdater;
     GraphUpdater graph_updater_;
 
+    class OverlappedGraph {
+    public:
+        OverlappedGraph() { graph = nullptr; ts_offset = 0.0; }
+        QCPGraph *graph;
+        double ts_offset;
+    };
+    QVector<OverlappedGraph *> overlapped_graph_vect_;
+    void clearOverlappedGraphs(OverlappedGraph *o_graph, QCustomPlot *sp);
+
     int num_dsegs_;
     int num_acks_;
     int num_sack_ranges_;
@@ -133,6 +142,7 @@ private:
     void fillStevens();
     void fillTcptrace();
     void fillThroughput();
+    void fillTcpOverlapped();
     void fillRoundTripTime();
     void fillWindowScale();
     QString streamDescription();
@@ -189,6 +199,7 @@ private slots:
     void on_actionThroughput_triggered();
     void on_actionStevens_triggered();
     void on_actionTcptrace_triggered();
+    void on_actionTcpOverlapped_triggered();
     void on_actionWindowScaling_triggered();
     void on_buttonBox_helpRequested();
 };

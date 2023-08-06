@@ -147,6 +147,8 @@ TCPStreamDialog::TCPStreamDialog(QWidget *parent, capture_file *cf, tcp_graph_ty
     if (graph_type == GRAPH_TSEQ_STEVENS) graph_idx = gtcb->count() - 1;
     gtcb->addItem(ui->actionTcptrace->text(), GRAPH_TSEQ_TCPTRACE);
     if (graph_type == GRAPH_TSEQ_TCPTRACE) graph_idx = gtcb->count() - 1;
+    gtcb->addItem(ui->actionTcpOverlapped->text(), GRAPH_TSEQ_TCPOVERLAPPED);
+    if (graph_type == GRAPH_TSEQ_TCPOVERLAPPED) graph_idx = gtcb->count() - 1;
     gtcb->addItem(ui->actionWindowScaling->text(), GRAPH_WSCALE);
     if (graph_type == GRAPH_WSCALE) graph_idx = gtcb->count() - 1;
     gtcb->setUpdatesEnabled(true);
@@ -184,6 +186,7 @@ TCPStreamDialog::TCPStreamDialog(QWidget *parent, capture_file *cf, tcp_graph_ty
     ctx_menu_.addAction(ui->actionThroughput);
     ctx_menu_.addAction(ui->actionStevens);
     ctx_menu_.addAction(ui->actionTcptrace);
+    ctx_menu_.addAction(ui->actionTcpOverlapped);
     ctx_menu_.addAction(ui->actionWindowScaling);
     set_action_shortcuts_visible_in_context_menu(ctx_menu_.actions());
 
@@ -477,10 +480,26 @@ void TCPStreamDialog::keyPressEvent(QKeyEvent *event)
     case Qt::Key_5:
         on_actionWindowScaling_triggered();
         break;
+    case Qt::Key_6:
+        on_actionTcpOverlapped_triggered();
+        break;
         // Alas, there is no Blade Runner-style Qt::Key_Enhance
     }
 
     QDialog::keyPressEvent(event);
+}
+
+void TCPStreamDialog::clearOverlappedGraphs(OverlappedGraph *o_graph,
+                                            QCustomPlot *sp)
+{
+    if (!o_graph) {
+        return;
+    }
+    if (o_graph->graph) {
+        o_graph->graph->data()->clear();
+        o_graph->graph->setVisible(false);
+        sp->removeGraph(o_graph->graph);
+    }
 }
 
 void TCPStreamDialog::mousePressEvent(QMouseEvent *event)
@@ -538,6 +557,12 @@ void TCPStreamDialog::fillGraph(bool reset_axes, bool set_focus)
     sack2_eb_->setVisible(false);
     sack2_eb_->data()->clear();
 
+    foreach (class OverlappedGraph *o_graph, overlapped_graph_vect_) {
+        clearOverlappedGraphs(o_graph, sp);
+        g_free(o_graph);
+    }
+    overlapped_graph_vect_.clear();
+
     base_graph_->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, pkt_point_size_));
 
     sp->xAxis->setLabel(time_s_label_);
@@ -573,15 +598,16 @@ void TCPStreamDialog::fillGraph(bool reset_axes, bool set_focus)
         // NOTE - adding both forward and reverse packets to time_stamp_map_
         //   so that both data and acks are selectable
         //   (this is important especially in selecting particular SACK pkts)
-        bool insert = true;
+        bool insert;
         if (!compareHeaders(seg)) {
             bytes_rev += seg->th_seglen;
             pkts_rev++;
             // only insert reverse packets if SACK present
-            insert = (seg->num_sack_ranges != 0);
+            insert = (graph_.type == GRAPH_TSEQ_TCPOVERLAPPED || seg->num_sack_ranges != 0);
         } else {
             bytes_fwd += seg->th_seglen;
             pkts_fwd++;
+            insert = true;
         }
         double ts = seg->rel_secs + seg->rel_usecs / 1000000.0;
         if (first) {
@@ -605,6 +631,9 @@ void TCPStreamDialog::fillGraph(bool reset_axes, bool set_focus)
         break;
     case GRAPH_TSEQ_TCPTRACE:
         fillTcptrace();
+        break;
+    case GRAPH_TSEQ_TCPOVERLAPPED:
+        fillTcpOverlapped();
         break;
     case GRAPH_THROUGHPUT:
         fillThroughput();
@@ -905,6 +934,87 @@ void TCPStreamDialog::fillTcptrace()
     dup_ack_graph_->setData(dup_ack_time, dup_ack, true);
     zero_win_graph_->setData(zero_win_time, zero_win, true);
 }
+
+void TCPStreamDialog::fillTcpOverlapped()
+{
+    QString dlg_title = QString(tr("Sequence Numbers (Overlapped)")) + streamDescription();
+    setWindowTitle(dlg_title);
+    title_->setText(dlg_title);
+
+    QCustomPlot *sp = ui->streamPlot;
+    sp->yAxis->setLabel(sequence_number_label_);
+
+    // make base graph invisible
+    sp->graph(0)->setVisible(false);
+
+    QVector<double> rel_time, ack;
+    OverlappedGraph *o_graph = nullptr;
+    double round_ts_offset = 0;
+    double round_last_seq = seq_offset_;
+    double round_seq_offset = seq_offset_;
+    GRand *rand42 = g_rand_new_with_seed(42);
+    for (struct segment *seg = graph_.segments; seg != nullptr; seg = seg->next) {
+        if ((seg->th_flags & TH_SYN) || !(seg->th_flags & TH_ACK)) {
+            continue;
+        }
+        double ts = (seg->rel_secs + seg->rel_usecs / 1000000.0);
+        if (compareHeaders(seg)) {
+            // something sent
+            if (seg->th_seglen == 0) {
+                continue;
+            }
+            guint32 seq_no = seg->th_seq;
+            if (!round_ts_offset) {
+                if (!o_graph) {
+                    o_graph = g_new(OverlappedGraph, 1);
+                }
+                rel_time.append(0.0);
+                ack.append(0.0);
+                round_ts_offset = o_graph->ts_offset = ts;
+                round_seq_offset = seq_no;
+            }
+            if ((seg->th_flags & TH_PUSH)) {
+                round_last_seq = seq_no + seg->th_seglen;
+            }
+        } else {
+            // something received
+            if (!round_ts_offset) {
+                continue;
+            }
+            double ackno = seg->th_ack;
+            rel_time.append(ts - round_ts_offset);  // TODO handle SACK
+            ack.append(ackno - round_seq_offset);
+            if (o_graph && ackno == round_last_seq) {
+                // round complete
+                QColor c;
+                // find an appropriate random color
+                do {
+                    c = QColor(g_rand_int_range(rand42, 0, 255),
+                               g_rand_int_range(rand42, 0, 255),
+                               g_rand_int_range(rand42, 0, 255));
+                } while (c.hue() < 20 || c.saturation() < 30 || c.value() < 40);
+                qreal pen_width = 0.5;
+                o_graph->graph = sp->addGraph();
+                o_graph->graph->setLineStyle(QCPGraph::lsLine);
+                o_graph->graph->setVisible(true);
+                o_graph->graph->setPen(QPen(QBrush(c), pen_width));
+                o_graph->graph->setData(rel_time, ack);
+                overlapped_graph_vect_.append(o_graph);
+                o_graph = nullptr;
+                rel_time.clear();
+                ack.clear();
+                round_ts_offset = 0;
+                round_seq_offset = ackno + 1;
+            }
+        }
+    }
+    if (o_graph) {
+        clearOverlappedGraphs(o_graph, sp);
+        g_free(o_graph);
+    }
+    g_rand_free(rand42);
+}
+
 
 // If the current implementation of incorporating SACKs in goodput calc
 //   is slow, comment out the following line to ignore SACKs in goodput calc.
@@ -1692,6 +1802,7 @@ void TCPStreamDialog::axisClicked(QCPAxis *axis, QCPAxis::SelectablePart, QMouse
         case GRAPH_THROUGHPUT:
         case GRAPH_TSEQ_STEVENS:
         case GRAPH_TSEQ_TCPTRACE:
+        case GRAPH_TSEQ_TCPOVERLAPPED:
         case GRAPH_WSCALE:
         case GRAPH_RTT:
             ts_origin_conn_ = ts_origin_conn_ ? false : true;
@@ -1720,6 +1831,9 @@ void TCPStreamDialog::mouseMoved(QMouseEvent *event)
 {
     QCustomPlot *sp = ui->streamPlot;
     Qt::CursorShape shape = Qt::ArrowCursor;
+    guint32 round_ts_offset = 0;
+    struct segment *packet_seg = nullptr;
+
     if (event) {
         if (event->buttons().testFlag(Qt::LeftButton)) {
             if (mouse_drags_) {
@@ -1736,42 +1850,76 @@ void TCPStreamDialog::mouseMoved(QMouseEvent *event)
                 }
             }
         }
+        if (!overlapped_graph_vect_.empty()) {
+            int posX = event->pos().x();
+            int posY = event->pos().y();
+            OverlappedGraph *o_graph = nullptr;
+            int xy_closest = INT32_MAX;
+            double tr_key = 0.0;
+            foreach (OverlappedGraph *og, overlapped_graph_vect_) {
+                int xy_og = INT32_MAX;
+                double key_best;
+                QCPGraphDataContainer::const_iterator it = og->graph->data()->constBegin();
+                for (; it != og->graph->data()->constEnd(); ++it) {
+                    int x = ui->streamPlot->xAxis->coordToPixel(it->key);
+                    int y = ui->streamPlot->yAxis->coordToPixel(it->value);
+                    int xy = abs(posX - x) + abs(posY - y);
+                    if (xy < xy_og) {
+                        xy_og = xy;
+                        key_best = it->key;
+                    }
+                }
+                if (xy_og < xy_closest) {
+                    xy_closest = xy_og;
+                    tr_key = key_best;
+                    o_graph = og;
+                }
+            }
+            if (o_graph) {
+                tracer_->setGraph(o_graph->graph);
+                tr_key += o_graph->ts_offset;
+                tr_key -= ts_offset_;
+                packet_seg = time_stamp_map_.value(tr_key, nullptr);
+                round_ts_offset = o_graph->ts_offset;
+            }
+        }
     }
     sp->setCursor(QCursor(shape));
 
     QString hint = "<small><i>";
     if (mouse_drags_) {
-        double tr_key = tracer_->position->key();
-        struct segment *packet_seg = NULL;
-        packet_num_ = 0;
-
-        // XXX If we have multiple packets with the same timestamp tr_key
-        // may not return the packet we want. It might be possible to fudge
-        // unique keys using nextafter().
-        if (event && tracer_->graph() && tracer_->position->axisRect()->rect().contains(event->pos())) {
-            switch (graph_.type) {
-            case GRAPH_TSEQ_STEVENS:
-            case GRAPH_TSEQ_TCPTRACE:
-            case GRAPH_THROUGHPUT:
-            case GRAPH_WSCALE:
-                packet_seg = time_stamp_map_.value(tr_key, NULL);
-                break;
-            case GRAPH_RTT:
-                if (ui->bySeqNumberCheckBox->isChecked())
-                    packet_seg = sequence_num_map_.value(tr_key, NULL);
-                else
-                    packet_seg = time_stamp_map_.value(tr_key, NULL);
-            default:
-                break;
-            }
-        }
-
         if (!packet_seg) {
-            tracer_->setVisible(false);
-            hint += "Hover over the graph for details. " + stream_desc_ + "</i></small>";
-            ui->hintLabel->setText(hint);
-            ui->streamPlot->replot();
-            return;
+            double tr_key = tracer_->position->key();
+            packet_num_ = 0;
+
+            // XXX If we have multiple packets with the same timestamp tr_key
+            // may not return the packet we want. It might be possible to fudge
+            // unique keys using nextafter().
+            if (event && tracer_->graph() && tracer_->position->axisRect()->rect().contains(event->pos())) {
+                switch (graph_.type) {
+                    case GRAPH_TSEQ_STEVENS:
+                    case GRAPH_TSEQ_TCPTRACE:
+                    case GRAPH_THROUGHPUT:
+                    case GRAPH_WSCALE:
+                        packet_seg = time_stamp_map_.value(tr_key, NULL);
+                        break;
+                    case GRAPH_RTT:
+                        if (ui->bySeqNumberCheckBox->isChecked())
+                            packet_seg = sequence_num_map_.value(tr_key, NULL);
+                        else
+                            packet_seg = time_stamp_map_.value(tr_key, NULL);
+                    default:
+                        break;
+                }
+            }
+
+            if (!packet_seg) {
+                tracer_->setVisible(false);
+                hint += "Hover over the graph for details. " + stream_desc_ + "</i></small>";
+                ui->hintLabel->setText(hint);
+                ui->streamPlot->replot();
+                return;
+            }
         }
 
         tracer_->setVisible(true);
@@ -1784,7 +1932,7 @@ void TCPStreamDialog::mouseMoved(QMouseEvent *event)
                 .arg(packet_seg->th_seq)
                 .arg(packet_seg->th_ack)
                 .arg(packet_seg->th_win);
-        tracer_->setGraphKey(ui->streamPlot->xAxis->pixelToCoord(event->pos().x()));
+        tracer_->setGraphKey(ui->streamPlot->xAxis->pixelToCoord(event->pos().x() + round_ts_offset));
         sp->replot();
     } else {
         if (rubber_band_ && rubber_band_->isVisible() && event) {
@@ -2165,6 +2313,11 @@ void TCPStreamDialog::on_actionStevens_triggered()
 void TCPStreamDialog::on_actionTcptrace_triggered()
 {
     ui->graphTypeComboBox->setCurrentIndex(ui->graphTypeComboBox->findData(GRAPH_TSEQ_TCPTRACE));
+}
+
+void TCPStreamDialog::on_actionTcpOverlapped_triggered()
+{
+    ui->graphTypeComboBox->setCurrentIndex(ui->graphTypeComboBox->findData(GRAPH_TSEQ_TCPOVERLAPPED));
 }
 
 void TCPStreamDialog::on_actionWindowScaling_triggered()
