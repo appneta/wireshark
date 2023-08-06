@@ -463,6 +463,7 @@
      </property>
      <addaction name="actionStatisticsTcpStreamStevens"/>
      <addaction name="actionStatisticsTcpStreamTcptrace"/>
+     <addaction name="actionStatisticsTcpStreamTcpOverlapped"/>
      <addaction name="actionStatisticsTcpStreamThroughput"/>
      <addaction name="actionStatisticsTcpStreamRoundTripTime"/>
      <addaction name="actionStatisticsTcpStreamWindowScaling"/>
@@ -1792,6 +1793,14 @@
    </property>
    <property name="toolTip">
     <string>TCP time sequence graph (tcptrace)</string>
+   </property>
+  </action>
+  <action name="actionStatisticsTcpStreamTcpOverlapped">
+   <property name="text">
+    <string>Time Sequence (overlapped)</string>
+   </property>
+   <property name="toolTip">
+    <string>TCP time sequence graph (overlapped)</string>
    </property>
   </action>
   <action name="actionSCTPAnalyseThisAssociation">

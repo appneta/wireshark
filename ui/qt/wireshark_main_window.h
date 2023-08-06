@@ -507,6 +507,7 @@ private slots:
     void openTcpStreamDialog(int graph_type);
     void on_actionStatisticsTcpStreamStevens_triggered();
     void on_actionStatisticsTcpStreamTcptrace_triggered();
+    void on_actionStatisticsTcpStreamTcpOverlapped_triggered();
     void on_actionStatisticsTcpStreamThroughput_triggered();
     void on_actionStatisticsTcpStreamRoundTripTime_triggered();
     void on_actionStatisticsTcpStreamWindowScaling_triggered();

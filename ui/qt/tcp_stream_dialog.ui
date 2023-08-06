@@ -593,7 +593,7 @@
     <string>Switch to the Window Scaling graph</string>
    </property>
    <property name="shortcut">
-    <string>5</string>
+    <string>6</string>
    </property>
   </action>
   <action name="actionTcptrace">
@@ -605,6 +605,17 @@
    </property>
    <property name="shortcut">
     <string>4</string>
+   </property>
+  </action>
+  <action name="actionTcpOverlapped">
+   <property name="text">
+    <string>Time / Sequence (overlapped)</string>
+   </property>
+   <property name="toolTip">
+    <string>Switch to the tcpoverlapped-style Time / Sequence graph</string>
+   </property>
+   <property name="shortcut">
+    <string>5</string>
    </property>
   </action>
   <action name="actionZoomInX">
