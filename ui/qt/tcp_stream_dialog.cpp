@@ -953,6 +953,30 @@ void TCPStreamDialog::fillTcpOverlapped()
     double round_last_seq = seq_offset_;
     double round_seq_offset = seq_offset_;
     GRand *rand42 = g_rand_new_with_seed(42);
+    double min_ts = 0.0;
+    double last_ts = 0.0;
+    bool round_sync = false;
+    for (struct segment *seg = graph_.segments; seg != nullptr; seg = seg->next) {
+        double ts = (seg->rel_secs + seg->rel_usecs / 1000000.0);
+        if (!compareHeaders(seg)) {
+            round_sync = (seg->th_flags & TH_SYN);
+            if (round_sync || seg->th_seglen) {
+                last_ts = ts;
+                round_last_seq = seg->th_seq;
+            }
+        } else {
+            if ((round_sync || (last_ts != 0.0 && ts > last_ts)) &&
+                (round_sync || seg->th_ack == round_last_seq)) {
+                double delta_ts = ts - last_ts;
+                if (min_ts == 0.0 || delta_ts < min_ts) {
+                    min_ts = delta_ts;
+                }
+            }
+            round_sync = false;
+            last_ts = 0.0;
+        }
+    }
+    round_last_seq = seq_offset_;
     for (struct segment *seg = graph_.segments; seg != nullptr; seg = seg->next) {
         if ((seg->th_flags & TH_SYN) || !(seg->th_flags & TH_ACK)) {
             continue;
@@ -970,7 +994,7 @@ void TCPStreamDialog::fillTcpOverlapped()
                 }
                 rel_time.append(0.0);
                 ack.append(0.0);
-                round_ts_offset = o_graph->ts_offset = ts;
+                round_ts_offset = o_graph->ts_offset = ts - min_ts;
                 round_seq_offset = seq_no;
             }
             if ((seg->th_flags & TH_PUSH)) {
@@ -982,7 +1006,7 @@ void TCPStreamDialog::fillTcpOverlapped()
                 continue;
             }
             double ackno = seg->th_ack;
-            rel_time.append(ts - round_ts_offset);  // TODO handle SACK
+            rel_time.append(ts - round_ts_offset);
             ack.append(ackno - round_seq_offset);
             if (o_graph && ackno == round_last_seq) {
                 // round complete
