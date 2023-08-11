@@ -9,36 +9,51 @@ References:
     * https://developer.apple.com/library/archive/technotes/tn2206/_index.html
 
 * Notarizing
-    * https://developer.apple.com/documentation/xcode/notarizing_macos_software_before_distribution
+  * https://developer.apple.com/documentation/xcode/notarizing_macos_software_before_distribution
 
-Prereq:
--------
+Prerequisites
+-------------
 
     sudo gem install asciidoctor
-    pip3 install dmgbuild
+    pip3 install --upgrade dmgbuild
+    pip3 install --upgrade biplist
 
-Build:
-------
+Also verify that you have a Broadcom "Personal Team" certificate in Xcode -> Settings -> Accounts -> Apple ID
 
-Run one time only, or if moving to a new Wireshark revision
+Prepare
+-------
+
+Old instructions ... run one time only, or if moving to a new Wireshark revision
 
     MACOSX_SUPPORT_LIBS=/Users/<identity>/git/pvc-appliance/macos-support-libs tools/macos-setup.sh -t 10.14
 
+New instructions ...
+
+1. run tools/macos-setup-brew.sh
+2. install the latest version of Wireshark off the web (to pick up libraries)
+3. export LIB_PREFIX=/Applications/Wireshark.app/Contents/Frameworks
+
+Build
+-----
+
 Here are some exports - CODE_SIGN_IDENTITY as per 'security find-identity -p codesigning -v login.keychain'
 
-    export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/Users/<identity>/Qt5.12.4/5.12.4/clang_64/lib/pkgconfig
-    export CMAKE_PREFIX_PATH=/Users/<identity>/Qt5.12.4/5.12.4/clang_64/lib/cmake
-    export CODE_SIGN_IDENTITY="AppNeta Inc"
-    PATH=/Users/<identity>/Qt5.12.4/5.12.4/clang_64/bin:/Library/Frameworks/Python.framework/Versions/3.7/bin/:$PATH
-    export PATH
+    export LDFLAGS="-L/usr/local/opt/libpcap/lib"
+    export CPPFLAGS="-I/usr/local/opt/libpcap/include"
+    export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/Users/fklassen/Qt5.12.12/5.12.12/clang_64/lib/pkgconfig
+    export CMAKE_PREFIX_PATH=/Users/${USER}/Qt5.12.12/5.12.12/clang_64/lib/cmake
+    export CODE_SIGN_IDENTITY="fred.klassen@broadcom.com" # validate with `security find-identity -v -s "$CODE_SIGN_IDENTITY" -p codesigning`
+    export PATH=/usr/local/opt/libpcap/bin:$PATH
+    export PATH=/Users/${USER}/Qt5.12.12/5.12.12/clang_64/bin:$PATH
 
     mkdir build; cd build
-    cmake -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -G Ninja ..
+    cmake -G Ninja -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14  ..
     ninja
-    ninja app_bundle
+    ninja wireshark_app_bundle
+    ninja wireshark_dmg
 
-Notarize:
----------
+Notarize
+--------
 
 At this point you may want to notarize the app_bundle - you will require an
 application-specific password - https://support.apple.com/en-us/HT204397
