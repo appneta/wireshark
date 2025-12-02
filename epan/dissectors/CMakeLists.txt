@@ -762,6 +762,7 @@ set(DISSECTOR_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-ap1394.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-app-pkix-cert.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-applemidi.c
+	${CMAKE_CURRENT_SOURCE_DIR}/packet-appneta.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-aprs.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-arcnet.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-arinc615a.c
