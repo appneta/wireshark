@@ -1,0 +1,511 @@
+# .clang-format -- YAML configuration file for the clang-format tool
+#
+# Wireshark - Network traffic analyzer
+# By Gerald Combs <gerald@wireshark.org>
+# Copyright 1998 Gerald Combs
+#
+# Syntax information:
+# https://releases.llvm.org/13.0.1/tools/clang/docs/ClangFormatStyleOptions.html
+#
+# This file contains all options available as of clang-format 13.0.0
+# and was originally generated using `clang-format --dump-config` before
+# being edited to attempt to incorporate as many of Wireshark's formatting
+# conventions as possible.
+#
+# Note that code formatters are pretty rigid by definition. In some cases
+# it's not possible to exactly replicate certain conventions. In others
+# the formatter may misparse what's happening on some lines so we may need
+# to, for example, insert a blank line before or after such an occasion.
+#
+# Note also that clang-format's YAML parser seems unhappy with full-line
+# comments that don't start at column 1.
+---
+
+# {{{ General setup/config
+#
+
+# these rules target C/C++
+Language: Cpp
+
+# please do reformat files of this type
+DisableFormat: false
+
+# C++ standard to use
+Standard: c++11
+
+# end lines with CR only
+UseCRLF: false
+
+# don't try to keep file's existing line endings
+DeriveLineEnding: false
+
+# don't force a specific maximum line length (for now, anyway)
+ColumnLimit: 0
+
+# treat these macros like attributes
+AttributeMacros:
+  - _U_
+  - WS_NORETURN
+  - WS_RETNONNULL
+  - WS_THREAD_LOCAL
+  - G_LIKELY
+  - G_UNLIKELY
+
+# treat these macros like 'for'
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+  - BOOST_FOREACH
+
+# treat these macros like 'if'
+# HACK: 'TRY'/'CATCH' are here so they stay formatted mostly like we want
+IfMacros:
+  - TRY
+  - CATCH
+
+# treat these macros like statement attributes
+StatementAttributeLikeMacros:
+  - Q_EMIT
+
+# treat these macros as if they're complete statements
+StatementMacros:
+  - Q_UNUSED
+  - QT_REQUIRE_VERSION
+
+# these macros are sensitive to whitespace changes
+WhitespaceSensitiveMacros:
+  - STRINGIZE
+  - PP_STRINGIZE
+  - BOOST_PP_STRINGIZE
+  - NS_SWIFT_NAME
+  - CF_SWIFT_NAME
+
+# macros matching these regular expressions are treated as if
+# they begin/end a block (thus causing extra indentation between them)
+MacroBlockBegin: ''
+MacroBlockEnd:   ''
+
+# }}}
+
+# {{{ Spacing options
+# (adding or removing spaces in specific circumstances)
+#
+
+# don't try to guess how to align '*'
+DerivePointerAlignment: false
+
+# 'char *x', not 'char* x'
+PointerAlignment: Right
+
+# align '&' same as '*'
+ReferenceAlignment: Pointer
+
+# use the PointerAlignment setting for pointer qualifiers
+SpaceAroundPointerQualifiers: Default
+
+# don't put a space after a type cast, eg `(int)i`
+SpaceAfterCStyleCast: false
+
+# don't put spaces inside the brackets of a type cast
+SpacesInCStyleCastParentheses: false
+
+# don't put a space after a '!' operator
+SpaceAfterLogicalNot: false
+
+# don't put a space after the 'template' keyword
+SpaceAfterTemplateKeyword: false
+
+# put a space before '=' and other assignment operators
+SpaceBeforeAssignmentOperators: true
+
+# don't put a space before the ':' in a case label
+SpaceBeforeCaseColon: false
+
+# put a space before a C++11 braced list initializer
+SpaceBeforeCpp11BracedList: true
+
+# put a space before the ':' in a constructor initialization
+SpaceBeforeCtorInitializerColon: true
+
+# put a space before the ':' in a constructor inheritance
+SpaceBeforeInheritanceColon: true
+
+# put spaces before the '(' only for control statements,
+# not function calls/definitions
+SpaceBeforeParens: ControlStatements
+
+# put a space before the ':' in C++11 range-based loop statements
+SpaceBeforeRangeBasedForLoopColon: true
+
+# don't put a space inside an empty block '{}'
+SpaceInEmptyBlock: false
+
+# don't put a space inside empty parentheses '()'
+SpaceInEmptyParentheses: false
+
+# number of spaces before a //-style comment on a code line
+# (does not affect /*-style comments)
+SpacesBeforeTrailingComments: 1
+
+# don't put spaces inside '<...>' brackets (for C++ casts/templates)
+SpacesInAngles: Never
+
+# don't put padding spaces inside the brackets for conditional statements
+SpacesInConditionalStatement: false
+
+# don't put padding spaces inside other types of brackets
+SpacesInParentheses: false
+
+# put spaces inside literal array definitions
+SpacesInContainerLiterals: true
+
+# number of spaces after the '//' in //-style line comments
+SpacesInLineCommentPrefix:
+  Minimum: 1        # enforce at least one
+  Maximum: -1       # don't restrict the maximum
+
+# don't put padding spaces inside square brackets
+SpacesInSquareBrackets: false
+
+# don't put space before spare grackets, eg `int a[5]`
+SpaceBeforeSquareBrackets: false
+
+# put spaces before and after the ':' in bitfield variable declarations
+BitFieldColonSpacing: Both
+
+# }}}
+
+# {{{ Indentation options
+# (spacing options that affect multiple lines)
+#
+
+# indent with spaces, not tabs
+UseTab: Never
+
+# align existing tabs to 8-space stops
+TabWidth: 8
+
+# overall indentation: 4 spaces
+IndentWidth: 4
+
+# line continuations get extra indenting
+ContinuationIndentWidth: 8
+
+# indent for initializers
+ConstructorInitializerIndentWidth: 4
+
+# 'private'/'public' don't get indents
+IndentAccessModifiers: false
+
+# (if we did, we'd outdent them 4 spaces)
+AccessModifierOffset: -4
+
+# case labels get own indent level
+IndentCaseLabels: true
+
+# case blocks get own indent level
+IndentCaseBlocks: true
+
+# goto labels get no indentation
+IndentGotoLabels: false
+
+# don't indent preprocessor directives
+IndentPPDirectives: None
+
+# (if we did, we'd indent them 1 space)
+PPIndentWidth: 1
+
+# don't indent inside 'extern "C"'
+IndentExternBlock: NoIndent
+
+# if we had templates, indent the 'requires' clause
+IndentRequires: true
+
+# don't indent function definition names
+IndentWrappedFunctionNames: false
+
+# indent a lambda function's body by one extra level relative to
+# that of the signature
+LambdaBodyIndentation: Signature
+
+# don't add a level of indentation inside of namespaces
+NamespaceIndentation: None
+
+# }}}
+
+# {{{ Alignment options
+# (this differs from indentation options because it involves
+# aligning parts of lines with parts of other lines)
+#
+
+# when a function call's arguments must wrap, don't align them to the '('
+AlignAfterOpenBracket: DontAlign
+
+# line up arrays of structures in columns
+AlignArrayOfStructures: Left
+
+# align macro definitions equally, even if there's whitespace between them
+AlignConsecutiveMacros: AcrossEmptyLines
+
+# align variable assignments equally
+AlignConsecutiveAssignments: Consecutive
+
+# align bitfield definitions equally
+AlignConsecutiveBitFields: Consecutive
+
+# align variable declarations equally
+AlignConsecutiveDeclarations: Consecutive
+
+# when using '\' to escape newlines, align them evenly, as close
+# to the end of their preceding statements as possible
+AlignEscapedNewlines: Left
+
+# align long, wrapped expressions "smartly" instead of by simple indents
+AlignOperands: Align
+
+# align trailing comments on lines
+AlignTrailingComments: true
+
+# }}}
+
+# {{{ Line-breaking options
+#
+
+# break long lines after a binary operator (eg '+')
+BreakBeforeBinaryOperators: None
+
+# break lines before/after '{' according to specific rules:
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel:  false              # 'case foo: {'
+  AfterClass:      true               # class definitions start '{' on next line
+  AfterControlStatement: Never        # 'if (foo) {'
+  AfterEnum:       false              # 'enum {'
+  AfterFunction:   true               # func. definitions start '{' on next line
+  AfterNamespace:  true               # namespace def'ns start '{' on next line
+  AfterObjCDeclaration: false
+  AfterStruct:     false              # 'struct foo {'
+  AfterUnion:      false              # 'union foo {'
+  AfterExternBlock: false             # 'extern "C" {'
+  BeforeCatch:     true               # don't "hug" catch statements
+  BeforeElse:      false              # '} else {'
+  BeforeLambdaBody: false
+  BeforeWhile:     false              # 'do {' ... '} while(foo)'
+  IndentBraces:    false              # don't give braces their own indent level
+  SplitEmptyFunction: true            # empty functions have '{' and '}' on
+                                      # separate lines
+  SplitEmptyRecord: true              # ditto empty class/struct/union/etc
+  SplitEmptyNamespace: true           # ditto empty namespace
+
+# C++: put template 'concept' statement on new line
+BreakBeforeConceptDeclarations: true
+
+# C++: line break after a class colon, and after each inherited class comma
+BreakInheritanceList: AfterColon
+
+# this one isn't in the linked documentation,
+# but `clang-format --dump-config` generated it.
+# I suspect it's a deprecated precursor to BreakInheritanceList
+BreakBeforeInheritanceComma: false
+
+# likewise for constructors
+BreakConstructorInitializers: AfterColon
+
+# another undocumented option; I presume it's a deprecated precursor
+# to BreakConstructorInitializers
+BreakConstructorInitializersBeforeComma: false
+
+# put each initializer on its own line
+AllowAllConstructorInitializersOnNextLine: false
+
+# this seems like a (deprecated?) synonym of the above
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+
+# when breaking long ternary statements, put the '?'/':' before the break
+BreakBeforeTernaryOperators: false
+
+# keep java annotations on one line
+BreakAfterJavaFieldAnnotations: false
+
+# don't allow clang-format to break up long string literals
+BreakStringLiterals: false
+
+# don't move all of a function call's arguments to the next line
+# if they're too long; keep arguments that fit on the first line
+AllowAllArgumentsOnNextLine: false
+
+# don't move all of a function declaration's parameters to the next line
+# if they're too long; keep parameters that fit on the first line
+AllowAllParametersOfDeclarationOnNextLine: false
+
+# don't gather enum lists onto a single line
+AllowShortEnumsOnASingleLine: false
+
+# don't gather up zero/one-line blocks in braces into a single line
+AllowShortBlocksOnASingleLine: Never
+
+# don't allow short case statement bodies to be on a single line
+AllowShortCaseLabelsOnASingleLine: false
+
+# don't allow short function definitions to be on a single line
+AllowShortFunctionsOnASingleLine: None
+
+# likewise for short lambdas
+AllowShortLambdasOnASingleLine: None
+
+# likewise for short 'if' statements
+AllowShortIfStatementsOnASingleLine: Never
+
+# likewise for short loop structures
+AllowShortLoopsOnASingleLine: false
+
+# put function return type definitions on the line before
+# the function name and definition
+AlwaysBreakAfterReturnType: AllDefinitions
+
+# this option is said to be deprecated, but no replacement is given.
+# Presumably AlwaysBreakAfterReturnType?
+AlwaysBreakAfterDefinitionReturnType: TopLevel
+
+# don't force a break before the first line of a multi-line string
+AlwaysBreakBeforeMultilineStrings: false
+
+# put C++ template declarations on their own line
+AlwaysBreakTemplateDeclarations: Yes
+
+# let a function call's arguments take as few lines as possible
+BinPackArguments: true
+
+# let a function's parameters take as few lines as possible
+BinPackParameters: true
+
+# don't compress nested namespaces into a single line
+CompactNamespaces: false
+
+# }}}
+
+# {{{ Blank line options
+#
+
+# If a block starts with an empty line, leave it there
+KeepEmptyLinesAtTheStartOfBlocks: true
+
+# don't allow more than one consecutive blank line
+MaxEmptyLinesToKeep: 1
+
+# put an empty line before a C++ 'private'/'public' label
+# if it seems to be a new logical block
+EmptyLineBeforeAccessModifier: LogicalBlock
+
+# don't put an empty line after a C++ 'private'/'public' label
+EmptyLineAfterAccessModifier: Never
+
+# }}}
+
+# {{{ Code-altering options
+# (see also Include options)
+#
+
+# don't add a comment to the closing brace of a namespace
+# with the name of the namespace
+FixNamespaceComments: false
+
+# if we did, don't add comments to namespaces with this
+# many lines or fewer
+ShortNamespaceLines: 1
+
+# don't add a trailing comma to the last element of an array
+InsertTrailingCommas: None
+
+# comments whose content matches this regexp will never be reformatted
+# (since they're assumed to be pragmas with special meanings)
+CommentPragmas:  '^ IWYU pragma:'
+
+# don't format braced lists "as best suited for C++11 braced lists"
+Cpp11BracedListStyle: false
+
+# allow clang-format to wrap+reformat comments that are too long
+ReflowComments:  true
+
+# don't sort 'using' declarations
+SortUsingDeclarations: false
+
+# }}}
+
+# {{{ Include options
+# clang-format has the ability to enforce consistent order
+# of `#include` statements, these are the rules that control that.
+#
+
+# sort include statements case-sensitively
+SortIncludes:    CaseSensitive
+
+# keep (blank-line-separated) blocks of includes as individual units
+IncludeBlocks:   Preserve
+
+# if IncludeBlocks is set to Regroup, these rules can be used to
+# control the regrouping. See docs for explanation.
+IncludeCategories:
+  - Regex:           '^"(llvm|llvm-c|clang|clang-c)/'
+    Priority:        2
+    SortPriority:    0
+    CaseSensitive:   false
+  - Regex:           '^(<|"(gtest|gmock|isl|json)/)'
+    Priority:        3
+    SortPriority:    0
+    CaseSensitive:   false
+  - Regex:           '.*'
+    Priority:        1
+    SortPriority:    0
+    CaseSensitive:   false
+
+IncludeIsMainRegex: '(Test)?$'
+IncludeIsMainSourceRegex: ''
+
+# }}}
+
+# {{{ Penalty options
+# TODO: document what the penalty affects (clang's docs aren't clear either)
+
+PenaltyBreakAssignment: 2
+PenaltyBreakBeforeFirstCallParameter: 19
+PenaltyBreakComment: 300
+PenaltyBreakFirstLessLess: 120
+PenaltyBreakString: 1000
+PenaltyBreakTemplateDeclaration: 10
+PenaltyExcessCharacter: 1000000
+PenaltyReturnTypeOnItsOwnLine: 0
+PenaltyIndentedWhitespace: 0
+
+# }}}
+
+# {{{ Irrelevant options
+# (generated by clang-format, kept for reference,
+# but won't apply to our use cases)
+#
+
+# Leave javascript strings with whatever quotes they already have
+JavaScriptQuotes: Leave
+
+# Put each import from a given source on its own line
+JavaScriptWrapImports: true
+
+# Put java static imports before non-static imports
+SortJavaStaticImport: Before
+
+ObjCBinPackProtocolList: Auto
+ObjCBlockIndentWidth: 2
+ObjCBreakBeforeNestedBlockParam: true
+ObjCSpaceAfterProperty: false
+ObjCSpaceBeforeProtocolList: true
+
+# }}}
+
+# Other YAML documents (which are separated by '---' lines)
+# can go in this same file in order to specify rules for other file types.
+# Overall default and/or non-type-specific options can be put in a YAML
+# document with no Language specifier.
+...
+
+
+
